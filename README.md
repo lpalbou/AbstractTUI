@@ -12,40 +12,29 @@ minimal SGR runs, synchronized output where the terminal supports it. The result
 an idle app emits zero bytes and allocates nothing, and a blinking cursor repaints
 one cell, not the screen.
 
-```text
- ▲ AbstractTUI  ops dashboard                                                          Dark (Abstract)  ·  12:34:56 UTC
- ┌ nav ────────┐  ┌ traffic — rx/tx (MB/s) ──────────────────────────────────────┐  ┌ load ─────────────────────────┐
- │  overview   │  │ ── rx   ── tx                                                │  │ mem                       54% │
- │  traffic    │  │100 │                                                      ⣀⢄⢀│  │████████████████▊              │
- │  sessions   │  │    │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⢄⡠⠔⠉⠊⠑⠊ ⠈⠁│  │⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒│
- │  logs       │  │    │⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠊⠉⠑⠒⠔⠒⠒⠤⠤⢄│  │ io                        45% │
- │  alerts     │  │0   │                                                         │  │█████████████▉                 │
- │  settings   │  │    └─────────────────────────────────────────────────────────│  │⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤│
- │             │  └──────────────────────────────────────────────────────────────┘  └───────────────────────────────┘
- │             │
- │             │  ┌ events ───────────────────────────┐  ┌ sessions — s toggles sort ────────────────────────────────┐
- │             │  │                                   │  │host         region   rx▼            tx            state   │
- │             │  │                                   │  │edge-2       eu-w     41.3 MB/s      20.8 MB/s     healthy │
- │             │  │                                   │  │core-a       us-e     41.1 MB/s      18.6 MB/s     syncing │
- │             │  │                                   │  │edge-1       eu-w     38.7 MB/s      7.2 MB/s      healthy │
- │             │  │                                   │  │edge-3       us-e     38.1 MB/s      23.6 MB/s     syncing │
- │             │  │                                   │  │cache-2      ap-s     25.2 MB/s      16.5 MB/s     healthy │
- │             │  │                                   │  │core-b       ap-s     22.8 MB/s      8.4 MB/s      syncing │
- │             │  │                                   │  │cache-1      eu-n     13.4 MB/s      19.9 MB/s     healthy │
- │             │  │ 00:00 info  session opened from … │  │                                                           │
- │             │  │ 00:00 ok    tls renewed for gate… │  │                                                           │
- │             │  │ 00:01 ok    backup verified       │  │                                                           │
- │             │  │ 00:01 info  session opened from … │  │                                                           │
- │             │  │ 00:02 info  session opened from … │  │                                                           │
- │             │  │ 00:02 warn  backpressure on shar… │  │                                                           │
- │             │  │ 00:03 ok    shard 2 caught up     │  │                                                           │
- └─────────────┘  └───────────────────────────────────┘  └───────────────────────────────────────────────────────────┘
+![The dashboard example: rx/tx line chart, load progress bars, a spinning 3D mark, colored event log and a sortable sessions table](docs/media/dashboard.gif)
 
- tab focus  alt+←→ panes  s sort  n toast  b mark  ? help  ctrl+t theme  q quit
-```
+*The `dashboard` example — live line charts, sub-cell progress bars, a
+software-rendered 3D mark, a scrolling event log, a sortable table, toasts and a
+modal, all animating while the rest of the screen stays still.*
 
-*The `dashboard` example at 120×35 (abridged; from `docs/captures/`, regenerable
-with `cargo run --example capture`).*
+### 3D in the terminal — a real GLB, rasterized to cells
+
+![The viewer3d example spinning a glTF helmet model, cycling half-block, quadrant, sextant and braille mosaic modes](docs/media/viewer3d.gif)
+
+*`cargo run --example viewer3d` turning [the standard damaged-helmet glTF
+model](https://github.com/KhronosGroup/glTF-Sample-Models) (15,452 triangles) —
+a hand-written perspective rasterizer with a z-buffer, textures and lighting,
+presented through half-block, quadrant, sextant and braille mosaics. No GPU, no
+external renderer.*
+
+### The design system on one screen — restyled under one keypress
+
+![The gallery example showing token swatches, widget states, charts, syntax-highlighted code and rich text, cycling through themes](docs/media/gallery.gif)
+
+*The `gallery` example — every token, widget state, chart, and text style on one
+board. Pressing a key swaps the theme signal and the whole screen re-renders
+through ordinary reactivity.*
 
 ## Highlights
 
@@ -140,6 +129,10 @@ safe to run anywhere. Start with these five:
 `ABSTRACTTUI_THEME=rose-pine cargo run --example hello` themes any example from
 the environment; `--caps` on `dashboard`, `viewer3d`, and `images` prints the
 detected capability report and exits.
+
+The animations above are recorded straight from these examples with
+[`vhs`](https://github.com/charmbracelet/vhs); the tapes live in
+[`docs/media/`](docs/media/) and regenerate with `vhs docs/media/<name>.tape`.
 
 ## Platform support
 
