@@ -88,6 +88,10 @@ pub fn spawn_in_pty_opts(
     // SAFETY (1): openpty writes two fds into our stack locals and reads
     // the winsize we constructed (the *mut signature never mutates it);
     // NULL name/termios are documented-legal.
+    // The winsize parameter is `*mut` on macOS/BSD libc but `*const` on
+    // Linux glibc; `&mut` satisfies both signatures, so the Linux-only
+    // "unnecessary mut" lint is silenced rather than obeyed.
+    #[allow(clippy::unnecessary_mut_passed)]
     let rc = unsafe {
         libc::openpty(
             &mut master,
