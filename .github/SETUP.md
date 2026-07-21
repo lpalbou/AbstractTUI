@@ -50,7 +50,8 @@ On crates.io (logged in as the crate owner):
     machine, then continue below.
 - **Existing crate:** crate page → **Settings → Trusted Publishing → Add**:
   - GitHub owner: `lpalbou`
-  - Repository: `abstracttui`
+  - Repository: `AbstractTUI` (exact GitHub capitalization — the OIDC claim
+    reports `lpalbou/AbstractTUI` and the match is on that string)
   - Workflow filename: `release.yml`
   - Environment: `crates-io`
 
