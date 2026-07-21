@@ -7,13 +7,14 @@
 //! OWNER: REDTEAM. Doctrine: `docs/design/testing.md`.
 //!
 //! Map:
-//! - [`vt`] / [`vt_csi`] — `VtScreen`, the VT100/xterm model (ground truth)
+//! - [`vt`] — `VtScreen`, the VT100/xterm model (ground truth; CSI
+//!   dispatch lives in a private sibling module)
 //! - [`grid`]     — the model's cell grid + wide-glyph pairing invariant
 //! - [`palette`]  — embedded xterm-256 palette (indexed SGR -> `Rgba`)
 //! - [`capture`]  — `CaptureTerm`, in-memory terminal double
 //! - [`snapshot`] — golden snapshot assertions (UPDATE_GOLDENS=1)
 //! - [`fuzzish`]  — seeded PRNG + hostile byte-soup generators
-//! - [`bench`]    — std-only timing harness for `#[ignore]`d perf tests
+//! - [`mod@bench`] — std-only timing harness for `#[ignore]`d perf tests
 //!
 //! This module ships in the library (not `#[cfg(test)]`) so integration
 //! tests and other modules' unit tests can use it; it costs nothing
