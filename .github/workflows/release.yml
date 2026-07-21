@@ -81,19 +81,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - name: Authenticate with crates.io (Trusted Publishing)
-        id: auth
-        uses: rust-lang/crates-io-auth-action@v1
       - name: cargo publish
         run: cargo publish
         env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
-          # Fallback if Trusted Publishing is not configured (e.g. the very
-          # first publish of the crate without a Pending Publisher entry):
-          # comment out the "Authenticate" step above and the token line
-          # above, add a classic API token as the CARGO_REGISTRY_TOKEN
-          # repository secret, and uncomment the next line instead.
-          # CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          # Classic API token from the repository secrets (set once by the
+          # maintainer). To switch to crates.io Trusted Publishing later:
+          # add the trust config on the crate page, restore the
+          # rust-lang/crates-io-auth-action@v1 step here (id: auth) and use
+          # `${{ steps.auth.outputs.token }}` instead of the secret.
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   github-release:
     name: create GitHub Release
