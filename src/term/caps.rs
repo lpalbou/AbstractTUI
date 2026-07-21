@@ -267,10 +267,11 @@ impl Capabilities {
                                  // RT1-12b: classic conhost does not translate mouse into VT
                                  // sequences under ENABLE_VIRTUAL_TERMINAL_INPUT — mouse would
                                  // be silently dead. Claim SGR mouse only inside a terminal
-                                 // known to translate (Windows Terminal, or a real terminal
-                                 // emulator identifying itself); bare conhost degrades to
-                                 // keyboard-only, honestly.
-            c.sgr_mouse = c.sgr_mouse && (windows_terminal || wezterm || !term_program.is_empty());
+                                 // that identified itself as a modern emulator (Windows
+                                 // Terminal, kitty, WezTerm, ghostty, iTerm2, foot, VS Code,
+                                 // or anything setting TERM_PROGRAM); bare conhost degrades
+                                 // to keyboard-only, honestly.
+            c.sgr_mouse = c.sgr_mouse && (modern || !term_program.is_empty());
         }
         #[cfg(not(windows))]
         {
@@ -711,7 +712,14 @@ mod tests {
     #[test]
     fn plain_xterm_256color() {
         let c = env(&[("TERM", "xterm-256color"), ("COLORTERM", "truecolor")]);
-        assert!(c.truecolor && c.colors_256 && c.sgr_mouse && c.bracketed_paste);
+        assert!(c.truecolor && c.colors_256 && c.bracketed_paste);
+        // RT1-12b: a bare environment (no terminal-program identity)
+        // keeps SGR mouse on unix but honestly drops it on Windows,
+        // where classic conhost cannot translate mouse into VT.
+        #[cfg(not(windows))]
+        assert!(c.sgr_mouse);
+        #[cfg(windows)]
+        assert!(!c.sgr_mouse, "bare env must not claim mouse on windows");
         assert!(!c.kitty_keyboard && !c.kitty_graphics && !c.sixel);
         assert!(!c.undercurl, "no undercurl evidence for plain xterm");
     }
@@ -725,7 +733,8 @@ mod tests {
         ]);
         assert!(c.no_color);
         assert!(!c.truecolor && !c.colors_256);
-        // NO_COLOR is about color, not interaction.
+        // NO_COLOR is about color, not interaction. (kitty identified
+        // itself, so the mouse claim holds on every platform.)
         assert!(c.sgr_mouse && c.bracketed_paste && c.kitty_keyboard);
         assert_eq!(c.present_caps().color, ColorDepth::Ansi16);
     }
