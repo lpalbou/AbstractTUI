@@ -1,0 +1,82 @@
+# CI for AbstractTUI — a pure-Rust library crate.
+#
+# Gates: build + full test suite on Linux/macOS, lib tests on Windows,
+# clippy (zero warnings) and rustdoc (zero warnings) on Linux.
+# Live/perf suites are #[ignore]d in the tree and deliberately not run here.
+#
+# Deliberate omissions (see .github/SETUP.md "Follow-ups"):
+#   - no MSRV job: Cargo.toml declares no `rust-version` yet.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_BACKTRACE: "1"
+
+jobs:
+  test-unix:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build (all targets)
+        run: cargo build --all-targets
+      - name: Test
+        run: cargo test
+      - name: Doc tests
+        run: cargo test --doc
+
+  test-windows:
+    # The integration-test harness drives real terminals through a unix pty
+    # helper (cfg-gated to unix), so the integration suites cannot run on
+    # Windows yet. Library unit tests are the Windows gate for now: the
+    # crate's Windows backend is exercised by `cargo build --lib` and
+    # `cargo test --lib`.
+    name: test (windows, lib only)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build (lib)
+        run: cargo build --lib
+      - name: Test (lib)
+        run: cargo test --lib
+
+  lint:
+    name: lint (clippy + rustdoc)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format check
+        run: cargo fmt --check
+      - name: Clippy (deny warnings)
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Rustdoc (deny warnings)
+        run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings

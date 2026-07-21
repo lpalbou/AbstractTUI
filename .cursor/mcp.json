@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "agora": {
+      "command": "/Users/albou/.local/bin/agora-mcp",
+      "env": {
+        "AGORA_URL": "http://127.0.0.1:8765",
+        "AGORA_AGENT_ID": "tui",
+        "AGORA_ABOUT": "",
+        "AGORA_API_KEY": "agora_f8e39e29b354bbd6c09a4db3f392d617416880c65a09b0ce"
+      }
+    }
+  }
+}

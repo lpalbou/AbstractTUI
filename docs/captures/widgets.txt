@@ -1,0 +1,32 @@
+
+      AbstractTUI         Dark (Abstract)
+
+  interactive   visual
+ ▔▔▔▔▔▔▔▔▔▔▔▔▔
+
+   click me    disabled   clicks: 0
+
+  ▐type your name, Enter submits…            ▌
+
+  hello, stranger!
+
+  ┌ list — arrows move, wheel scrolls ─────────────────────────────────────────────────────────────────────┐
+  │abstract-dark                                                                                           │
+  │observer-night                                                                                          │
+  │catppuccin-mocha                                                                                        │
+  │rose-pine                                                                                               │
+  │tokyo-night                                                                                             │
+  │nord                                                                                                    │
+  │one-dark                                                                                                │
+  │dracula                                                                                                 │
+  │monokai                                                                                                 │
+  │gruvbox                                                                                                 │
+  │                                                                                                        │
+  │                                                                                                        │
+  │                                                                                                        │
+  │                                                                                                        │
+  └────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+ tab focus · enter/space activate · ctrl+t theme · f2 spin · q quit
+

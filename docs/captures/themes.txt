@@ -1,0 +1,30 @@
+ Themes  —  Dark (Abstract) (dark)
+                                                                              preview
+ ● Dark (Abstract)            Light (Abstract)                                 ▲ app                   12:04
+   ██████████████████         ██████████████████
+                                                                               primary text
+   Observer Night             Catppuccin Mocha                                 secondary label
+   ██████████████████         ██████████████████                               placeholder
+                                                                               ●ok ●warn ●err ●info
+   Catppuccin Macchiato       Catppuccin Frappe
+   ██████████████████         ██████████████████                                selected row
+                                                                                action   link
+   Rose Pine                  Rose Pine Moon
+   ██████████████████         ██████████████████                               ███████████████████
+
+   Tokyo Night                Nord                                             ──────  ──────
+   ██████████████████         ██████████████████
+
+   One Dark                   Dracula
+   ██████████████████         ██████████████████
+
+   Monokai                    Gruvbox
+   ██████████████████         ██████████████████
+
+                                                    · · ·
+ Dark (Abstract)  text 14.7:1 · muted 7.3:1 · faint 3.0:1 · accent 4.5:1 · selection 10.2:1
+ text muted faint  ● ok ● warn ● error ● info ● accent ● alt
+ chart ████████████████   selection
+
+
+ ←↑↓→ move  enter apply  q quit

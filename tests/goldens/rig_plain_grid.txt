@@ -1,0 +1,6 @@
+size=8x3 cursor=3,2 modes=[7,25]
+  0|abc     |
+  1| rev    |
+  2|end     |
+styles:
+  1:1..4 attrs=R

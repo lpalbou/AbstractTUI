@@ -1,0 +1,287 @@
+size=110x30 cursor=0,29 modes=[7,25,1049]
+  0| Themes  —  Dark (Abstract) (dark)                                                                            |
+  1|                                                                              preview                         |
+  2| ● Dark (Abstract)            Light (Abstract)                                 ▲ app                   12:04  |
+  3|   ██████████████████         ██████████████████                                                              |
+  4|                                                                               primary text                   |
+  5|   Observer Night             Catppuccin Mocha                                 secondary label                |
+  6|   ██████████████████         ██████████████████                               placeholder                    |
+  7|                                                                               ●ok ●warn ●err ●info           |
+  8|   Catppuccin Macchiato       Catppuccin Frappe                                                               |
+  9|   ██████████████████         ██████████████████                                selected row                  |
+ 10|                                                                                action   link                 |
+ 11|   Rose Pine                  Rose Pine Moon                                                                  |
+ 12|   ██████████████████         ██████████████████                               ███████████████████            |
+ 13|                                                                                                              |
+ 14|   Tokyo Night                Nord                                             ──────  ──────                 |
+ 15|   ██████████████████         ██████████████████                                                              |
+ 16|                                                                                                              |
+ 17|   One Dark                   Dracula                                                                         |
+ 18|   ██████████████████         ██████████████████                                                              |
+ 19|                                                                                                              |
+ 20|   Monokai                    Gruvbox                                                                         |
+ 21|   ██████████████████         ██████████████████                                                              |
+ 22|                                                                                                              |
+ 23|                                                    · · ·                                                     |
+ 24| Dark (Abstract)  text 14.7:1 · muted 7.3:1 · faint 3.0:1 · accent 4.5:1 · selection 10.2:1                   |
+ 25| text muted faint  ● ok ● warn ● error ● info ● accent ● alt                                                  |
+ 26| chart ████████████████   selection                                                                           |
+ 27|                                                                                                              |
+ 28|                                                                                                              |
+ 29| ←↑↓→ move  enter apply  q quit                                                                               |
+styles:
+  0:0..1 fg=#eeeeee bg=#1a1a2e
+  0:1..7 fg=#e94560 bg=#1a1a2e
+  0:7..12 fg=#666666 bg=#1a1a2e
+  0:12..27 fg=#eeeeee bg=#1a1a2e
+  0:27..34 fg=#aaaaaa bg=#1a1a2e
+  0:34..110 fg=#eeeeee bg=#1a1a2e
+  1:0..78 fg=#eeeeee bg=#1a1a2e
+  1:78..85 fg=#666666 bg=#1a1a2e
+  1:85..110 fg=#eeeeee bg=#1a1a2e
+  2:0..1 fg=#eeeeee bg=#1a1a2e
+  2:1..3 fg=#27ae60 bg=#58273d
+  2:3..27 fg=#eeeeee bg=#58273d
+  2:27..78 fg=#eeeeee bg=#1a1a2e
+  2:78..79 fg=#eeeeee bg=#16213e
+  2:79..84 fg=#e94560 bg=#16213e
+  2:84..103 fg=#eeeeee bg=#16213e
+  2:103..108 fg=#aaaaaa bg=#16213e
+  2:108..109 fg=#eeeeee bg=#16213e
+  2:109..110 fg=#eeeeee bg=#1a1a2e
+  3:0..1 fg=#eeeeee bg=#1a1a2e
+  3:1..3 fg=#eeeeee bg=#58273d
+  3:3..5 fg=#1a1a2e bg=#58273d
+  3:5..7 fg=#16213e bg=#58273d
+  3:7..9 fg=#0f3460 bg=#58273d
+  3:9..11 fg=#e94560 bg=#58273d
+  3:11..13 fg=#60a5fa bg=#58273d
+  3:13..15 fg=#27ae60 bg=#58273d
+  3:15..17 fg=#f39c12 bg=#58273d
+  3:17..19 fg=#e74c3c bg=#58273d
+  3:19..21 fg=#60a5fa bg=#58273d
+  3:21..27 fg=#eeeeee bg=#58273d
+  3:27..30 fg=#eeeeee bg=#1a1a2e
+  3:30..32 fg=#f7f7fb bg=#1a1a2e
+  3:32..34 fg=#ffffff bg=#1a1a2e
+  3:34..36 fg=#e6e8f0 bg=#1a1a2e
+  3:36..38 fg=#e94560 bg=#1a1a2e
+  3:38..40 fg=#2563eb bg=#1a1a2e
+  3:40..42 fg=#12883e bg=#1a1a2e
+  3:42..44 fg=#b16105 bg=#1a1a2e
+  3:44..46 fg=#dc2626 bg=#1a1a2e
+  3:46..48 fg=#2563eb bg=#1a1a2e
+  3:48..110 fg=#eeeeee bg=#1a1a2e
+  4:0..110 fg=#eeeeee bg=#1a1a2e
+  5:0..79 fg=#eeeeee bg=#1a1a2e
+  5:79..94 fg=#aaaaaa bg=#1a1a2e
+  5:94..110 fg=#eeeeee bg=#1a1a2e
+  6:0..3 fg=#eeeeee bg=#1a1a2e
+  6:3..5 fg=#0b0f14 bg=#1a1a2e
+  6:5..7 fg=#10161e bg=#1a1a2e
+  6:7..9 fg=#161e28 bg=#1a1a2e
+  6:9..11 fg=#e8a54a bg=#1a1a2e
+  6:11..13 fg=#6ea8d8 bg=#1a1a2e
+  6:13..15 fg=#7bc98c bg=#1a1a2e
+  6:15..17 fg=#e0af68 bg=#1a1a2e
+  6:17..19 fg=#d9705a bg=#1a1a2e
+  6:19..21 fg=#6ea8d8 bg=#1a1a2e
+  6:21..30 fg=#eeeeee bg=#1a1a2e
+  6:30..32 fg=#1e1e2e bg=#1a1a2e
+  6:32..34 fg=#181825 bg=#1a1a2e
+  6:34..36 fg=#313244 bg=#1a1a2e
+  6:36..38 fg=#cba6f7 bg=#1a1a2e
+  6:38..40 fg=#89b4fa bg=#1a1a2e
+  6:40..42 fg=#a6e3a1 bg=#1a1a2e
+  6:42..44 fg=#f9e2af bg=#1a1a2e
+  6:44..46 fg=#f38ba8 bg=#1a1a2e
+  6:46..48 fg=#89b4fa bg=#1a1a2e
+  6:48..79 fg=#eeeeee bg=#1a1a2e
+  6:79..90 fg=#666666 bg=#1a1a2e
+  6:90..110 fg=#eeeeee bg=#1a1a2e
+  7:0..79 fg=#eeeeee bg=#1a1a2e
+  7:79..82 fg=#27ae60 bg=#1a1a2e
+  7:82..88 fg=#f39c12 bg=#1a1a2e
+  7:88..93 fg=#e74c3c bg=#1a1a2e
+  7:93..99 fg=#60a5fa bg=#1a1a2e
+  7:99..110 fg=#eeeeee bg=#1a1a2e
+  8:0..110 fg=#eeeeee bg=#1a1a2e
+  9:0..3 fg=#eeeeee bg=#1a1a2e
+  9:3..5 fg=#24273a bg=#1a1a2e
+  9:5..7 fg=#1e2030 bg=#1a1a2e
+  9:7..9 fg=#363a4f bg=#1a1a2e
+  9:9..11 fg=#c6a0f6 bg=#1a1a2e
+  9:11..13 fg=#8aadf4 bg=#1a1a2e
+  9:13..15 fg=#a6da95 bg=#1a1a2e
+  9:15..17 fg=#eed49f bg=#1a1a2e
+  9:17..19 fg=#ed8796 bg=#1a1a2e
+  9:19..21 fg=#8aadf4 bg=#1a1a2e
+  9:21..30 fg=#eeeeee bg=#1a1a2e
+  9:30..32 fg=#303446 bg=#1a1a2e
+  9:32..34 fg=#292c3c bg=#1a1a2e
+  9:34..36 fg=#414559 bg=#1a1a2e
+  9:36..38 fg=#ca9ee6 bg=#1a1a2e
+  9:38..40 fg=#8caaee bg=#1a1a2e
+  9:40..42 fg=#a6d189 bg=#1a1a2e
+  9:42..44 fg=#e5c890 bg=#1a1a2e
+  9:44..46 fg=#e78284 bg=#1a1a2e
+  9:46..48 fg=#8caaee bg=#1a1a2e
+  9:48..79 fg=#eeeeee bg=#1a1a2e
+  9:79..106 fg=#eeeeee bg=#58273d
+  9:106..110 fg=#eeeeee bg=#1a1a2e
+  10:0..79 fg=#eeeeee bg=#1a1a2e
+  10:79..87 fg=#eeeeee bg=#0f3460
+  10:87..89 fg=#eeeeee bg=#1a1a2e
+  10:89..93 fg=#60a5fa bg=#1a1a2e
+  10:93..110 fg=#eeeeee bg=#1a1a2e
+  11:0..110 fg=#eeeeee bg=#1a1a2e
+  12:0..3 fg=#eeeeee bg=#1a1a2e
+  12:3..5 fg=#191724 bg=#1a1a2e
+  12:5..7 fg=#1f1d2e bg=#1a1a2e
+  12:7..9 fg=#26233a bg=#1a1a2e
+  12:9..11 fg=#c4a7e7 bg=#1a1a2e
+  12:11..13 fg=#31748f bg=#1a1a2e
+  12:13..15 fg=#9ccfd8 bg=#1a1a2e
+  12:15..17 fg=#f6c177 bg=#1a1a2e
+  12:17..19 fg=#eb6f92 bg=#1a1a2e
+  12:19..21 fg=#3d90b1 bg=#1a1a2e
+  12:21..30 fg=#eeeeee bg=#1a1a2e
+  12:30..32 fg=#232136 bg=#1a1a2e
+  12:32..34 fg=#2a273f bg=#1a1a2e
+  12:34..36 fg=#393552 bg=#1a1a2e
+  12:36..38 fg=#c4a7e7 bg=#1a1a2e
+  12:38..40 fg=#3e8fb0 bg=#1a1a2e
+  12:40..42 fg=#9ccfd8 bg=#1a1a2e
+  12:42..44 fg=#f6c177 bg=#1a1a2e
+  12:44..46 fg=#eb6f92 bg=#1a1a2e
+  12:46..48 fg=#459bbd bg=#1a1a2e
+  12:48..79 fg=#eeeeee bg=#1a1a2e
+  12:79..98 fg=#e94560 bg=#0f3460
+  12:98..108 fg=#eeeeee bg=#0f3460
+  12:108..110 fg=#eeeeee bg=#1a1a2e
+  13:0..110 fg=#eeeeee bg=#1a1a2e
+  14:0..79 fg=#eeeeee bg=#1a1a2e
+  14:79..87 fg=#3c3c4d bg=#1a1a2e
+  14:87..93 fg=#e94560 bg=#1a1a2e
+  14:93..110 fg=#eeeeee bg=#1a1a2e
+  15:0..3 fg=#eeeeee bg=#1a1a2e
+  15:3..5 fg=#1a1b26 bg=#1a1a2e
+  15:5..7 fg=#24283b bg=#1a1a2e
+  15:7..9 fg=#414868 bg=#1a1a2e
+  15:9..11 fg=#7aa2f7 bg=#1a1a2e
+  15:11..13 fg=#2ac3de bg=#1a1a2e
+  15:13..15 fg=#9ece6a bg=#1a1a2e
+  15:15..17 fg=#e0af68 bg=#1a1a2e
+  15:17..19 fg=#f7768e bg=#1a1a2e
+  15:19..21 fg=#2ac3de bg=#1a1a2e
+  15:21..30 fg=#eeeeee bg=#1a1a2e
+  15:30..32 fg=#2e3440 bg=#1a1a2e
+  15:32..34 fg=#3b4252 bg=#1a1a2e
+  15:34..36 fg=#434c5e bg=#1a1a2e
+  15:36..38 fg=#88c0d0 bg=#1a1a2e
+  15:38..40 fg=#5e81ac bg=#1a1a2e
+  15:40..42 fg=#a3be8c bg=#1a1a2e
+  15:42..44 fg=#ebcb8b bg=#1a1a2e
+  15:44..46 fg=#d89fa4 bg=#1a1a2e
+  15:46..48 fg=#9bb0cb bg=#1a1a2e
+  15:48..110 fg=#eeeeee bg=#1a1a2e
+  16:0..110 fg=#eeeeee bg=#1a1a2e
+  17:0..110 fg=#eeeeee bg=#1a1a2e
+  18:0..3 fg=#eeeeee bg=#1a1a2e
+  18:3..5 fg=#282c34 bg=#1a1a2e
+  18:5..7 fg=#21252b bg=#1a1a2e
+  18:7..9 fg=#3a3f4b bg=#1a1a2e
+  18:9..11 fg=#61afef bg=#1a1a2e
+  18:11..13 fg=#c678dd bg=#1a1a2e
+  18:13..15 fg=#98c379 bg=#1a1a2e
+  18:15..17 fg=#e5c07b bg=#1a1a2e
+  18:17..19 fg=#e06c75 bg=#1a1a2e
+  18:19..21 fg=#c678dd bg=#1a1a2e
+  18:21..30 fg=#eeeeee bg=#1a1a2e
+  18:30..32 fg=#282a36 bg=#1a1a2e
+  18:32..34 fg=#343746 bg=#1a1a2e
+  18:34..36 fg=#44475a bg=#1a1a2e
+  18:36..38 fg=#ff79c6 bg=#1a1a2e
+  18:38..40 fg=#8be9fd bg=#1a1a2e
+  18:40..42 fg=#50fa7b bg=#1a1a2e
+  18:42..44 fg=#f1fa8c bg=#1a1a2e
+  18:44..46 fg=#ff7979 bg=#1a1a2e
+  18:46..48 fg=#8be9fd bg=#1a1a2e
+  18:48..110 fg=#eeeeee bg=#1a1a2e
+  19:0..110 fg=#eeeeee bg=#1a1a2e
+  20:0..110 fg=#eeeeee bg=#1a1a2e
+  21:0..3 fg=#eeeeee bg=#1a1a2e
+  21:3..5 fg=#272822 bg=#1a1a2e
+  21:5..7 fg=#2d2e27 bg=#1a1a2e
+  21:7..9 fg=#3e3d32 bg=#1a1a2e
+  21:9..11 fg=#66d9ef bg=#1a1a2e
+  21:11..13 fg=#a1efe4 bg=#1a1a2e
+  21:13..15 fg=#a6e22e bg=#1a1a2e
+  21:15..17 fg=#e6db74 bg=#1a1a2e
+  21:17..19 fg=#fb5d95 bg=#1a1a2e
+  21:19..21 fg=#a1efe4 bg=#1a1a2e
+  21:21..30 fg=#eeeeee bg=#1a1a2e
+  21:30..32 fg=#282828 bg=#1a1a2e
+  21:32..34 fg=#3c3836 bg=#1a1a2e
+  21:34..36 fg=#504945 bg=#1a1a2e
+  21:36..38 fg=#fe8019 bg=#1a1a2e
+  21:38..40 fg=#83a598 bg=#1a1a2e
+  21:40..42 fg=#b8bb26 bg=#1a1a2e
+  21:42..44 fg=#fabd2f bg=#1a1a2e
+  21:44..46 fg=#fc7f70 bg=#1a1a2e
+  21:46..48 fg=#89a99d bg=#1a1a2e
+  21:48..110 fg=#eeeeee bg=#1a1a2e
+  22:0..110 fg=#eeeeee bg=#1a1a2e
+  23:0..52 fg=#eeeeee bg=#1a1a2e
+  23:52..57 fg=#666666 bg=#1a1a2e
+  23:57..110 fg=#eeeeee bg=#1a1a2e
+  24:0..1 fg=#eeeeee bg=#1a1a2e
+  24:1..91 fg=#aaaaaa bg=#1a1a2e
+  24:91..110 fg=#eeeeee bg=#1a1a2e
+  25:0..6 fg=#eeeeee bg=#1a1a2e
+  25:6..11 fg=#aaaaaa bg=#1a1a2e
+  25:11..12 fg=#eeeeee bg=#1a1a2e
+  25:12..17 fg=#666666 bg=#1a1a2e
+  25:17..19 fg=#eeeeee bg=#1a1a2e
+  25:19..21 fg=#27ae60 bg=#1a1a2e
+  25:21..23 fg=#aaaaaa bg=#1a1a2e
+  25:23..24 fg=#eeeeee bg=#1a1a2e
+  25:24..26 fg=#f39c12 bg=#1a1a2e
+  25:26..30 fg=#aaaaaa bg=#1a1a2e
+  25:30..31 fg=#eeeeee bg=#1a1a2e
+  25:31..33 fg=#e74c3c bg=#1a1a2e
+  25:33..38 fg=#aaaaaa bg=#1a1a2e
+  25:38..39 fg=#eeeeee bg=#1a1a2e
+  25:39..41 fg=#60a5fa bg=#1a1a2e
+  25:41..45 fg=#aaaaaa bg=#1a1a2e
+  25:45..46 fg=#eeeeee bg=#1a1a2e
+  25:46..48 fg=#e94560 bg=#1a1a2e
+  25:48..54 fg=#aaaaaa bg=#1a1a2e
+  25:54..55 fg=#eeeeee bg=#1a1a2e
+  25:55..57 fg=#60a5fa bg=#1a1a2e
+  25:57..60 fg=#aaaaaa bg=#1a1a2e
+  25:60..110 fg=#eeeeee bg=#1a1a2e
+  26:0..1 fg=#eeeeee bg=#1a1a2e
+  26:1..6 fg=#aaaaaa bg=#1a1a2e
+  26:6..7 fg=#eeeeee bg=#1a1a2e
+  26:7..9 fg=#e94560 bg=#1a1a2e
+  26:9..11 fg=#60a5fa bg=#1a1a2e
+  26:11..13 fg=#27ae60 bg=#1a1a2e
+  26:13..15 fg=#f39c12 bg=#1a1a2e
+  26:15..17 fg=#e74c3c bg=#1a1a2e
+  26:17..19 fg=#a575ad bg=#1a1a2e
+  26:19..21 fg=#44aaad bg=#1a1a2e
+  26:21..23 fg=#ed7427 bg=#1a1a2e
+  26:23..25 fg=#eeeeee bg=#1a1a2e
+  26:25..36 fg=#eeeeee bg=#58273d
+  26:36..110 fg=#eeeeee bg=#1a1a2e
+  27:0..110 fg=#eeeeee bg=#1a1a2e
+  28:0..110 fg=#eeeeee bg=#1a1a2e
+  29:0..1 fg=#eeeeee bg=#1a1a2e
+  29:1..5 fg=#e94560 bg=#1a1a2e
+  29:5..12 fg=#aaaaaa bg=#1a1a2e
+  29:12..17 fg=#e94560 bg=#1a1a2e
+  29:17..25 fg=#aaaaaa bg=#1a1a2e
+  29:25..26 fg=#e94560 bg=#1a1a2e
+  29:26..33 fg=#aaaaaa bg=#1a1a2e
+  29:33..110 fg=#eeeeee bg=#1a1a2e

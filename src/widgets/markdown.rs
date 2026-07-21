@@ -1,0 +1,395 @@
+//! MarkdownView: RENDER's markdown blocks, themed and typeset.
+//!
+//! ```ignore
+//! use abstracttui::widgets::MarkdownView;
+//! let view = MarkdownView::new(doc_source)
+//!     .scroll_offset(top.get())
+//!     .element(&t)
+//!     .build();
+//! ```
+//!
+//! Typesetting (all tokens, §3.3): headings step `accent`(+BOLD) ->
+//! `accent` -> `text`+BOLD with a `border` underline rule beneath level 1;
+//! list markers in `accent_alt`; blockquotes carry a `border` bar with
+//! `text_muted` prose; code fences render through the highlighter on the
+//! `surface_raised` code ground (the same inks as `CodeView` — one
+//! mapping, `code_token_color`); inline code = `surface_raised` chip;
+//! links = `link` ink + underline. Layout happens at draw width (wrap),
+//! deterministically — `MarkdownView::rows(...)` exposes the same fold
+//! for the app's scroll clamp.
+//!
+//! OWNER: DESIGN.
+
+use crate::base::{Point, Rgba};
+use crate::layout::Style as LayoutStyle;
+use crate::render::md::{self, Block, Marker, MdStyles};
+use crate::render::rich::{RichLine, RichText, Span};
+use crate::render::{Attrs, Style};
+use crate::text::CLikeLexer;
+use crate::theme::TokenSet;
+use crate::ui::{Element, StyledCanvas};
+
+use super::code::code_token_color;
+
+/// One typeset row: a rich line plus its chrome.
+struct Row {
+    line: RichLine,
+    indent: i32,
+    /// Full-width ground override (code fences).
+    ground: Option<Rgba>,
+    /// Leading quote bar.
+    quote: bool,
+    /// Full-width rule row (`---` and the level-1 underline).
+    rule: bool,
+}
+
+impl Row {
+    fn plain(line: RichLine) -> Row {
+        Row {
+            line,
+            indent: 0,
+            ground: None,
+            quote: false,
+            rule: false,
+        }
+    }
+}
+
+pub struct MarkdownView {
+    source: String,
+    scroll_offset: i32,
+    layout: Option<LayoutStyle>,
+}
+
+impl MarkdownView {
+    pub fn new(source: impl Into<String>) -> MarkdownView {
+        MarkdownView {
+            source: source.into(),
+            scroll_offset: 0,
+            layout: None,
+        }
+    }
+
+    /// First visible typeset row (app-managed scrolling).
+    pub fn scroll_offset(mut self, rows: i32) -> MarkdownView {
+        self.scroll_offset = rows.max(0);
+        self
+    }
+
+    pub fn layout(mut self, layout: LayoutStyle) -> MarkdownView {
+        self.layout = Some(layout);
+        self
+    }
+
+    /// Typeset row count at `width` — the scroll clamp (same fold as the
+    /// renderer, so the clamp can never drift from the pixels).
+    pub fn rows(source: &str, t: &TokenSet, width: i32) -> usize {
+        layout_rows(source, t, width).len()
+    }
+
+    /// Heading outline `(level, text)` — table-of-contents material.
+    pub fn outline(source: &str, t: &TokenSet) -> Vec<(u8, String)> {
+        md::parse(source, &md_styles(t))
+            .iter()
+            .filter_map(|b| match b {
+                Block::Heading { level, content } => Some((*level, content.plain())),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub fn element(self, t: &TokenSet) -> Element {
+        let tokens = *t;
+        let offset = self.scroll_offset as usize;
+        let source = self.source;
+        let layout = self
+            .layout
+            .unwrap_or_else(|| LayoutStyle::default().grow(1.0));
+        // Draw-time typesetting, cached per width (resize re-lays-out;
+        // steady-state repaints reuse).
+        let mut cache: Option<(i32, Vec<Row>)> = None;
+        Element::new().style(layout).draw(move |canvas, rect| {
+            if rect.w <= 1 || rect.h <= 0 {
+                return;
+            }
+            let rows = match &mut cache {
+                Some((w, rows)) if *w == rect.w => rows,
+                slot => {
+                    let rows = layout_rows(&source, &tokens, rect.w);
+                    &mut slot.insert((rect.w, rows)).1
+                }
+            };
+            let offset = offset.min(rows.len().saturating_sub(1));
+            draw_rows(canvas, rect, &tokens, &rows[offset..]);
+        })
+    }
+}
+
+/// The markdown span vocabulary in theme tokens. `base` deliberately
+/// carries NO fg: parse_inline stamps `base` onto every plain span, and
+/// an explicit fg there would defeat block-level recoloring (blockquotes
+/// dim to `text_muted`); fg-less spans inherit at draw time instead.
+fn md_styles(t: &TokenSet) -> MdStyles {
+    MdStyles {
+        base: Style::EMPTY,
+        bold: Style::new().attrs(Attrs::BOLD),
+        italic: Style::new().attrs(Attrs::ITALIC),
+        // Inline code: a raised chip, body ink.
+        code: Style::new().fg(t.text).bg(t.surface_raised),
+        link: Style::new().fg(t.link).attrs(Attrs::UNDERLINE),
+        heading: Style::new().attrs(Attrs::BOLD),
+    }
+}
+
+/// Parse + typeset at `width`. Pure over (source, tokens, width).
+fn layout_rows(source: &str, t: &TokenSet, width: i32) -> Vec<Row> {
+    let styles = md_styles(t);
+    let lexer = CLikeLexer::default();
+    let code_base = Style::new().fg(t.text);
+    let mut rows: Vec<Row> = Vec::new();
+    let blank = |rows: &mut Vec<Row>| {
+        if !rows.is_empty() {
+            rows.push(Row::plain(RichLine::new()));
+        }
+    };
+
+    for block in md::parse(source, &styles) {
+        match block {
+            Block::Heading { level, content } => {
+                blank(&mut rows);
+                let ink = match level {
+                    1 => Style::new().fg(t.accent).attrs(Attrs::BOLD),
+                    2 => Style::new().fg(t.accent),
+                    _ => Style::new().fg(t.text).attrs(Attrs::BOLD),
+                };
+                let mut line = RichLine::new();
+                for span in content.spans {
+                    line.push(Span::new(span.text, span.style.merge(ink)));
+                }
+                rows.push(Row::plain(line));
+                if level == 1 {
+                    rows.push(Row {
+                        line: RichLine::new(),
+                        indent: 0,
+                        ground: None,
+                        quote: false,
+                        rule: true,
+                    });
+                }
+            }
+            Block::Paragraph(line) => {
+                blank(&mut rows);
+                for wrapped in wrap_line(line, width) {
+                    rows.push(Row::plain(wrapped));
+                }
+            }
+            Block::ListItem {
+                depth,
+                marker,
+                content,
+            } => {
+                let indent = 2 + depth as i32 * 2;
+                let mut line = RichLine::new();
+                let marker_text = match marker {
+                    Marker::Bullet => "• ".to_string(),
+                    Marker::Number(n) => format!("{n}. "),
+                };
+                line.push(Span::new(marker_text, Style::new().fg(t.accent_alt)));
+                for span in content.spans {
+                    line.push(span);
+                }
+                for (i, wrapped) in wrap_line(line, width - indent).into_iter().enumerate() {
+                    rows.push(Row {
+                        line: wrapped,
+                        // Continuation rows hang past the marker.
+                        indent: indent + if i > 0 { 2 } else { 0 },
+                        ground: None,
+                        quote: false,
+                        rule: false,
+                    });
+                }
+            }
+            Block::Blockquote(line) => {
+                blank(&mut rows);
+                let mut muted = RichLine::new();
+                for span in line.spans {
+                    // Quote prose dims; spans with their OWN ink (links,
+                    // inline code) keep it.
+                    let style = if span.style.fg.is_none() {
+                        span.style.fg(t.text_muted)
+                    } else {
+                        span.style
+                    };
+                    muted.push(Span::new(span.text, style));
+                }
+                for wrapped in wrap_line(muted, width - 2) {
+                    rows.push(Row {
+                        line: wrapped,
+                        indent: 2,
+                        ground: None,
+                        quote: true,
+                        rule: false,
+                    });
+                }
+            }
+            Block::CodeFence { lang: _, lines } => {
+                blank(&mut rows);
+                for code_line in &lines {
+                    let rich = RichLine::from_highlighted(code_line, &lexer, code_base, |k| {
+                        Style::new().fg(code_token_color(k, t))
+                    });
+                    let mut padded = RichLine::new();
+                    padded.push(Span::new(" ", code_base));
+                    for span in rich.spans {
+                        padded.push(span);
+                    }
+                    rows.push(Row {
+                        line: padded,
+                        indent: 1,
+                        ground: Some(t.surface_raised),
+                        quote: false,
+                        rule: false,
+                    });
+                }
+            }
+            Block::Rule => {
+                blank(&mut rows);
+                rows.push(Row {
+                    line: RichLine::new(),
+                    indent: 0,
+                    ground: None,
+                    quote: false,
+                    rule: true,
+                });
+            }
+        }
+    }
+    rows
+}
+
+fn wrap_line(line: RichLine, width: i32) -> Vec<RichLine> {
+    RichText::from_lines(vec![line]).wrap(width.max(4)).lines
+}
+
+fn draw_rows(canvas: &mut dyn StyledCanvas, rect: crate::base::Rect, t: &TokenSet, rows: &[Row]) {
+    for (i, row) in rows.iter().enumerate() {
+        let y = rect.y + i as i32;
+        if y >= rect.bottom() {
+            break;
+        }
+        if row.rule {
+            for x in rect.x..rect.right() {
+                canvas.put(Point::new(x, y), '─', t.border, Rgba::TRANSPARENT);
+            }
+            continue;
+        }
+        if let Some(ground) = row.ground {
+            canvas.fill(
+                crate::base::Rect::new(rect.x, y, rect.w, 1),
+                ' ',
+                t.text,
+                ground,
+            );
+        }
+        if row.quote {
+            canvas.put(Point::new(rect.x, y), '▎', t.border, Rgba::TRANSPARENT);
+        }
+        let mut x = rect.x + row.indent;
+        for span in &row.line.spans {
+            let style = if span.style.fg.is_none() {
+                span.style.fg(t.text)
+            } else {
+                span.style
+            };
+            x += crate::widgets::richtext::print_span_clipped(
+                canvas,
+                x,
+                y,
+                rect.right(),
+                &span.text,
+                &style,
+            );
+            if x >= rect.right() {
+                break;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::base::Size;
+    use crate::theme::default_theme;
+    use crate::widgets::test_util::{draw_into, row};
+
+    const DOC: &str = "# Title\n\nBody with `code` inline.\n\n- first\n- second\n\n> wisdom\n\n```\nfn main() {}\n```\n";
+
+    fn cell_of(row: &str, needle: &str) -> i32 {
+        let byte = row.find(needle).unwrap();
+        row[..byte].chars().count() as i32
+    }
+
+    #[test]
+    fn heading_list_quote_and_fence_chrome() {
+        let t = default_theme().tokens;
+        let c = draw_into(MarkdownView::new(DOC).element(&t), Size::new(28, 14));
+        // Level-1 heading in accent + underline rule beneath.
+        let title_y = 0;
+        assert!(row(&c, title_y).starts_with("Title"));
+        assert_eq!(c.cell(Point::new(0, title_y)).unwrap().1, t.accent);
+        assert!(row(&c, title_y + 1).starts_with('─'));
+        assert_eq!(c.cell(Point::new(0, title_y + 1)).unwrap().1, t.border);
+
+        // Inline code chip ground.
+        let body_y = (0..14).find(|y| row(&c, *y).contains("code")).unwrap();
+        let cx = cell_of(&row(&c, body_y), "code");
+        assert_eq!(c.cell(Point::new(cx, body_y)).unwrap().2, t.surface_raised);
+
+        // List marker ink.
+        let li_y = (0..14).find(|y| row(&c, *y).contains("• first")).unwrap();
+        let mx = cell_of(&row(&c, li_y), "•");
+        assert_eq!(c.cell(Point::new(mx, li_y)).unwrap().1, t.accent_alt);
+
+        // Blockquote bar + muted prose.
+        let q_y = (0..14).find(|y| row(&c, *y).contains("wisdom")).unwrap();
+        assert_eq!(c.cell(Point::new(0, q_y)).unwrap().0, '▎');
+        let wx = cell_of(&row(&c, q_y), "wisdom");
+        assert_eq!(c.cell(Point::new(wx, q_y)).unwrap().1, t.text_muted);
+
+        // Code fence: raised ground + keyword ink.
+        let f_y = (0..14).find(|y| row(&c, *y).contains("fn main")).unwrap();
+        let fx = cell_of(&row(&c, f_y), "fn");
+        let (_, fg, bg) = c.cell(Point::new(fx, f_y)).unwrap();
+        assert_eq!(fg, t.syntax_keyword);
+        assert_eq!(bg, t.surface_raised);
+    }
+
+    #[test]
+    fn outline_rows_and_scroll_share_the_fold() {
+        let t = default_theme().tokens;
+        assert_eq!(
+            MarkdownView::outline(DOC, &t),
+            vec![(1, "Title".to_string())]
+        );
+        let total = MarkdownView::rows(DOC, &t, 28);
+        assert!(total >= 10, "typeset rows: {total}");
+        // Scrolling by one hides the title row.
+        let c = draw_into(
+            MarkdownView::new(DOC).scroll_offset(1).element(&t),
+            Size::new(28, 6),
+        );
+        assert!(!row(&c, 0).contains("Title"));
+    }
+
+    #[test]
+    fn wrapping_and_tiny_rects_never_panic() {
+        let t = default_theme().tokens;
+        let long = "paragraph with quite a few words that must wrap around";
+        let c = draw_into(MarkdownView::new(long).element(&t), Size::new(12, 8));
+        assert!(row(&c, 0).trim_end().len() <= 12);
+        for size in [Size::new(0, 0), Size::new(2, 1), Size::new(5, 2)] {
+            let _ = draw_into(MarkdownView::new(DOC).element(&t), size);
+        }
+    }
+}

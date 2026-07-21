@@ -1,0 +1,2213 @@
+# AbstractTUI
+
+> AbstractTUI is a reactive, compositor-grade terminal UI engine for Rust. State lives in
+> fine-grained signals (in the SolidJS tradition — not immediate mode, not a virtual DOM):
+> a write re-runs exactly the computations that depended on it, and those re-renders damage
+> exactly the screen regions they own. Damage flows through a z-ordered compositor with
+> alpha blending and per-cell shaders, a frame diff, and a byte-economical ANSI presenter,
+> so an idle app emits zero bytes and allocates nothing. On top sit a 20+ widget library
+> arranged by a flexbox-style solver and a track-based grid, 26 built-in themes over 36
+> contrast-audited semantic design tokens, PNG/baseline-JPEG images drawn through the best
+> channel the terminal proves (kitty graphics, iTerm2, sixel, or unicode mosaic),
+> software-rasterized 3D from GLB files (textures, animation, skinning — no GPU),
+> cell-shader animation with tweens, easings, and timelines, an optional boot splash, and a
+> headless testing harness that drives the production pipeline without a pty. One crate,
+> five small dependencies (unicode-width, unicode-segmentation, miniz_oxide, plus libc on
+> unix / windows-sys on Windows). MIT licensed.
+
+This file aggregates the full AbstractTUI documentation verbatim: the README followed by
+every guide under docs/, each introduced by a `===== FILE: <path> =====` separator, with
+package facts at the end.
+
+
+===== FILE: README.md =====
+
+# AbstractTUI
+
+**The terminal, composed.** A reactive, compositor-grade terminal UI engine for Rust.
+
+AbstractTUI is built on fine-grained reactive signals — not immediate mode, not a
+virtual DOM. Reading a signal inside a view tracks it; writing one re-runs exactly
+the computations that depended on it, and those re-renders damage exactly the
+screen regions they own. Damaged regions flow through a real compositor
+(z-ordered layers, alpha blending, per-layer offset/opacity), a frame diff, and a
+byte emitter that plays the terminal like an instrument — cursor-motion economy,
+minimal SGR runs, synchronized output where the terminal supports it. The result:
+an idle app emits zero bytes and allocates nothing, and a blinking cursor repaints
+one cell, not the screen.
+
+```text
+ ▲ AbstractTUI  ops dashboard                                                          Dark (Abstract)  ·  12:34:56 UTC
+ ┌ nav ────────┐  ┌ traffic — rx/tx (MB/s) ──────────────────────────────────────┐  ┌ load ─────────────────────────┐
+ │  overview   │  │ ── rx   ── tx                                                │  │ mem                       54% │
+ │  traffic    │  │100 │                                                      ⣀⢄⢀│  │████████████████▊              │
+ │  sessions   │  │    │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⢄⡠⠔⠉⠊⠑⠊ ⠈⠁│  │⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒│
+ │  logs       │  │    │⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠊⠉⠑⠒⠔⠒⠒⠤⠤⢄│  │ io                        45% │
+ │  alerts     │  │0   │                                                         │  │█████████████▉                 │
+ │  settings   │  │    └─────────────────────────────────────────────────────────│  │⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤│
+ │             │  └──────────────────────────────────────────────────────────────┘  └───────────────────────────────┘
+ │             │
+ │             │  ┌ events ───────────────────────────┐  ┌ sessions — s toggles sort ────────────────────────────────┐
+ │             │  │                                   │  │host         region   rx▼            tx            state   │
+ │             │  │                                   │  │edge-2       eu-w     41.3 MB/s      20.8 MB/s     healthy │
+ │             │  │                                   │  │core-a       us-e     41.1 MB/s      18.6 MB/s     syncing │
+ │             │  │                                   │  │edge-1       eu-w     38.7 MB/s      7.2 MB/s      healthy │
+ │             │  │                                   │  │edge-3       us-e     38.1 MB/s      23.6 MB/s     syncing │
+ │             │  │                                   │  │cache-2      ap-s     25.2 MB/s      16.5 MB/s     healthy │
+ │             │  │                                   │  │core-b       ap-s     22.8 MB/s      8.4 MB/s      syncing │
+ │             │  │                                   │  │cache-1      eu-n     13.4 MB/s      19.9 MB/s     healthy │
+ │             │  │ 00:00 info  session opened from … │  │                                                           │
+ │             │  │ 00:00 ok    tls renewed for gate… │  │                                                           │
+ │             │  │ 00:01 ok    backup verified       │  │                                                           │
+ │             │  │ 00:01 info  session opened from … │  │                                                           │
+ │             │  │ 00:02 info  session opened from … │  │                                                           │
+ │             │  │ 00:02 warn  backpressure on shar… │  │                                                           │
+ │             │  │ 00:03 ok    shard 2 caught up     │  │                                                           │
+ └─────────────┘  └───────────────────────────────────┘  └───────────────────────────────────────────────────────────┘
+
+ tab focus  alt+←→ panes  s sort  n toast  b mark  ? help  ctrl+t theme  q quit
+```
+
+*The `dashboard` example at 120×35 (abridged; from `docs/captures/`, regenerable
+with `cargo run --example capture`).*
+
+## Highlights
+
+- **Widgets + layout** — buttons, text inputs, lists, sortable tables, tabs,
+  checkboxes, radio groups, scroll regions, panels, badges, progress bars,
+  spinners, modals, toasts — arranged by a flexbox-style solver (row/column,
+  `grow`, `gap`, padding) and a track-based grid (`fr`/cells/percent, spans).
+- **26 built-in themes** — catppuccin, rose-pine, tokyo-night, nord, one-dark,
+  dracula, monokai, gruvbox, solarized, everforest and the Abstract originals —
+  over 36 semantic design tokens, contrast-audited against WCAG floors, and
+  hot-swappable at runtime through one signal.
+- **Input everywhere** — keyboard and mouse (click, hover, drag, wheel), the
+  kitty keyboard protocol and xterm modifyOtherKeys decoded automatically when
+  present, bracketed paste hardened against multi-megabyte and hostile input,
+  focus events, key chords with modifiers.
+- **Images** — PNG and baseline JPEG decoding built in, drawn through the best
+  channel your terminal offers: kitty graphics, iTerm2, sixel, or unicode mosaic
+  (half-block / quadrant / sextant / braille). Capability detection is automatic
+  and every degradation is labeled, never silent.
+- **Software-rasterized 3D** — load GLB files (node hierarchies, textures,
+  vertex colors, animation, skinning) and render them into the same cell
+  pipeline. No GPU, no native dependencies.
+- **Motion** — cell shaders (shimmer, dissolve, hue-drift, and more) that cost
+  work only where damage exists, plus tweens, easings, and timelines.
+- **A boot identity** — a 2-second animated splash (3D mark with a pure-cell 2D
+  fallback), skippable with any key, auto-disabled on non-TTY, `NO_COLOR`, and
+  `TERM=dumb`.
+- **Headless testing** — drive the production pipeline against a captured
+  terminal and assert on the rendered screen. No pty required.
+
+## Your first app
+
+Sixteen lines, one import:
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::widgets::Button;
+
+fn main() -> abstracttui::base::Result<()> {
+    App::simple(|cx| {
+        let count = cx.signal(0);
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(dyn_view(LayoutStyle::line(1), move || {
+                text(format!("count: {}", count.get()))
+            }))
+            .child(Button::new("+1").on_click(move || count.update(|c| *c += 1)).view(cx))
+            .child(text("Tab focuses · Enter clicks · Ctrl+C quits"))
+            .build()
+    })
+}
+```
+
+Tab focus, Enter/Space activation, and Ctrl+C quit are all defaults. The count
+line re-renders fine-grained through `dyn_view` — nothing else repaints. The
+walkthrough lives in [docs/getting-started.md](docs/getting-started.md).
+
+## Install
+
+```sh
+cargo add abstracttui
+```
+
+Rust 2021 edition. The dependency policy is deliberately austere — `unicode-width`,
+`unicode-segmentation`, `miniz_oxide`, plus `libc` on unix / `windows-sys` on
+Windows, and nothing else. ANSI emission, input parsing, the layout solver, the
+signals runtime, PNG/JPEG decoding, glTF parsing, and the 3D rasterizer are all
+implemented in-crate.
+
+## Run the examples
+
+```sh
+git clone https://github.com/lpalbou/abstracttui
+cd abstracttui
+cargo run --example dashboard
+```
+
+Twelve runnable examples live in [examples/](examples/README.md), and every one
+exits cleanly with a notice when no interactive terminal is present, so they are
+safe to run anywhere. Start with these five:
+
+- `dashboard` — the flagship ops screen: charts, log tail, sortable table,
+  toasts, modal help, spatial pane navigation.
+- `gallery` — the whole design system on one screen; one keypress restyles it.
+- `themes` — every theme as a live card grid with a preview pane and measured
+  contrast ratios.
+- `viewer3d` — orbit a GLB model with measured fps
+  (`cargo run --example viewer3d -- path/to/model.glb`).
+- `images` — four mosaic families side by side, dithering, and pixel-protocol
+  placement with the chosen channel named.
+
+`ABSTRACTTUI_THEME=rose-pine cargo run --example hello` themes any example from
+the environment; `--caps` on `dashboard`, `viewer3d`, and `images` prints the
+detected capability report and exits.
+
+## Platform support
+
+| Platform | Status |
+| --- | --- |
+| macOS | Verified — the full test suite includes live pty tests (real controlling terminal, signal-driven resize, suspend/resume). |
+| Linux | Verified — same unix code paths and pty coverage. |
+| Windows | Best-effort — compiles clean and lint-free against the MSVC target, and the platform-independent logic is unit-tested on every host, but it has not yet been run on a live Windows console. Treat the first Windows run as a beta event. |
+
+The terminal is always restored — on quit, on panic, and on Ctrl+Z suspend —
+including cursor style, mouse modes, and kitty keyboard flags.
+
+## Performance
+
+Measured (release build, M-class laptop): a full 200×60 diff+present costs
+~0.5 ms, a keystroke reaches the painted frame in ~50 µs through the real event
+loop, and an idle app costs zero — zero bytes written, zero heap allocations,
+zero wakeups. These are enforced by in-tree perf budgets and allocation-counting
+tests, not aspirations.
+
+## Documentation
+
+- [Getting started](docs/getting-started.md) — install to first pixels, step by step.
+- [Architecture](docs/architecture.md) — signals, damage, the compositor, the render pipeline.
+- [API guide](docs/api.md) — the public surface, module by module.
+- [FAQ](docs/faq.md) and [Troubleshooting](docs/troubleshooting.md).
+- [Examples catalog](examples/README.md) — what each demo proves and the keys it answers to.
+- API reference on [docs.rs](https://docs.rs/abstracttui).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+
+===== FILE: docs/getting-started.md =====
+
+# Getting started
+
+From install to first pixels, step by step. Every snippet here compiles against
+the current release; the longer ones are lifted from the crate's own doctests,
+which run in CI.
+
+## Install
+
+```sh
+cargo add abstracttui
+```
+
+AbstractTUI targets the Rust 2021 edition and builds on macOS, Linux, and
+Windows with a deliberately small dependency set (`unicode-width`,
+`unicode-segmentation`, `miniz_oxide`, plus the platform FFI crate). There is no
+native library to install and no GPU requirement.
+
+## Your first app
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::widgets::Button;
+
+fn main() -> abstracttui::base::Result<()> {
+    App::simple(|cx| {
+        let count = cx.signal(0);
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(dyn_view(LayoutStyle::line(1), move || {
+                text(format!("count: {}", count.get()))
+            }))
+            .child(Button::new("+1").on_click(move || count.update(|c| *c += 1)).view(cx))
+            .child(text("Tab focuses · Enter clicks · Ctrl+C quits"))
+            .build()
+    })
+}
+```
+
+Line by line:
+
+- **`use abstracttui::prelude::*;`** — one import covers the common path:
+  widgets, layout vocabulary, signals, hooks, and `App` itself.
+- **`App::simple(|cx| ...)`** — builds the app, mounts your root component,
+  enters the raw terminal, and runs the event loop until quit. The `cx`
+  parameter is your `Scope`: the handle you create reactive state with. A panic
+  hook is installed first, so the terminal is restored even if your code panics.
+- **`let count = cx.signal(0);`** — a `Signal`. Signals are small `Copy`
+  handles, so you can move them into as many closures as you like. `.get()` is
+  a tracked read; `.set(v)` and `.update(|v| ...)` write and notify exactly the
+  computations that read it.
+- **`Element::new().style(LayoutStyle::column())`** — the element tree. Styles
+  describe layout (direction, size, grow, gap, padding); children stack top to
+  bottom in a column.
+- **`dyn_view(LayoutStyle::line(1), move || ...)`** — a reactive region. The
+  closure re-runs whenever a signal it reads changes, and only this region's
+  cells are redrawn. `LayoutStyle::line(1)` is a full-width, one-row slot.
+- **`Button::new("+1").on_click(...).view(cx)`** — a widget builder. `.view(cx)`
+  resolves the active theme from context and returns a finished `View`, ready
+  for `.child(..)`. Every themed widget in the prelude supports this shape.
+- **`text(...)`** — a static text leaf. It never re-renders because it reads no
+  signals.
+- **Defaults you did not write** — Tab/Shift+Tab move focus, Enter and Space
+  activate the focused widget, Ctrl+C quits. Override any of them by consuming
+  the event in a handler or shortcut.
+
+## Adding interactivity
+
+`TextInput` binds to a `Signal<String>` and reports edits through `on_change`
+(after every edit) and `on_submit` (on Enter). Combined with `dyn_view`, state
+flows from keystroke to screen with no wiring in between:
+
+```rust
+use abstracttui::prelude::*;
+
+fn form(cx: Scope) -> View {
+    let name = cx.signal(String::new());
+    let saved = cx.signal(false);
+
+    Element::new()
+        .style(LayoutStyle::column().gap(1).padding(Edges::all(1)))
+        .child(
+            TextInput::new()
+                .placeholder("your name")
+                .value(name)                          // bind an external signal
+                .on_change(move |_| saved.set(false)) // any edit invalidates
+                .view(cx),
+        )
+        .child(Button::new("Save").on_click(move || saved.set(true)).view(cx))
+        .child(dyn_view(LayoutStyle::line(1), move || {
+            let status = if saved.get() { "saved" } else { "unsaved" };
+            text(format!("{} — {}", name.get(), status))
+        }))
+        .build()
+}
+```
+
+Run it with `App::simple(form)`. Tab moves between the input and the button;
+the input handles cursor movement, selection (Shift+arrows), word jumps
+(Alt+arrows), and paste for you. Mouse clicks focus and activate the same
+widgets — no extra code.
+
+## Layout basics
+
+Layout is a flexbox-style solver. The vocabulary: `LayoutStyle::column()` /
+`LayoutStyle::row()` set direction, `gap(n)` spaces children, `padding(Edges)`
+insets content, and sizes come from `Dimension::Cells(n)`, `Dimension::Percent(f)`,
+or `grow`:
+
+```rust
+// A fixed sidebar and a growing main pane.
+Element::new()
+    .style(LayoutStyle::row().gap(1).padding(Edges::all(1)))
+    .child(
+        Element::new()
+            .style(LayoutStyle::column().width(Dimension::Cells(20)))
+            .child(text("sidebar"))
+            .build(),
+    )
+    .child(
+        Element::new()
+            .style(LayoutStyle::column().grow(1.0)) // takes the remaining width
+            .child(text("main"))
+            .build(),
+    )
+    .build()
+```
+
+The rule for multi-pane layouts: give every pane that should share leftover
+space a `grow`, and fixed panes an explicit size. A pane with neither takes
+only its content size. `LayoutStyle::fill()` (fill the parent on both axes) and
+`LayoutStyle::line(n)` (full width, `n` rows) cover the two most common shapes.
+
+For two-dimensional layouts there is a track-based `Grid` — columns and rows
+declared as `Track::Cells(n)`, `Track::Percent(f)`, `Track::Fr(f)`, or
+`Track::Auto`, with row-major auto-placement and spans:
+
+```rust
+// A label column and a growing field column; children fill row by row.
+Grid::new(vec![Track::Cells(12), Track::Fr(1.0)], vec![])
+    .gap(1)
+    .child(text("Name:"))
+    .child(TextInput::new().view(cx))
+    .child(text("Notes:"))
+    .child(TextInput::new().view(cx))
+    .view()
+```
+
+The `grid` example (`cargo run --example grid`) cycles three track recipes over
+the same children — the fastest way to build intuition.
+
+## Theming in 3 lines
+
+```rust
+set_theme_by_id("nord");           // switch — every themed region repaints
+let theme = use_theme(cx);         // reactive handle to the active theme
+let tokens = theme.get().tokens;   // 36 semantic color tokens (bg, text, accent, …)
+```
+
+Widgets never name colors; they consume semantic tokens (`bg`, `surface`,
+`text`, `accent`, `ok`/`warn`/`error`, chart slots, syntax inks, …), so one
+`set_theme_by_id` restyles the entire app. 26 themes ship built in — try
+`cargo run --example themes` for a live picker with measured contrast ratios,
+or set `ABSTRACTTUI_THEME=<id>` in the environment (the convention every
+example honors). Custom themes register at runtime through `theme::register`,
+which audits contrast floors and either refuses or labels violations,
+depending on the mode you choose.
+
+## Showing an image
+
+Decode once, wrap in an `Arc`, hand it to the `Image` widget:
+
+```rust
+use std::sync::Arc;
+use abstracttui::gfx;
+
+let bytes = std::fs::read("photo.jpg")?;
+let bitmap = Arc::new(gfx::decode_image(&bytes)?);
+```
+
+```rust
+use abstracttui::widgets::ImageFit;
+
+// In your component:
+Image::from_bitmap(bitmap.clone())
+    .fit(ImageFit::Contain) // largest size that fits, aspect preserved
+    .view(cx)
+```
+
+`gfx::decode_image` sniffs the actual bytes (containers lie, bytes don't) and
+decodes PNG or baseline JPEG; unknown formats are rejected by name, never with
+a panic. The widget renders unicode mosaic — colored sub-cell glyphs that work
+in any terminal — and picks the best mosaic mode for the terminal's detected
+glyph and color support. For pixel-perfect output over the kitty, iTerm2, or sixel
+protocols, `gfx::ImageSession` manages placement at the app level; the
+`images` example (`cargo run --example images`) shows both paths side by side,
+naming the channel it chose.
+
+## A 3D teaser
+
+```rust
+use std::sync::Arc;
+use abstracttui::three;
+
+let view = three::quick_view("model.glb")?; // load + framed camera + light
+let model = Arc::new(view.model);
+```
+
+```rust
+// In your component:
+Viewport3D::new(model.clone())
+    .orbit(0.6, 0.35, 1.0) // yaw, pitch, zoom — drive these from signals
+    .view(cx)
+```
+
+`three::quick_view` loads a GLB file with a camera framed on the model's bounds
+and a default light. `Viewport3D` software-rasterizes the scene into cells:
+drag orbits, the wheel zooms, and the widget reports deltas through
+`.on_orbit`/`.on_zoom` so camera state lives in your signals. Animated,
+skinned models play through `.animate(clip, t)`. The loader supports binary
+GLB with triangle meshes, embedded PNG/baseline-JPEG textures, LINEAR/STEP
+animation, and 4-joint skinning; unsupported features are rejected by name or
+degraded with a label, never guessed at. `cargo run --example viewer3d --
+path/to/model.glb` is the full viewer, with measured fps in the status row.
+
+## Plain terminals vs feature-rich terminals
+
+You write one app; the engine adapts it to the terminal it finds. Capabilities
+(color depth, kitty keyboard/graphics, sixel, synchronized output, pixel
+geometry) are detected in two passes — an instant environment pass for the
+first frame, then an active probe that can both raise and lower the answer
+based on what the terminal actually replies. Everything degrades in the open:
+
+- Truecolor styling steps down to 256 or 16 colors; `NO_COLOR` and `TERM=dumb`
+  are honored.
+- Images step down the protocol ladder to unicode mosaic, which works
+  everywhere. Inside tmux, pixel protocols are enabled only after a live
+  passthrough probe proves they arrive.
+- Key combos like Ctrl+Enter or Shift+Enter exist only on terminals with the
+  kitty protocol or modifyOtherKeys (legacy terminals send bytes identical to
+  plain Enter) — treat them as enhancements, and keep baseline bindings on
+  keys that work everywhere: arrows, Home/End, PgUp/PgDn, F1–F12.
+
+Every degradation is recorded as a labeled startup notice. Read them
+reactively with the `use_startup_notices(cx)` hook and render them in a status
+line or toast — the `dashboard` example does exactly that, and its `--caps`
+flag prints the full capability report without needing a tty.
+
+## Testing your app headlessly
+
+No pty needed: drive the same pipeline production uses against a captured
+terminal, feed input as bytes, and assert on the rendered screen. This is the
+crate's own doctest on `App`:
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::app::Driver;
+use abstracttui::testing::CaptureTerm;
+
+let size = Size::new(20, 4);
+let mut app = App::new(size);
+app.mount(|cx| {
+    let n = cx.signal(0);
+    Element::new()
+        .shortcut(KeyChord::plain(Key::Char('+')), move |_| n.update(|v| *v += 1))
+        .child(dyn_view(LayoutStyle::line(1), move || text(format!("n = {}", n.get()))))
+        .build()
+}).unwrap();
+
+let mut term = CaptureTerm::new(size);
+let cfg = RunConfig { probe: false, ..RunConfig::default() };
+let mut driver = Driver::new(&mut app, &mut term, cfg).unwrap();
+driver.turn(&mut app, &mut term).unwrap();          // first frame
+assert!(term.screen().to_text().contains("n = 0"));
+
+term.push_input(b"+");                              // a keypress
+driver.turn(&mut app, &mut term).unwrap();          // dispatch + repaint
+assert!(term.screen().to_text().contains("n = 1"));
+```
+
+`CaptureTerm` records every byte and models the screen; `Driver::turn` runs one
+full frame cycle — input dispatch, effects, layout, damage-driven redraw, diff,
+present. Every focus and damage path is the real one. For pure component tests
+you can skip the driver entirely: mount into a `ui::UiTree`, dispatch events,
+and draw into a `ui::BufferCanvas` — every widget suite in the crate is written
+that way.
+
+## Where next
+
+- [Architecture](architecture.md) — signals, the damage contract, the
+  compositor, and the render pipeline.
+- [API guide](api.md) — the public surface, module by module.
+- [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
+- [Examples catalog](../examples/README.md) — twelve runnable programs, from
+  the 53-line `hello` to the full `dashboard`, with the keys each answers to.
+
+
+===== FILE: docs/architecture.md =====
+
+# AbstractTUI Architecture
+
+AbstractTUI is a standalone Rust engine that treats the terminal as a real
+display device. A layered compositor with damage tracking sits under a
+fine-grained reactive component model; pixel graphics and software-rasterized
+3D are first-class citizens of the same scene, themed by a shared design-token
+system.
+
+Most terminal UI stacks pick one of two camps: immediate mode, which rebuilds
+the whole frame every tick and diffs it, or retained widget trees with coarse
+invalidation. AbstractTUI takes a third architecture. State lives in signals;
+a write re-runs exactly the computations that depended on it, and those
+computations damage exactly the screen regions they own. There is no virtual
+DOM to diff and no full-frame rebuild to pay for. An idle application burns
+zero CPU; a blinking status cell damages one cell.
+
+## Layer map
+
+Every module sits at a fixed layer and depends only on layers below it. The
+`testing` module cuts across the whole stack: an in-memory terminal double
+and a VT100/xterm interpreter let any layer be exercised headlessly against
+ground truth.
+
+```mermaid
+graph BT
+    base["base<br/>geometry, color, errors, shared vocabulary"]
+
+    subgraph terminal["terminal layer"]
+        term["term<br/>raw mode, capabilities, restore"]
+        input["input<br/>byte stream to events"]
+    end
+
+    subgraph drawing["drawing layer"]
+        render["render<br/>surfaces, compositor, diff, presenter"]
+        text["text<br/>measurement, wrapping"]
+        anim["anim<br/>clock, tweens, cell shaders"]
+    end
+
+    reactive["reactive<br/>signals, memos, effects, scheduler"]
+    layout["layout<br/>flex and grid solver"]
+    ui["ui<br/>element tree, event routing, focus"]
+
+    subgraph content["content layer"]
+        widgets["widgets<br/>built-in library"]
+        gfx["gfx<br/>bitmaps, mosaic, pixel protocols"]
+        three["three<br/>GLB loading, 3D rasterizer"]
+    end
+
+    theme["theme<br/>design tokens, theme registry"]
+    app["app<br/>frame loop, overlays, runtime"]
+    boot["boot<br/>splash identity"]
+
+    testing["testing<br/>capture terminal, VT model, harnesses"]
+
+    base --> terminal
+    terminal --> drawing
+    drawing --> reactive
+    reactive --> layout
+    layout --> ui
+    ui --> content
+    content --> theme
+    theme --> app
+    app --> boot
+    testing -. exercises every layer .-> terminal
+    testing -.-> drawing
+    testing -.-> app
+```
+
+The engine is deliberately standalone. Runtime dependencies are limited to
+`libc` (unix), `windows-sys` (windows), `unicode-width`,
+`unicode-segmentation`, and `miniz_oxide` (PNG inflate). ANSI emission, input
+parsing, the flexbox solver, the signals runtime, JSON parsing (for glTF),
+PNG chunking and defiltering, base64, sixel encoding, and the 3D math and
+rasterizer are all implemented in-crate.
+
+## Pillar 1: fine-grained reactivity
+
+The `reactive` module implements signals, memos, and effects with ownership
+scopes, in the SolidJS tradition rather than the React one. Reads are tracked:
+while a computation runs, every `Signal` it reads records an edge to it. A
+write marks direct observers dirty and transitive observers for re-check,
+then flushes queued effects — immediately after the write, or once at the end
+of a `batch`. Each effect pulls its sources up to date before running, so it
+observes a single consistent world (diamond dependencies cannot glitch).
+Memos recompute lazily and stop propagation when the new value compares equal.
+
+Ownership scopes tie state to component lifetime: signals, memos, effects,
+and cleanups created on a `Scope` die when that scope is disposed, which is
+what happens when a dynamic view region unmounts. The UI consequence is the
+important one: components are plain functions that run **once** to build a
+view blueprint. Reactivity lives in `dyn_view` regions that re-run when the
+signals they read change — a parent never re-renders a child, and there is no
+tree diff. A changed region marks damage for exactly the cells it owns.
+
+Draw closures are pure over data captured at view-build time; reading a
+tracked signal inside a draw closure is a debug-mode panic. This is what
+keeps the frame model (below) airtight: painting cannot create new damage.
+
+## Pillar 2: the compositor
+
+The `render` module owns everything between "widgets wrote cells" and "bytes
+reached the terminal":
+
+- **Z-ordered layers.** Each layer is a cell surface with an offset, opacity,
+  a blend mode, an optional color transform, and an optional per-cell shader.
+  Animations translate or fade whole layers without re-rendering their
+  content.
+- **Blending.** Colors are RGBA. `Blend::Normal` is source-over;
+  `Blend::Additive` accumulates light (for glows, particles, scanline
+  highlights). Alpha means transparency while compositing, and "terminal
+  default color" once a frame reaches the presenter.
+- **Per-cell shaders** transform cells as a pure function of `(x, y, t, cell)`.
+  Shaders are billed by damage: a shader runs only where damage exists, so a
+  static shader is paid once at install and never again. An animated shader
+  is an animation — advancing its clock damages what the shader's
+  `changed_region` hint declares (default: the whole layer) and requests the
+  next frame like any tween. The hint contract is stability outside the
+  declared rect, property-tested for every built-in shader.
+- **Damage tracking.** Every draw records its own damage automatically.
+  Damage may honestly over-approximate: the diff re-checks equality, so stale
+  damage costs microseconds, never wrong pixels.
+- **Frame diff and presentation.** The flattened frame is diffed against what
+  the terminal currently shows, producing minimal runs. The presenter turns
+  runs into byte-economical ANSI: cursor-motion economy, SGR run
+  minimization, truecolor with 256/16-color downlevel, DEC 2026 synchronized
+  output so frames land atomically, and a scroll-region optimization that
+  detects full-width band shifts (log append, list scroll) and replays them
+  as DECSTBM scroll commands instead of repainted rows. All bytes are
+  buffered and flushed to the terminal exactly once per frame.
+
+All output flows through the presenter — including foreign payloads. Image
+protocols emit through `Presenter::external_write`, which flushes pending
+runs, positions the real cursor, emits the payload, and invalidates cursor
+and SGR assumptions afterward. Nothing writes to the terminal behind the
+presenter's back.
+
+## Pillar 3: capability-driven graphics
+
+The `gfx` module serves bitmaps through the best channel the terminal
+actually offers, on an explicit quality ladder:
+
+1. **kitty graphics** — upload once by id, place and move by escape, true
+   deletion;
+2. **iTerm2** (OSC 1337) — full base64-PNG re-emit at the cursor;
+3. **sixel** — paletted raster at the cursor;
+4. **unicode mosaic** — colored half-block, quadrant, sextant, or braille
+   glyphs, with optional dithering. This is plain cells, so it works on any
+   terminal and composites like any other content.
+
+Which channel applies is decided by detected capabilities, never by
+assumption, and every degradation is labeled with a reason rather than
+applied silently — `MosaicMode::auto` returns both the chosen mode and why.
+The `three` module renders into the same pipeline, so a 3D viewport and a
+PNG follow identical presentation rules.
+
+## The frame lifecycle
+
+The application runtime drives one strictly-sequenced pass per frame on the
+UI thread:
+
+```mermaid
+flowchart LR
+    U["USER<br/>drain posted jobs,<br/>dispatch events in one<br/>reactive batch,<br/>flush effects"]
+    L["LAYOUT<br/>re-solve dirty<br/>subtrees"]
+    D["DRAW<br/>run draw closures for<br/>damaged regions only"]
+    C["COMPOSE<br/>flatten layers,<br/>shaders, blending"]
+    P["PRESENT<br/>diff to minimal ANSI,<br/>one flush"]
+    S["SWAP<br/>frame becomes<br/>previous"]
+
+    U --> L --> D --> C --> P --> S
+    S -->|sleep until input, timer,<br/>or a requested frame| U
+```
+
+User code runs only in the USER phase. Input dispatch is wrapped in one
+reactive batch; effect flush is where dynamic views remount and layout
+re-solves are requested. From LAYOUT onward no user code runs, therefore no
+signal writes, therefore no re-entrant damage: the frame's damage set is
+sealed when LAYOUT begins. Signal writes from other threads arrive only as
+posted jobs, and posted jobs run only in the USER phase — a write landing
+mid-frame wakes the loop and is drained by the next frame. Late damage is
+never lost and never double-painted, by construction rather than by
+discipline.
+
+The cursor follows the same economy. The default is the terminal's native
+cursor, parked by the presenter, so a focused-but-idle text field costs
+nothing. A composited or animated cursor is an animation: it requests frames
+and is billed as one.
+
+## The damage promise
+
+The frame model rolls up into one product guarantee:
+
+> **An idle AbstractTUI app costs zero: zero bytes written, zero heap
+> allocations, zero shader work.**
+
+This is enforced by tests, not stated as an aspiration. In-tree tests pin
+each clause: an idle frame emits zero bytes
+(`render::present::tests::zero_runs_zero_bytes`, and the third frame of
+`render::pipeline_tests::full_pipeline_small_damage_small_bytes`), a
+no-change frame allocates nothing
+(`alloc_budget::presenter_no_change_frame_emits_and_allocates_nothing`),
+steady-state diff and present allocate nothing
+(`alloc_budget::diff_present_steady_state_allocates_nothing`), and a static
+shader on an idle layer performs zero shade calls
+(`render::compositor::tests::shader_runs_only_for_damaged_cells_and_never_when_static`).
+
+Idle really means idle: the event loop blocks in a terminal read with zero
+wakeups until input, a resize, a cross-thread wake, or a timer deadline
+arrives. Animations never poll — an active animation requests one more frame
+through the scheduler and simply stops asking when it settles, and each
+animated layer is billed for exactly the damage it declares.
+
+The active path is budgeted too: diff plus present of a full-change 200x60
+frame runs in roughly 450 microseconds median on an M-class laptop, and the
+steady-state hot path performs no heap allocation. The irreducible byte cost
+of truecolor styling is the SGR payload itself; 256-color caps are the lever
+for byte-constrained links.
+
+## The terminal layer
+
+The `term` and `input` modules are the platform boundary, kept small enough
+to audit line by line. The posture:
+
+- **Raw mode and session lifecycle.** `enter` switches to raw mode, the
+  alternate screen, and the requested modes; `leave` undoes everything in
+  exact reverse order. Restore is layered three deep: explicit `leave`,
+  `Drop` if you forget, and a process-global `term::emergency_restore` for
+  panic hooks. Cursor style, window title, pixel-mouse mode, and kitty
+  keyboard flags are all tracked and reset — including from a panic.
+  `App::run` installs the panic hook before anything else, so a panic in any
+  draw closure or handler still restores the screen.
+- **Capability detection is evidence, not folklore.** Detection runs in two
+  passes: an instant, conservative environment pass for the first frame,
+  then an active query probe that runs concurrently and can both raise and
+  lower the answer — a terminal that replies "mode not recognized" is
+  believed. Color depth, kitty keyboard and graphics, sixel, synchronized
+  output, cell pixel geometry, and pixel-mouse support are all probed with
+  safe timeouts. `NO_COLOR` and `TERM=dumb` are honored.
+- **Kitty keyboard protocol.** Progressive enhancement flags are pushed on
+  enter and popped on leave. Under the kitty protocol (or xterm's
+  modifyOtherKeys) the engine decodes press/repeat/release and chords such
+  as Ctrl+Enter or Shift+Enter that are byte-identical to plain Enter on the
+  classic wire. Applications should treat those chords as enhancements;
+  arrows, Home/End, PgUp/PgDn, and F1-F12 with any modifier combination are
+  reliable everywhere.
+- **Mouse, including pixel coordinates.** SGR mouse tracking delivers cell
+  coordinates always; raw pixel coordinates ride alongside only when pixel
+  reporting is verifiably active. Pixel reporting is a mid-session toggle
+  (applications flip it while a pointer hovers an image), with the same
+  latch-and-restore machinery as the cursor style.
+- **Bracketed paste is the only paste path.** Paste is fuzz-hardened:
+  multi-megabyte pastes stream in bounded chunks, byte-exactly, with
+  embedded escape sequences neutralized as content. Copy-to-clipboard uses
+  OSC 52, gated on detection; the read form of OSC 52 is deliberately never
+  emitted — it would let any application read the user's clipboard.
+- **Keyboard input is never silently dead.** If the platform refuses to poll
+  the terminal descriptor (a real macOS quirk with `/dev/tty` that the
+  engine detects and avoids), the reader falls back to a working descriptor
+  with a labeled degradation surfaced through startup notices, or fails with
+  an actionable error. An app that starts is an app that receives keys.
+- **One event stream that never lies.** Keys, mouse, paste, focus, resize,
+  and terminal query replies arrive ordered through one reader. Unknown or
+  hostile escape sequences are swallowed and surfaced as `Unknown` events —
+  foreign bytes cannot forge keystrokes; the parser never panics on any
+  input and is continuously fuzzed. Resize comes from platform ground truth
+  (never parsed from bytes), is deduplicated, and is re-checked on every
+  wake so a missed signal cannot leave a stale layout.
+- **tmux, honestly.** Inside tmux, pixel graphics are off by default because
+  tmux swallows the protocols unless passthrough is enabled — which is
+  invisible from the environment. The engine verifies passthrough per
+  session with a wrapped round-trip probe and only then enables the kitty
+  and iTerm2 paths, wrapped automatically. tmux cannot reflow passthrough
+  images across scrolling or pane splits; that limit is cosmetic and stated.
+- **Suspend/resume is a first-class verb** on unix: full restore, stop the
+  process group, re-enter on resume. On Windows it returns an explicit
+  `Unsupported` error.
+
+## The 3D pipeline
+
+The `three` module loads binary glTF (GLB) with a validation-first posture:
+typed accessors are checked against the buffers they index, unsupported
+features are rejected by name (sparse accessors, Draco and meshopt
+compression, non-triangle primitive modes), and recoverable gaps degrade
+with labels (external URIs, normal/metallic-roughness/occlusion maps, morph
+weights). A two-million-triangle budget is enforced from metadata before any
+allocation happens.
+
+Rendering is a software perspective rasterizer: near-plane and guard-band
+clipping, top-left fill rule, z-buffer, perspective-correct depth and UVs,
+lambert-plus-ambient shading, base-color textures with a box-filter mip
+chain. Node TRS and matrix hierarchies animate via LINEAR and STEP keyframe
+tracks; skinned meshes blend up to four joints per vertex. Pose sampling is
+pure in `t` and allocation-free at steady state, so playback costs are
+predictable. Output lands in an RGBA framebuffer that flows through the same
+image ladder as any bitmap — mosaic cells universally, pixel protocols where
+the terminal proves them. A model of 20k triangles or fewer renders in under
+2 ms at typical viewport sizes; ~120k triangles holds 30 fps with headroom
+on one core (reproduce with
+`cargo test --release -- --ignored perf_three_envelope --nocapture`).
+
+## Platform posture
+
+macOS and Linux are the verified platforms. Every unix code path is exercised
+by a live pseudo-terminal test suite — signal-driven resize, job-control
+suspend, and keystroke flow under a real controlling terminal — and tmux
+passthrough has been proven live against tmux 3.7b.
+
+Windows support is best-effort and honestly labeled: the backend compiles
+cleanly and is lint-clean against the MSVC target, its platform-independent
+logic (UTF-16 surrogate pairing, wake latching, resize deduplication) is
+unit-tested on every host, and its console usage was written against
+Microsoft's documented semantics — but it has not yet executed on a live
+Windows machine. Treat the first Windows run as a beta event, not a
+certified path. The rendering path itself is identical ANSI everywhere
+(Windows 10+ VT processing), so the platform delta is confined to the
+terminal layer.
+
+Diff/present correctness is property-tested against the in-crate VT
+interpreter: the bytes the presenter emits, applied to the previous screen,
+must reproduce the intended screen — including wide-glyph pairs at scroll
+boundaries. The input parser is fuzzed with hostile corpora on every build.
+
+
+===== FILE: docs/api.md =====
+
+# AbstractTUI API Guide
+
+A guided tour of the public API, module by module. This is not a reference —
+the item-by-item rustdoc is the reference (`cargo doc --open`, or browse
+[docs.rs](https://docs.rs/abstracttui)). The goal here is orientation: what
+each module is for, the types you will actually touch, and the idioms the
+engine expects. Snippets are lifted from the crate's compiled doctests
+wherever possible, so they match the shipped code.
+
+## The prelude
+
+`use abstracttui::prelude::*;` is all an application needs for the common
+path. The prelude is curated to the app-code surface only: engine and test
+types (`UiTree`, `Driver`, `create_root`, canvases) stay behind explicit
+imports. One deliberate absence: `render::Style` is not exported, because two
+`Style` types one glob apart is a trap. Layout style is exported as
+`LayoutStyle` (box geometry — direction, size, gap); paint style is spelled
+`render::Style` in full, inside draw closures, where it belongs.
+
+## reactive — signals, memos, effects
+
+`Signal<T>` is tracked state, `Memo<T>` is derived state, and an effect is a
+computation that re-runs when anything it read changes. Handles are `Copy`;
+state is owned by the `Scope` that created it and dies when that scope is
+disposed. `batch` coalesces writes so effects observe one consistent world;
+`untrack` reads without subscribing. The model in one compiled example:
+
+```rust
+use abstracttui::reactive::{batch, create_root};
+use std::{cell::RefCell, rc::Rc};
+
+let log = Rc::new(RefCell::new(Vec::new()));
+let (root, ()) = create_root(|cx| {
+    let count = cx.signal(0);
+    let doubled = cx.memo(move || count.get() * 2);
+    let log2 = log.clone();
+    cx.effect(move || log2.borrow_mut().push(doubled.get()));
+    count.set(3);
+    batch(|| {
+        count.set(4);
+        count.set(5); // coalesced: the effect sees only 10
+    });
+});
+assert_eq!(*log.borrow(), vec![0, 6, 10]);
+root.dispose();
+```
+
+(`create_root` is the standalone entry point; inside an app, `App::mount`
+hands your component a ready `Scope`.) Two time-aware helpers round out the
+module: `animate(cx, source, easing, duration)` returns a signal following
+`source` through eased transitions (settled values cost zero frames), and
+`after(delay, f)` runs a one-shot closure on the UI thread, costing zero
+wakeups until due.
+
+## ui — elements, views, composition
+
+`Element` is the view-tree builder: layout style, children, focusability,
+event handlers, keyboard shortcuts, and an optional draw closure.
+Components are plain functions `fn(Scope, Props) -> View` — no trait, no
+registry. They run **once**; reactivity comes from `dyn_view(style, f)`,
+which re-runs `f` when the signals it reads change and re-renders only that
+region. Props structs carry data fields, `Callback<T>` fields for typed
+events out, and `View` fields as slots for children:
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::widgets::Button;
+
+struct CardProps {
+    title: String,
+    on_close: Callback<()>, // typed event out
+    children: View,         // slot
+}
+
+fn card(cx: Scope, props: CardProps) -> View {
+    let close = props.on_close.clone();
+    Element::new()
+        .style(LayoutStyle::column())
+        .child(
+            Element::new()
+                .style(LayoutStyle::row())
+                .child(text(props.title))
+                .child(Button::new("x").on_click(move || close.call(())).view(cx))
+                .build(),
+        )
+        .child(props.children) // the slot mounts where the component says
+        .build()
+}
+```
+
+Events route capture → target → bubble with hit testing and focus
+management; `KeyChord` shortcuts attach to any element. For app-scale state,
+the endorsed pattern is a store struct of signals provided as context —
+`cx.provide_context(store)` at the root, `cx.use_context()` anywhere below.
+Signals are `Copy` handles, so cloning the store shares state: no prop
+drilling, no reducer framework.
+
+## layout — flex and grid
+
+The layout solver is a flexbox subset over integer cells: `Direction`
+row/column, `grow`/`shrink`/`basis`, `gap`, padding, margin, min/max,
+percent and absolute positioning, plus wrapping (`wrap()`, `cross_gap`).
+Rounding is largest-remainder, so children tile their container exactly.
+`Display::Grid` adds track grids: columns and rows are `Track::Cells(n)`,
+`Track::Percent(f)`, `Track::Auto` (content-sized), or `Track::Fr(w)`
+(weighted leftover); children auto-place row-major and can span via
+`col_span`/`row_span`. `Overflow` (`Visible`/`Clip`/`Scroll`) is the
+clipping and wheel-routing vocabulary.
+
+```rust
+use abstracttui::prelude::*;
+
+// Sidebar + growing content in a row.
+let sidebar = LayoutStyle::default().width(Dimension::Cells(24));
+let content = LayoutStyle::default().grow(1.0);
+
+// A label/field form as a track grid.
+let form = LayoutStyle::default().grid(
+    vec![Track::Cells(12), Track::Fr(1.0)], // columns
+    vec![Track::Auto, Track::Auto],         // rows
+);
+```
+
+## widgets — the built-in library
+
+Every widget is built from the same public `ui` + `layout` + `theme` surface
+user code has — widgets hold no engine privileges. They consume design
+tokens only, never raw colors; the canonical build is `.view(cx)` (theme
+from context), with an `element` form for explicit tokens — stateless
+widgets take just `&TokenSet`, no `Scope`. The catalog:
+
+- **Block** — the bordered panel primitive: title, fill, focus ring, `BorderKind`.
+- **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
+- **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`.
+- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`.
+- **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts).
+- **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
+- **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling.
+- **Checkbox** — `[x] label` bound to a `Signal<bool>`.
+- **RadioGroup** — one-of-N bound to a `Signal<usize>`; one tab stop, Up/Down move the selection.
+- **Progress** — bar with sub-cell precision; optional ok→warn→error ramp.
+- **Spinner** — indeterminate activity glyph, pure over a caller-owned frame index.
+- **Badge** — small tinted label for status chips, counts, tags (`Tone`).
+- **Separator** — horizontal or vertical rule, optionally labeled.
+- **Charts** — `Sparkline`, `LineChart`, `BarChart` on sub-cell grids.
+- **Grid** — container widget over `Display::Grid`; spans ride each child's own style.
+- **Image** — bitmap display through the mosaic pipeline (`ImageFit`; `Bitmap` re-exported beside it).
+- **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals.
+- **MarkdownView / RichTextView / CodeView** — typeset markdown, wrapped styled spans, read-only highlighted code.
+- **Logo** — the AbstractTUI wordmark for headers, about screens, empty states.
+
+## app — the runtime
+
+`App::simple` is the whole happy path: mount a component, enter the
+terminal, run until quit. This compiled example is the canonical first app —
+Tab focuses, Enter/Space clicks, Ctrl+C quits, all by default:
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::widgets::Button;
+
+fn main() -> abstracttui::base::Result<()> {
+    App::simple(|cx| {
+        let count = cx.signal(0);
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(dyn_view(LayoutStyle::line(1), move || {
+                text(format!("count: {}", count.get()))
+            }))
+            .child(Button::new("+1").on_click(move || count.update(|c| *c += 1)).view(cx))
+            .child(text("Tab focuses · Enter clicks · Ctrl+C quits"))
+            .build()
+    })
+}
+```
+
+For more control, `App::new(size)` + `mount` + `run` splits the steps, and
+`App::quitter()` hands out a cloneable programmatic-quit handle. Ctrl+C
+arrives as an ordinary key (raw mode); the quit-by-default policy is
+overridden by any handler that consumes the event.
+
+Around the core loop the module provides:
+
+- **Overlays** — z-ordered layers above the main tree (`LayerHandle`,
+  `ImageHandle`) for popups, menus, and pixel images.
+- **Modal** — a centered, focus-trapped overlay panel: input is fully owned
+  while open, Tab cycles inside, state created in the modal's scope dies on
+  close. **Toast** — top-right chips that slide in, park for their duration
+  at zero frame cost, then slide out and remove their layer.
+- **Hooks** — `use_theme(cx)` (the app-level theme signal), `use_viewport(cx)`
+  (terminal size as a signal), `use_startup_notices(cx)` (labeled startup
+  degradations as a reactive list).
+- **KeymapHelp** — a ready-made `?` help modal listing the shortcuts
+  reachable from the current focus plus every registered global action.
+
+## theme — design tokens
+
+Widgets consume `TokenId`s resolved against the active theme's `TokenSet`;
+they never hold raw colors. Twenty-six built-in themes ship in the registry:
+the abstract family (`abstract-dark` — the default — plus light, aurora,
+paper, ember, midnight, dawn), `observer-night`, catppuccin (mocha,
+macchiato, frappe, latte), rose-pine (plus moon, dawn), `tokyo-night`,
+`nord`, `one-dark`/`one-light`, `dracula`, `monokai`, `gruvbox`,
+`solarized-dark`/`-light`, and `everforest-dark`/`-light`.
+
+Switching is one signal write: widgets that read the theme signal re-render
+fine-grained, and the app damages the whole tree so even static text
+repaints in the new palette:
+
+```rust
+use abstracttui::prelude::*;
+
+set_theme_by_id("catppuccin-mocha"); // false for unknown ids, nothing changes
+```
+
+`theme::list()` enumerates `(id, label, dark)` for a picker. Applications
+can add their own themes at runtime with `theme::register(candidate, mode)`:
+every registration runs the full contrast audit, and the mode decides
+whether violations refuse the theme or register it with labeled findings.
+
+## render — surfaces and paint (advanced)
+
+Most applications never touch `render` directly — widgets and draw closures
+do. The two concepts worth knowing:
+
+**`Surface`** is the cell buffer draw closures write into. Damage is
+recorded automatically by every write; the diff re-checks equality, so
+over-approximate damage costs microseconds, never wrong pixels.
+
+**`render::Style` is a patch, not an appearance.** `fg`/`bg` at `None` keep
+what the target cell already has — text drawn over a filled panel keeps the
+panel's background. Attributes are add/remove sets, so bold layers onto
+existing content. `Style::absolute()` opts out (remove everything first),
+and `merge` is sequential application — the later opinion wins:
+
+```rust
+use abstracttui::base::Rgba;
+use abstracttui::render::{Attrs, Style};
+
+// The common one-liner: ink + emphasis.
+let err = Style::new().fg(Rgba::rgb(255, 80, 80)).bold();
+assert_eq!(err.add, Attrs::BOLD);
+assert_eq!(err.bg, None); // bg unset: keeps the panel underneath
+
+// Patches compose; the later opinion wins where both have one.
+let quoted = err.merge(Style::new().dim().fg(Rgba::rgb(150, 150, 150)));
+assert_eq!(quoted.fg, Some(Rgba::rgb(150, 150, 150)));
+assert_eq!(quoted.add, Attrs::BOLD | Attrs::DIM);
+```
+
+The one non-patch field is the hyperlink id: it always overwrites, because
+inheriting a stale link under a fresh label would be a correctness hazard.
+
+For effects, layers accept per-cell shaders (`CellShader`; built-ins in
+`anim::shaders`). Shaders are billed by damage: static shaders cost nothing
+after installation; animated shaders damage only what their `changed_region`
+hint declares. For debugging: `render::snapshot(&surface)` prints a bordered
+character grid, `snapshot_styles` adds per-row style annotations, and
+`Compositor::set_debug_damage(true)` outlines every repaint region live.
+
+## gfx — images
+
+`gfx::decode_image(bytes)` sniffs the magic bytes (containers lie, bytes do
+not) and decodes PNG or baseline JPEG into a `Bitmap` — owned RGBA8 with
+get/set, nearest and bilinear resize, cropping, and a box-filter mip chain.
+Unknown formats are rejected by name, telling the caller what does decode;
+truncated or hostile bytes are named errors, never panics.
+
+Three presentation entry points, smallest first:
+
+```rust
+use abstracttui::base::{Rect, Rgba};
+use abstracttui::gfx::{render_to_cells, Bitmap};
+use abstracttui::term::Capabilities;
+
+let img = Bitmap::new(16, 8, Rgba::rgb(180, 90, 30));
+let cells = render_to_cells(&img, Rect::new(2, 1, 8, 4), &Capabilities::default());
+assert_eq!(cells.len(), 8 * 4);
+```
+
+- `render_to_cells` picks the best mosaic mode for the probed terminal and
+  returns ready-to-blit cell patches; `MosaicMode::auto(&caps)` returns both
+  the mode and the reason it was chosen (half-block, quadrant, sextant, or
+  braille; optional Floyd–Steinberg dithering).
+- `widgets::Image` is the widget form — always mosaic, because a draw
+  closure owns cells, not escape bytes.
+- `gfx::ImageSession` manages the pixel protocols (kitty, iTerm2, sixel):
+  slots keyed by the caller, content versions, minimal traffic per channel —
+  kitty transmits once and re-places on move; iTerm2 and sixel honestly
+  re-emit. Bytes reach the terminal through the presenter, and tmux
+  passthrough wrapping applies automatically when capabilities prove it.
+
+## three — 3D models
+
+`three::quick_view(path)` is the five-line hello: load a GLB, get a camera
+framed on the model's bounds and a default light, render:
+
+```rust
+use abstracttui::three::{self, Framebuffer, SceneRenderer};
+
+let view = three::quick_view("model.glb")?;
+let mut fb = Framebuffer::new(160, 96);
+SceneRenderer::new().render(&view.scene(), &mut fb);
+// fb -> mosaic cells via gfx, or hand the model to widgets::Viewport3D.
+```
+
+Underneath: `Model::load(bytes)` / `load_glb(path)` parse and validate the
+GLB (unsupported features reject by name; recoverable gaps degrade with
+labels into `model.warnings`), `Scene`/`Camera`/`Light` describe the view,
+and `SceneRenderer` rasterizes with z-buffer, texturing, and mips.
+`model.animations()` lists clips; `sample_pose_full(clip, t, &mut pose)`
+produces node worlds and skin joint matrices, pure in `t` and allocation-free
+at steady state — loop with `t % clip.duration()`. One culling note: bare
+`Scene::new` culls back faces (procedural meshes are consistently wound);
+`QuickView::scene()` and `Viewport3D` render double-sided, because
+real-world exports are not.
+
+## term and input — the terminal, when you need it
+
+Applications under `App` rarely touch these; embedders and diagnostics do.
+`Capabilities::detect_env()` is the free, instant, conservative environment
+pass; the active probe refines it concurrently at startup. `caps.summary()`
+is the multi-line human report (`summary_line()` the one-liner); scripts
+should read fields, not parse prose. `EnterOptions` declares the session
+posture — the default is the full-screen stance (alternate screen, hidden
+cursor, button-drag mouse, bracketed paste, focus events), with kitty
+keyboard flags as an explicit opt-in:
+
+```rust
+use abstracttui::term::{Capabilities, EnterOptions, TermRead, Terminal, UnixTerminal};
+use std::time::{Duration, Instant};
+
+let caps = Capabilities::detect_env(); // free, instant, conservative
+let mut term = UnixTerminal::new()?;   // real device fd acquisition
+term.enter(&EnterOptions::default())?; // raw mode + altscreen + modes
+
+match term.read(Some(Instant::now() + Duration::from_secs(5)))? {
+    TermRead::Input(bytes) => { /* feed input::Parser */ }
+    TermRead::Resize(size) => { /* re-layout */ }
+    TermRead::Wake => { /* another thread wants the loop */ }
+    TermRead::Idle => { /* deadline expired */ }
+}
+
+term.leave()?; // also runs on Drop — the terminal always restores
+```
+
+`input::Parser` turns raw bytes into structured events — resumable across
+arbitrary chunk splits (mid-UTF-8, mid-escape), never panicking on any
+input. `input::EventReader` glues a terminal to the parser and owns the
+ESC-disambiguation deadlines.
+
+## testing — the headless harness
+
+The `testing` module ships in the library so applications can test against
+the same machinery the engine tests itself with: `CaptureTerm` is an
+in-memory terminal that records emitted bytes and models the screen,
+`VtScreen` is the VT100/xterm interpreter that serves as ground truth
+("the bytes we emitted produce the frame we intended"), and `app::Driver`
+pumps real frames — the same pipeline production uses — without a tty:
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::app::Driver;
+use abstracttui::testing::CaptureTerm;
+
+let size = Size::new(20, 4);
+let mut app = App::new(size);
+app.mount(|cx| {
+    let n = cx.signal(0);
+    Element::new()
+        .shortcut(KeyChord::plain(Key::Char('+')), move |_| n.update(|v| *v += 1))
+        .child(dyn_view(LayoutStyle::line(1), move || text(format!("n = {}", n.get()))))
+        .build()
+}).unwrap();
+
+let mut term = CaptureTerm::new(size);
+let cfg = RunConfig { probe: false, ..RunConfig::default() };
+let mut driver = Driver::new(&mut app, &mut term, cfg).unwrap();
+driver.turn(&mut app, &mut term).unwrap();          // first frame
+assert!(term.screen().to_text().contains("n = 0"));
+
+term.push_input(b"+");                              // a keypress
+driver.turn(&mut app, &mut term).unwrap();          // dispatch + repaint
+assert!(term.screen().to_text().contains("n = 1"));
+```
+
+Input is fed as the terminal would send it, so every dispatch, focus, and
+damage path is the real one. For pure component tests, skip the driver: mount
+into a `ui::UiTree`, dispatch events, draw into a `ui::BufferCanvas`.
+Golden-snapshot assertions and deterministic fuzz helpers round out the
+module.
+
+## Stability and limits
+
+Plain statements of current behavior:
+
+- **JPEG** decoding is baseline sequential only; progressive and arithmetic
+  variants reject by name. **PNG** supports 8-bit depths without interlacing
+  (Adam7 rejects by name).
+- **Sixel** uses one palette per emission: multiple live sixel images
+  recolor each other — prefer one per screen. iTerm2 and sixel have no
+  placement model (moves re-emit the payload); only kitty gets placement
+  escapes and true deletes.
+- **Pixel protocols** are verified byte-for-byte against protocol models,
+  not live terminals; unicode mosaic is the universal, always-safe path.
+- **3D animation** supports LINEAR and STEP interpolation; CUBICSPLINE and
+  morph weights skip with labels; rotations nlerp (shortest path), not
+  slerp. Skinning reads `JOINTS_0`/`WEIGHTS_0` (four joints per vertex,
+  linear blend). Textures: base color only, REPEAT wrap, per-triangle mips.
+- **Mosaic** color resolution is two colors per cell (the glyph split
+  carries the rest); braille conveys structure, not color; sextant glyphs
+  need a recent font and are an explicit opt-in.
+- **Ambiguous-width characters** follow `unicode-width` narrow semantics. A
+  terminal configured ambiguous-wide breaks cell layout for every terminal
+  application; the presenter's cursor discipline bounds the drift but
+  cannot erase it.
+- **Capacity ceilings** degrade with labels, never unbounded growth: 4096
+  distinct long grapheme clusters per surface (then U+FFFD), 65535
+  hyperlinks per surface (then plain text), with counters exposed.
+- **Scroll optimization** requires DECSTBM/SU/SD compliance — present in
+  every VT100 descendant — and can be forced off via `PresenterOpts`.
+- **Windows** compiles clean and its extracted logic is unit-tested on every
+  host, but it has not yet run on a live Windows machine; treat a first
+  Windows deployment as a beta event. macOS and Linux are the live-verified
+  platforms.
+
+
+===== FILE: docs/theming.md =====
+
+# Theming
+
+AbstractTUI widgets never name colors — they name **roles**. Every drawable
+surface resolves a semantic token against the active theme, so an entire
+application restyles from a single switch, and every built-in palette is
+held to measured, test-enforced contrast floors.
+
+This page covers the token model, the 26 built-in themes, runtime
+switching, the contrast guarantees, registering your own themes, and the
+styling conventions widget authors should follow. The complete hex value
+of every token in every theme lives in the generated reference:
+[`captures/themes-table.md`](captures/themes-table.md).
+
+## The 36-token semantic model
+
+A theme's palette is a `TokenSet`: 36 resolved `Rgba` values, one per
+`TokenId`. The tokens are grouped by the job they do, not by hue:
+
+**Grounds** — the layered backgrounds an app is built on.
+
+- `bg` — the application field; the deepest layer, fills the terminal.
+- `surface` — panel and card ground.
+- `surface_raised` — raised chrome: popovers, menus, active tabs, chips,
+  and the declared ground for code blocks.
+- `overlay` — the modal scrim; deliberately carries alpha for the
+  compositor to blend over whatever it covers.
+
+**Text tiers** — three levels of copy, each with its own contrast floor.
+
+- `text` — body copy.
+- `text_muted` — secondary copy: labels, descriptions, timestamps.
+- `text_faint` — the decoration tier: placeholders, disabled glyphs,
+  watermark art. Deliberately below the accessible-text grade; never used
+  for information-carrying text.
+
+**Strokes**
+
+- `border` — hairline strokes: pane separators, boxes, rules.
+- `border_focus` — the focus-ring ink; must read stronger than `border`.
+
+**Voice** — where the theme's personality lives.
+
+- `accent` — the theme's identity color: primary actions, active states,
+  brand marks. One accent per screen region works best.
+- `accent_alt` — a curated companion accent (gradients, secondary
+  emphasis).
+- `link` — hyperlink ink (the underline comes from the style attribute,
+  not the color).
+
+**Semantic states**
+
+- `ok`, `warn`, `error`, `info` — success, caution, failure, and
+  informational marks.
+
+**Selection pair**
+
+- `selection_bg` / `selection_fg` — always used together, never mixed with
+  other grounds. The pair means "this is the thing keys act on".
+
+**Cursor and shadow**
+
+- `cursor` — the caret/block-cursor ink when the engine draws its own.
+- `shadow` — a dim multiplier for cell-space drop shadows (carries alpha).
+- `shadow_ground` — `shadow` pre-composited over `bg` at theme build, so
+  it is opaque. This is what `Block::shadow` paints: widgets never do
+  color math themselves.
+
+**Chart ramp**
+
+- `chart[0..8]` — eight hue-separated series colors, all legible on `bg`.
+  Chart series pick a **slot**, never a color: slots 0–4 follow the
+  accent/info/ok/warn/error family and slots 5–7 are curated companions,
+  with a separation pass that keeps every series tellable-apart even in
+  palettes where two source colors coincide. `TokenSet::chart(i)` clamps
+  out-of-range indexes to the last slot, so indexing from arbitrary data
+  can never panic.
+
+**Syntax family**
+
+- `syntax_keyword`, `syntax_string`, `syntax_number`, `syntax_type`,
+  `syntax_func`, `syntax_punct`, `syntax_comment` — code inks derived per
+  theme from the audited accent/semantic family and contrast-guarded
+  against `surface_raised` (the code ground). Comments deliberately recede
+  at the 3:1 class; the other inks target 4.5:1.
+
+By-id access exists for tooling (theme editors, debug overlays, config
+files): `TokenId::ALL` (all 36, stable order), `tokens.get(id)`,
+`tokens.set(id, rgba)`, `TokenId::from_name("accent")`, and
+`tokens.iter()` for `(id, color)` pairs.
+
+## The 26 built-in themes
+
+`theme::themes()` returns the built-in registry; `theme::get(id)` looks a
+theme up by id (also honoring the `"dark"`/`"light"` aliases for the house
+pair); `theme::resolve(id)` falls back to the default for unknown ids and
+returns a labeled warning string alongside; `theme::default_theme()` is
+`abstract-dark`. `theme::list()` yields `(id, label, dark)` for every
+visible theme, built-ins first, then runtime registrations — the picker
+surface.
+
+The family:
+
+| family | themes |
+| --- | --- |
+| Abstract originals | `abstract-dark`, `abstract-light`, `abstract-aurora`, `abstract-paper`, `abstract-ember`, `abstract-midnight`, `abstract-dawn` |
+| Observer | `observer-night` |
+| Catppuccin | `catppuccin-mocha`, `catppuccin-macchiato`, `catppuccin-frappe`, `catppuccin-latte` |
+| Rosé Pine | `rose-pine`, `rose-pine-moon`, `rose-pine-dawn` |
+| Tokyo Night | `tokyo-night` |
+| Nord | `nord` |
+| One | `one-dark`, `one-light` |
+| Dracula | `dracula` |
+| Monokai | `monokai` |
+| Gruvbox | `gruvbox` |
+| Solarized | `solarized-dark`, `solarized-light` |
+| Everforest | `everforest-dark`, `everforest-light` |
+
+The ported families keep every hex value their upstream palette defines,
+verbatim. Tokens the upstream source does not define (borders, selection
+tints, focus rings, the chart ramp, the syntax family) are derived by
+documented, contrast-guarded rules — for example, borders composite the
+theme's own text ink over the ground so gruvbox gets warm cream strokes
+rather than clinical gray.
+
+Every token value of every theme, generated straight from the registry:
+[`captures/themes-table.md`](captures/themes-table.md).
+
+## Switching themes at runtime
+
+There is exactly one app-level theme signal. Reads are reactive, writes
+restyle the whole application:
+
+```rust
+use abstracttui::prelude::*;
+
+// Inside a component: read reactively. Any dyn_view that reads the
+// signal rebuilds with fresh tokens when the theme changes.
+fn header(cx: Scope) -> View {
+    let theme = use_theme(cx);
+    dyn_view(LayoutStyle::line(1), move || {
+        let t = theme.get(); // &'static Theme: t.tokens, t.is_dark()
+        text(format!("{} ({})", t.label, if t.is_dark() { "dark" } else { "light" }))
+    })
+}
+
+// Anywhere: switch. Returns false (and changes nothing) for unknown ids.
+set_theme_by_id("nord");
+
+// Or with a handle from the registry / a runtime registration:
+set_theme(abstracttui::theme::get("catppuccin-mocha").unwrap());
+```
+
+Mounting an app installs a watcher on the signal that damages the whole
+tree on switch, so even static text repaints, while regions that read the
+signal inside `dyn_view` re-render fine-grained. `Theme::is_dark()` is the
+supported way to make polarity-conditional choices (shadow strength, image
+dithering, artwork variants).
+
+The shipped examples honor `ABSTRACTTUI_THEME=<id>` as a startup
+convention — `set_theme_by_id` at boot is all it takes to adopt the same
+convention in your app.
+
+## Contrast guarantees
+
+Every registered theme must pass `theme::audit(id, &tokens)` — a WCAG
+contrast audit that measures each documented pair with
+`theme::contrast_ratio(a, b)` and returns structured `Violation`s (theme,
+rule, token, measured value, required floor). The built-in family passes
+with zero violations as a test invariant; the floors are public in
+`theme::contrast::floors` so your tooling audits against the same numbers:
+
+| pair | floor |
+| --- | --- |
+| `text` / grounds | 4.5:1 (7:1 is the target, reported not enforced) |
+| `text_muted` / `bg` | 3.0:1 |
+| `text_faint` / `bg` | 2.5:1 (the deliberate decoration tier) |
+| `accent`, `accent_alt`, semantics, `link` / `bg` | 3.0:1 |
+| `selection_fg` / `selection_bg` | 4.5:1 |
+| `border` / `bg` | 1.5:1 |
+| `border_focus` / `bg` | 2.0:1 |
+| `cursor` / `bg` | 3.0:1 |
+| syntax inks / `surface_raised` | 4.5:1 (comments 3.0:1) |
+
+Syntax floors are additionally capped at what the theme's own body text
+achieves on the code ground — code can never be more readable than text,
+which matters for deliberately soft palettes.
+
+Beyond the pairs, grounds must be **decisive**: a theme's measured ground
+luminance must agree with its declared `dark` flag by a margin
+(`|L(bg) − 0.5| ≥ 0.15`). A mid-gray ground makes both text polarities
+marginal and breaks everything downstream that groups by polarity.
+
+Audit exceptions are named per `(theme, rule)` pair, never blanket, and a
+stale exception fails the test suite. Exactly one exists today:
+`everforest-light`'s text on raised chrome measures ~4.25:1 — both values
+are verbatim upstream colors, the rule is stricter than the mandated
+text/ground floor, and 4.25:1 still clears WCAG AA-large.
+
+## Registering a custom theme
+
+`theme::register(candidate, mode)` is the runtime door:
+
+```rust
+use abstracttui::theme::{register, RegisterMode, ThemeCandidate, TokenSet};
+
+let candidate = ThemeCandidate {
+    id: "my-theme".into(),        // kebab-case: [a-z0-9-_], non-empty
+    label: "My Theme".into(),
+    dark: true,                   // audited against measured luminance
+    tokens: my_tokens,            // a full TokenSet
+};
+
+match register(candidate, RegisterMode::Strict) {
+    Ok(reg) => set_theme(reg.theme),
+    Err(e) => eprintln!("{e}"),   // structured violations, not a boolean
+}
+```
+
+The audit always runs; the mode declares what happens to findings:
+
+- **`RegisterMode::Strict`** — findings refuse the registration. The
+  error carries the structured violation list plus role-hygiene findings
+  (`RegisterError::Rejected { violations, hygiene }`), so a theme file can
+  be treated as code: fix what the audit names.
+- **`RegisterMode::Labeled`** — the theme registers anyway, and every
+  finding comes back on `Registration::warnings` as a `#FALLBACK:`-prefixed
+  line. Use this for user-supplied themes where refusing would strand the
+  user — and surface the warnings, never swallow them.
+
+Identity problems refuse in **both** modes: an empty or malformed id is
+`RegisterError::InvalidId`, and shadowing a built-in id or one of its
+aliases is `RegisterError::ReservedId` — a user theme silently replacing
+`nord` would be spoofing, not customization.
+
+Accepted registrations are `&'static` (leaked once, stable for the app's
+life, ~300 bytes each), visible to `theme::get`, `theme::list`, and theme
+cycling. Re-registering an id replaces it for future lookups while old
+handles stay valid; re-registering a byte-identical candidate returns the
+existing handle without allocating.
+
+### Deriving tokens
+
+You rarely design 36 colors by hand. `theme::derive` provides the same
+helpers the built-in registry uses:
+
+- `mix(a, b, t)`, `lighten(c, t)`, `darken(c, t)` — sRGB-space mixes
+  (the perceptual limits are documented at the definitions; these are for
+  small nudges within one theme, not long decorative gradients).
+- `mix_until_contrast(base, ink, anchor, t0, step, floor)` — walk a mix
+  upward until it clears a contrast floor against its ground (how borders
+  are derived).
+- `tint_until_readable(base, tint, fg, t0, step, t_min, floor)` — walk a
+  tint downward until the foreground stays readable on it (how selection
+  backgrounds are derived).
+
+The intended recipe: start from your four anchor colors (ground, text,
+accent, one semantic), derive surfaces with `lighten`/`darken` steps, fill
+the rest with the walks, then run `theme::audit` and fix what it names.
+
+## Design guidance for widget authors
+
+Widgets built on AbstractTUI should speak tokens and nothing else — the
+engine's own widget sources are lint-checked for raw hex. The conventions
+that keep a screen coherent:
+
+**Three focus/selection mechanisms, in priority order.**
+
+1. The **selection pair** says "this is the thing keys act on"
+   (list rows, table rows, selected text).
+2. A **`border_focus` stroke** says "this pane owns the keyboard"
+   (bordered widgets and panes).
+3. **`accent` ink** is hover garnish.
+
+Never render two selection pairs at different strengths — one pair, one
+meaning.
+
+**The state table.**
+
+- *Normal*: content inks on their ground.
+- *Hover*: recolors the actionable ink to `accent` — decoration only; a
+  hover state must never carry information focus does not.
+- *Focus*: `border_focus` stroke on bordered widgets; the selection pair
+  on borderless ones.
+- *Disabled*: `text_faint`, and out of the focus order entirely — a
+  focused-disabled widget cannot exist.
+- *Selected*: persists when the pane is unfocused; the owning pane's
+  stroke says where keys go.
+
+**Hard rules.**
+
+- Tokens only; no color arithmetic in widgets — pre-composited tokens like
+  `shadow_ground` exist precisely so widgets never blend.
+- Placeholders (`text_faint`) disappear on first input.
+- Underline-as-affordance is drawn as cells, never as a text attribute
+  alone, so it survives 16-color terminals.
+- Every widget draws inside its rect; long spans clip rather than leak.
+
+For a live rendering of all of this, run the `widgets` and `gallery`
+examples (`cargo run --example gallery`), and see
+[`../examples/README.md`](../examples/README.md).
+
+
+===== FILE: docs/graphics-and-3d.md =====
+
+# Graphics and 3D
+
+AbstractTUI renders real pixels in the terminal: PNG/JPEG images through
+the best channel the terminal offers, and software-rasterized 3D models
+(GLB) with textures, lighting, and animation — all with hand-rolled
+decoders and no GPU requirement. Degradation is always labeled, never
+silent: when the engine falls back to a lesser channel, the result says so.
+
+## Images end-to-end
+
+### Bytes to picture
+
+`gfx::decode_image(bytes)` sniffs the magic bytes (containers lie, bytes
+don't) and decodes **PNG** or **baseline JPEG** into a `gfx::Bitmap` — an
+owned RGBA8 image with pixel `get`/`set`, nearest and bilinear resize,
+cropping, and a box-filter mip chain. Unknown formats reject by name,
+telling the caller what does decode ("PNG and baseline JPEG decode,
+GIF/WebP/AVIF/TIFF do not" — a message you can show verbatim). Truncated
+or hostile bytes produce named errors, never panics; the decoders are
+fuzz-hardened.
+
+### Picture to terminal: the capability ladder
+
+The engine picks the best channel the terminal proves it supports —
+`gfx::choose_channel(&caps)` — best first:
+
+| channel | how it draws | moves / resizes | removal | requires |
+| --- | --- | --- | --- | --- |
+| kitty graphics | upload once by id, place by escape | cheap re-place, no retransmit | true delete | kitty graphics protocol |
+| iTerm2 | full base64-PNG re-emit at the cursor | full re-emit | cells overdraw | OSC 1337 support |
+| sixel | paletted raster at the cursor | full re-emit | cells overdraw | sixel + known cell pixel geometry; one shared palette |
+| unicode mosaic | colored glyphs (it *is* cells) | free | free | any terminal |
+
+Capabilities come from detection, not folklore: an instant environment
+pass, then an active query probe that can raise *and* lower the answer.
+Run any of the `dashboard`, `viewer3d`, or `images` examples with `--caps`
+to print the report for your terminal.
+
+### Three entry points, smallest first
+
+- **`gfx::render_to_cells(bitmap, rect, &caps)`** — one call. Picks the
+  best mosaic mode for the probed terminal and returns ready-to-blit
+  `CellPatch`es.
+- **`widgets::Image`** — the widget: `Image::from_path("logo.png")` or
+  `Image::from_bitmap(Arc<Bitmap>)` (the `Bitmap` type is re-exported
+  beside the widget and in the prelude), with `fit`
+  (`Contain`/`Cover`/`Fill`/`None`), alignment, and a mosaic-mode
+  override. The widget **always renders mosaic cells**: a widget draw
+  closure owns cells, not escape bytes, so pixel-protocol placement lives
+  one level up.
+- **`gfx::ImageSession`** — pixel protocols with a lifecycle. Slots are
+  keyed by the caller (`SlotKey`), content changes are declared by version
+  bump, and each sync emits the minimum traffic the channel allows: kitty
+  transmits once, re-places on move, and deletes on drop; iTerm2 and sixel
+  honestly re-emit their full payload on any change. Bytes flow through an
+  `ExternalSink` (the presenter adapts), and tmux passthrough wrapping is
+  applied automatically when capabilities call for it. `SyncOutcome` tells
+  you whether cells need repainting, bytes were written, or nothing
+  changed.
+
+`gfx::present_image` / `ImageRenderer` sit under all three: capability
+ladder on top, `RenderConfig` for the knobs (kitty wire format, placement
+z-index, sixel register budget and dithering).
+
+### Mosaic modes
+
+Mosaic renders pixels as colored glyphs with a two-colors-per-cell best
+fit (weighted least squares):
+
+- **HalfBlock** — 1×2 pixels per cell using `▀`. Exact and universal.
+- **Quadrant** — 2×2, the 16-glyph quadrant set. Universal glyph coverage.
+- **Sextant** — 2×3, the 64-pattern sextant set. Denser, but its U+1FB00
+  glyphs need a recent font — explicit opt-in, since no font probe exists
+  and missing glyphs render as tofu.
+- **Braille** — 2×4, dots by luminance threshold. Structure rather than
+  color; the strongest choice on monochrome-class terminals.
+
+`MosaicMode::auto(&caps)` picks for you and returns the reason as a label:
+non-UTF-8 locales get HalfBlock (U+2580 survives most legacy codepages),
+monochrome terminals get Braille, color terminals get Quadrant.
+
+Optional **Floyd–Steinberg dithering** (serpentine error diffusion) can
+pre-quantize the source to a palette before cell fitting — worth it when
+the *output* terminal is 256- or 16-color, where straight quantization
+would band gradients. Sixel emission has its own configurable dithering.
+
+### Images under tmux
+
+Inside tmux, graphics protocols are off by default because tmux swallows
+them unless the user set `allow-passthrough on` — a setting invisible from
+the environment. The engine verifies passthrough per session with a
+wrapped round-trip probe and only then enables the kitty/iTerm2 paths,
+wrapping every payload automatically. Known cosmetic limit: tmux cannot
+reflow passthrough images across scrolling or pane splits. Mosaic works
+everywhere regardless.
+
+## 3D end-to-end
+
+### The five-line hello
+
+```rust
+use abstracttui::three::{self, Framebuffer, SceneRenderer};
+
+let view = three::quick_view("model.glb")?;      // load + framed camera + light
+let mut fb = Framebuffer::new(160, 96);
+SceneRenderer::new().render(&view.scene(), &mut fb);
+// fb -> mosaic cells via MosaicRenderer, or use Viewport3D below.
+```
+
+`quick_view` (and `quick_view_bytes` for in-memory GLB data) returns a
+`QuickView` with public `model`, `camera`, `light`, and `stats` fields —
+adjust the camera and light freely between frames, then call `.scene()`.
+`stats` reports decode cost (texture decode dominates on textured models;
+a 2048² JPEG-textured asset loads in the ~100 ms class — show a loading
+state around it). `look_from(yaw, pitch)` re-frames the camera on the
+model's bounds: the "reset camera" a viewer needs.
+
+### What loads (the GLB subset)
+
+Binary GLB containers with embedded buffers; TRIANGLES primitives;
+positions, normals, UVs, and vertex colors; u8/u16/u32 indices or
+non-indexed geometry; node TRS and matrix hierarchies; multiple scenes
+(the default scene wins); `baseColorFactor` and `baseColorTexture`
+(embedded PNG or baseline JPEG); `emissiveFactor`; smooth-normal
+generation on request; and a 2-million-triangle budget enforced from
+metadata before decode.
+
+Rejected **by name**: sparse accessors, Draco/meshopt compression,
+non-triangle primitive modes, and out-of-range anything. Labeled
+degradations (the model loads, with a warning): external URIs, unsupported
+texture maps (normal/metallic-roughness/occlusion), morph weights, and
+CUBICSPLINE animation channels (skipped).
+
+### Scene, camera, light
+
+`Scene<'_>` borrows a `Model` and carries a `Camera` (orbit-style: target,
+yaw, pitch, distance, vertical FOV, near/far), a `Light` (directional:
+direction vector or spherical `from_angles`, ambient + diffuse terms), a
+background color, and a `double_sided` flag.
+
+Culling defaults differ by entry, deliberately: bare `Scene::new` culls
+back faces (procedural meshes are consistently wound), while `Viewport3D`
+and `QuickView::scene()` render double-sided (real-world GLB exports are
+not, and holes read as bugs). Flip `double_sided` explicitly when the
+other trade-off fits.
+
+### The Viewport3D widget
+
+```rust
+let vp = Viewport3D::new(Arc::new(model))
+    .orbit(yaw, pitch, zoom)      // plain floats each build; signals live app-side
+    .mode(MosaicMode::HalfBlock)
+    .animate(0, t)                // play clip 0 at time t (loops; static = rest pose)
+    .light_angles(azimuth, elevation)
+    .fog(0.15)
+    .on_orbit(move |dyaw, dpitch| { /* write yaw/pitch signals */ })
+    .on_zoom(move |steps| { /* write zoom signal */ })
+    .element(&tokens);
+```
+
+The widget is pure over its props: same props, same pixels. Left-drag
+orbits (the pointer is captured for the drag, so fast drags keep steering
+outside the rect), the wheel zooms — but the widget only *reports* deltas
+through `on_orbit`/`on_zoom`; the app owns camera state and clamping.
+`element(&TokenSet)` takes no scope because the widget holds no reactive
+state. Buffers persist inside the draw closure, so a steady-state repaint
+allocates nothing. `light`, `background`, `spin` (caller-driven
+auto-rotation), and `cull_backfaces` round out the builder.
+
+For a complete interactive viewer, run
+`cargo run --example viewer3d -- model.glb`.
+
+### Animation playback
+
+`Model::animations()` lists the clips; `sample_pose_full(clip, t, &mut
+Pose)` produces per-instance world matrices plus per-skin joint matrices —
+pure in `t`, clamped to the clip's keyframe range (loop with
+`t % clip.duration()`), and allocation-free in steady state (the `Pose`
+scratch is reused across frames).
+
+Supported interpolation: **LINEAR** and **STEP**; rotations use
+shortest-path nlerp. **Skinning**: up to 4 joints per vertex
+(`JOINTS_0`/`WEIGHTS_0`), linear blend, sanitized at load — out-of-range
+weighted joints reject, drifted weight sums renormalize with a label. An
+animated, skinned test asset ships in the repository
+(`src/three/fixtures/animated_bar.glb`).
+
+### Textures and mip-mapping
+
+Base-color textures decode through the same image pipeline (embedded PNG /
+baseline JPEG) and build a box-filter mip chain. The rasterizer picks a
+mip level **per triangle** from the texels-per-pixel ratio, with bilinear
+sampling within the level; wrap mode is REPEAT.
+
+## The boot splash
+
+An optional two-second identity animation for app startup, played before
+your first frame. `boot::should_splash(&caps)` is the production gate: it
+returns the reason to skip when the render handle is not a tty, when
+`ABSTRACTTUI_NO_SPLASH` is set (any value except `0`, so wrapper scripts
+can force-enable), when `NO_COLOR` is set, when `TERM=dumb`, or when the
+capability report itself says the terminal is dumb. Respect the reason —
+it is ready-made for a log line.
+
+The sequence runs 2.0 s in four beats: **arrival** (three planes fly in,
+staggered, on an ease-out curve), **alignment** (at 0.9 s the planes lock
+into the mark and a 12-spark burst fires), **reveal** (at 1.4 s the
+wordmark tracks open from 4 cells of letter-spacing to 1), **hold**
+(settle, then done). Any key skips with a fast 120 ms fade, and a hard
+2.5 s wall cutoff bounds the whole thing.
+
+Two render paths read the same identity constants: a 3D path (the mark
+rendered by the `three` rasterizer, chosen on truecolor terminals) and a
+pure-cell 2D path with its own particle field (everywhere else). Try both:
+`cargo run --example splash` (`--3d` / `--2d` to force one).
+
+## Honest limits
+
+- **JPEG**: baseline sequential only; progressive and arithmetic coding
+  reject by name. Scan component selectors are validated against the
+  frame header; malformed scans reject rather than decode wrong.
+- **PNG**: 8-bit depths, no interlacing (Adam7 rejects by name).
+- **Sixel**: one palette per emission — multiple live sixel images recolor
+  each other. Prefer one sixel image per screen.
+- **iTerm2/sixel** have no placement model: any move or resize re-emits
+  the full payload; only kitty gets placement escapes and true deletes.
+- **Pixel protocols** are verified byte-for-byte against the protocol
+  specifications and a protocol state model, not against every live
+  terminal emulator; mosaic is the universal, always-correct path.
+- **Animation**: LINEAR/STEP only; CUBICSPLINE channels and morph weights
+  skip with labels; rotation interpolation is nlerp, not slerp.
+- **Skinning**: `JOINTS_0`/`WEIGHTS_0` only (4 joints per vertex), linear
+  blend, no inverse-transpose normal handling (an approximation under
+  non-uniform scale).
+- **Textures**: base color only; other maps are labeled and ignored; wrap
+  is REPEAT (per-sampler modes are not read). Mip LOD is per-triangle,
+  not per-pixel.
+- **Mosaic**: two colors per cell, by construction; braille carries
+  structure, not color.
+- **Rasterizer**: near-plane and guard-band clipping, top-left fill rule,
+  perspective-correct depth and UVs; vertex-color interpolation is
+  screen-linear (invisible at cell scale).
+- **Performance numbers are load-sensitive**: the envelope below is from
+  an idle machine; medians inflate several-fold under host contention.
+
+## Performance envelope
+
+Measured medians, release build, on a quiet machine (ms/frame):
+
+| asset | triangles | 160×96 | 320×192 |
+| --- | --- | --- | --- |
+| synthetic sphere (untextured, gouraud) | 16,128 | 0.76 | 0.97 |
+| helmet (JPEG textured + mips) | 15,452 | 1.31 | 1.82 |
+| helmet (untextured) | 15,452 | 1.18 | 1.59 |
+| x-wing (PNG textured + mips) | 119,999 | 7.53 | 8.21 |
+| skinned sphere (animated, all vertices blended) | 65,024 | 2.90 | 3.26 |
+
+The renderer is vertex-bound at cell scale: 4× the pixels costs +9–39%,
+while 7.4× the triangles costs ~5.7×. Rule of thumb: assets up to ~20k
+triangles render in well under 2 ms anywhere; a 120k-triangle asset fits a
+30 fps budget with 3–4× headroom on one core.
+
+Mosaic conversion adds, for a 200×60-cell target (worst case): half-block
+~50 µs, braille ~0.5 ms, quadrant ~1 ms, sextant ~3.7 ms.
+
+Reproduce on your machine:
+
+```bash
+cargo test --release -- --ignored perf_three_envelope --nocapture
+cargo test --release -- --ignored perf_mosaic_200x60 --nocapture
+```
+
+
+===== FILE: docs/faq.md =====
+
+# FAQ
+
+## Why another TUI library?
+
+Most terminal UI libraries make one of two bets: immediate-mode (redraw
+everything every frame, diff at the end) or a retained widget tree with
+coarse invalidation. AbstractTUI makes a different one: **fine-grained
+reactive signals driving a layered compositor with damage tracking**.
+State lives in signals; only the regions that read a changed signal
+re-render; the compositor diffs only damaged cells; an idle app sits in a
+blocking read at zero CPU. On top of that sits capability-driven graphics
+(real images and software-rasterized 3D with labeled fallbacks) and a
+36-token theme system with enforced contrast floors. If your app is a
+short-lived form, simpler designs are fine; AbstractTUI is built for
+long-running, composed, animated applications that should still cost
+nothing when nothing happens.
+
+## Does it work over SSH?
+
+Yes. Everything the engine does travels as bytes over the pty, which is
+exactly what SSH carries. Capabilities are detected from the terminal that
+is actually attached — your local emulator — via an environment pass plus
+an active query probe, so color depth, image protocols, and keyboard
+enhancements reflect what your end of the connection supports. Expect the
+same feature set you would get locally in the same emulator; only latency
+changes.
+
+## Which terminals support images?
+
+Anything, at some rung of the ladder. Kitty-protocol terminals get the
+best channel (upload once, cheap moves, true deletes); iTerm2-protocol
+terminals get inline images with full re-emits; sixel terminals get
+paletted rasters; **every** terminal gets unicode mosaic, which is plain
+colored glyphs and needs nothing. The engine probes and picks; run
+`cargo run --example images -- --caps` to see what your terminal offers.
+See [graphics-and-3d.md](graphics-and-3d.md) for the full ladder.
+
+## Why is my emoji/wide-character layout off in one terminal?
+
+Because terminals genuinely disagree about the width of some characters.
+Emoji presentation sequences (VS16), ZWJ families, and East-Asian-Ambiguous
+symbols render at different widths across emulators and configurations —
+there is no protocol to ask. The engine measures with a consistent width
+policy and defends its cursor after emitting a risky cluster, so a
+disagreement stays confined to that cluster instead of smearing everything
+after it on the line. If your terminal is configured ambiguous-wide, cell
+layout of every TUI breaks regardless; prefer the terminal's default width
+configuration, and prefer unambiguous glyphs in structural chrome.
+
+## How do I test my app headlessly?
+
+Drive the same pipeline production uses against a captured terminal — no
+tty needed:
+
+```rust
+use abstracttui::app::Driver;
+use abstracttui::testing::CaptureTerm;
+
+let mut term = CaptureTerm::new(size);
+let mut driver = Driver::new(&mut app, &mut term, cfg)?;
+driver.turn(&mut app, &mut term)?;             // one full frame cycle
+assert!(term.screen().to_text().contains("n = 0"));
+term.push_input(b"+");                          // bytes, as a terminal would send
+driver.turn(&mut app, &mut term)?;
+```
+
+`CaptureTerm` records the emitted bytes and models the screen, so you
+assert on rendered text (or raw bytes) with every dispatch, focus, and
+damage path being the real one. For pure component tests, skip the driver:
+mount into a `ui::UiTree`, dispatch events, draw into a buffer canvas.
+
+## Can I embed AbstractTUI in an existing event loop?
+
+Yes. `App::run` is a convenience, not a requirement. `Driver::turn` runs
+exactly one frame cycle and never blocks — the blocking edge is a separate
+wait call, so your own loop decides when to pump. Headless surfaces
+(`pump`, `draw`) drive the reactive and layout pipeline without a terminal
+at all, and the unix terminal can be constructed over explicit file
+descriptors for embedders.
+
+## Why the near-zero dependency policy?
+
+The dependency policy is a hard rule: `std` plus a minimal, low-level,
+permissively-licensed set — `unicode-width`, `unicode-segmentation`,
+`miniz_oxide` (inflate for PNG), and the platform bindings (`libc` on
+unix, `windows-sys` on Windows). Everything else is hand-rolled: ANSI
+emission, the input parser, the flexbox solver, the signals runtime, JSON
+parsing for glTF, PNG chunking and defiltering, JPEG decode, base64, sixel
+encoding, and the 3D math and rasterizer. The payoff is a dependency graph
+you can audit in one sitting, fast clean builds, no feature-flag matrix,
+and behavior that changes only when this crate changes.
+
+## How do themes stay readable?
+
+Every theme — built-in or registered at runtime — is audited against
+WCAG-derived contrast floors: body text at 4.5:1, muted text at 3:1,
+accents and semantic marks at 3:1, selection text at 4.5:1, and so on down
+to hairline borders at 1.5:1. The built-in family passes with zero
+violations as a test invariant, and `theme::register` runs the same audit
+on your themes — refusing in strict mode or labeling every finding in
+labeled mode. See [theming.md](theming.md#contrast-guarantees) for the
+full table.
+
+## What happens on a dumb terminal, or with NO_COLOR?
+
+Both are honored. `TERM=dumb` (or an empty `TERM`) marks the terminal as
+not worth escaping at: the active capability probe is skipped entirely and
+the splash refuses to play. `NO_COLOR` forces color depth down regardless
+of what the terminal supports, and the raw fact is surfaced so themes can
+react. On limited-color terminals, the presenter quantizes to the 256- or
+16-color palette pairwise — foreground and background are re-picked
+together so text never vanishes into its own background.
+
+## Is Windows supported?
+
+Best-effort, honestly labeled. macOS and Linux are the verified platforms:
+every unix code path is exercised by live pty tests, including
+signal-driven resize, job-control suspend, and keystroke flow under a real
+controlling terminal. The Windows backend compiles cleanly against the
+MSVC target, its platform-independent logic (UTF-16 pairing, wake
+latching, resize dedupe) is unit-tested on every host, and its console
+usage follows Microsoft's documented semantics — but it has not been
+exercised on live Windows hardware. Treat a first Windows
+deployment as a beta event. (One concrete difference: `suspend()` returns
+an explicit Unsupported error on Windows — hide the Ctrl+Z binding there.)
+
+## How big is the crate?
+
+One crate, no feature flags, no build script, three small library
+dependencies plus the platform bindings. The source is roughly 65k lines
+of Rust including its extensive inline test suites — decoders, rasterizer,
+layout solver, and signals runtime included, since none of that is pulled
+in from elsewhere.
+
+## Can widgets be shared as libraries?
+
+Yes — a component is a plain function, so it ships like any Rust code. The
+convention: a props struct (with `Callback<T>` fields for typed events out
+and `View` fields for slots), a function that takes `Scope` and props and
+returns a `View`. `Callback::default()` is a no-op, so optional events
+cost nothing to leave unbound. The `components` example is the heavily
+commented reference: three reusable components composed repeatedly with
+different props into a settings screen.
+
+## How do I see what is actually repainting?
+
+The compositor has a damage visualizer: `set_debug_damage(true)` outlines
+exactly the regions each frame repaints. If a "static" screen shows
+outlines every frame, something is writing a signal it shouldn't — that is
+your profiling starting point, before reaching for a profiler. Perf
+numbers only mean anything in `--release` builds.
+
+## Why can my app write the clipboard but not read it?
+
+By design. Copy uses OSC 52 (gated on detection, since some terminals
+silently ignore it, and success is only reported when the capability
+holds). The **read** form of OSC 52 is deliberately never emitted: it
+would let any full-screen application silently read the user's clipboard —
+a data-exfiltration vector. Paste reaches your app exclusively through
+bracketed paste, which is fuzz-hardened: multi-megabyte pastes stream in
+bounded chunks, byte-exactly, with embedded escape sequences neutralized
+as content.
+
+## Why doesn't Ctrl+Enter (or Shift+Enter) do anything?
+
+On the classic terminal wire, Ctrl+Enter, Shift+Enter, and Ctrl+Backspace
+are byte-identical to plain Enter / Ctrl+H — no parser can recover what
+the terminal never sent. They become distinct under the kitty keyboard
+protocol or xterm's modifyOtherKeys, both of which the engine detects and
+decodes automatically. Treat these chords as enhancements, not baseline
+bindings; everything on arrows, Home/End, PgUp/PgDn, and F1–F12 with any
+modifier combination is reliable everywhere.
+
+## Does it support the mouse?
+
+Yes: SGR-encoded mouse events (clicks, drags, wheel) in cell coordinates
+on every supported terminal, hover/click affordances in the built-in
+widgets, pointer capture for drags (the 3D viewport uses it for orbiting),
+and pixel-precision reporting where the terminal verifiably supports it —
+raw pixel coordinates ride alongside cell coordinates only when pixel
+reporting is actually active, never posing as cells.
+
+## How do I let users pick a theme?
+
+`set_theme_by_id(id)` switches at runtime and the whole app restyles
+through the one theme signal; `theme::list()` gives you `(id, label,
+dark)` for every visible theme, including ones your app registered. The
+shipped examples honor `ABSTRACTTUI_THEME=<id>` as a startup convention,
+and `cargo run --example themes` is a complete picker UI — card grid, live
+preview, measured contrast ratios — you can crib from.
+
+
+===== FILE: docs/troubleshooting.md =====
+
+# Troubleshooting
+
+Symptom → cause → fix, for the problems terminal reality actually
+produces. Two diagnostic surfaces recur below:
+
+- **The capability report**: `cargo run --example dashboard -- --caps`
+  (also `viewer3d`, `images`) prints what the engine detected — color
+  depth, image protocols, keyboard enhancements, tmux state. In code:
+  `caps.summary()` (multi-line) or `caps.summary_line()` (one line).
+- **Startup notices**: labeled degradations are collected at startup and
+  exposed reactively (`use_startup_notices`); render them in a footer or
+  toast and problems name themselves.
+
+## Nothing renders at all
+
+**Cause**: there is no terminal to render to. Either the process is not
+attached to a tty (output redirected, running under CI), or `TERM=dumb`
+(or empty) told the engine not to emit escapes at this terminal.
+
+**Fix**: run inside a terminal emulator. If stdin/stdout/stderr are all
+redirected and `/dev/tty` is unavailable, terminal construction fails with
+an actionable error rather than emitting bytes into the void. For CI and
+tests, don't fight it — drive the app headlessly with
+`testing::CaptureTerm` (see [faq.md](faq.md#how-do-i-test-my-app-headlessly)).
+Note the shipped examples deliberately exit 0 with a one-line notice when
+there is no interactive terminal.
+
+## Keyboard is dead under an unusual shell or launcher
+
+**Cause**: some environments hand the process a terminal descriptor that
+cannot be polled (a real macOS quirk with `/dev/tty`). The engine detects
+this and falls back to a working descriptor instead of blocking forever.
+
+**Fix**: usually none needed — an app that starts is an app that receives
+keys. The fallback is a *labeled* degradation: `Terminal::degraded()`
+returns the reason, and it lands in the startup notices. If keys are
+genuinely dead, check the notices first; if the engine could not find any
+workable descriptor it fails with an actionable error rather than starting
+deaf.
+
+## Images don't show (or fall back to blocky glyphs)
+
+**Cause**: the terminal didn't prove a pixel protocol. Image channels are
+enabled by detection — kitty graphics, iTerm2, or sixel (sixel also needs
+the cell pixel geometry) — and anything unproven falls back to unicode
+mosaic, with the degradation labeled, never silent.
+
+**Fix**: check `--caps` to see which channel was chosen and why. Under
+tmux, graphics are off by default: tmux swallows the protocols unless
+`allow-passthrough on` is set, and that setting is invisible from the
+environment, so the engine verifies it per session with a wrapped
+round-trip probe and only then enables the pixel paths. Set
+`set -g allow-passthrough on` in `~/.tmux.conf`, restart the session, and
+re-check `--caps`. Mosaic output is not a bug — on terminals with no pixel
+protocol it *is* the correct answer, and the quadrant/sextant/braille
+modes are a deliberate quality ladder within it.
+
+## Colors look wrong or washed out
+
+**Cause**: the terminal did not advertise truecolor, so every 24-bit color
+is being quantized to the 256- (or 16-) color palette. Detection reads
+`COLORTERM` and `TERM` in the environment pass, and the active probe can
+both raise and lower the verdict. `NO_COLOR`, if set, forces color off
+deliberately.
+
+**Fix**: use a truecolor terminal, or export `COLORTERM=truecolor` if your
+terminal genuinely supports it but doesn't say so (common over some SSH
+hops that strip the variable). Check what was detected with `--caps`. One
+guarantee under quantization: foreground/background pairs are re-picked
+together, so text may band but never vanishes into its own background.
+
+## The screen flickers or tears during animation
+
+**Cause**: the terminal doesn't support synchronized output (DEC private
+mode 2026), so partially-painted frames can be displayed mid-write. Where
+the capability is detected, the engine brackets frames and the terminal
+displays each one atomically.
+
+**Fix**: use a terminal that supports synchronized output (check
+`--caps` — `sync` appears in the summary line when detected). Everything
+still works without it; the engine's damage tracking keeps writes small,
+which minimizes the visible window, but true tear-free animation needs the
+terminal's cooperation.
+
+## Ctrl+Enter behaves exactly like Enter
+
+**Cause**: on the legacy wire they are the same bytes. Ctrl+Enter,
+Shift+Enter, and Ctrl+Backspace are byte-identical to Enter / Ctrl+H — the
+information does not exist in the stream, so no parser can recover it.
+
+**Fix**: use a terminal with the kitty keyboard protocol or xterm's
+modifyOtherKeys — both are detected and decoded automatically, and these
+chords become distinct. In your own app, treat such chords as
+enhancements with a baseline alternative; arrows, Home/End, PgUp/PgDn, and
+F1–F12 with any modifier are reliable everywhere.
+
+## The boot splash doesn't play
+
+**Cause**: one of the deliberate gates fired. `boot::should_splash` skips
+when the render handle is not a tty, when `ABSTRACTTUI_NO_SPLASH` is set
+(to anything except `0`), when `NO_COLOR` is set, when `TERM=dumb`, or
+when the capability report classifies the terminal as dumb.
+
+**Fix**: if you *want* the splash, clear those variables and run on a real
+tty (`cargo run --example splash` to verify; `ABSTRACTTUI_NO_SPLASH=0`
+explicitly opts back in under wrapper scripts that set it). The gate
+function returns the skip reason as a string — log it and the answer reads
+itself. Also remember any keypress skips the splash with a fast fade; a
+buffered keystroke at launch can end it almost immediately.
+
+## Frames are slow
+
+**Cause**: usually one of three, in this order: a debug build (the
+rasterizer and mosaic fit are numeric code — `--release` is several times
+faster); a busy machine (the published envelope is from an idle box, and
+medians inflate several-fold under host contention); or your app damaging
+more than it thinks (a signal written every tick re-renders every region
+that reads it).
+
+**Fix**: measure in `--release` first. Then turn on the compositor's
+damage visualizer (`set_debug_damage(true)`) — it outlines exactly which
+regions repaint each frame; a supposedly idle screen with outlines
+everywhere means some signal is being written needlessly. For 3D scenes,
+the perf envelope and its reproduction commands are in
+[graphics-and-3d.md](graphics-and-3d.md#performance-envelope) — the
+renderer is vertex-bound at cell scale, so triangle count matters far more
+than viewport size.
+
+## Wide characters are misaligned in some terminals
+
+**Cause**: East-Asian-Ambiguous characters, emoji presentation sequences
+(VS16), and ZWJ families genuinely render at different widths across
+terminals — some split emoji families into components, some render
+ambiguous symbols double-wide under CJK configurations or emoji-font
+fallback. There is no protocol to query the terminal's opinion.
+
+**Fix**: the engine already confines the damage — after emitting a risky
+cluster it re-anchors the cursor, so a width disagreement stays inside
+that cluster instead of shifting the whole line (the classic smear). What
+it cannot fix: a terminal configured ambiguous-*wide* breaks the cell
+grid of every TUI. Keep the terminal's default width configuration, and
+prefer unambiguous glyphs (plain ASCII, box drawing, block elements) in
+structural chrome.
+
+## Tests hang forever
+
+**Cause**: the app was spawned in a harness with piped stdin that never
+reaches EOF. An idle app deliberately sits in a blocking read (zero CPU),
+so with a pipe that never sends bytes and never closes, it waits forever —
+that is correct behavior pointed at the wrong harness design.
+
+**Fix**: don't drive the real binary through pipes in tests. Use the
+canonical headless harness — `testing::CaptureTerm` plus `Driver::turn` —
+which runs the full production pipeline synchronously: push input bytes,
+turn one frame, assert on the rendered screen. Every test in this crate
+that exercises the app loop is written that way, and it needs no tty, no
+timeouts, and no sleeps.
+
+
+===== Package facts =====
+
+- Crate: `abstracttui` 0.1.0 (Rust, edition 2021). First public release: 2026-07-21.
+- Description: a reactive, compositor-grade terminal UI engine — fine-grained signals,
+  layered rendering with damage tracking, images (kitty/iTerm2/sixel/mosaic),
+  software-rasterized 3D (GLB), themes and animation.
+- License: MIT.
+- Repository / homepage: https://github.com/lpalbou/abstracttui
+- API reference: https://docs.rs/abstracttui
+- Dependencies (std plus this minimal set; everything else is implemented in-crate):
+  - `unicode-width` 0.2 — cell-width measurement
+  - `unicode-segmentation` 1 — grapheme segmentation
+  - `miniz_oxide` 0.8 — DEFLATE (PNG decoding)
+  - `libc` 0.2 — Unix terminal FFI (unix targets only)
+  - `windows-sys` 0.60 — Windows console FFI (windows targets only)
+- Test invocation (from CONTRIBUTING.md):
+  - `cargo test` — the whole suite (~1,240 tests: unit tests, integration suites under
+    `tests/`, and doctests).
+  - `cargo test --test live_smoke -- --ignored --test-threads=1` — live pty smoke tests
+    (spawn a real terminal session; run serially).
+  - `cargo test --test perf_budgets --release -- --ignored --test-threads=1` —
+    performance budgets (meaningful only in release builds; run serially).
+  - `UPDATE_GOLDENS=1 cargo test` — deliberately (re)mint golden snapshots under
+    `tests/goldens/`.
+  - Lint gates before submitting: `cargo fmt --all` and `cargo clippy --all-targets`
+    (zero warnings expected).
+  - Windows cross-check: `cargo check --target x86_64-pc-windows-msvc`.

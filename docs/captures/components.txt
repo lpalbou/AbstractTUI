@@ -1,0 +1,30 @@
+
+   deploy    ack alert    disabled
+
+ ╭───────────────────╮   ╭───────────────────╮   ╭───────────────────╮
+ │deploys            │   │alerts             │   │uptime d           │
+ │12                 │   │2                  │   │97                 │
+ │▲                  │   │▼                  │   │→                  │
+ ╰───────────────────╯   ╰───────────────────╯   ╰───────────────────╯
+
+
+ ┌ settings ─────────────────────────────────────────────────────────┐
+ │name            ▐orion                         ▌                   │
+ │                                                                   │
+ │notifications   [x] page the on-call                               │
+ │                                                                   │
+ │channel         (•) stable                                         │
+ │                ( ) beta                                           │
+ │                ( ) nightly                                        │
+ │                                                                   │
+ │→ orion · notifications on · stable channel                        │
+ │                                                                   │
+ │                                                                   │
+ │                                                                   │
+ │                                                                   │
+ │                                                                   │
+ └───────────────────────────────────────────────────────────────────┘
+
+
+ tab focus · enter/space activate · click cards · ctrl+t theme · q quit
+

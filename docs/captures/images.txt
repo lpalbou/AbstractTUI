@@ -1,0 +1,30 @@
+
+ images — procedural test card (160x96 px)
+
+ ┌┐ ┌┐ ┌┐ ┌┐
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ ││ ││ ││ ││
+ └┘ └┘ └┘ └┘
+
+ dither: off (truecolor)    protocol: off — would use mosaic (no pixel protocol here)
+ d dither · p protocol · t theme · q quit
+

@@ -1,0 +1,111 @@
+# Release pipeline for the `abstracttui` crate.
+#
+# Triggers:
+#   - push of a v* tag (e.g. v0.1.0): verify -> publish to crates.io -> GitHub Release.
+#   - workflow_dispatch: verify only by default (a release rehearsal);
+#     set the `publish` input to true to actually publish from the ref you run it on.
+#
+# Publishing authenticates via crates.io Trusted Publishing (OIDC) — no
+# long-lived token stored in the repo. One-time setup lives in .github/SETUP.md.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Actually publish to crates.io (otherwise verify only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  RUST_BACKTRACE: "1"
+
+jobs:
+  verify:
+    name: verify (tests, lints, package)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Build (all targets)
+        run: cargo build --all-targets
+      - name: Test
+        run: cargo test
+      - name: Doc tests
+        run: cargo test --doc
+      - name: Clippy (deny warnings)
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Rustdoc (deny warnings)
+        run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - name: Assert tag matches Cargo.toml version
+        # Only meaningful on tag pushes; a workflow_dispatch run has no tag.
+        if: github.ref_type == 'tag'
+        run: |
+          crate_version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$tag_version" != "$crate_version" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match Cargo.toml version ${crate_version}"
+            exit 1
+          fi
+          echo "Tag ${GITHUB_REF_NAME} matches Cargo.toml version ${crate_version}"
+      - name: Package contents sanity check
+        run: cargo package --no-verify --list
+      - name: Publish dry run
+        run: cargo publish --dry-run
+
+  publish:
+    name: publish to crates.io
+    needs: verify
+    # Publish on tag pushes, or on manual dispatch when publish=true.
+    if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.publish)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # The environment is part of the Trusted Publishing trust config on
+    # crates.io and lets you attach required-reviewer protection rules.
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write # OIDC token exchange for crates.io Trusted Publishing
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Authenticate with crates.io (Trusted Publishing)
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
+      - name: cargo publish
+        run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          # Fallback if Trusted Publishing is not configured (e.g. the very
+          # first publish of the crate without a Pending Publisher entry):
+          # comment out the "Authenticate" step above and the token line
+          # above, add a classic API token as the CARGO_REGISTRY_TOKEN
+          # repository secret, and uncomment the next line instead.
+          # CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  github-release:
+    name: create GitHub Release
+    needs: publish
+    # Only tags have something to attach release notes to.
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Create release with auto-generated notes
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true

@@ -1,0 +1,23 @@
+# mdBook configuration for the AbstractTUI documentation site.
+# Built by .github/workflows/docs.yml and deployed to GitHub Pages at
+# https://lpalbou.github.io/abstracttui/ (rustdoc is added under /api/ by CI).
+[book]
+title = "AbstractTUI"
+authors = ["Laurent-Philippe Albou"]
+description = "A reactive, compositor-grade terminal UI engine for Rust."
+language = "en"
+src = "docs"
+
+[build]
+build-dir = "book"
+
+[output.html]
+git-repository-url = "https://github.com/lpalbou/abstracttui"
+edit-url-template = "https://github.com/lpalbou/abstracttui/edit/main/{path}"
+site-url = "/abstracttui/"
+default-theme = "ayu"
+preferred-dark-theme = "ayu"
+
+[output.html.fold]
+enable = true
+level = 1

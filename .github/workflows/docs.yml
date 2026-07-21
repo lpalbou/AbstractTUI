@@ -1,0 +1,85 @@
+# Documentation site for AbstractTUI, deployed to GitHub Pages.
+#
+# Two pieces, one artifact:
+#   - the mdBook guide built from docs/ (book.toml at the repo root) is the
+#     site root: https://lpalbou.github.io/abstracttui/
+#   - rustdoc (`cargo doc --no-deps`) is copied into book/api/, served at
+#     https://lpalbou.github.io/abstracttui/api/abstracttui/
+#
+# One-time setup: enable Pages with Source = "GitHub Actions" (see
+# .github/SETUP.md).
+
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "book.toml"
+      - "src/**"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Only one Pages deployment at a time; let a queued deploy finish rather
+# than cancelling it mid-flight.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build site (mdBook + rustdoc)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install mdBook
+        uses: taiki-e/install-action@v2
+        with:
+          tool: mdbook
+      - name: Build guide
+        run: mdbook build
+      - name: Build API docs
+        run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - name: Add rustdoc under /api/
+        # The mdBook index stays the site root; rustdoc is reachable at
+        # /api/abstracttui/. A tiny index.html redirect covers the bare
+        # /api/ path.
+        run: |
+          mkdir -p book/api
+          cp -r target/doc/. book/api/
+          cat > book/api/index.html <<'EOF'
+          <!DOCTYPE html>
+          <meta charset="utf-8">
+          <meta http-equiv="refresh" content="0; url=abstracttui/index.html">
+          <title>Redirecting to API reference</title>
+          <a href="abstracttui/index.html">API reference</a>
+          EOF
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: book
+
+  deploy:
+    name: deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

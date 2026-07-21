@@ -1,0 +1,148 @@
+size=110x32 cursor=0,31 modes=[7,25,1049]
+  0|                                                                                                              |
+  1|      AbstractTUI         Dark (Abstract)                                                                     |
+  2|                                                                                                              |
+  3|  interactive   visual                                                                                        |
+  4| ▔▔▔▔▔▔▔▔▔▔▔▔▔                                                                                                |
+  5|                                                                                                              |
+  6|   click me    disabled   clicks: 0                                                                           |
+  7|                                                                                                              |
+  8|  ▐type your name, Enter submits…            ▌                                                                |
+  9|                                                                                                              |
+ 10|  hello, stranger!                                                                                            |
+ 11|                                                                                                              |
+ 12|  ┌ list — arrows move, wheel scrolls ─────────────────────────────────────────────────────────────────────┐  |
+ 13|  │abstract-dark                                                                                           │  |
+ 14|  │observer-night                                                                                          │  |
+ 15|  │catppuccin-mocha                                                                                        │  |
+ 16|  │rose-pine                                                                                               │  |
+ 17|  │tokyo-night                                                                                             │  |
+ 18|  │nord                                                                                                    │  |
+ 19|  │one-dark                                                                                                │  |
+ 20|  │dracula                                                                                                 │  |
+ 21|  │monokai                                                                                                 │  |
+ 22|  │gruvbox                                                                                                 │  |
+ 23|  │                                                                                                        │  |
+ 24|  │                                                                                                        │  |
+ 25|  │                                                                                                        │  |
+ 26|  │                                                                                                        │  |
+ 27|  └────────────────────────────────────────────────────────────────────────────────────────────────────────┘  |
+ 28|                                                                                                              |
+ 29|                                                                                                              |
+ 30| tab focus · enter/space activate · ctrl+t theme · f2 spin · q quit                                           |
+ 31|                                                                                                              |
+styles:
+  0:0..110 fg=#eeeeee bg=#1a1a2e
+  1:0..14 fg=#eeeeee bg=#1a1a2e
+  1:14..17 fg=#e94560 bg=#1a1a2e
+  1:17..25 fg=#eeeeee bg=#1a1a2e
+  1:25..42 fg=#e94560 bg=#0f3460
+  1:42..110 fg=#eeeeee bg=#1a1a2e
+  2:0..110 fg=#eeeeee bg=#1a1a2e
+  3:0..1 fg=#eeeeee bg=#1a1a2e
+  3:1..2 fg=#aaaaaa bg=#16213e
+  3:2..13 fg=#eeeeee bg=#16213e attrs=B
+  3:13..109 fg=#aaaaaa bg=#16213e
+  3:109..110 fg=#eeeeee bg=#1a1a2e
+  4:0..1 fg=#eeeeee bg=#1a1a2e
+  4:1..14 fg=#e94560 bg=#16213e
+  4:14..109 fg=#aaaaaa bg=#16213e
+  4:109..110 fg=#eeeeee bg=#1a1a2e
+  5:0..110 fg=#eeeeee bg=#1a1a2e
+  6:0..2 fg=#eeeeee bg=#1a1a2e
+  6:2..12 fg=#eeeeee bg=#0f3460
+  6:12..14 fg=#eeeeee bg=#1a1a2e
+  6:14..24 fg=#666666 bg=#0f3460
+  6:24..110 fg=#eeeeee bg=#1a1a2e
+  7:0..110 fg=#eeeeee bg=#1a1a2e
+  8:0..2 fg=#eeeeee bg=#1a1a2e
+  8:2..3 fg=#3c3c4d bg=#16213e
+  8:3..33 fg=#666666 bg=#16213e
+  8:33..45 fg=#eeeeee bg=#16213e
+  8:45..46 fg=#3c3c4d bg=#16213e
+  8:46..110 fg=#eeeeee bg=#1a1a2e
+  9:0..110 fg=#eeeeee bg=#1a1a2e
+  10:0..110 fg=#eeeeee bg=#1a1a2e
+  11:0..110 fg=#eeeeee bg=#1a1a2e
+  12:0..2 fg=#eeeeee bg=#1a1a2e
+  12:2..3 fg=#3c3c4d bg=#16213e
+  12:3..38 fg=#aaaaaa bg=#16213e
+  12:38..108 fg=#3c3c4d bg=#16213e
+  12:108..110 fg=#eeeeee bg=#1a1a2e
+  13:0..2 fg=#eeeeee bg=#1a1a2e
+  13:2..3 fg=#3c3c4d bg=#16213e
+  13:3..107 fg=#eeeeee bg=#58273d
+  13:107..108 fg=#3c3c4d bg=#16213e
+  13:108..110 fg=#eeeeee bg=#1a1a2e
+  14:0..2 fg=#eeeeee bg=#1a1a2e
+  14:2..3 fg=#3c3c4d bg=#16213e
+  14:3..107 fg=#eeeeee bg=#16213e
+  14:107..108 fg=#3c3c4d bg=#16213e
+  14:108..110 fg=#eeeeee bg=#1a1a2e
+  15:0..2 fg=#eeeeee bg=#1a1a2e
+  15:2..3 fg=#3c3c4d bg=#16213e
+  15:3..107 fg=#eeeeee bg=#16213e
+  15:107..108 fg=#3c3c4d bg=#16213e
+  15:108..110 fg=#eeeeee bg=#1a1a2e
+  16:0..2 fg=#eeeeee bg=#1a1a2e
+  16:2..3 fg=#3c3c4d bg=#16213e
+  16:3..107 fg=#eeeeee bg=#16213e
+  16:107..108 fg=#3c3c4d bg=#16213e
+  16:108..110 fg=#eeeeee bg=#1a1a2e
+  17:0..2 fg=#eeeeee bg=#1a1a2e
+  17:2..3 fg=#3c3c4d bg=#16213e
+  17:3..107 fg=#eeeeee bg=#16213e
+  17:107..108 fg=#3c3c4d bg=#16213e
+  17:108..110 fg=#eeeeee bg=#1a1a2e
+  18:0..2 fg=#eeeeee bg=#1a1a2e
+  18:2..3 fg=#3c3c4d bg=#16213e
+  18:3..107 fg=#eeeeee bg=#16213e
+  18:107..108 fg=#3c3c4d bg=#16213e
+  18:108..110 fg=#eeeeee bg=#1a1a2e
+  19:0..2 fg=#eeeeee bg=#1a1a2e
+  19:2..3 fg=#3c3c4d bg=#16213e
+  19:3..107 fg=#eeeeee bg=#16213e
+  19:107..108 fg=#3c3c4d bg=#16213e
+  19:108..110 fg=#eeeeee bg=#1a1a2e
+  20:0..2 fg=#eeeeee bg=#1a1a2e
+  20:2..3 fg=#3c3c4d bg=#16213e
+  20:3..107 fg=#eeeeee bg=#16213e
+  20:107..108 fg=#3c3c4d bg=#16213e
+  20:108..110 fg=#eeeeee bg=#1a1a2e
+  21:0..2 fg=#eeeeee bg=#1a1a2e
+  21:2..3 fg=#3c3c4d bg=#16213e
+  21:3..107 fg=#eeeeee bg=#16213e
+  21:107..108 fg=#3c3c4d bg=#16213e
+  21:108..110 fg=#eeeeee bg=#1a1a2e
+  22:0..2 fg=#eeeeee bg=#1a1a2e
+  22:2..3 fg=#3c3c4d bg=#16213e
+  22:3..107 fg=#eeeeee bg=#16213e
+  22:107..108 fg=#3c3c4d bg=#16213e
+  22:108..110 fg=#eeeeee bg=#1a1a2e
+  23:0..2 fg=#eeeeee bg=#1a1a2e
+  23:2..3 fg=#3c3c4d bg=#16213e
+  23:3..107 fg=#eeeeee bg=#16213e
+  23:107..108 fg=#3c3c4d bg=#16213e
+  23:108..110 fg=#eeeeee bg=#1a1a2e
+  24:0..2 fg=#eeeeee bg=#1a1a2e
+  24:2..3 fg=#3c3c4d bg=#16213e
+  24:3..107 fg=#eeeeee bg=#16213e
+  24:107..108 fg=#3c3c4d bg=#16213e
+  24:108..110 fg=#eeeeee bg=#1a1a2e
+  25:0..2 fg=#eeeeee bg=#1a1a2e
+  25:2..3 fg=#3c3c4d bg=#16213e
+  25:3..107 fg=#eeeeee bg=#16213e
+  25:107..108 fg=#3c3c4d bg=#16213e
+  25:108..110 fg=#eeeeee bg=#1a1a2e
+  26:0..2 fg=#eeeeee bg=#1a1a2e
+  26:2..3 fg=#3c3c4d bg=#16213e
+  26:3..107 fg=#eeeeee bg=#16213e
+  26:107..108 fg=#3c3c4d bg=#16213e
+  26:108..110 fg=#eeeeee bg=#1a1a2e
+  27:0..2 fg=#eeeeee bg=#1a1a2e
+  27:2..108 fg=#3c3c4d bg=#16213e
+  27:108..110 fg=#eeeeee bg=#1a1a2e
+  28:0..110 fg=#eeeeee bg=#1a1a2e
+  29:0..110 fg=#eeeeee bg=#1a1a2e
+  30:0..110 fg=#eeeeee bg=#1a1a2e
+  31:0..110 fg=#eeeeee bg=#1a1a2e

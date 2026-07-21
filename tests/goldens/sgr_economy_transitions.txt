@@ -1,0 +1,12 @@
+same_style_no_repeat: 46 bytes
+  <ESC>[?2026h<ESC>[H<ESC>[0;1;38;2;10;20;30mab<ESC>[0m<CR><ESC>[?2026l
+bold_off_uses_22: 51 bytes
+  <ESC>[?2026h<ESC>[H<ESC>[0;1;38;2;10;20;30ma<ESC>[22mb<ESC>[0m<CR><ESC>[?2026l
+many_attrs_off_uses_reset: 67 bytes
+  <ESC>[?2026h<ESC>[H<ESC>[0;1;3;4;9;38;2;10;20;30;48;2;1;2;3ma<ESC>[0mb<ESC>[0m<CR><ESC>[?2026l
+fg_change_only: 61 bytes
+  <ESC>[?2026h<ESC>[H<ESC>[0;38;2;10;20;30ma<ESC>[38;2;200;20;30mb<ESC>[0m<CR><ESC>[?2026l
+undercurl_over_underline: 40 bytes
+  <ESC>[?2026h<ESC>[H<ESC>[0;4ma<ESC>[0;4:3mb<ESC>[0m<CR><ESC>[?2026l
+dim_and_bold_shared_reset_readd: 40 bytes
+  <ESC>[?2026h<ESC>[H<ESC>[0;1;2ma<ESC>[0;2mb<ESC>[0m<CR><ESC>[?2026l

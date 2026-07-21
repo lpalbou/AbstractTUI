@@ -1,0 +1,86 @@
+# AbstractTUI
+
+> AbstractTUI is a reactive, compositor-grade terminal UI engine for Rust. State lives in
+> fine-grained signals (in the SolidJS tradition — not immediate mode, not a virtual DOM):
+> a write re-runs exactly the computations that depended on it, and those re-renders damage
+> exactly the screen regions they own. Damage flows through a z-ordered compositor with
+> alpha blending and per-cell shaders, a frame diff, and a byte-economical ANSI presenter,
+> so an idle app emits zero bytes and allocates nothing. On top sit a 20+ widget library
+> arranged by a flexbox-style solver and a track-based grid, 26 built-in themes over 36
+> contrast-audited semantic design tokens, PNG/baseline-JPEG images drawn through the best
+> channel the terminal proves (kitty graphics, iTerm2, sixel, or unicode mosaic),
+> software-rasterized 3D from GLB files (textures, animation, skinning — no GPU),
+> cell-shader animation with tweens, easings, and timelines, an optional boot splash, and a
+> headless testing harness that drives the production pipeline without a pty. One crate,
+> five small dependencies (unicode-width, unicode-segmentation, miniz_oxide, plus libc on
+> unix / windows-sys on Windows). MIT licensed.
+
+## Core docs
+
+- [README](README.md): Project overview — the pitch, highlights, a 16-line first app,
+  install, the flagship examples, the platform support table, and measured performance
+  numbers (idle costs zero; a 200×60 diff+present in ~0.5 ms).
+- [Getting started](docs/getting-started.md): Install to first pixels, step by step — the
+  first app explained line by line, interactivity with `TextInput`, layout basics (flex
+  and grid), theming in 3 lines, showing an image, a 3D teaser, how capability degradation
+  works, and headless testing of your own app.
+- [Architecture](docs/architecture.md): How the engine fits together — the layer map,
+  fine-grained reactivity, the compositor (layers, blending, shaders, diff/present), the
+  frame lifecycle, the zero-cost idle guarantee and the tests that pin it, the terminal
+  layer (capabilities, kitty keyboard, tmux, restore), the 3D pipeline, platform posture.
+- [API guide](docs/api.md): The public surface, module by module — prelude, reactive, ui,
+  layout, the widget catalog, the app runtime (overlays, modal, toast, hooks), theme,
+  render (Style-as-patch, shaders), gfx, three, term/input, the testing harness, and plain
+  statements of stability and limits.
+- [Documentation index](docs/README.md): One-line map of every guide and the reference
+  material.
+
+## Topics
+
+- [Theming](docs/theming.md): The 36-token semantic model, the 26 built-in themes, runtime
+  switching through one signal, WCAG-derived contrast floors and the audit, registering
+  custom themes (Strict/Labeled modes), token derivation helpers, and styling rules for
+  widget authors.
+- [Graphics and 3D](docs/graphics-and-3d.md): Images end-to-end (decode → capability
+  ladder → mosaic modes → tmux passthrough), the GLB 3D pipeline (supported subset, scene/
+  camera/light, the Viewport3D widget, animation and skinning, textures and mips), the
+  boot splash, honest limits, and the measured performance envelope.
+- [FAQ](docs/faq.md): Real questions — design rationale, SSH, which terminals support
+  images, wide-character widths, headless testing, embedding in an existing event loop,
+  the near-zero dependency policy, theme readability, `NO_COLOR`/dumb terminals, Windows
+  status, crate size, shareable components, damage debugging, and the clipboard policy.
+- [Troubleshooting](docs/troubleshooting.md): Symptom → cause → fix — nothing renders,
+  dead keyboard, images falling back to mosaic, washed-out colors, flicker/tearing,
+  Ctrl+Enter behaving like Enter, the splash not playing, slow frames, wide-character
+  misalignment, and tests that hang.
+
+## Project
+
+- [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0 is the
+  first public release.
+- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,240 tests) and the two
+  explicitly-run suites (live pty, perf budgets), golden snapshots, lint gates, the strict
+  module layering rule, code conventions, and how to add a widget or a theme.
+- [Security policy](SECURITY.md): Private reporting (contact@abstractframework.ai); the
+  untrusted-input scope (terminal bytes, PNG/JPEG, GLB, markdown) — any panic, unbounded
+  allocation, or hang on crafted input is treated as a vulnerability-class bug.
+- [Acknowledgements](ACKNOWLEDGEMENTS.md): The five dependencies with licenses, the public
+  specifications implemented, prior art (ratatui, notcurses, textual, SolidJS), and the
+  ported theme palettes.
+- [License](LICENSE): MIT.
+
+## Code entry points
+
+- [src/prelude.rs](src/prelude.rs): The one-import app surface
+  (`use abstracttui::prelude::*;`) — widgets, layout vocabulary, signals, theme hooks, and
+  `App`; `render::Style` is deliberately excluded from the glob.
+- [src/lib.rs](src/lib.rs): Crate root with the layer map — `base`, `term`, `input`,
+  `render`, `text`, `anim`, `reactive`, `layout`, `ui`, `widgets`, `gfx`, `three`,
+  `theme`, `app`, `boot`, `testing`.
+- [examples/](examples/README.md): The catalog of the twelve runnable examples — `hello`,
+  `dashboard`, `gallery`, `themes`, `widgets`, `effects`, `splash`, `viewer3d`, `images`,
+  `components`, `grid`, `capture` — each documented with keys and requirements; every one
+  exits cleanly without a tty, and `dashboard`/`viewer3d`/`images` take `--caps`.
+- [docs/captures/](docs/captures/): Deterministic text "screenshots" of the shipped
+  examples (plain and style-annotated), plus `themes-table.md` — every token hex value of
+  all 26 themes; regenerable with `cargo run --example capture`.

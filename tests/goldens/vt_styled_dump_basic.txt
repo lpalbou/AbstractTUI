@@ -1,0 +1,9 @@
+size=12x4 cursor=10,2 modes=[7]
+  0|Title       |
+  1| 日本       |
+  2|link plain  |
+  3|            |
+styles:
+  0:0..5 fg=#e94560 attrs=B
+  1:0..6 bg=#005f87
+  2:0..4 link=0
