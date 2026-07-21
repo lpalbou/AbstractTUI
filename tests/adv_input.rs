@@ -448,10 +448,7 @@ fn probe_on_mute_terminal_ends_at_deadline() {
 fn probe_on_dumb_terminal_writes_nothing() {
     let mut term = CaptureTerm::new(Size::new(80, 24));
     let mut reader = EventReader::new();
-    let mut caps = Capabilities {
-        dumb: true,
-        ..Capabilities::default()
-    };
+    let mut caps = Capabilities::with(|c| c.dumb = true);
     let passthrough =
         abstracttui::input::probe_active(&mut term, &mut reader, &mut caps, Duration::ZERO)
             .unwrap();

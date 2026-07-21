@@ -44,6 +44,16 @@ pub struct Modal {
 impl Modal {
     /// Open over `viewport` with a panel of `size`. `build` receives the
     /// modal's own scope: state created there dies on close.
+    ///
+    /// Layout guarantee (0240): inside the fixed panel, a declared fixed
+    /// size is a PROMISE — content nodes with `width`/`height:
+    /// Cells(n)` and no explicit minimum get `min = n`, so overflow
+    /// pressure from a large middle (a long transcript in a `Scroll`)
+    /// squeezes the flexible children instead of silently erasing the
+    /// title/button/hint rows the modal exists to show. Opt out per
+    /// node with an explicit `min_h(0)`/`min_w(0)` (or any explicit
+    /// minimum). Blueprint-time: styles produced later by `dyn_view`
+    /// build closures or `style_signal` are the author's own.
     pub fn open(
         overlays: &Overlays,
         cx: Scope,
@@ -61,7 +71,8 @@ impl Modal {
         let tokens = &current_theme().tokens;
         let ground = tokens.get(TokenId::Overlay);
         let ink = tokens.get(TokenId::Text);
-        let content = build(scope);
+        let mut content = build(scope);
+        content.for_each_style_mut(&mut floor_declared_size);
         let panel = Element::new()
             .style(
                 LayoutStyle::default()
@@ -100,6 +111,24 @@ impl Modal {
         Modal {
             layer: self.layer.clone(),
             scope: self.scope,
+        }
+    }
+}
+
+/// The 0240 floor: a declared `Cells` extent with no explicit minimum
+/// becomes its own minimum. Flex shrink respects minimums (the solver's
+/// freeze loop), so under overflow the flexible children absorb the loss
+/// and the fixed rows stay visible. `Some(_)` — including an explicit
+/// `min_h(0)` — is the author's word and is never overridden.
+fn floor_declared_size(style: &mut LayoutStyle) {
+    if let Dimension::Cells(h) = style.height {
+        if style.min_height.is_none() {
+            style.min_height = Some(h);
+        }
+    }
+    if let Dimension::Cells(w) = style.width {
+        if style.min_width.is_none() {
+            style.min_width = Some(w);
         }
     }
 }

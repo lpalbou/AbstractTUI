@@ -121,7 +121,18 @@ pub(crate) struct Runtime {
     /// One-shot timers (toast dismissal, debounce). Unlike frame tasks
     /// these do NOT keep frames coming: the loop sleeps until the
     /// earliest deadline (`next_timer_deadline`) — zero wakeups before.
-    pub timers: Vec<(std::time::Instant, Box<dyn FnOnce()>)>,
+    /// Entries carry an id so a holder can cancel BEFORE the deadline
+    /// (`reactive::interval` rides this); `after` never exposes its id,
+    /// so its contract is unchanged.
+    pub timers: Vec<TimerEntry>,
+    /// Id source for [`TimerEntry`]; monotonically increasing, never
+    /// reused (u64: exhaustion is not a practical concern).
+    pub next_timer_id: u64,
+    /// The clock reading `run_due_timers` is firing with, readable by
+    /// timer callbacks that re-arm (an interval's next deadline must
+    /// derive from the LOOP's clock — injected in tests — not from a
+    /// fresh `Instant::now`). `None` outside a timer-fire pass.
+    pub timer_now: Option<std::time::Instant>,
     /// Scope-provided context values (`provide_context`/`use_context`):
     /// sparse side map (only providers pay), removed on dispose.
     pub contexts: std::collections::HashMap<Key, ContextEntries>,
@@ -151,6 +162,8 @@ impl Runtime {
             worker_failures: Vec::new(),
             frame_tasks: Vec::new(),
             timers: Vec::new(),
+            next_timer_id: 0,
+            timer_now: None,
             contexts: std::collections::HashMap::new(),
         }
     }
@@ -383,6 +396,13 @@ impl Runtime {
     }
 }
 
+/// One armed one-shot timer: deadline, cancellation id, callback.
+pub(crate) struct TimerEntry {
+    pub deadline: std::time::Instant,
+    pub id: u64,
+    pub f: Box<dyn FnOnce()>,
+}
+
 /// One scope's provided context values: (type, boxed value) pairs.
 pub(crate) type ContextEntries = Vec<(std::any::TypeId, Rc<dyn std::any::Any>)>;
 
@@ -611,6 +631,15 @@ pub fn stats() -> RuntimeStats {
         slot_capacity: rt.graph.capacity_slots(),
         queued_effects: rt.queue.len(),
     })
+}
+
+/// Panic-safe `timer_now` clear for `run_due_timers`' fire guard.
+pub(crate) fn clear_timer_now() {
+    let _ = RT.try_with(|cell| {
+        if let Ok(mut rt) = cell.try_borrow_mut() {
+            rt.timer_now = None;
+        }
+    });
 }
 
 /// Panic-safe draw-depth decrement for `diag::DrawPhase`'s Drop.

@@ -74,14 +74,7 @@ pub enum SyncOutcome {
 ///     }
 /// }
 ///
-/// let caps = GraphicsCaps {
-///     kitty_graphics: true,
-///     iterm2_images: false,
-///     sixel: false,
-///     sixel_max_registers: None,
-///     cell_pixel_size: None,
-///     wrap: None,
-/// };
+/// let caps = GraphicsCaps::with(|g| g.kitty_graphics = true);
 /// let mut session = ImageSession::new();
 /// let mut sink = Sink(Vec::new());
 /// let img = Bitmap::new(4, 4, Rgba::rgb(9, 9, 9));

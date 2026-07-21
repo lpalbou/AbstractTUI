@@ -233,6 +233,60 @@ impl UiTree {
         }
     }
 
+    /// Initial keyboard-ownership policy for trees that OWN input from
+    /// frame one (modal overlay trees — `app::popups::Modal` and every
+    /// `Overlays::layer_tree(modal = true)` caller run this at open):
+    ///
+    /// 1. an `autofocus` node already focused at mount wins (no-op);
+    /// 2. otherwise the first focusable (document order);
+    /// 3. otherwise the root's FIRST CHILD — the content element of a
+    ///    panel/content composition. Key dispatch targets
+    ///    `focus.or(root)` and shortcuts resolve along the root→focus
+    ///    path, so an unfocused tree exposes only the root's shortcuts:
+    ///    anchoring on the content keeps ITS shortcuts live from frame
+    ///    one (the 0230 dead-keys bug). Programmatic focus does not
+    ///    require focusability — Tab moves on from the anchor normally;
+    /// 4. a childless root anchors on the root itself.
+    pub fn focus_init(&mut self) {
+        if self.core.borrow().focus.is_some() {
+            return; // autofocus won at mount
+        }
+        self.focus_first();
+        if self.core.borrow().focus.is_some() {
+            return;
+        }
+        let anchor = {
+            let core = self.core.borrow();
+            core.root.map(|root| {
+                core.insts
+                    .get(root.0)
+                    .and_then(|inst| inst.children.first().copied())
+                    .unwrap_or(root)
+            })
+        };
+        if let Some(anchor) = anchor {
+            self.set_focus(Some(anchor));
+        }
+    }
+
+    /// Deliver an autofocus request parked by a mount that ran inside a
+    /// computation (`Dyn` regenerations — see `TreeCore::
+    /// pending_autofocus`). Called from `UiTree::layout`, which only
+    /// runs outside computations; a target disposed between the mount
+    /// and this frame is dropped WITHOUT blurring whatever is focused.
+    pub(super) fn deliver_pending_autofocus(&mut self) {
+        let target = {
+            let mut core = self.core.borrow_mut();
+            match core.pending_autofocus.take() {
+                Some(id) if core.insts.contains(id.0) => Some(id),
+                _ => None,
+            }
+        };
+        if let Some(target) = target {
+            self.set_focus(Some(target));
+        }
+    }
+
     /// Spatial focus movement: the nearest focusable in `dir` from the
     /// currently focused rect (dashboard arrow-navigation between
     /// panes). Geometry-based nearest-in-direction: candidates whose

@@ -14,7 +14,23 @@ use crate::render::present::{ColorDepth, PresentCaps};
 
 /// What the terminal can do. Booleans default to `false` except
 /// `deferred_wrap` (see field doc); the env pass raises what it can prove.
+///
+/// `#[non_exhaustive]` (ADR-0003): new capability fields are the most
+/// likely additive change this crate makes, and they must never be a
+/// breaking release. Reading fields stays plain access; constructing a
+/// custom set goes through [`Capabilities::with`] (struct literals and
+/// functional-update syntax are crate-internal only):
+///
+/// ```compile_fail
+/// // E0639 downstream: non_exhaustive forbids literal construction,
+/// // functional update included.
+/// let caps = abstracttui::term::Capabilities {
+///     truecolor: true,
+///     ..Default::default()
+/// };
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Capabilities {
     /// 24-bit SGR color (38;2;r;g;b).
     pub truecolor: bool,
@@ -141,6 +157,28 @@ impl Default for Capabilities {
 }
 
 impl Capabilities {
+    /// Construct a custom capability set: defaults, adjusted in place.
+    /// THE downstream constructor (ADR-0003) — the struct is
+    /// `#[non_exhaustive]`, so struct literals and `..Default::default()`
+    /// updates only compile inside this crate; this keeps the same
+    /// ergonomics one field-set at a time and stays source-compatible
+    /// when capability fields are added:
+    ///
+    /// ```
+    /// use abstracttui::term::Capabilities;
+    ///
+    /// let caps = Capabilities::with(|c| {
+    ///     c.truecolor = true;
+    ///     c.colors_256 = true;
+    /// });
+    /// assert!(caps.truecolor && !caps.kitty_graphics);
+    /// ```
+    pub fn with(f: impl FnOnce(&mut Self)) -> Self {
+        let mut caps = Self::default();
+        f(&mut caps);
+        caps
+    }
+
     /// Passive detection from the process environment.
     ///
     /// Free and instant — run it before first paint; the active probe
@@ -552,7 +590,13 @@ impl From<&Capabilities> for PresentCaps {
 
 /// Everything the gfx protocol ladder needs, in one read-only handful
 /// (kernel-owned; `gfx` consumes it — GFX3D cycle-1 request 1).
+///
+/// `#[non_exhaustive]` like [`Capabilities`] (ADR-0003): graphics facts
+/// grow with terminal protocols. Downstream construction goes through
+/// [`GraphicsCaps::with`]; the usual source remains
+/// [`Capabilities::graphics`].
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct GraphicsCaps {
     /// Kitty graphics protocol usable (direct or via verified wrap).
     pub kitty_graphics: bool,
@@ -569,6 +613,24 @@ pub struct GraphicsCaps {
     /// under tmux means passthrough is unverified — the env pass already
     /// zeroed the protocol bits, so the ladder lands on mosaic.
     pub wrap: Option<WrapKind>,
+}
+
+impl GraphicsCaps {
+    /// Construct a custom graphics-capability view: defaults, adjusted
+    /// in place — the downstream constructor (ADR-0003), mirroring
+    /// [`Capabilities::with`].
+    ///
+    /// ```
+    /// use abstracttui::term::GraphicsCaps;
+    ///
+    /// let gfx = GraphicsCaps::with(|g| g.kitty_graphics = true);
+    /// assert!(gfx.kitty_graphics && !gfx.sixel);
+    /// ```
+    pub fn with(f: impl FnOnce(&mut Self)) -> Self {
+        let mut caps = Self::default();
+        f(&mut caps);
+        caps
+    }
 }
 
 /// A decoded terminal query reply, produced by `input::Parser` and consumed

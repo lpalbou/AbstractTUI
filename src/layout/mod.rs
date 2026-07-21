@@ -17,7 +17,7 @@ mod style;
 mod tree;
 mod wrap;
 
-pub use solve::{resolve_subtree, solve};
+pub use solve::{measure, resolve_subtree, solve};
 pub use style::{
     Align, Dimension, Direction, Display, Edges, Inset, Justify, Overflow, Position, Style, Track,
 };
@@ -403,6 +403,24 @@ mod tests {
         assert_eq!(tree.rect(pinned), Rect::new(14, 1, 4, 1));
         // Both insets, auto size: fills content box minus insets.
         assert_eq!(tree.rect(stretched), Rect::new(2, 2, 16, 6));
+    }
+
+    #[test]
+    fn measure_query_answers_without_assigning_rects() {
+        // The 0130 size query: a column of measured leaves answers its
+        // stacked intrinsic height at the given width; no rect changes.
+        let mut tree = LayoutTree::new();
+        let col = tree.add(Style::column());
+        let a = tree.add_leaf(Style::default(), Box::new(|_| Size::new(8, 2)));
+        let b = tree.add_leaf(Style::default(), Box::new(|_| Size::new(6, 3)));
+        tree.add_child(col, a);
+        tree.add_child(col, b);
+        let m = measure(&tree, col, Size::new(30, 100));
+        assert_eq!(m, Size::new(8, 5), "sum main axis, max cross: {m:?}");
+        assert_eq!(tree.rect(col), Rect::ZERO, "measure must not solve");
+        // An explicit dimension wins over content.
+        tree.set_style(col, Style::column().h(9));
+        assert_eq!(measure(&tree, col, Size::new(30, 100)).h, 9);
     }
 
     #[test]

@@ -121,14 +121,7 @@ impl ExternalSink for ModelSink {
     }
 }
 fn kitty_caps() -> GraphicsCaps {
-    GraphicsCaps {
-        wrap: None,
-        kitty_graphics: true,
-        iterm2_images: false,
-        sixel: false,
-        sixel_max_registers: None,
-        cell_pixel_size: None,
-    }
+    GraphicsCaps::with(|g| g.kitty_graphics = true)
 }
 
 /// An `ImageSession` created, used, dropped, then a FRESH one created in

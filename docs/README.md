@@ -13,6 +13,7 @@ mosaic), software-rasterized 3D (GLB), themes, and animation.
 | [api.md](api.md) | The public API surface, module by module. |
 | [theming.md](theming.md) | The 36-token semantic model, the 26 built-in themes, runtime switching, contrast guarantees, custom theme registration, and styling rules for widget authors. |
 | [graphics-and-3d.md](graphics-and-3d.md) | Images end-to-end (decode → bitmap → widget/protocols, the capability ladder, mosaic modes), the 3D pipeline (GLB loading, scenes, the Viewport3D widget, animation), the boot splash, honest limits, and measured performance. |
+| [live-data.md](live-data.md) | Background threads into the UI: the ownership rule, source→signal bindings, bounded ingestion with honest drop counters, the `interval` time source, worker lifecycle. |
 | [faq.md](faq.md) | Real questions: design rationale, SSH, terminal image support, headless testing, embedding, dependencies, Windows, clipboard policy, and more. |
 | [troubleshooting.md](troubleshooting.md) | Symptom → cause → fix: blank screens, dead keyboards, missing images, wrong colors, flicker, splash gates, slow frames, width misalignment, hanging tests. |
 

@@ -14,11 +14,10 @@ use abstracttui::ui::{text, Element};
 
 fn config() -> RunConfig {
     RunConfig {
-        caps: Some(Capabilities {
-            truecolor: true,
-            colors_256: true,
-            ..Capabilities::default()
-        }),
+        caps: Some(Capabilities::with(|c| {
+            c.truecolor = true;
+            c.colors_256 = true;
+        })),
         enter: None,
         probe: false,
     }

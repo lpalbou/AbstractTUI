@@ -167,15 +167,17 @@ pub(super) fn mount_view(
                 let mounted = untrack(|| mount_view(&core2, child_cx, view, Some(dyn_id)));
                 let core3 = core_for_effect.clone();
                 child_cx.on_cleanup(move || remove_subtree(&core3, mounted));
-                // A regenerated subtree may carry an autofocus node
-                // (a dialog's default field appearing via Dyn).
-                let autofocus = core_for_effect.borrow_mut().pending_autofocus.take();
-                if let Some(target) = autofocus {
-                    untrack(|| {
-                        super::tree::UiTree::from_core(core_for_effect.clone())
-                            .set_focus(Some(target));
-                    });
-                }
+                // A mounted subtree may carry an autofocus node (a
+                // dialog's default field appearing via Dyn). The request
+                // stays PARKED in `pending_autofocus` — focus delivery
+                // runs user handlers (`focus_signal` writes), and firing
+                // those inside this effect re-enters the running
+                // computation through the flush: the 0220 "dependency
+                // cycle" mount panic. Safe consume points, both outside
+                // every computation: `UiTree::mount` right after the
+                // initial mount returns, and `UiTree::layout` (frame
+                // phase L) for regenerations — the `request_frame`
+                // below guarantees that layout happens.
                 {
                     let mut c = core_for_effect.borrow_mut();
                     // Old content's region is stale; a structure change

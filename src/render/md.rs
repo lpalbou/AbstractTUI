@@ -45,6 +45,13 @@ use super::cell::Attrs;
 use super::rich::{RichLine, RichText, Span};
 use super::style::Style;
 
+/// Streaming session (backlog 0110): append deltas, re-parse only the
+/// open tail block. Lives beside the parser so block-closing rules
+/// share one implementation.
+#[path = "md_stream.rs"]
+mod stream;
+pub use stream::StreamSession;
+
 /// One parsed block. Paragraph/heading/list/quote content is a single
 /// logical [`RichLine`] — wrapping is the renderer's move.
 #[derive(Clone, Debug, PartialEq)]

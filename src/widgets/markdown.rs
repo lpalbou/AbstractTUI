@@ -31,20 +31,22 @@ use crate::ui::{Element, StyledCanvas};
 
 use super::code::code_token_color;
 
-/// One typeset row: a rich line plus its chrome.
-struct Row {
-    line: RichLine,
-    indent: i32,
+/// One typeset row: a rich line plus its chrome. Crate-shared: the Feed
+/// widget caches these per item/block (backlog 0100) — ONE row recipe,
+/// so a feed item and a MarkdownView can never typeset differently.
+pub(crate) struct Row {
+    pub(crate) line: RichLine,
+    pub(crate) indent: i32,
     /// Full-width ground override (code fences).
-    ground: Option<Rgba>,
+    pub(crate) ground: Option<Rgba>,
     /// Leading quote bar.
-    quote: bool,
+    pub(crate) quote: bool,
     /// Full-width rule row (`---` and the level-1 underline).
-    rule: bool,
+    pub(crate) rule: bool,
 }
 
 impl Row {
-    fn plain(line: RichLine) -> Row {
+    pub(crate) fn plain(line: RichLine) -> Row {
         Row {
             line,
             indent: 0,
@@ -129,7 +131,8 @@ impl MarkdownView {
 /// carries NO fg: parse_inline stamps `base` onto every plain span, and
 /// an explicit fg there would defeat block-level recoloring (blockquotes
 /// dim to `text_muted`); fg-less spans inherit at draw time instead.
-fn md_styles(t: &TokenSet) -> MdStyles {
+/// Crate-shared with the Feed widget (one mapping, no drift).
+pub(crate) fn md_styles(t: &TokenSet) -> MdStyles {
     MdStyles {
         base: Style::EMPTY,
         bold: Style::new().attrs(Attrs::BOLD),
@@ -143,32 +146,65 @@ fn md_styles(t: &TokenSet) -> MdStyles {
 
 /// Parse + typeset at `width`. Pure over (source, tokens, width).
 fn layout_rows(source: &str, t: &TokenSet, width: i32) -> Vec<Row> {
-    let styles = md_styles(t);
-    let lexer = CLikeLexer::default();
-    let code_base = Style::new().fg(t.text);
+    let ts = BlockTypesetter::new(t);
     let mut rows: Vec<Row> = Vec::new();
-    let blank = |rows: &mut Vec<Row>| {
-        if !rows.is_empty() {
-            rows.push(Row::plain(RichLine::new()));
-        }
-    };
+    for block in md::parse(source, ts.styles()) {
+        ts.push_block(&mut rows, &block, width, true);
+    }
+    rows
+}
 
-    for block in md::parse(source, &styles) {
+/// The block -> typeset-rows recipe, crate-shared (backlog 0100): the
+/// Feed widget caches rows per item/block through this same fold, so a
+/// feed item and a `MarkdownView` can never typeset differently.
+pub(crate) struct BlockTypesetter {
+    styles: MdStyles,
+    lexer: CLikeLexer,
+    code_base: Style,
+    t: TokenSet,
+}
+
+impl BlockTypesetter {
+    pub(crate) fn new(t: &TokenSet) -> BlockTypesetter {
+        BlockTypesetter {
+            styles: md_styles(t),
+            lexer: CLikeLexer::default(),
+            code_base: Style::new().fg(t.text),
+            t: *t,
+        }
+    }
+
+    /// The span styles matching this typesetter's tokens — parse
+    /// sources with these so inline patches line up.
+    pub(crate) fn styles(&self) -> &MdStyles {
+        &self.styles
+    }
+
+    /// Append `block`'s typeset rows to `out` at `width`. `separate`
+    /// applies the document spacing policy: one blank row before every
+    /// non-list block when `out` is not empty (list items stack tight).
+    pub(crate) fn push_block(&self, out: &mut Vec<Row>, block: &Block, width: i32, separate: bool) {
+        let t = &self.t;
+        let blank = |rows: &mut Vec<Row>| {
+            if separate && !rows.is_empty() {
+                rows.push(Row::plain(RichLine::new()));
+            }
+        };
         match block {
             Block::Heading { level, content } => {
-                blank(&mut rows);
+                blank(out);
                 let ink = match level {
                     1 => Style::new().fg(t.accent).attrs(Attrs::BOLD),
                     2 => Style::new().fg(t.accent),
                     _ => Style::new().fg(t.text).attrs(Attrs::BOLD),
                 };
                 let mut line = RichLine::new();
-                for span in content.spans {
-                    line.push(Span::new(span.text, span.style.merge(ink)));
+                for span in &content.spans {
+                    line.push(Span::new(span.text.clone(), span.style.merge(ink)));
                 }
-                rows.push(Row::plain(line));
-                if level == 1 {
-                    rows.push(Row {
+                out.push(Row::plain(line));
+                if *level == 1 {
+                    out.push(Row {
                         line: RichLine::new(),
                         indent: 0,
                         ground: None,
@@ -178,9 +214,9 @@ fn layout_rows(source: &str, t: &TokenSet, width: i32) -> Vec<Row> {
                 }
             }
             Block::Paragraph(line) => {
-                blank(&mut rows);
-                for wrapped in wrap_line(line, width) {
-                    rows.push(Row::plain(wrapped));
+                blank(out);
+                for wrapped in wrap_line(line.clone(), width) {
+                    out.push(Row::plain(wrapped));
                 }
             }
             Block::ListItem {
@@ -188,18 +224,18 @@ fn layout_rows(source: &str, t: &TokenSet, width: i32) -> Vec<Row> {
                 marker,
                 content,
             } => {
-                let indent = 2 + depth as i32 * 2;
+                let indent = 2 + *depth as i32 * 2;
                 let mut line = RichLine::new();
                 let marker_text = match marker {
                     Marker::Bullet => "• ".to_string(),
                     Marker::Number(n) => format!("{n}. "),
                 };
                 line.push(Span::new(marker_text, Style::new().fg(t.accent_alt)));
-                for span in content.spans {
-                    line.push(span);
+                for span in &content.spans {
+                    line.push(span.clone());
                 }
                 for (i, wrapped) in wrap_line(line, width - indent).into_iter().enumerate() {
-                    rows.push(Row {
+                    out.push(Row {
                         line: wrapped,
                         // Continuation rows hang past the marker.
                         indent: indent + if i > 0 { 2 } else { 0 },
@@ -210,9 +246,9 @@ fn layout_rows(source: &str, t: &TokenSet, width: i32) -> Vec<Row> {
                 }
             }
             Block::Blockquote(line) => {
-                blank(&mut rows);
+                blank(out);
                 let mut muted = RichLine::new();
-                for span in line.spans {
+                for span in &line.spans {
                     // Quote prose dims; spans with their OWN ink (links,
                     // inline code) keep it.
                     let style = if span.style.fg.is_none() {
@@ -220,10 +256,10 @@ fn layout_rows(source: &str, t: &TokenSet, width: i32) -> Vec<Row> {
                     } else {
                         span.style
                     };
-                    muted.push(Span::new(span.text, style));
+                    muted.push(Span::new(span.text.clone(), style));
                 }
                 for wrapped in wrap_line(muted, width - 2) {
-                    rows.push(Row {
+                    out.push(Row {
                         line: wrapped,
                         indent: 2,
                         ground: None,
@@ -233,17 +269,18 @@ fn layout_rows(source: &str, t: &TokenSet, width: i32) -> Vec<Row> {
                 }
             }
             Block::CodeFence { lang: _, lines } => {
-                blank(&mut rows);
-                for code_line in &lines {
-                    let rich = RichLine::from_highlighted(code_line, &lexer, code_base, |k| {
-                        Style::new().fg(code_token_color(k, t))
-                    });
+                blank(out);
+                for code_line in lines {
+                    let rich =
+                        RichLine::from_highlighted(code_line, &self.lexer, self.code_base, |k| {
+                            Style::new().fg(code_token_color(k, t))
+                        });
                     let mut padded = RichLine::new();
-                    padded.push(Span::new(" ", code_base));
+                    padded.push(Span::new(" ", self.code_base));
                     for span in rich.spans {
                         padded.push(span);
                     }
-                    rows.push(Row {
+                    out.push(Row {
                         line: padded,
                         indent: 1,
                         ground: Some(t.surface_raised),
@@ -253,8 +290,8 @@ fn layout_rows(source: &str, t: &TokenSet, width: i32) -> Vec<Row> {
                 }
             }
             Block::Rule => {
-                blank(&mut rows);
-                rows.push(Row {
+                blank(out);
+                out.push(Row {
                     line: RichLine::new(),
                     indent: 0,
                     ground: None,
@@ -264,14 +301,20 @@ fn layout_rows(source: &str, t: &TokenSet, width: i32) -> Vec<Row> {
             }
         }
     }
-    rows
 }
 
 fn wrap_line(line: RichLine, width: i32) -> Vec<RichLine> {
     RichText::from_lines(vec![line]).wrap(width.max(4)).lines
 }
 
-fn draw_rows(canvas: &mut dyn StyledCanvas, rect: crate::base::Rect, t: &TokenSet, rows: &[Row]) {
+/// Paint typeset rows into `rect`, one row per line from `rect.y` down,
+/// clipped at `rect.bottom()`. Crate-shared with the Feed widget.
+pub(crate) fn draw_rows(
+    canvas: &mut dyn StyledCanvas,
+    rect: crate::base::Rect,
+    t: &TokenSet,
+    rows: &[Row],
+) {
     for (i, row) in rows.iter().enumerate() {
         let y = rect.y + i as i32;
         if y >= rect.bottom() {

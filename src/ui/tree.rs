@@ -81,8 +81,12 @@ pub(super) struct TreeCore {
     pub(super) dirty_subtrees: Vec<LayoutId>,
     /// Last-focused descendant per memory container (focus restore).
     pub(super) focus_memory: std::collections::HashMap<ViewId, ViewId>,
-    /// Autofocus node recorded during mount, consumed after the mount
-    /// completes (focus dispatch cannot run mid-borrow).
+    /// Autofocus node recorded during mount, consumed OUTSIDE every
+    /// computation: by `UiTree::mount` after the initial mount returns,
+    /// or by `UiTree::layout` (frame phase L) for nodes mounted inside a
+    /// `Dyn` effect run. Focus delivery runs user handlers whose signal
+    /// writes would re-enter a running computation if fired inline
+    /// (the 0220 mount-time "dependency cycle" panic).
     pub(super) pending_autofocus: Option<ViewId>,
 }
 
@@ -152,12 +156,6 @@ impl UiTree {
         UiTree {
             core: self.core.clone(),
         }
-    }
-
-    /// Module-internal: a handle from a raw core (the Dyn mount effect
-    /// needs focus dispatch without a `&UiTree`).
-    pub(super) fn from_core(core: Rc<RefCell<TreeCore>>) -> UiTree {
-        UiTree { core }
     }
 
     /// Viewport size (accessibility hook + diagnostics).
@@ -322,18 +320,17 @@ impl UiTree {
         let id = mount_view(&self.core, cx, view, None);
         let core_for_cleanup = self.core.clone();
         cx.on_cleanup(move || remove_subtree(&core_for_cleanup, id));
-        let autofocus = {
+        {
             let mut core = self.core.borrow_mut();
             core.root = Some(id);
             core.needs_layout = true;
             core.damage_all();
-            core.pending_autofocus.take()
-        };
-        if let Some(target) = autofocus {
-            // Initial-focus policy: an autofocus node wins; apps
-            // without one call focus_first() explicitly.
-            self.set_focus(Some(target));
         }
+        // Initial-focus policy: an autofocus node wins (even one mounted
+        // by a nested Dyn effect — its request parked; this is the safe
+        // consume point, outside every computation); apps without one
+        // call focus_first() explicitly.
+        self.deliver_pending_autofocus();
         request_frame();
         id
     }
@@ -353,7 +350,14 @@ impl UiTree {
     /// nearest ancestor whose own size cannot be affected — see
     /// `mount.rs`), which is what makes a 60fps scroll drag pay for its
     /// container instead of the screen. Cheap when clean.
+    ///
+    /// Also the delivery point for autofocus nodes mounted inside `Dyn`
+    /// effect runs: layout is called outside every computation (frame
+    /// phase L, dispatch entry, draw), so the parked focus request can
+    /// run its FocusIn handlers — and any re-render those trigger folds
+    /// into this very solve.
     pub fn layout(&mut self) {
+        self.deliver_pending_autofocus();
         let mut core = self.core.borrow_mut();
         let full = core.needs_layout;
         let dirty: Vec<LayoutId> = std::mem::take(&mut core.dirty_subtrees);

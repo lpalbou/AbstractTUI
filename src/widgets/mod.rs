@@ -22,6 +22,7 @@ pub mod button;
 pub mod chart;
 pub mod checkbox;
 pub mod code;
+pub mod feed;
 pub mod grid;
 pub mod image;
 pub mod input;
@@ -48,6 +49,7 @@ pub use button::{Button, ButtonStyle};
 pub use chart::{BarChart, LineChart, Sparkline};
 pub use checkbox::Checkbox;
 pub use code::{code_token_color, CodeView};
+pub use feed::{CustomBlock, Feed, FeedBlock, FeedItem, FeedState};
 pub use grid::Grid;
 pub use image::{Image, ImageAlign, ImageFit};
 pub use input::TextInput;
@@ -116,7 +118,7 @@ mod lint_tests {
     /// nothing invented. (`include_str!` pins the exact shipped sources —
     /// a new widget file must be added here, which the count check below
     /// enforces against the module declarations above.)
-    const SOURCES: [(&str, &str); 22] = [
+    const SOURCES: [(&str, &str); 23] = [
         ("mod.rs", include_str!("mod.rs")),
         ("badge.rs", include_str!("badge.rs")),
         ("block.rs", include_str!("block.rs")),
@@ -124,6 +126,7 @@ mod lint_tests {
         ("chart.rs", include_str!("chart.rs")),
         ("checkbox.rs", include_str!("checkbox.rs")),
         ("code.rs", include_str!("code.rs")),
+        ("feed.rs", include_str!("feed.rs")),
         ("grid.rs", include_str!("grid.rs")),
         ("image.rs", include_str!("image.rs")),
         ("input.rs", include_str!("input.rs")),

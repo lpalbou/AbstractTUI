@@ -184,6 +184,13 @@ impl Overlays {
     /// owned by `cx` — disposing `cx` unmounts the tree; removing the
     /// layer removes the pixels (pair them via `LayerHandle::remove` +
     /// scope disposal, as `app::popups::Modal` does).
+    ///
+    /// RULING (0230): a MODAL tree owns the keyboard from frame one —
+    /// it swallows every key, so its shortcuts must be live immediately.
+    /// Opening one establishes initial focus via `UiTree::focus_init`
+    /// (autofocus wins, else first focusable, else the content anchor);
+    /// non-modal trees stay unfocused until the user clicks in (the
+    /// cycle-5 key rule: only a FOCUSED non-modal overlay owns keys).
     pub fn layer_tree(
         &self,
         z: i32,
@@ -194,6 +201,9 @@ impl Overlays {
     ) -> LayerHandle {
         let mut tree = UiTree::new(bounds.size());
         tree.mount(cx, view);
+        if modal {
+            tree.focus_init();
+        }
         self.create(
             z,
             bounds,
@@ -609,6 +619,20 @@ impl LayerHandle {
         let store = store.try_borrow().ok()?;
         let i = store.index_of(self.id)?;
         Some(store.layers[i].bounds())
+    }
+
+    /// The UI tree mounted on this layer (tree layers only): a handle
+    /// onto the LIVE tree — shared core, so focus moves, dispatches and
+    /// inspection act on the real thing. `None` for manual/draw layers,
+    /// after removal, or while the store is mid-phase.
+    pub fn tree(&self) -> Option<UiTree> {
+        let store = self.store.upgrade()?;
+        let store = store.try_borrow().ok()?;
+        let i = store.index_of(self.id)?;
+        match &store.meta[i].content {
+            OverlayContent::Tree { tree, .. } => Some(tree.handle()),
+            _ => None,
+        }
     }
 
     pub fn is_alive(&self) -> bool {

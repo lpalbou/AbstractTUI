@@ -14,13 +14,12 @@ use abstracttui::ui::{dyn_view, text, Element};
 
 fn fixed_caps() -> Capabilities {
     // Deterministic: host env must never leak into assertions.
-    Capabilities {
-        truecolor: true,
-        colors_256: true,
-        sync_output_2026: true,
-        hyperlinks: true,
-        ..Capabilities::default()
-    }
+    Capabilities::with(|c| {
+        c.truecolor = true;
+        c.colors_256 = true;
+        c.sync_output_2026 = true;
+        c.hyperlinks = true;
+    })
 }
 
 fn config() -> RunConfig {

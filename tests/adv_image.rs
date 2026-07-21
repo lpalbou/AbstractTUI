@@ -44,14 +44,7 @@ impl ExternalSink for ModelSink {
 }
 
 fn kitty_caps() -> GraphicsCaps {
-    GraphicsCaps {
-        wrap: None,
-        kitty_graphics: true,
-        iterm2_images: false,
-        sixel: false,
-        sixel_max_registers: None,
-        cell_pixel_size: None,
-    }
+    GraphicsCaps::with(|g| g.kitty_graphics = true)
 }
 
 // ---------------------------------------------------------------------------
@@ -373,10 +366,8 @@ fn image_session_lifecycle_under_tmux_wrap() {
     use abstracttui::term::caps::WrapKind;
     let mut session = ImageSession::new();
     let mut sink = ModelSink::tmux();
-    let caps = GraphicsCaps {
-        wrap: Some(WrapKind::Tmux),
-        ..kitty_caps()
-    };
+    let mut caps = kitty_caps();
+    caps.wrap = Some(WrapKind::Tmux);
     let slot = 8u64;
 
     session.sync(

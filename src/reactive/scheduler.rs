@@ -43,7 +43,17 @@ impl RemoteShared {
     }
 
     fn notify(&self) {
-        self.woken.store(true, Ordering::Release);
+        // Waker dedup (live-data 0020): N notifies between two drains
+        // invoke the waker callback ONCE — `swap` tells the first setter
+        // apart from repeats. Level-triggered safety: `drain_posted`
+        // clears the flag BEFORE running jobs, so a post landing
+        // mid-drain re-flags and re-invokes; a post racing the clear can
+        // at worst produce one spurious (empty) wake, never a lost one —
+        // the job is pushed before this flag is set, so a drain that
+        // observed the flag clear has already taken the job.
+        if self.woken.swap(true, Ordering::AcqRel) {
+            return; // already flagged: the loop is waking anyway
+        }
         // Snapshotting the callback under the lock, invoking outside it,
         // would risk racing an unset; the waker is set once at app start
         // and is cheap (self-pipe write), so invoking under the lock is
@@ -71,6 +81,29 @@ impl WakeHandle {
     /// Queue `f` to run on the UI thread at the next `drain_posted`, then
     /// wake the loop. This is how a timer thread sets a signal: the set
     /// happens on the UI thread, inside the closure.
+    ///
+    /// ## Contract (the live-data ownership rule)
+    ///
+    /// The reactive graph is single-threaded; background threads never
+    /// touch signals — the ONLY sanctioned crossing is this posted
+    /// closure (a wrong-thread signal access is a named panic, see
+    /// `runtime::MSG_WRONG_THREAD`). Guarantees the queue provides:
+    ///
+    /// - **Ordered delivery** — closures run FIFO in post order; one
+    ///   producer's posts apply in its emit order (cross-producer order
+    ///   is lock-acquisition order).
+    /// - **Frame semantics** — a burst of posts coalesces into one wake
+    ///   and one frame; a post landing mid-frame is drained by the NEXT
+    ///   frame's phase U, exactly once (damage contract §2).
+    ///
+    /// ## Control lane, not data lane
+    ///
+    /// This queue is UNBOUNDED by contract — it is the low-rate control
+    /// lane (timer callbacks, completion notices, worker results). A
+    /// flooding producer grows it without limit between turns. High-rate
+    /// sources should batch reads into few posts, or use the bounded
+    /// helper ([`super::ingest::bounded_source`]) which adds a capacity,
+    /// an explicit overflow policy and a labeled drop counter.
     pub fn post(&self, f: impl FnOnce() + Send + 'static) {
         self.shared
             .posted
@@ -211,6 +244,37 @@ mod tests {
         assert_eq!(drain_posted(), 1);
         assert!(!wake_pending());
         assert_eq!(hits.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn waker_invoked_once_per_drain_cycle() {
+        // N posts between two drains = ONE waker invocation (0020's
+        // dedup): the pipe write is per drain cycle, not per post.
+        let calls = Arc::new(AtomicUsize::new(0));
+        let c2 = calls.clone();
+        set_wake_callback(move || {
+            c2.fetch_add(1, Ordering::SeqCst);
+        });
+        let _ = drain_posted(); // clear any flag from this thread's history
+        calls.store(0, Ordering::SeqCst);
+        let handle = wake_handle();
+        for i in 0..64 {
+            handle.post(move || {
+                let _ = i;
+            });
+        }
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "burst of posts must invoke the waker exactly once"
+        );
+        assert_eq!(drain_posted(), 64, "every job still runs");
+        // The NEXT cycle re-invokes: the dedup is per drain, not global.
+        handle.post(|| {});
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+        assert_eq!(drain_posted(), 1);
+        // Uninstall so sibling assertions on this thread stay isolated.
+        set_wake_callback(|| {});
     }
 
     #[test]

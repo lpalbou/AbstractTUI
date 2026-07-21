@@ -50,6 +50,18 @@ pub(super) fn clamp_axis(v: i32, min: Option<i32>, max: Option<i32>) -> i32 {
     v.clamp(lo, hi)
 }
 
+/// THE size query (backlog 0130): measure a subtree's intrinsic size
+/// within `avail` without assigning rects — what a scroll container
+/// asks to size its content wrapper when no `content_size` hint is
+/// given. Explicit dimensions win; `Auto` asks the measure callback
+/// (leaves) or aggregates children. Pure: no tree mutation.
+///
+/// Unconstrained axes pass a large `avail` extent (the solver's
+/// absolute-placement path does exactly this through the same fold).
+pub fn measure(tree: &LayoutTree, id: LayoutId, avail: Size) -> Size {
+    intrinsic_size(tree, id, avail)
+}
+
 /// Content-driven size of a node within `avail`. Explicit dimensions win;
 /// `Auto` asks the measure callback (leaves) or aggregates children
 /// (containers): sum along the node's own main axis, max across.

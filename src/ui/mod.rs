@@ -97,6 +97,56 @@ mod tests {
     }
 
     #[test]
+    fn focus_init_prefers_autofocus_then_focusable_then_content_anchor() {
+        // 1. Autofocus present: focus_init is a no-op (mount focused it).
+        let (_r1, mut t1) = mounted(Size::new(20, 3), |_cx| {
+            Element::new()
+                .child(focusable_box(5, 1).build())
+                .child(focusable_box(5, 1).autofocus().build())
+                .build()
+        });
+        let auto_won = t1.focused().expect("autofocus at mount");
+        t1.focus_init();
+        assert_eq!(t1.focused(), Some(auto_won), "autofocus wins");
+
+        // 2. No autofocus: first focusable in document order.
+        let (_r2, mut t2) = mounted(Size::new(20, 3), |_cx| {
+            Element::new()
+                .child(text("label"))
+                .child(focusable_box(5, 1).build())
+                .build()
+        });
+        assert!(t2.focused().is_none());
+        t2.focus_init();
+        let picked = t2.focused().expect("first focusable");
+        t2.set_focus(None);
+        t2.focus_first();
+        assert_eq!(t2.focused(), Some(picked), "same pick as focus_first");
+
+        // 3. No focusables at all: anchor on the root's first child so
+        //    ITS shortcuts sit on the dispatch path (0230) — key target
+        //    is focus.or(root), shortcuts resolve along root→focus.
+        let hits = Rc::new(RefCell::new(0u32));
+        let h = hits.clone();
+        let (_r3, mut t3) = mounted(Size::new(20, 3), move |_cx| {
+            Element::new()
+                .child(
+                    Element::new()
+                        .shortcut(KeyChord::plain(Key::Char('a')), move |_| {
+                            *h.borrow_mut() += 1;
+                        })
+                        .child(text("content"))
+                        .build(),
+                )
+                .build()
+        });
+        t3.focus_init();
+        assert!(t3.focused().is_some(), "content anchor focused");
+        let consumed = t3.dispatch(&UiEvent::Key(KeyEvent::plain(Key::Char('a'))));
+        assert!(consumed && *hits.borrow() == 1, "anchored shortcut fired");
+    }
+
+    #[test]
     fn focus_memory_restores_last_focused_on_reentry() {
         // [pane: a b c] [outside]. Tab to b, Tab out to outside, Tab
         // wraps back INTO the pane -> lands on b again, not a.

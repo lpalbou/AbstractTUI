@@ -53,6 +53,28 @@ pub enum ViewNode {
 
 pub struct View(pub(crate) ViewNode);
 
+impl View {
+    /// Visit every layout style in this blueprint tree, mutably —
+    /// element, text-leaf and dyn-region styles alike (the dyn's OWN
+    /// style; styles produced by its build closure at runtime are out of
+    /// reach by construction, as are `style_signal` closures). In-crate
+    /// policy hook: `app::popups::Modal` floors declared fixed sizes
+    /// with it (backlog 0240). Blueprint-time only — mounted instances
+    /// are not affected.
+    pub(crate) fn for_each_style_mut(&mut self, f: &mut impl FnMut(&mut Style)) {
+        match &mut self.0 {
+            ViewNode::Element(el) => {
+                f(&mut el.style);
+                for child in &mut el.children {
+                    child.for_each_style_mut(f);
+                }
+            }
+            ViewNode::Text(t) => f(&mut t.style),
+            ViewNode::Dyn(d) => f(&mut d.style),
+        }
+    }
+}
+
 pub struct TextView {
     pub(crate) content: String,
     pub(crate) style: Style,

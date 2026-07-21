@@ -47,12 +47,15 @@ mod arena;
 mod diag;
 mod effect;
 mod execute;
+mod ingest;
+mod interval;
 mod memo;
 mod node;
 mod runtime;
 mod scheduler;
 mod scope;
 mod signal;
+mod source;
 
 #[cfg(test)]
 mod tests;
@@ -62,6 +65,8 @@ pub use animate::{
 };
 pub use diag::{diagnostics, enter_draw_phase, take_worker_failures, Diagnostics, DrawPhase};
 pub use effect::Effect;
+pub use ingest::{bounded_source, BoundedSender, CoalesceFn, IngestStats, OverflowPolicy};
+pub use interval::{interval, IntervalHandle};
 pub use memo::Memo;
 pub use runtime::{batch, flush_effects, on_cleanup, stats, untrack, RuntimeStats};
 pub use scheduler::{
@@ -70,5 +75,6 @@ pub use scheduler::{
 };
 pub use scope::{create_root, RootScope, Scope};
 pub use signal::Signal;
+pub use source::{channel_source, latest_source, SourceSender};
 
 pub(crate) use arena::{GenArena, Key};

@@ -138,16 +138,54 @@ pub fn frame_tasks_pending() -> usize {
 /// toast dismissal, debounce). Timers do NOT frame-pace: the loop
 /// sleeps until [`next_timer_deadline`] and fires due timers in phase U
 /// (`run_due_timers`), so a pending timer costs zero wakeups until due.
+/// For a repeating, cancellable cadence use [`super::interval`].
 pub fn after(delay: Duration, f: impl FnOnce() + 'static) {
-    let deadline = Instant::now() + delay;
-    with_rt(|rt| rt.timers.push((deadline, Box::new(f))));
+    let _ = arm_timer_at(Instant::now() + delay, f);
     // Wake a possibly-blocked loop so it recomputes its sleep deadline.
     request_frame();
 }
 
+/// Arm a one-shot at an ABSOLUTE deadline; returns the entry's id for
+/// [`cancel_timer`]. Internal: `after` (fire-and-forget) and `interval`
+/// (re-arming + cancellation) are the public faces. Does NOT wake the
+/// loop — callers decide (an interval re-arming inside phase U needs no
+/// wake; a fresh arm from user code does).
+pub(crate) fn arm_timer_at(deadline: Instant, f: impl FnOnce() + 'static) -> u64 {
+    with_rt(|rt| {
+        rt.next_timer_id += 1;
+        let id = rt.next_timer_id;
+        rt.timers.push(super::runtime::TimerEntry {
+            deadline,
+            id,
+            f: Box::new(f),
+        });
+        id
+    })
+}
+
+/// Remove a pending timer by id BEFORE it fires. True if an entry was
+/// removed; false when it already fired (or was already cancelled) —
+/// ids are never reused, so this can never remove a stranger's timer.
+/// The callback is dropped outside the runtime borrow (its captures'
+/// `Drop` may re-enter the runtime).
+pub(crate) fn cancel_timer(id: u64) -> bool {
+    let removed: Option<super::runtime::TimerEntry> = with_rt(|rt| {
+        let at = rt.timers.iter().position(|e| e.id == id)?;
+        Some(rt.timers.swap_remove(at))
+    });
+    removed.is_some()
+}
+
+/// The clock reading the CURRENT `run_due_timers` pass fires with —
+/// `None` outside one. Re-arming callbacks (intervals) derive their next
+/// deadline from this, so injected test clocks stay authoritative.
+pub(crate) fn timer_fire_now() -> Option<Instant> {
+    with_rt(|rt| rt.timer_now)
+}
+
 /// Earliest pending timer deadline — the loop's idle sleep bound.
 pub fn next_timer_deadline() -> Option<Instant> {
-    with_rt(|rt| rt.timers.iter().map(|(t, _)| *t).min())
+    with_rt(|rt| rt.timers.iter().map(|e| e.deadline).min())
 }
 
 /// Fire every timer whose deadline passed (phase U). Returns fired count.
@@ -158,14 +196,25 @@ pub fn run_due_timers(now: Instant) -> usize {
         let mut fired = Vec::new();
         let mut i = 0;
         while i < rt.timers.len() {
-            if rt.timers[i].0 <= now {
-                fired.push(rt.timers.swap_remove(i).1);
+            if rt.timers[i].deadline <= now {
+                fired.push(rt.timers.swap_remove(i).f);
             } else {
                 i += 1;
             }
         }
+        // Publish the pass clock for re-arming callbacks; cleared by the
+        // guard below even if a callback panics (a stale value would
+        // corrupt every later interval's timeline).
+        rt.timer_now = Some(now);
         fired
     });
+    struct FireGuard;
+    impl Drop for FireGuard {
+        fn drop(&mut self) {
+            super::runtime::clear_timer_now();
+        }
+    }
+    let _guard = FireGuard;
     let count = due.len();
     for f in due {
         f();
