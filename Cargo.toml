@@ -19,7 +19,7 @@ exclude = ["reviews/", "docs/captures/", "docs/media/", ".github/", "book.toml"]
 [dependencies]
 unicode-width = "0.2"
 unicode-segmentation = "1"
-miniz_oxide = "0.8"
+miniz_oxide = "0.9"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
