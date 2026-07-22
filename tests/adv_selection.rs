@@ -117,7 +117,7 @@ fn drag_paints_highlight_and_copy_key_emits_osc52() {
 }
 
 #[test]
-fn release_copies_multi_row_and_click_clears_highlight() {
+fn release_copies_multi_row_and_clears_highlight() {
     let size = Size::new(30, 6);
     let mut app = three_rows(size);
     let mut term = CaptureTerm::new(size);
@@ -125,30 +125,29 @@ fn release_copies_multi_row_and_click_clears_highlight() {
     selection().set_enabled(true);
     driver.turn(&mut app, &mut term).unwrap();
 
-    // Drag from "gamma"'s g (0,1) down to (4,2), release: row-flow copy —
-    // row 1 from the anchor to the pane's right edge (trailing blanks
-    // trim), row 2 from the pane's left edge to the head inclusive.
+    // Drag from "gamma"'s g (0,1) down to (4,2): highlight paints.
     term.push_input(b"\x1b[<0;1;2M");
     term.push_input(b"\x1b[<32;5;3M");
     driver.turn(&mut app, &mut term).unwrap();
+    let sel_bg = current_theme().tokens.get(TokenId::SelectionBg);
+    assert_eq!(term.screen().cell(2, 1).unwrap().paint.bg, Some(sel_bg));
+
+    // Release: row-flow copy — row 1 from the anchor to the pane's right
+    // edge (trailing blanks trim), row 2 from the pane's left edge to
+    // the head inclusive.
     term.push_input(b"\x1b[<0;5;3m"); // release copies
     driver.turn(&mut app, &mut term).unwrap();
     driver.turn(&mut app, &mut term).unwrap(); // custody emission frame
     let expected = b64("gamma delta\nthird");
     assert_eq!(term.screen().clipboard(), Some(("c", expected.as_str())));
 
-    // The region stays visible after release... then a click clears it
-    // and the cells recompose from truth (original inks restored). Esc
-    // clears identically — pinned at the unit level, where the bare-ESC
-    // wire byte needs no disambiguation wait.
-    let sel_bg = current_theme().tokens.get(TokenId::SelectionBg);
-    assert_eq!(term.screen().cell(2, 1).unwrap().paint.bg, Some(sel_bg));
-    term.push_input(b"\x1b[<0;15;1M"); // click elsewhere
-    driver.turn(&mut app, &mut term).unwrap();
+    // The copy ENDS the gesture (0290): the highlight clears itself and
+    // the cells recompose from truth (original inks restored) — no
+    // click/Esc needed, and no region lingers to swallow keys.
     assert_ne!(
         term.screen().cell(2, 1).unwrap().paint.bg,
         Some(sel_bg),
-        "a click must clear the highlight"
+        "the release-copy must clear the highlight"
     );
     assert!(row(&term, 1).starts_with("gamma delta"));
 }
@@ -162,7 +161,8 @@ fn ctrl_c_copies_with_selection_and_quits_without() {
     selection().set_enabled(true);
     driver.turn(&mut app, &mut term).unwrap();
 
-    // Active selection: Ctrl+C is COPY (terminal muscle memory), not quit.
+    // Mid-drag selection: Ctrl+C is COPY (terminal muscle memory), not
+    // quit — and the copy ends the gesture (0290).
     term.push_input(b"\x1b[<0;1;1M");
     term.push_input(b"\x1b[<32;5;1M");
     driver.turn(&mut app, &mut term).unwrap();
@@ -173,13 +173,99 @@ fn ctrl_c_copies_with_selection_and_quits_without() {
         term.screen().clipboard(),
         Some(("c", b64("alpha").as_str()))
     );
+    assert!(
+        !selection().is_active(),
+        "the Ctrl+C copy cleared the region (0290)"
+    );
 
-    // Cleared selection: Ctrl+C is the default quit again.
-    term.push_input(b"\x1b[<0;9;3M"); // click clears
-    driver.turn(&mut app, &mut term).unwrap();
+    // Region gone: the NEXT Ctrl+C is the default quit again — no
+    // click/Esc dance in between (the 0290 footgun, inverted).
     term.push_input(b"\x03");
     let turn = driver.turn(&mut app, &mut term).unwrap();
     assert!(turn.quit, "no selection: default quit restored");
+}
+
+/// Backlog 0290 regression: after a release-copy the app owns its keys
+/// again IMMEDIATELY. The field failure: the retained region swallowed
+/// every `c`/Enter (typing "cargo check" into a composer lost both
+/// `c`s; Enter submitted nothing) until a click/Esc — with no effective
+/// app-side workaround, because the selection layer consumes those keys
+/// before tree dispatch.
+#[test]
+fn release_copy_frees_enter_and_c_for_the_app() {
+    let size = Size::new(30, 6);
+    let mut app = App::new(size);
+    // Composer-shaped fixture: the root counts the Key/Wheel events
+    // that actually REACH tree dispatch.
+    let keys: std::rc::Rc<std::cell::RefCell<Vec<char>>> =
+        std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let wheels: std::rc::Rc<std::cell::RefCell<u32>> = std::rc::Rc::new(std::cell::RefCell::new(0));
+    let (k, w) = (keys.clone(), wheels.clone());
+    app.mount(move |_cx| {
+        Element::new()
+            .on(abstracttui::ui::Phase::Bubble, move |_c, e| match e {
+                abstracttui::ui::UiEvent::Key(key) => {
+                    let ch = match key.key {
+                        abstracttui::ui::Key::Char(c) => c,
+                        abstracttui::ui::Key::Enter => '\n',
+                        _ => '?',
+                    };
+                    k.borrow_mut().push(ch);
+                }
+                abstracttui::ui::UiEvent::Mouse(m) => {
+                    if matches!(
+                        m.kind,
+                        abstracttui::ui::MouseKind::ScrollUp
+                            | abstracttui::ui::MouseKind::ScrollDown
+                    ) {
+                        *w.borrow_mut() += 1;
+                    }
+                }
+                _ => {}
+            })
+            .child(text("alpha beta"))
+            .child(text("gamma delta"))
+            .build()
+    })
+    .unwrap();
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
+    selection().set_enabled(true);
+    driver.turn(&mut app, &mut term).unwrap();
+
+    // Drag "alpha", release: the copy fires and the gesture ends.
+    term.push_input(b"\x1b[<0;1;1M");
+    term.push_input(b"\x1b[<32;5;1M");
+    term.push_input(b"\x1b[<0;5;1m");
+    driver.turn(&mut app, &mut term).unwrap();
+    driver.turn(&mut app, &mut term).unwrap(); // custody emission
+    assert_eq!(
+        term.screen().clipboard(),
+        Some(("c", b64("alpha").as_str()))
+    );
+    assert!(!selection().is_active(), "release-copy clears the region");
+
+    // Typing "c" then Enter goes to the APP — the exact keystrokes the
+    // retained region used to eat. The clipboard must NOT change (no
+    // silent re-copy).
+    term.push_input(b"c");
+    term.push_input(b"\r");
+    driver.turn(&mut app, &mut term).unwrap();
+    assert_eq!(
+        keys.borrow().as_slice(),
+        &['c', '\n'],
+        "post-copy keys must reach tree dispatch"
+    );
+    assert_eq!(
+        term.screen().clipboard(),
+        Some(("c", b64("alpha").as_str())),
+        "no re-copy: the clipboard still holds the release copy"
+    );
+
+    // Wheel routing is untouched by any of this.
+    term.push_input(b"\x1b[<65;2;2M");
+    driver.turn(&mut app, &mut term).unwrap();
+    assert_eq!(*wheels.borrow(), 1, "wheel still reaches the tree");
 }
 
 #[test]

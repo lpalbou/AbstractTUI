@@ -302,9 +302,10 @@ owns the durable wire: the value signal, the caret byte, focus, the
 history store, programmatic edits, and `caret_cell()` — the caret's
 solved screen cell, which anchors completion dropdowns. The widget soft
 wraps at its width, grows with content inside `rows(min, max)` and then
-scrolls internally; Enter submits while Alt+Enter (and Shift+Enter where
-the kitty protocol reports it) inserts a newline — flip it with
-`SubmitPolicy::EnterInserts`. Up/Down navigate the buffer first and
+scrolls internally; Enter submits while Alt+Enter, Ctrl+J (the universal
+chord — `0x0a` IS Ctrl+J on the legacy wire, so it works on every
+terminal) and Shift+Enter where the kitty protocol reports it insert a
+newline — flip it with `SubmitPolicy::EnterInserts`. Up/Down navigate the buffer first and
 reach for history only at the edges; the in-progress draft survives a
 recall round trip. Pastes insert whole, newlines included — never a
 submit:
@@ -429,6 +430,34 @@ the overlay store; `widgets` sits below `app` in the layer map), but
 they are plain token-consuming components with the standard
 `.view(cx)` / `.element(cx, &tokens)` builds.
 
+**Programmatic open — `SelectHandle`.** Command-summoned pickers
+(`/theme`, `/model` typed into a composer) open a face without a
+trigger gesture: build a cloneable `SelectHandle`, attach it with
+`.handle(&h)` on any of the three faces, and call `h.open()` from a
+command handler or shortcut — it returns `true` when the popup is open
+after the call. The popup anchors at the trigger's LAST-PAINTED rect,
+so a face that has never rendered refuses (`false`) — open on the
+frame after mounting (the documented one-frame caveat). Disabled
+faces, empty option lists, and unmounted faces (the wire dies with the
+face's scope; dyn_view regenerations rewire automatically) also return
+`false`, never panic:
+
+```rust
+use abstracttui::prelude::*;
+
+fn command_picker(cx: Scope) -> (View, SelectHandle) {
+    let picker = SelectHandle::new();
+    let view = Combobox::new(vec![
+        SelectOption::new("nord"),
+        SelectOption::new("aurora"),
+    ])
+    .handle(&picker)
+    .placeholder("theme…")
+    .view(cx);
+    (view, picker) // `/theme` handler calls picker.open()
+}
+```
+
 ## app — the runtime
 
 `App::simple` is the whole happy path: mount a component, enter the
@@ -467,15 +496,24 @@ Around the core loop the module provides:
   while open, Tab cycles inside, state created in the modal's scope dies on
   close. **Toast** — top-right chips that slide in, park for their duration
   at zero frame cost, then slide out and remove their layer.
-- **AnchoredPanel** (`app::anchored`) — a passive anchored popup layer:
-  placed against an anchor rect (below-preferred, flip-above, viewport
-  clamp), stacked above everything live via `Overlays::top_z()`, never
-  focused (keys stay with the anchor's owner), closed by its opener's
-  scope death. `Completion` builds the caret-anchored completion
-  dropdown on top of it (see the widgets section).
+- **AnchoredPanel / Popup / Tooltip** (`app::anchored`) — the three
+  routing modes of the anchored-popup substrate, one placement engine
+  (below-preferred, flip-above, viewport clamp): `AnchoredPanel` is the
+  PASSIVE layer (never focused — keys stay with the anchor's owner;
+  `Completion` builds the caret-anchored dropdown on it), `Popup` is the
+  OWNED modal tree above the whole live stack with `DismissReason`-named
+  endings (the Select family rides it), and `Tooltip` is the hover-timed
+  passive label. All three close with their opener's scope (see the
+  widgets section for the completion and select details).
 - **Hooks** — `use_theme(cx)` (the app-level theme signal), `use_viewport(cx)`
   (terminal size as a signal), `use_startup_notices(cx)` (labeled startup
-  degradations as a reactive list).
+  degradations as a reactive list), and `use_caps(cx)` — the driver's LIVE
+  `Capabilities` (env pass at enter, upgraded as active-probe replies fold
+  in). Read it in a `dyn_view` for capability-honest UI: key hints that say
+  "Shift+Enter newline" only where the kitty protocol is actually live,
+  graphics-channel labels that flip when the probe proves a better channel.
+  Read-only by contract (writing capabilities stays the driver's job);
+  `current_caps()` is the untracked snapshot for plumbing.
 - **KeymapHelp** — a ready-made `?` help modal listing the shortcuts
   reachable from the current focus plus every registered global action.
 
@@ -507,8 +545,20 @@ copy_to_clipboard("exact source text");
 While selection is enabled, the engine claims **left Down/Drag/Up only**:
 dragging paints the theme's `selection_fg`/`selection_bg` inks over the
 composed frame (damage-contract honest — only changed cells repaint), and
-releasing copies. While a selection is visible, Enter / `c` / Ctrl+C copy
-again and Esc or a click clears — Ctrl+C only quits when no selection is
+releasing copies. **Every copy ends the gesture** (0290): the region
+clears with the copy, so the app's next keystrokes — including Enter and
+`c` — route normally at once (a retained region used to silently eat
+them in composer-shaped apps). The key table while a region is visible
+(i.e. mid-drag):
+
+| Key            | Effect                                   |
+|----------------|------------------------------------------|
+| Enter          | copy the region, then clear (one-shot)   |
+| `c` / Ctrl+C   | copy the region, then clear (one-shot)   |
+| Esc            | cancel — clear without copying           |
+| anything else  | routes to the app normally               |
+
+A fresh left click re-anchors; Ctrl+C only quits when no region is
 visible. Wheel scrolling, hover, and every other key route normally the
 whole time. Copies travel as OSC 52 through the presenter's byte custody;
 terminals that did not advertise the capability still get the bytes
@@ -718,6 +768,19 @@ term.leave()?; // also runs on Drop — the terminal always restores
 arbitrary chunk splits (mid-UTF-8, mid-escape), never panicking on any
 input. `input::EventReader` glues a terminal to the parser and owns the
 ESC-disambiguation deadlines.
+
+Kitty keyboard flags follow the PROBE, not just the environment: the env
+pass claims the protocol only for terminals that speak it out of the box
+(kitty, ghostty, foot — WezTerm ships it config-off, so its claim waits
+for probe evidence), and when the active probe proves the protocol on a
+terminal env could not claim (iTerm2 ≥ 3.5, VS Code/Cursor, Warp), the
+driver pushes the standard flags mid-session via
+`Terminal::set_kitty_keyboard` — Shift+Enter-class chords start working
+without a restart. The verb updates the terminal's session accounting,
+so `leave` pops exactly what was pushed and job-control suspend/resume
+stays symmetric (pop on suspend, re-push on resume). Embedders that
+enter with explicit `RunConfig::enter` options own their posture: the
+driver never upgrades it.
 
 ## testing — the headless harness
 

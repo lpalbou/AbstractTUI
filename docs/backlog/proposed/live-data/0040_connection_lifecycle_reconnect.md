@@ -91,3 +91,26 @@ this item must prove that, not work around it.
 Re-read `App::drive_loop` and the damage contract before designing: the model must ride the
 existing timer/wake machinery. Check whether 0010 landed with a helper — the connection worker
 should be expressible as an ordinary 0010 source whose emitted values are state transitions.
+
+## Promotion evidence (2026-07-22, convergence cycle 2 — the trigger has effectively fired)
+
+The first shipped application has now hand-rolled this item once, without jitter — the exact
+thundering-herd risk this item names. Evidence (FIELD study 2,
+`reviews/study2/field-consumer-tensions.md` §3.5; consumer = `abstractcode-tui`):
+
+- hand-rolled SSE parsing over ureq: `gateway/sse.rs`, 125 lines;
+- reconnect loop in `runner.rs:923-1012`: **linear** backoff `500ms × consecutive_errors`
+  capped at 5 s (runner.rs:1006-1008), an 8-iteration REST poll fallback, terminal-status
+  probes, fatal-status classification (runner.rs:962-978) — and **NO jitter**;
+- the app-class report (`reviews/study2/field-app-classes.md` class 4) adds the multiplier: an
+  entity-monitoring surface runs per-entity replay streams + roster polling, making the
+  hand-roll N× worse; its class-3 coordination UI rides the same lane. That report calls this
+  "this study's strongest cross-track recommendation."
+
+The item's stated promotion criterion was "the 0060 watcher build starts, or any second real
+consumer appears" — the first consumer exists and a whole app CLASS is named behind it.
+**Recommendation: promote to planned/ at the next single-writer backlog pass.** The 0060-first
+caution stands only for declaring the API surface STABLE (validate the shape against a real
+disconnect cycle); it should not keep the item in proposed/ while consumers accrete divergent
+hand-rolls. 0050 (transport ADR) correctly stays gated on watcher evidence — the consumer
+proved ureq-class blocking HTTP in a worker thread workable meanwhile.

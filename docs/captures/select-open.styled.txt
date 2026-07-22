@@ -1,0 +1,59 @@
+size=72x20 cursor=0,19 modes=[7,1002,1004,1006,1049,2004]
+  0|                                                                        |
+  1| settings                                                               |
+  2|                                                                        |
+  3| channel ▐stable                   ▾▌                                   |
+  4|          stable                 lts                                    |
+  5| [x] page beta                                                          |
+  6|          nightly              daily                                    |
+  7|          archive                                                       |
+  8|                                                                        |
+  9|                                                                        |
+ 10|                                                                        |
+ 11|                                                                        |
+ 12|                                                                        |
+ 13|                                                                        |
+ 14|                                                                        |
+ 15|                                                                        |
+ 16|                                                                        |
+ 17|                                                                        |
+ 18| enter commits · esc abandons · click outside dismisses                 |
+ 19|                                                                        |
+styles:
+  0:0..72 fg=#eeeeee bg=#1a1a2e
+  1:0..72 fg=#eeeeee bg=#1a1a2e
+  2:0..72 fg=#eeeeee bg=#1a1a2e
+  3:0..9 fg=#eeeeee bg=#1a1a2e
+  3:9..10 fg=#e94560 bg=#16213e
+  3:10..35 fg=#eeeeee bg=#16213e
+  3:35..37 fg=#e94560 bg=#16213e
+  3:37..72 fg=#eeeeee bg=#1a1a2e
+  4:0..9 fg=#eeeeee bg=#1a1a2e
+  4:9..33 fg=#eeeeee bg=#0f3460
+  4:33..36 fg=#aaaaaa bg=#0f3460
+  4:36..37 fg=#eeeeee bg=#0f3460
+  4:37..72 fg=#eeeeee bg=#1a1a2e
+  5:0..1 fg=#eeeeee bg=#1a1a2e
+  5:1..9 fg=#eeeeee bg=#16213e
+  5:9..37 fg=#eeeeee bg=#58273d
+  5:37..72 fg=#eeeeee bg=#1a1a2e
+  6:0..9 fg=#eeeeee bg=#1a1a2e
+  6:9..31 fg=#eeeeee bg=#0f3460
+  6:31..36 fg=#aaaaaa bg=#0f3460
+  6:36..37 fg=#eeeeee bg=#0f3460
+  6:37..72 fg=#eeeeee bg=#1a1a2e
+  7:0..9 fg=#eeeeee bg=#1a1a2e
+  7:9..37 fg=#666666 bg=#0f3460
+  7:37..72 fg=#eeeeee bg=#1a1a2e
+  8:0..72 fg=#eeeeee bg=#1a1a2e
+  9:0..72 fg=#eeeeee bg=#1a1a2e
+  10:0..72 fg=#eeeeee bg=#1a1a2e
+  11:0..72 fg=#eeeeee bg=#1a1a2e
+  12:0..72 fg=#eeeeee bg=#1a1a2e
+  13:0..72 fg=#eeeeee bg=#1a1a2e
+  14:0..72 fg=#eeeeee bg=#1a1a2e
+  15:0..72 fg=#eeeeee bg=#1a1a2e
+  16:0..72 fg=#eeeeee bg=#1a1a2e
+  17:0..72 fg=#eeeeee bg=#1a1a2e
+  18:0..72 fg=#eeeeee bg=#1a1a2e
+  19:0..72 fg=#eeeeee bg=#1a1a2e

@@ -16,14 +16,14 @@ size=100x30 cursor=0,29 modes=[7,25,1049]
  14| │                                                                   │                              |
  15| │channel         (•) stable                                         │                              |
  16| │                ( ) beta                                           │                              |
- 17| │                ( ) nightly                                        │                              |
- 18| │                                                                   │                              |
- 19| │→ orion · notifications on · stable channel                        │                              |
- 20| │                                                                   │                              |
+ 17| │                                                                   │                              |
+ 18| │channel select  ▐stable                   ▾▌                       │                              |
+ 19| │                                                                   │                              |
+ 20| │theme           ▐Dark (Abstract)          ▾▌                       │                              |
  21| │                                                                   │                              |
- 22| │                                                                   │                              |
+ 22| │features        ▐enable features…         ▾▌                       │                              |
  23| │                                                                   │                              |
- 24| │                                                                   │                              |
+ 24| │→ orion · notifications on · stable channel · 0 features           │                              |
  25| └───────────────────────────────────────────────────────────────────┘                              |
  26|                                                                                                    |
  27|                                                                                                    |
@@ -178,28 +178,35 @@ styles:
   16:71..100 fg=#eeeeee bg=#1a1a2e
   17:0..1 fg=#eeeeee bg=#1a1a2e
   17:1..2 fg=#3c3c4d bg=#16213e
-  17:2..18 fg=#16213e bg=#16213e
-  17:18..29 fg=#eeeeee bg=#16213e
-  17:29..69 fg=#16213e bg=#16213e
+  17:2..69 fg=#16213e bg=#16213e
   17:69..70 fg=#3c3c4d bg=#16213e
   17:70..71 fg=#10101d bg=#10101d
   17:71..100 fg=#eeeeee bg=#1a1a2e
   18:0..1 fg=#eeeeee bg=#1a1a2e
   18:1..2 fg=#3c3c4d bg=#16213e
-  18:2..69 fg=#16213e bg=#16213e
+  18:2..16 fg=#aaaaaa bg=#16213e
+  18:16..18 fg=#16213e bg=#16213e
+  18:18..19 fg=#3c3c4d bg=#16213e
+  18:19..45 fg=#eeeeee bg=#16213e
+  18:45..46 fg=#3c3c4d bg=#16213e
+  18:46..69 fg=#16213e bg=#16213e
   18:69..70 fg=#3c3c4d bg=#16213e
   18:70..71 fg=#10101d bg=#10101d
   18:71..100 fg=#eeeeee bg=#1a1a2e
   19:0..1 fg=#eeeeee bg=#1a1a2e
   19:1..2 fg=#3c3c4d bg=#16213e
-  19:2..45 fg=#eeeeee bg=#16213e
-  19:45..69 fg=#16213e bg=#16213e
+  19:2..69 fg=#16213e bg=#16213e
   19:69..70 fg=#3c3c4d bg=#16213e
   19:70..71 fg=#10101d bg=#10101d
   19:71..100 fg=#eeeeee bg=#1a1a2e
   20:0..1 fg=#eeeeee bg=#1a1a2e
   20:1..2 fg=#3c3c4d bg=#16213e
-  20:2..69 fg=#16213e bg=#16213e
+  20:2..7 fg=#aaaaaa bg=#16213e
+  20:7..18 fg=#16213e bg=#16213e
+  20:18..19 fg=#3c3c4d bg=#16213e
+  20:19..45 fg=#eeeeee bg=#16213e
+  20:45..46 fg=#3c3c4d bg=#16213e
+  20:46..69 fg=#16213e bg=#16213e
   20:69..70 fg=#3c3c4d bg=#16213e
   20:70..71 fg=#10101d bg=#10101d
   20:71..100 fg=#eeeeee bg=#1a1a2e
@@ -211,7 +218,13 @@ styles:
   21:71..100 fg=#eeeeee bg=#1a1a2e
   22:0..1 fg=#eeeeee bg=#1a1a2e
   22:1..2 fg=#3c3c4d bg=#16213e
-  22:2..69 fg=#16213e bg=#16213e
+  22:2..10 fg=#aaaaaa bg=#16213e
+  22:10..18 fg=#16213e bg=#16213e
+  22:18..19 fg=#3c3c4d bg=#16213e
+  22:19..44 fg=#666666 bg=#16213e
+  22:44..45 fg=#eeeeee bg=#16213e
+  22:45..46 fg=#3c3c4d bg=#16213e
+  22:46..69 fg=#16213e bg=#16213e
   22:69..70 fg=#3c3c4d bg=#16213e
   22:70..71 fg=#10101d bg=#10101d
   22:71..100 fg=#eeeeee bg=#1a1a2e
@@ -223,7 +236,8 @@ styles:
   23:71..100 fg=#eeeeee bg=#1a1a2e
   24:0..1 fg=#eeeeee bg=#1a1a2e
   24:1..2 fg=#3c3c4d bg=#16213e
-  24:2..69 fg=#16213e bg=#16213e
+  24:2..58 fg=#eeeeee bg=#16213e
+  24:58..69 fg=#16213e bg=#16213e
   24:69..70 fg=#3c3c4d bg=#16213e
   24:70..71 fg=#10101d bg=#10101d
   24:71..100 fg=#eeeeee bg=#1a1a2e

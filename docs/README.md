@@ -20,13 +20,15 @@ mosaic), software-rasterized 3D (GLB), themes, and animation.
 ## Reference material
 
 - [`../examples/README.md`](../examples/README.md) — the examples
-  catalog: twelve runnable programs from a 53-line hello to a full ops
+  catalog: fourteen runnable programs from a 53-line hello to a full ops
   dashboard, each documented with keys, requirements, and what it should
   look like. Every example exits cleanly without a tty, and
   `dashboard`/`viewer3d`/`images` take `--caps` to print the terminal
   capability report.
 - [`captures/`](captures/) — deterministic text "screenshots" of the
-  shipped examples (plain and style-annotated renders), regenerable with
-  `cargo run --example capture`.
+  shipped examples (plain and style-annotated renders), plus in-process
+  stills of the app-layer surfaces (streaming transcript with the
+  completion dropdown open, an open Select popup, a diff-tinted code
+  pane, a scrolled feed); regenerable with `cargo run --example capture`.
 - [`captures/themes-table.md`](captures/themes-table.md) — the generated
   reference table: every token hex value of all 26 built-in themes.

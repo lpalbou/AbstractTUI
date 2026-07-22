@@ -1,0 +1,20 @@
+
+ settings
+
+ channel ▐stable                   ▾▌
+          stable                 lts
+ [x] page beta
+          nightly              daily
+          archive
+
+
+
+
+
+
+
+
+
+
+ enter commits · esc abandons · click outside dismisses
+

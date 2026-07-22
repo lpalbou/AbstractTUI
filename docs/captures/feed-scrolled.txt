@@ -1,0 +1,22 @@
+╭ events ──────────────────────────────────────────────────────────────────────────╮
+│12:04:56 worker-2 event 8 — payload accepted                                     ││
+│12:04:03 worker-0 event 9 — payload accepted                                     ││
+│12:05:10 worker-1 event 10 — payload accepted                                    ││
+│12:05:17 worker-2 event 11 — payload accepted                                    ││
+│12:06:24 worker-0 event 12 — payload accepted                                    ┃│
+│12:06:31 worker-1 event 13 — payload accepted                                    ┃│
+│12:07:38 worker-2 event 14 — payload accepted                                    ┃│
+│12:07:45 worker-0 event 15 — payload accepted                                    ┃│
+│12:08:52 worker-1 event 16 — payload accepted                                    ┃│
+│12:08:59 worker-2 event 17 — payload accepted                                    ┃│
+│12:09:06 worker-0 event 18 — payload accepted                                    ┃│
+│12:09:13 worker-1 event 19 — payload accepted                                    ┃│
+│12:10:20 worker-2 event 20 — payload accepted                                    ┃│
+│12:10:27 worker-0 event 21 — payload accepted                                    ┃│
+│12:11:34 worker-1 event 22 — payload accepted                                    ││
+│12:11:41 worker-2 event 23 — payload accepted                                    ││
+│12:12:48 worker-0 event 24 — payload accepted                                    ││
+│12:12:55 worker-1 event 25 — payload accepted                                    ││
+│12:13:02 worker-2 event 26 — payload accepted                                    ││
+╰──────────────────────────────────────────────────────────────────────────────────╯
+scrolled (f to re-follow)

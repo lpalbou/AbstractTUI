@@ -58,14 +58,18 @@ fn main() -> abstracttui::base::Result<()> {
         copy
     });
 
-    let caps = abstracttui::term::Capabilities::detect_env();
-    let channel = choose_channel(&caps.graphics());
-    let channel_label = match channel {
-        Channel::Kitty => "kitty",
-        Channel::Iterm2 => "iterm2",
-        Channel::Sixel => "sixel",
-        Channel::Mosaic => "mosaic (no pixel protocol here)",
-    };
+    // The channel label is TRUTHFUL now (backlog 0685 closed): it reads
+    // the live `use_caps` signal inside the footer's dyn_view below, so
+    // the active probe's upgrades (sixel via DA1, kitty graphics proof —
+    // facts env cannot see) re-render the label the moment they land.
+    fn channel_label(caps: &abstracttui::term::Capabilities) -> &'static str {
+        match choose_channel(&caps.graphics()) {
+            Channel::Kitty => "kitty",
+            Channel::Iterm2 => "iterm2",
+            Channel::Sixel => "sixel",
+            Channel::Mosaic => "mosaic",
+        }
+    }
 
     let mut app = App::new(Size::new(110, 30));
     let quitter = app.quitter();
@@ -91,10 +95,19 @@ fn main() -> abstracttui::base::Result<()> {
                     return;
                 }
                 // Center-right placement, sized by the image's cell
-                // aspect at half-block density.
-                let w = 36.min((bitmap.width() / 2).max(8) as i32);
-                let h = (w / 2).max(4);
-                *slot = Some(overlays.image(Rect::new(60, 4, w, h), (*bitmap).clone()));
+                // aspect at half-block density — CLAMPED to the live
+                // viewport: an off-screen rect makes iTerm2/sixel
+                // placements scroll or clip surprisingly, and the last
+                // row stays untouched (sixel cursor-below-image scrolls
+                // the screen on most emulators when the image bottoms
+                // out — chafa#192).
+                let vp = abstracttui::app::current_viewport();
+                let w = 36
+                    .min((bitmap.width() / 2).max(8) as i32)
+                    .min((vp.w - 4).max(8));
+                let h = (w / 2).max(4).min((vp.h - 6).max(2));
+                let x = (vp.w - w - 2).max(0);
+                *slot = Some(overlays.image(Rect::new(x, 4, w, h), (*bitmap).clone()));
             }
         };
 
@@ -130,23 +143,29 @@ fn main() -> abstracttui::base::Result<()> {
                 }
                 row.build()
             }))
-            .child(dyn_view(LayoutStyle::default().h(2), move || {
-                let _ = theme.get();
-                let d = if dithering.get() {
-                    "on (16-color FS)"
-                } else {
-                    "off (truecolor)"
-                };
-                let p = if protocol_on.get() {
-                    format!("placed via {channel_label}")
-                } else {
-                    format!("off — would use {channel_label}")
-                };
-                Element::new()
-                    .style(LayoutStyle::column())
-                    .child(text(format!("dither: {d}    protocol: {p}")))
-                    .child(text("d dither · p protocol · t theme · q quit"))
-                    .build()
+            .child(dyn_view(LayoutStyle::default().h(2), {
+                let caps = use_caps(cx);
+                move || {
+                    let _ = theme.get();
+                    let d = if dithering.get() {
+                        "on (16-color FS)"
+                    } else {
+                        "off (truecolor)"
+                    };
+                    // Live capability read (0685): probe upgrades flip
+                    // this label — no more "env pass only" hedging.
+                    let label = channel_label(&caps.get());
+                    let p = if protocol_on.get() {
+                        format!("placed via {label}")
+                    } else {
+                        format!("off — would use {label}")
+                    };
+                    Element::new()
+                        .style(LayoutStyle::column())
+                        .child(text(format!("dither: {d}    protocol: {p}")))
+                        .child(text("d dither · p protocol · t theme · q quit"))
+                        .build()
+                }
             }))
             .build()
     })?;

@@ -68,6 +68,11 @@ use core::{
 mod combobox;
 pub use combobox::Combobox;
 
+#[path = "select_handle.rs"]
+mod handle;
+use handle::anchor_cell;
+pub use handle::SelectHandle;
+
 #[path = "select_multi.rs"]
 mod multi;
 pub use multi::MultiSelect;
@@ -147,6 +152,7 @@ pub struct Select {
     layout: Option<LayoutStyle>,
     overlays: Option<Overlays>,
     on_change: Option<Box<dyn FnMut(usize)>>,
+    handle: Option<SelectHandle>,
 }
 
 impl Select {
@@ -161,6 +167,7 @@ impl Select {
             layout: None,
             overlays: None,
             on_change: None,
+            handle: None,
         }
     }
 
@@ -215,6 +222,15 @@ impl Select {
     /// [`Select::commit_on_move`], highlight moves commit too.
     pub fn on_change(mut self, f: impl FnMut(usize) + 'static) -> Select {
         self.on_change = Some(Box::new(f));
+        self
+    }
+
+    /// Programmatic-open wiring (backlog 0296): `handle.open()` opens
+    /// this face's popup without a trigger gesture — the command-
+    /// summoned picker verb. Anchor and lifecycle contract on
+    /// [`SelectHandle`]. Disabled faces refuse programmatic opens too.
+    pub fn handle(mut self, handle: &SelectHandle) -> Select {
+        self.handle = Some(handle.clone());
         self
     }
 
@@ -363,6 +379,26 @@ impl Select {
             }
         });
 
+        // Trigger rect recorded at draw time: the anchor source for
+        // programmatic opens (0296 — see SelectHandle's contract).
+        let last_rect = anchor_cell();
+        if let Some(h) = &self.handle {
+            if !disabled {
+                let open = open.clone();
+                let session = session.clone();
+                let last_rect = last_rect.clone();
+                h.wire(cx, move || {
+                    if session.borrow().popup.is_some() {
+                        return true; // already open counts as open
+                    }
+                    let Some(anchor) = last_rect.get() else {
+                        return false; // never painted: no honest anchor
+                    };
+                    open(anchor);
+                    session.borrow().popup.is_some()
+                });
+            }
+        }
         let access_options = options.clone();
         let access_placeholder = placeholder.clone();
         let mut el = Element::new()
@@ -384,6 +420,7 @@ impl Select {
                     .map(|o| o.label.clone())
                     .unwrap_or_else(|| access_placeholder.clone())
             })
+            .draw(move |_canvas, rect| last_rect.set(Some(rect)))
             .hover_signal(hovered)
             .focus_signal(focused);
         if !disabled {

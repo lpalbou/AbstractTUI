@@ -11,18 +11,28 @@
 //! token hex values, straight from the registry) and in-process splash
 //! frames (2D + 3D at t = 1.0 s) — no pty involved for those.
 //!
+//! A fourth family (`app_shots.rs`) renders the app-layer surfaces —
+//! streaming transcript + composer + completion, an open Select popup,
+//! a diff-tinted CodeView, a scrolled feed — fully IN PROCESS through
+//! `Driver` + `CaptureTerm`: fixed data, scripted input, no clocks, no
+//! pty — byte-deterministic.
+//!
 //! Usage:
 //!   cargo build --examples                    # shots run the built binaries
 //!   cargo run --example capture               # everything
 //!   cargo run --example capture -- themes     # just themes-table.md
 //!   cargo run --example capture -- splash     # just the splash frames
 //!   cargo run --example capture -- shots      # just the pty captures
+//!   cargo run --example capture -- apps       # just the in-process app shots
 //!
 //! Determinism: sizes, themes, and demo data are fixed (the dashboard
 //! honors `ABSTRACTTUI_FIXED_CLOCK`/`ABSTRACTTUI_START_THEME`); the one
 //! honest wobble is wall-clock frame pacing — a tick more or fewer of
 //! animated data between regenerations. Regenerate deliberately and
-//! diff by eye; these are documentation stills, not golden tests.
+//! diff by eye; these are documentation stills, not golden tests. The
+//! `apps` family has no wobble at all (headless, scripted, clockless).
+
+mod app_shots;
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -121,7 +131,7 @@ const SHOTS: &[Shot] = &[
         name: "gallery",
         example: "gallery",
         cols: 112,
-        rows: 32,
+        rows: 38,
         delay_ms: 1800,
         keys: "q",
         env: &[],
@@ -163,8 +173,13 @@ fn main() {
     if matches!(what.as_str(), "all" | "shots") {
         produced.extend(pty_shots(&out));
     }
+    if matches!(what.as_str(), "all" | "apps") {
+        produced.extend(app_shots::app_shots(&out));
+    }
     if produced.is_empty() {
-        eprintln!("capture: nothing produced (arg {what:?}; expected all|themes|splash|shots)");
+        eprintln!(
+            "capture: nothing produced (arg {what:?}; expected all|themes|splash|shots|apps)"
+        );
         std::process::exit(1);
     }
     // The manifest indexes the DIRECTORY, not this run — partial runs
@@ -432,7 +447,10 @@ fn write_manifest(out: &Path) {
          plain render (`.txt`) and a styled dump (`.styled.txt`: text plus style\n\
          runs). `themes-table.md` lists every registered theme's token values.\n\n\
          Sizes and demo data are fixed; wall-clock frame pacing may shift animated\n\
-         data by a tick between regenerations — regenerate deliberately, diff by eye.\n\n",
+         data by a tick between regenerations — regenerate deliberately, diff by eye.\n\
+         The app-surface stills (`transcript-stream`, `select-open`, `code-diff`,\n\
+         `feed-scrolled`) render in-process with scripted input and no clocks —\n\
+         those four are byte-deterministic.\n\n",
     );
     md.push_str("| artifact |\n|---|\n");
     for name in names {

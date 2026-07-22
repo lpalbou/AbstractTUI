@@ -49,3 +49,8 @@ pub use crate::{
     app::anchored::{AnchoredPanel, Completion, CompletionCandidate},
     widgets::{TextArea, TextAreaState},
 };
+
+// Live-capability view (0295/0685) + the select programmatic-open
+// handle (0296) — appended with their wave.
+pub use crate::app::select::SelectHandle;
+pub use crate::app::{current_caps, use_caps};

@@ -141,6 +141,17 @@ impl WindowsTerminal {
         }
     }
 
+    /// Prepend to the emergency restore bytes — teardown that must run
+    /// while the alternate screen is still active (the kitty keyboard
+    /// pop; see the unix twin for the per-screen-buffer rationale).
+    fn prepend_emergency_leave(extra: &[u8]) {
+        if let Ok(mut g) = EMERGENCY.lock() {
+            if let Some(s) = g.as_mut() {
+                s.leave_bytes.splice(0..0, extra.iter().copied());
+            }
+        }
+    }
+
     /// Per-instance wake channel: an unnamed auto-reset event. Auto-reset
     /// gives the coalescing contract for free — N `SetEvent`s between two
     /// waits satisfy exactly one wait.
@@ -520,6 +531,34 @@ impl Terminal for WindowsTerminal {
         } else {
             mode.disarm_bytes()
         })
+    }
+
+    fn set_kitty_keyboard(&mut self, flags: super::options::KittyFlags) -> Result<()> {
+        // Mirrors the unix backend: the accounting lives in the saved
+        // options, so leave pops what was pushed with zero extra state.
+        let Some(saved) = &mut self.saved else {
+            return Err(Error::Term(
+                "set_kitty_keyboard outside a session — enter() first".into(),
+            ));
+        };
+        let prev = saved.opts.kitty_keyboard;
+        if prev == flags {
+            return Ok(());
+        }
+        saved.opts.kitty_keyboard = flags;
+        let mut bytes = Vec::with_capacity(16);
+        if !prev.is_empty() {
+            bytes.extend_from_slice(super::options::KittyFlags::POP_BYTES);
+        }
+        if !flags.is_empty() {
+            bytes.extend_from_slice(&flags.push_bytes());
+        }
+        if prev.is_empty() && !flags.is_empty() {
+            // Panic-hook restore must pop while the alt screen is active
+            // (kitty stacks are per screen buffer).
+            Self::prepend_emergency_leave(super::options::KittyFlags::POP_BYTES);
+        }
+        self.write(&bytes)
     }
 
     // `cell_pixel_size` stays the default `None`: the console API exposes

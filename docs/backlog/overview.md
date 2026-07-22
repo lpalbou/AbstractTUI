@@ -21,10 +21,14 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | State | Count |
 | --- | --- |
 | Planned | 4 |
-| Proposed | 43 |
-| Completed | 14 |
+| Proposed | 61 |
+| Completed | 20 |
 | Deprecated | 0 |
 | Recurrent | 0 |
+
+(Counted from the filesystem 2026-07-22, fix wave cycle 3:
+`[0-9]*.md` files under planned/, proposed/, completed/. The wave moved
+0293/0295/0296 to completed/first-app/ and 0685 to completed/media-av/.)
 
 ## Topic tracks
 
@@ -37,6 +41,8 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | control-plane | `proposed/control-plane/` | Proposed | Making running apps observable and drivable from outside their own keyboard: lifecycle events, an automation bus + opt-in JSONL control server (MCP-bridgeable), declared-keys persistence with crash-resume, and headless serve with terminal attach/detach. |
 | extensions | `proposed/extensions/` | Proposed | Modularity architecture (two feature classes + the `abstracttui-*` sibling family, ADR-ready) and the diagram-class capability lane: core vector canvas + link-registration seam, node-graph widgets, mermaid subset, mdpad-reader enablement, and the standing web-rendering verdict. |
 | app-kits | `proposed/app-kits/` | Proposed | The application-kit layer over the content widgets: anchored-popup substrate + choice controls, form kit + wizard, rich data tables, chip/count vocabulary, navigation (sidebar + filter tabs), header/banners, tree view, split panes + panel rail — proven by three in-repo reference validators (admin console, setup wizard, triage shell). |
+| media-av | `proposed/media-av/` | Proposed | MEDIA's band (0600–0690): voice/AV UI plumbing (push-to-talk contract, meter/scope widgets, speaking highlight, external-process pattern, the no-audio mock demo) + image-path follow-ups from the study-2 truth audit (`reviews/study2/media-images-truth.md`). |
+| games | `proposed/games/` | Proposed | Retro-games feasibility band (0700–0790, `reviews/study2/field-games.md`): four general-need gaps a cell game exposes — key press/release state, public frame tasks + fixed-timestep helper, sprite/tile toolkit (masked blit, sheets, palette swap), board-grid math (square + hex). Audio defers to media-av; saves to control-plane 0340; strokes to extensions 0420. |
 
 ## Planned ledger
 
@@ -62,6 +68,8 @@ composer wave).
 | 0100 | `widgets::Feed` (keyed, windowed, streaming items) | completed/app-widgets/ |
 | 0110 | `md::StreamSession` (open-block-only re-parse, equivalence-pinned) | completed/app-widgets/ |
 | 0270 | Text selection + clipboard copy (all three tiers: bypass docs, mouse-capture suspend verb, screen-text selection + OSC 52) — completed 2026-07-22 | completed/first-app/ |
+| 0290 | UX footgun fixed: every selection copy ENDS the gesture (release-copy and mid-drag Enter/`c`/Ctrl+C clear the region with the copy) — post-copy keys reach the app immediately — completed 2026-07-22 | completed/first-app/ |
+| 0298 | P0 fixed: stale frame band after resize — `apply_resize` pairs prev-poison with `Presenter::invalidate()` so the post-resize frame re-anchors with absolute CUP; every resize×modal-close interleaving pinned vs a fresh-paint oracle — completed 2026-07-22 | completed/first-app/ |
 | 0120 | `widgets::TextArea` + `app::anchored` completion dropdown (0500's passive slice + `Overlays::top_z`) | completed/app-widgets/ |
 | 0130 | `Scroll::follow_tail` + measured content extent | completed/app-widgets/ |
 | 0220 | BUG fixed: autofocus in dyn_view regeneration panicked | completed/first-app/ |
@@ -69,14 +77,20 @@ composer wave).
 | 0240 | Footgun fixed: modal overflow crushed fixed rows (defaults + debug notice) | completed/first-app/ |
 | 0250 | Footgun fixed: `List::on_activate` per the 0250 ruling (selection follows movement; activation = Enter/Space/click-on-selected; bookkeeping-before-callbacks on List AND Table) — completed 2026-07-22 | completed/first-app/ |
 | 0500 | Anchored-popup substrate COMPLETE (owned + tooltip modes joined the shipped passive slice) + `Select`/`Combobox`/`MultiSelect` in `app::select` — completed 2026-07-22 | completed/app-kits/ |
+| 0293 | BUG fixed: kitty enter-flags now FOLLOW the probe (`Terminal::set_kitty_keyboard`, session-options accounting: leave pops, suspend/resume symmetric) + WezTerm claim evidence-gated — completed 2026-07-22 (fix wave cycle 3) | completed/first-app/ |
+| 0295 | `app::use_caps`/`current_caps` — the live post-probe capabilities signal (converged with media-av 0685); TextArea gained the universal Ctrl+J newline chord — completed 2026-07-22 (fix wave cycle 3) | completed/first-app/ |
+| 0296 | `SelectHandle` programmatic open on all three select faces (command-summoned pickers; last-painted-rect anchor, disposal-safe wiring) — completed 2026-07-22 (fix wave cycle 3) | completed/first-app/ |
+| 0685 | Probed-capabilities signal — discharged by first-app 0295 (one accessor, both consumers); images example's channel label truthful — completed 2026-07-22 (fix wave cycle 3) | completed/media-av/ |
 
 ## Proposed ledger
 
 | ID | Title | Track | Promotion trigger |
 | --- | --- | --- | --- |
-| 0040 | Connection lifecycle model + jittered reconnect/backoff | live-data | Starting the watcher (0060) or either port. |
+| 0040 | Connection lifecycle model + jittered reconnect/backoff | live-data | **Trigger has effectively fired** (dated evidence section in-item, 2026-07-22): the first consumer hand-rolled SSE + reconnect/backoff WITHOUT jitter; promotion to planned/ recommended at the next single-writer pass. |
 | 0050 | Transport story: HTTP/WebSocket/TLS dependency decision (first ADR) | live-data | Decide only after the watcher's evidence (0060); do not settle from the armchair. |
 | 0060 | Milestone: read-only multi-room watcher over the a2a hub (dogfood) | live-data | Maintainer green-light; validates 0010/0020/0040. Explicitly not-now. |
+| 0102 | `FeedBlock::Rich` — span-model feed lines (multi-ink without a custom block) | app-widgets | First transcript/log consumer mixing inks in one line (the first app already carries the ~137-line Card workaround); one block-vocabulary pass with 0660/0280. |
+| 0104 | `FeedState::sync` — diffing adapter from a slice source of truth | app-widgets | The second fold-shaped consumer (the first hand-rolls ~180 lines of fingerprint/mirror machinery). |
 | 0140 | Stateful cross-line lexers (python/js/toml) — diff lexer SHIPPED 2026-07-22 (`text::DiffLexer`, additive); stateful seam + language presets remain | app-widgets | A consumer needing real language tinting; the stateful-seam design note in the item gates python. |
 | 0160 | Content selection + copy — screen-level v1 SHIPPED via 0270; remaining scope = logical widget-content mapping (copy markdown source, unwrap soft-wraps) shared with 0148 | app-widgets | A consumer needing source-text copy (screen-text copy ships today). |
 | 0165 | Hyperlink/reference hit-testing through the event path | app-widgets | A dogfood app reaching its "activate a reference" phase. |
@@ -85,13 +99,14 @@ composer wave).
 | 0210 | EPIC: a2a chat TUI over the agora hub | ports | Its widget + live-data dependencies land (Feed + TextArea 0120 DONE; lifecycle 0040/0050 remain). |
 | 0260 | Disclosure widget: per-item fold/unfold for transcripts (maintainer ask) | first-app | Fold into Feed's item model (0100 shipped — extend), or standalone on a second consumer. |
 | 0280 | Feed custom blocks cannot host widgets; protocol images degrade to mosaic in Feed | first-app | Filed 2026-07-22 (0.2.0 adoption wave); design with Feed's item model + the 0144 protocol-images-in-flow question. |
-| 0290 | Selection region lingers after release-copy — `c`/Enter keep being swallowed | first-app | Filed 2026-07-22; small UX fix in app::selection claim rules. |
 | 0292 | Completion triggers fire on any mid-text token — no position policy (renumbered from 0300) | first-app | Filed 2026-07-22; add trigger-position policy to `Completion` (start-of-line/word options). |
 | 0294 | Anchored panel places short lists over the chrome below instead of flipping up (renumbered from 0310) | first-app | Filed 2026-07-22; placement scoring in `place_panel`. |
+| 0297 | Disposal safety engine-wide — 0250's ruling stopped at List/Table; Button's post-callback write remains | first-app | Filed 2026-07-22 (convergence cycle 2, FIELD §3.1); acceptance = the consumer deletes its one-tick retire deferral. |
 | 0142 | Markdown tables (GFM subset) — shares `solve_columns` with the Table widget | app-widgets | mdpad-class reader green-light, or chat messages needing tables. |
 | 0144 | Markdown images — in-flow mosaic rendering, lazy decode | app-widgets | mdpad-class reader green-light; protocol-images-in-flow deferred by design. |
 | 0146 | Heading anchors + TOC extraction (`md::outline`) | app-widgets | mdpad-class reader; 0165 consumes the anchor ids. |
 | 0148 | Search-highlight overlay (shares the text↔cells mapping with 0160) | app-widgets | A reader/console reaching its find-in-content phase. |
+| 0190 | Time-axis charts + history windows (`TimeSeries` model) | app-widgets | First production-monitor consumer, or the dashboard example graduating from its hand-rolled ring (filed 2026-07-22, FIELD class-5 gap). |
 | 0300 | App lifecycle events (boot/ready/resize/caps/focus/suspend/resume/quit + custom) — the band foundation | control-plane | Scheduling any of 0310/0340/0350, or the first app needing suspend/flush hooks. |
 | 0310 | Automation bus: inject input, query semantic tree + screen text, invoke named actions, subscribe to events | control-plane | 0300 + a driving consumer (port harness, embedder, or 0320). |
 | 0320 | JSONL control protocol + opt-in serve seam (default-OFF `control-server` feature; socket perms = auth) | control-plane | 0310 + the JSON-promotion precondition (with extensions 0410); closes only with the protocol ADR. |
@@ -117,32 +132,62 @@ composer wave).
 | 0570 | Tree view (outline/file-tree; Role variants ride the 0.2 batch) | app-kits | Triage-shell outline or a file-manager consumer. |
 | 0580 | Split panes + collapsible panel rail | app-kits | Triage-shell validator. |
 | 0590 | Reference validators: admin console, setup wizard, triage shell (in-repo; no item completes unvalidated) | app-kits | Grows a slice with each landing app-kits item. |
+| 0610 | Push-to-talk input contract (consumes games/0700; latch fallback on legacy wires) | media-av | A voice app's mic phase, with 0700. |
+| 0620 | `widgets::Meter` + `widgets::AudioScope` (ballistics, dB, theme zones over the chart substrate) | media-av | Any voice app or level-bar dashboard (0650 counts). |
+| 0630 | Speaking-highlight primitive (Signal<Range> → cells; shares 0148/0160's text↔cells mapping) | media-av | A voice-reader consumer; builds WITH the 0148 substrate. |
+| 0640 | External audio-process lifecycle pattern (docs + example; verified no engine code needed) | media-av | Ships with 0650 or the first voice app. |
+| 0650 | `examples/voice-mock.rs` — no-audio, no-network demo of 0610/0620/0630/0640 | media-av | The voice items' validation vehicle. |
+| 0660 | Images inside Feed/Markdown via protocol placement (rect-follow, clip, eviction) | media-av | A feed with image attachments, or app-widgets 0144. |
+| 0665 | Animated image sessions (kitty a=f zero-steady-state-bytes; labeled timer fallback) | media-av | An animated-content consumer; decoder dep needs a ruling. |
+| 0670 | Cell-pixel-size refresh on resize (font zoom re-scales sixel/3D) | media-av | First sixel field report or the next driver-images wave. |
+| 0675 | Scroll shift × live images: kitty re-place restores the scroll byte win (plain-diff guard shipped 2026-07-22) | media-av | A log app keeping a persistent image. |
+| 0680 | Sixel bottom-row honesty: last-row clamp + DECSET 8452 probe | media-av | First sixel validation pass of the images-truth recipe. |
+| 0688 | Detection/transport robustness: strict kitty-probe reply parse; >1 MiB single-frame payloads under tmux (iTerm2 multipart; sixel labeled refusal) | media-av | Next caps/probe wave or a tmux+iTerm2 field report. |
+| 0700 | Key press/release state: held keys as a first-class input fact | games | First real-time game example, or media-av 0610's push-to-talk phase — whichever moves first. Fidelity prerequisite DISCHARGED 2026-07-22: first-app 0293 shipped (the flags push now reaches probe-proven terminals). |
+| 0710 | Game tick: public per-frame tasks + fixed-timestep helper | games | First real-time game example, or the second in-tree consumer hand-rolling an `after`-recursion clock (effects example is the first). |
+| 0720 | Sprite/tile toolkit: masked blit, sprite sheets, cell-art palette swap | games | First game example reaching its render phase, or a second consumer hand-rolling cell-by-cell sprite copies. |
+| 0730 | Board-grid math: square + hex coordinates, range, line, aspect-corrected projection | games | First grid-mapped surface in any dogfood app or game example. Placement (core vs sibling) routes through extensions 0400's classification. |
 
 ## Next recommended work
 
-(Updated 2026-07-21 after the Content + Live-data wave and the three-track
-study. The former #1/#2 recommendations — 0100 and the live-data chain —
-are DONE.)
+(Updated 2026-07-22, cycle-3 synthesis. Evidence base: the six study-2
+reports in `reviews/study2/`; full three-horizon plan with efforts in
+`reviews/study2/ACTION-PLAN.md`. The former list is discharged: 0120, the
+0.2 budget batch, and 0500 are DONE; 0300 moves to the horizon-3 queue
+(control-plane) — still the band foundation, no longer ahead of the
+consumer-earned items below.)
 
-1. ~~**0120 (TextArea)**~~ — DONE 2026-07-22 (with 0500's passive-panel
-   substrate slice + `Overlays::top_z`). Both port epics now have their
-   full widget dependency set.
-2. ~~**The 0.2 budget batch**~~ — RETIRED 2026-07-22: the 0.2 window was
-   spent by the 0.2.0 release. What shipped additively since:
-   `Overlays::top_z` (0120), `TextInput::masked` + 0250's ruling fix +
-   0180's MSRV/CI honesty (the 0.2.1 wave). What remains BREAKING moved
-   to the 0.3 budget document (`planned/0002_the_0_3_breaking_budget.md`,
-   maintainer-gated): `Role` non_exhaustive + end-appended variants,
-   `TokenKind` non_exhaustive, `Scroll::content_size` deprecation. The
-   subtree focus step (0510's engine delta) is additive and rides the
-   form kit.
-3. **0300 (lifecycle events)** — the control-plane band's foundation;
-   cheap, additive, and everything agent-facing (0310-0360) consumes it.
-   NOTE: control-plane band ids 0300-0390 are distinct from first-app's
-   renumbered field reports (0292/0294 stay below 0300).
-4. ~~**0500 (popup substrate + selects)**~~ — DONE 2026-07-22 (owned +
-   tooltip modes, `app::select` family, gallery + wave coverage). The
-   app-kits trunk is in: 0510/0520/0530 consumers are unblocked.
+1. **The 0.2.2 patch (shipping now)** — the image-lifecycle fixes (five
+   bug classes, `reviews/study2/media-images-truth.md`, adversarially
+   re-reviewed in `quality-on-media.md`) + first-app
+   0290/0293/0295/0296/0298. WHY: 0290 has NO app-side workaround (the
+   selection layer eats `c`/Enter before dispatch), and 0293 heads the
+   key-state chain while fixing Shift+Enter on the majority macOS
+   terminals. (Progress 2026-07-22, fix wave cycle 3: 0293/0295/0296 —
+   and media-av 0685 with them — are DONE; 0290/0298 remain this
+   patch's open items.)
+2. **0102 `FeedBlock::Rich` + 0104 `FeedState::sync`** — WHY: the first
+   consumer's #1 tension and its twin (~137-line Card system + ~180-line
+   sync machinery, `field-consumer-tensions.md` §4.1/§3.6); additive;
+   unblocks the log/chat/entity classes (`field-app-classes.md` classes
+   3/5). One block-vocabulary pass with 0280/0660 — the enum grows once.
+3. **0040 promotion (jittered reconnect)** — WHY: the trigger fired with
+   two studies' evidence — the consumer hand-rolled SSE +
+   reconnect/backoff WITHOUT jitter (`field-consumer-tensions.md` §3.5)
+   and entity monitors multiply it (`field-app-classes.md` class 4);
+   dated evidence section in-item.
+4. **0297 disposal law engine-wide** — WHY: tension #2
+   (`field-consumer-tensions.md` §3.1) — Button's post-callback write
+   forces a one-tick retire deferral in every modal-closing consumer;
+   acceptance = the consumer deletes it.
+5. **0700 key press/release state** — WHY: the games+voice shared
+   primitive (`field-games.md` §2, `media-voice-plumbing.md` §2), now
+   unblocked by 0293 in the patch; real-time games stay blocked until it
+   lands.
+6. **The 0.3 budget execution when the maintainer signs**
+   (`planned/0002`) — WHY: Role/TokenKind `non_exhaustive` +
+   `content_size` deprecation batch in one window; the semver CI gate
+   enforces additive-only meanwhile.
 
 ## Sequencing (load-bearing)
 
@@ -185,6 +230,24 @@ are DONE.)
 - **Sibling extension crates inherit the dependency posture** (std +
   abstracttui + hand-rolled parsing); the TLS-class exception is not
   granted here — it rides live-data 0050's transport ADR.
+- **The key-state chain (convergence cycle 2)**: first-app 0293 (push
+  kitty flags after the probe proves the protocol) → games 0700 (the
+  key press/release state service + fidelity honesty) → media-av 0610
+  (push-to-talk consumes it). 0700's service lands independently but
+  runs repeat-approximated on iTerm2/VS Code/Warp until 0293; 0610
+  adds no key-state machinery of its own. **Chain head SHIPPED
+  2026-07-22 (fix wave cycle 3)**: 0293 is completed —
+  `REPORT_EVENT_TYPES` now reaches probe-proven terminals, so 0700
+  starts unblocked at full fidelity.
+- **The Feed-block family (convergence cycle 2)**: app-widgets 0102
+  (`FeedBlock::Rich`), media-av 0660 (images in Feed), and first-app
+  0280 (widget-hosting blocks) all extend the same `FeedBlock` enum —
+  one block-vocabulary design pass, owned by whichever executes first,
+  reviewed by the other two; the enum grows once.
+- **0730's home is a 0400 classification** (core module vs a
+  games-domain sibling crate) — the item argues both precedents
+  (0420-core vs 0440-sibling-layout) and promotes only with a recorded
+  ruling.
 - **Same-z Modal stacking hazard (0500 follow-up 2, verified in code
   2026-07-22)**: two `Modal::open` calls both mount at `MODAL_Z =
   1000`; paint order is stable ascending-z (ties keep mount order —
@@ -218,6 +281,7 @@ persistence-container ADR**, and the **0050 transport ADR** (waits on
 - Deprecation: append a `## Deprecation report` with the reason, move to
   `deprecated/`, update this overview.
 - Bands: live-data owns 0010–0090, app-widgets owns 0100–0190, ports own
-  0200–0290 (0200/0210 = port epics; 0220–0260 = first-app findings),
+  0200–0290 (0200/0210 = port epics; 0220–0298 = first-app findings),
   control-plane owns 0300–0390, extensions owns 0400–0490, app-kits owns
-  0500–0590. Leave gaps for insertion.
+  0500–0590, media-av owns 0600–0690, games owns 0700–0790. Leave gaps
+  for insertion.

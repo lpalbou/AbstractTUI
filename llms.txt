@@ -66,10 +66,11 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, 0.2.1 (2026-07-22) the current one.
-- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,440 tests) and the two
-  explicitly-run suites (live pty, perf budgets), golden snapshots, lint gates, the strict
-  module layering rule, code conventions, and how to add a widget or a theme.
+  (2026-07-21) is the first public release, 0.2.2 (2026-07-22) the current one.
+- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,440 tests) and the
+  explicitly-run suites (live pty, two release-mode perf-budget suites), golden snapshots,
+  lint gates, the strict module layering rule, code conventions, and how to add a widget
+  or a theme.
 - [Security policy](SECURITY.md): Private reporting (contact@abstractframework.ai); the
   untrusted-input scope (terminal bytes, PNG/JPEG, GLB, markdown) — any panic, unbounded
   allocation, or hang on crafted input is treated as a vulnerability-class bug.
@@ -92,5 +93,7 @@
   requirements; every one exits cleanly without a tty, and `dashboard`/`viewer3d`/`images`
   take `--caps`.
 - [docs/captures/](docs/captures/): Deterministic text "screenshots" of the shipped
-  examples (plain and style-annotated), plus `themes-table.md` — every token hex value of
-  all 26 themes; regenerable with `cargo run --example capture`.
+  examples (plain and style-annotated) and clockless in-process stills of the app-layer
+  surfaces (streaming transcript with completion open, open Select popup, diff-tinted
+  code, scrolled feed), plus `themes-table.md` — every token hex value of all 26 themes;
+  regenerable with `cargo run --example capture`.

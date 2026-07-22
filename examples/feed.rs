@@ -22,16 +22,16 @@
 //! - events/sec is sampled by `reactive::interval` — the cancellable
 //!   recurring timer (fixed-delay, no catch-up storms).
 //!
-//! Follow-tail is the ENGINE's (`Scroll::follow_tail`, landed this
-//! wave): while following, the offset pins to the bottom across
-//! appends and resizes; scrolling up releases it; reaching the bottom
-//! (or pressing f) re-arms it. The content extent is MEASURED — no
-//! size hint, no rebuild-per-append: Feed's content-sized mode answers
-//! the solver reactively. (One interim remains: the slot-keyed window
-//! sync below becomes `FeedState::clear()` + re-push when that lands
-//! from CONTENT; keyed replace is today's equivalent.)
+//! Follow-tail is the ENGINE's (`Scroll::follow_tail`): while
+//! following, the offset pins to the bottom across appends and
+//! resizes; scrolling up releases it; reaching the bottom (or pressing
+//! f) re-arms it. The content extent is MEASURED — no size hint, no
+//! rebuild-per-append: Feed's content-sized mode answers the solver
+//! reactively. (`FeedState::clear()` + re-push is the simpler window
+//! sync; the slot-keyed replace below re-typesets only the slots whose
+//! content actually changed.)
 //!
-//! Selection is the ENGINE's (screen-text selection, landed with 0270):
+//! Selection is the ENGINE's (screen-text selection, backlog 0270):
 //! this demo enables always-on drag select — drag paints the highlight
 //! (clamped to the pane under the anchor, so the border never leaks
 //! into a copy), releasing (or c/Enter) copies the text via OSC 52,
@@ -70,8 +70,10 @@ fn main() -> abstracttui::base::Result<()> {
     }
     // Engine screen-text selection (0270 tier 3), always-on: left-drag
     // has no other meaning in this app, so select mode simply stays
-    // enabled. Drag → highlight, release/c/Enter → OSC 52 copy, Esc or
-    // click → clear; wheel scroll routes normally throughout.
+    // enabled. Drag → highlight, release (or c/Enter mid-drag) → OSC 52
+    // copy AND clear (every copy ends the gesture — 0290: keys route to
+    // the app again immediately); Esc cancels without copying; wheel
+    // scroll routes normally throughout.
     selection().set_enabled(true);
 
     let stop = Arc::new(AtomicBool::new(false));
@@ -93,8 +95,8 @@ fn main() -> abstracttui::base::Result<()> {
         // The Feed: keyed rich items, windowed paint. The bounded
         // window syncs into slot keys ("slot-0".."slot-399"), so the
         // Feed holds at most WINDOW items — bounded end to end.
-        // (Cycle-3 swap: FeedState::clear() + re-push, CONTENT's
-        // suggested pairing; keyed replace is today's equivalent.)
+        // (FeedState::clear() + re-push is the simpler sync; slot-keyed
+        // replace re-typesets only the slots whose content changed.)
         let feed = FeedState::new(cx);
         let feed_sync = feed.clone();
         cx.effect_labeled("feed-window-sync", move || {

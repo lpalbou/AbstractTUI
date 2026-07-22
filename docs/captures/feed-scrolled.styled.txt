@@ -1,0 +1,115 @@
+size=84x22 cursor=0,21 modes=[7,1002,1004,1006,1049,2004]
+  0|╭ events ──────────────────────────────────────────────────────────────────────────╮|
+  1|│12:04:56 worker-2 event 8 — payload accepted                                     ││|
+  2|│12:04:03 worker-0 event 9 — payload accepted                                     ││|
+  3|│12:05:10 worker-1 event 10 — payload accepted                                    ││|
+  4|│12:05:17 worker-2 event 11 — payload accepted                                    ││|
+  5|│12:06:24 worker-0 event 12 — payload accepted                                    ┃│|
+  6|│12:06:31 worker-1 event 13 — payload accepted                                    ┃│|
+  7|│12:07:38 worker-2 event 14 — payload accepted                                    ┃│|
+  8|│12:07:45 worker-0 event 15 — payload accepted                                    ┃│|
+  9|│12:08:52 worker-1 event 16 — payload accepted                                    ┃│|
+ 10|│12:08:59 worker-2 event 17 — payload accepted                                    ┃│|
+ 11|│12:09:06 worker-0 event 18 — payload accepted                                    ┃│|
+ 12|│12:09:13 worker-1 event 19 — payload accepted                                    ┃│|
+ 13|│12:10:20 worker-2 event 20 — payload accepted                                    ┃│|
+ 14|│12:10:27 worker-0 event 21 — payload accepted                                    ┃│|
+ 15|│12:11:34 worker-1 event 22 — payload accepted                                    ││|
+ 16|│12:11:41 worker-2 event 23 — payload accepted                                    ││|
+ 17|│12:12:48 worker-0 event 24 — payload accepted                                    ││|
+ 18|│12:12:55 worker-1 event 25 — payload accepted                                    ││|
+ 19|│12:13:02 worker-2 event 26 — payload accepted                                    ││|
+ 20|╰──────────────────────────────────────────────────────────────────────────────────╯|
+ 21|scrolled (f to re-follow)                                                           |
+styles:
+  0:0..1 fg=#3c3c4d bg=#16213e
+  0:1..9 fg=#aaaaaa bg=#16213e
+  0:9..84 fg=#3c3c4d bg=#16213e
+  1:0..1 fg=#3c3c4d bg=#16213e
+  1:1..45 fg=#eeeeee bg=#16213e
+  1:45..82 fg=#16213e bg=#16213e
+  1:82..84 fg=#3c3c4d bg=#16213e
+  2:0..1 fg=#3c3c4d bg=#16213e
+  2:1..45 fg=#eeeeee bg=#16213e
+  2:45..82 fg=#16213e bg=#16213e
+  2:82..84 fg=#3c3c4d bg=#16213e
+  3:0..1 fg=#3c3c4d bg=#16213e
+  3:1..46 fg=#eeeeee bg=#16213e
+  3:46..82 fg=#16213e bg=#16213e
+  3:82..84 fg=#3c3c4d bg=#16213e
+  4:0..1 fg=#3c3c4d bg=#16213e
+  4:1..46 fg=#eeeeee bg=#16213e
+  4:46..82 fg=#16213e bg=#16213e
+  4:82..84 fg=#3c3c4d bg=#16213e
+  5:0..1 fg=#3c3c4d bg=#16213e
+  5:1..46 fg=#eeeeee bg=#16213e
+  5:46..82 fg=#16213e bg=#16213e
+  5:82..83 fg=#aaaaaa bg=#16213e
+  5:83..84 fg=#3c3c4d bg=#16213e
+  6:0..1 fg=#3c3c4d bg=#16213e
+  6:1..46 fg=#eeeeee bg=#16213e
+  6:46..82 fg=#16213e bg=#16213e
+  6:82..83 fg=#aaaaaa bg=#16213e
+  6:83..84 fg=#3c3c4d bg=#16213e
+  7:0..1 fg=#3c3c4d bg=#16213e
+  7:1..46 fg=#eeeeee bg=#16213e
+  7:46..82 fg=#16213e bg=#16213e
+  7:82..83 fg=#aaaaaa bg=#16213e
+  7:83..84 fg=#3c3c4d bg=#16213e
+  8:0..1 fg=#3c3c4d bg=#16213e
+  8:1..46 fg=#eeeeee bg=#16213e
+  8:46..82 fg=#16213e bg=#16213e
+  8:82..83 fg=#aaaaaa bg=#16213e
+  8:83..84 fg=#3c3c4d bg=#16213e
+  9:0..1 fg=#3c3c4d bg=#16213e
+  9:1..46 fg=#eeeeee bg=#16213e
+  9:46..82 fg=#16213e bg=#16213e
+  9:82..83 fg=#aaaaaa bg=#16213e
+  9:83..84 fg=#3c3c4d bg=#16213e
+  10:0..1 fg=#3c3c4d bg=#16213e
+  10:1..46 fg=#eeeeee bg=#16213e
+  10:46..82 fg=#16213e bg=#16213e
+  10:82..83 fg=#aaaaaa bg=#16213e
+  10:83..84 fg=#3c3c4d bg=#16213e
+  11:0..1 fg=#3c3c4d bg=#16213e
+  11:1..46 fg=#eeeeee bg=#16213e
+  11:46..82 fg=#16213e bg=#16213e
+  11:82..83 fg=#aaaaaa bg=#16213e
+  11:83..84 fg=#3c3c4d bg=#16213e
+  12:0..1 fg=#3c3c4d bg=#16213e
+  12:1..46 fg=#eeeeee bg=#16213e
+  12:46..82 fg=#16213e bg=#16213e
+  12:82..83 fg=#aaaaaa bg=#16213e
+  12:83..84 fg=#3c3c4d bg=#16213e
+  13:0..1 fg=#3c3c4d bg=#16213e
+  13:1..46 fg=#eeeeee bg=#16213e
+  13:46..82 fg=#16213e bg=#16213e
+  13:82..83 fg=#aaaaaa bg=#16213e
+  13:83..84 fg=#3c3c4d bg=#16213e
+  14:0..1 fg=#3c3c4d bg=#16213e
+  14:1..46 fg=#eeeeee bg=#16213e
+  14:46..82 fg=#16213e bg=#16213e
+  14:82..83 fg=#aaaaaa bg=#16213e
+  14:83..84 fg=#3c3c4d bg=#16213e
+  15:0..1 fg=#3c3c4d bg=#16213e
+  15:1..46 fg=#eeeeee bg=#16213e
+  15:46..82 fg=#16213e bg=#16213e
+  15:82..84 fg=#3c3c4d bg=#16213e
+  16:0..1 fg=#3c3c4d bg=#16213e
+  16:1..46 fg=#eeeeee bg=#16213e
+  16:46..82 fg=#16213e bg=#16213e
+  16:82..84 fg=#3c3c4d bg=#16213e
+  17:0..1 fg=#3c3c4d bg=#16213e
+  17:1..46 fg=#eeeeee bg=#16213e
+  17:46..82 fg=#16213e bg=#16213e
+  17:82..84 fg=#3c3c4d bg=#16213e
+  18:0..1 fg=#3c3c4d bg=#16213e
+  18:1..46 fg=#eeeeee bg=#16213e
+  18:46..82 fg=#16213e bg=#16213e
+  18:82..84 fg=#3c3c4d bg=#16213e
+  19:0..1 fg=#3c3c4d bg=#16213e
+  19:1..46 fg=#eeeeee bg=#16213e
+  19:46..82 fg=#16213e bg=#16213e
+  19:82..84 fg=#3c3c4d bg=#16213e
+  20:0..84 fg=#3c3c4d bg=#16213e
+  21:0..84 fg=#eeeeee bg=#1a1a2e

@@ -99,6 +99,15 @@ pub struct Driver {
     pub(super) caps: Capabilities,
     present_caps: PresentCaps,
     probe: Option<ActiveProbe>,
+    /// Kitty keyboard flags the session currently has pushed (enter-time
+    /// value, updated when the probe upgrade pushes them — 0293). Only
+    /// meaningful with `kitty_auto`.
+    kitty_flags: KittyFlags,
+    /// The enter options were DERIVED from capabilities (`cfg.enter` was
+    /// `None`), so the driver owns the kitty keyboard posture and may
+    /// upgrade it when the probe proves the protocol. An explicit
+    /// `RunConfig::enter` is the embedder's exact posture: never touched.
+    kitty_auto: bool,
     comp: Compositor,
     diff: FrameDiff,
     presenter: Presenter,
@@ -112,6 +121,11 @@ pub struct Driver {
     /// presenter custody AFTER the cell runs (§6: cells first, protocol
     /// payloads second, ONE flush).
     pub(super) pending_image_bytes: Vec<(Vec<u8>, Point)>,
+    /// Image-ladder degradation labels awaiting the notices lane
+    /// (phase U owns signal writes; D2 only queues). Deduped via
+    /// `image_notice_seen` — one line per DISTINCT warning per run.
+    pub(super) pending_image_notices: Vec<String>,
+    pub(super) image_notice_seen: std::collections::HashSet<String>,
     frame: Surface,
     prev: Surface,
     size: Size,
@@ -156,6 +170,7 @@ impl Driver {
     /// the first `turn` does, from the mount-time damage.
     pub fn new(app: &mut App, term: &mut dyn Terminal, cfg: RunConfig) -> Result<Driver> {
         let caps = cfg.caps.unwrap_or_else(Capabilities::detect_env);
+        let kitty_auto = cfg.enter.is_none();
         let enter = cfg.enter.unwrap_or_else(|| EnterOptions {
             kitty_keyboard: if caps.kitty_keyboard {
                 KittyFlags::standard()
@@ -169,6 +184,9 @@ impl Driver {
         // Through App::set_viewport, never tree-direct: App::viewport()
         // must stay truthful (RT2-9).
         app.set_viewport(size);
+        // Publish the env-pass capabilities into the reactive view
+        // (`app::use_caps`, 0295/0685); probe folds upgrade it later.
+        super::caps::publish_caps(&caps);
 
         // Cross-thread wakeups: posted jobs and frame requests interrupt
         // the blocking read. A terminal without a waker (scripted tests)
@@ -204,6 +222,8 @@ impl Driver {
         Ok(Driver {
             reader: EventReader::new(),
             present_caps: present_caps_from(&caps),
+            kitty_flags: enter.kitty_keyboard,
+            kitty_auto,
             caps,
             probe,
             comp: Compositor::new(),
@@ -212,6 +232,8 @@ impl Driver {
             overlays,
             image_session: ImageSession::new(),
             pending_image_bytes: Vec::new(),
+            pending_image_notices: Vec::new(),
+            image_notice_seen: std::collections::HashSet::new(),
             frame: Surface::new(size, blank),
             prev: Surface::new(size, blank),
             size,
@@ -277,7 +299,7 @@ impl Driver {
             if now >= deadline {
                 self.probe_grace = None;
                 if self.probe.take().is_some() {
-                    self.apply_caps_upgrade(app);
+                    self.apply_caps_upgrade(app, term);
                 }
             }
         }
@@ -294,7 +316,7 @@ impl Driver {
         let pending: Vec<Event> = self.pending.drain(..).collect();
         for ev in pending {
             events += 1;
-            self.handle_event(app, ev, &mut quit);
+            self.handle_event(app, term, ev, &mut quit);
         }
         // Drain whatever is immediately available in ONE burst
         // (`poll_many` with an elapsed deadline = non-blocking drain;
@@ -320,7 +342,7 @@ impl Driver {
         coalesce_moves(&mut burst);
         for ev in burst.drain(..) {
             events += 1;
-            self.handle_event(app, ev, &mut quit);
+            self.handle_event(app, term, ev, &mut quit);
         }
         self.burst = burst;
         if app.quit_requested() {
@@ -352,6 +374,15 @@ impl Driver {
         // the app here (phase U owns signal writes). The notices lane is
         // the in-session surface; stderr waits until teardown.
         for note in self.collapse_pending.drain(..) {
+            if self.collapse_log.len() < 64 {
+                self.collapse_log.push(note.clone());
+            }
+            app.push_startup_notice(note);
+        }
+        // Image-ladder degradation labels (queued by phase D2, deduped
+        // there): the charter says degradations are labeled, never
+        // silent — the driver used to drop these on the floor.
+        for note in self.pending_image_notices.drain(..) {
             if self.collapse_log.len() < 64 {
                 self.collapse_log.push(note.clone());
             }
@@ -411,6 +442,12 @@ impl Driver {
         // runs (the overlay borrow rule); overlay content paints next.
         let viewport = Rect::from_size(self.size);
         let mut damage = app.tree().take_damage();
+        // Image placements vacated since last frame (moved / removed /
+        // channel-switched) fold their rects into THIS frame's damage so
+        // the tree repaints them from truth, and poison `prev` where the
+        // terminal holds pixels the cell model cannot see (details in
+        // driver_images.rs).
+        self.pre_image_pass(&mut damage);
         coalesce_damage(&mut damage, viewport);
         let mut root_surface = self.steal_root_surface();
         {
@@ -472,10 +509,24 @@ impl Driver {
         // one vertical band shift, the terminal scrolls (DECSTBM+SU/SD,
         // ~8-9x fewer bytes on list/log workloads) and only residuals
         // repaint; detection declining yields plain-compute bytes.
+        //
+        // Byte-channel image guard (MEDIA study 2): terminals scroll
+        // protocol images WITH the text (the kitty spec mandates it;
+        // sixel pixels scroll on xterm-class emulators), which would
+        // move terminal-held placements out from under the session's
+        // bookkeeping. While such images are live, take the plain diff —
+        // correct pixels over the byte win.
         self.out.clear();
-        let runs = self
-            .diff
-            .compute_scrolled(&self.prev, &self.frame, &self.scratch_damage);
+        let runs = if self.image_session.live_byte_slots() > 0 {
+            crate::render::ScrolledRuns::plain(self.diff.compute(
+                &self.prev,
+                &self.frame,
+                &self.scratch_damage,
+            ))
+        } else {
+            self.diff
+                .compute_scrolled(&self.prev, &self.frame, &self.scratch_damage)
+        };
         self.presenter
             .emit_scrolled(runs, &self.frame, &self.present_caps, &mut self.out);
         // Protocol payloads AFTER cell runs, through presenter custody
@@ -554,15 +605,31 @@ impl Driver {
         term.leave()
     }
 
-    fn handle_event(&mut self, app: &mut App, event: Event, quit: &mut bool) {
+    fn handle_event(
+        &mut self,
+        app: &mut App,
+        term: &mut dyn Terminal,
+        event: Event,
+        quit: &mut bool,
+    ) {
         match event {
             Event::Resize(size) => self.apply_resize(app, size),
             Event::CapsReply(reply) => {
                 if let Some(probe) = &mut self.probe {
-                    if probe.on_reply(&reply, &mut self.caps) {
+                    // Every fold that CHANGED a capability reaches the
+                    // reactive view immediately (0295/0685) — partial
+                    // probes (a terminal that never answers DA1) still
+                    // surface what they proved. Emission-strategy
+                    // upgrades stay gated on probe completion below.
+                    let before = self.caps.clone();
+                    let done = probe.on_reply(&reply, &mut self.caps);
+                    if self.caps != before {
+                        super::caps::publish_caps(&self.caps);
+                    }
+                    if done {
                         self.probe = None;
                         self.probe_grace = None;
-                        self.apply_caps_upgrade(app);
+                        self.apply_caps_upgrade(app, term);
                     } else if probe.sentinel_passed()
                         && probe.awaiting_wrapped()
                         && self.probe_grace.is_none()
@@ -594,8 +661,16 @@ impl Driver {
                 {
                     SelectionAct::Pass => {}
                     SelectionAct::Consumed => return,
-                    SelectionAct::Copy => {
-                        self.queue_selection_copy(app);
+                    SelectionAct::Copy(region) => {
+                        // The act CARRIES the region because a copy ENDS
+                        // the gesture (backlog 0290): the selection layer
+                        // consumed its own state before answering, so a
+                        // region can never linger to swallow the app's
+                        // next Enter/`c` keystrokes (the composer
+                        // footgun). Extraction reads the last composed
+                        // frame — exactly what the highlight showed.
+                        let text = super::selection::extract_text(&self.frame, &region);
+                        self.queue_clipboard_text(app, &text);
                         return;
                     }
                 }
@@ -658,6 +733,18 @@ impl Driver {
         // the diff re-emits every cell of the next frame instead of
         // trusting a model of a screen that no longer exists.
         self.poison_prev();
+        // The CURSOR is as unknowable as the content: emulators move the
+        // physical cursor with the reflowed line (macOS Terminal anchored
+        // it to the bottom in the 0298 field incident), so the parked
+        // virtual cursor is a ghost now. Poisoning `prev` re-emits every
+        // CELL, but the first run would still be PLACED by relative
+        // motion from that ghost — offsetting the entire frame and
+        // leaving a stale band where the old frame peeked out (backlog
+        // 0298). Invalidate the presenter so the post-resize frame
+        // re-anchors with absolute CUP and a reset-based SGR. Both
+        // halves of "the screen is unknown" belong together: cells
+        // (poison) and cursor/pen (invalidate).
+        self.presenter.invalidate();
         // Through App::set_viewport (RT2-9: tree-direct left
         // App::viewport() reporting the stale size forever).
         app.set_viewport(size);
@@ -666,7 +753,26 @@ impl Driver {
     /// Capability upgrade (probe completed): emission strategy changed
     /// (color depth, sync brackets, graphics channel), so the next frame
     /// must re-present everything even though the scene is unchanged.
-    fn apply_caps_upgrade(&mut self, _app: &mut App) {
+    /// Also the kitty enter-flags moment (0293): a probe that PROVED the
+    /// keyboard protocol on a terminal the env pass could not claim
+    /// pushes the standard flags now — Shift+Enter-class chords start
+    /// working on iTerm2 ≥ 3.5, VS Code/Cursor, and Warp without a
+    /// restart. The terminal's session bookkeeping owns the pop (leave
+    /// pops the entry; suspend pops and re-pushes symmetrically).
+    fn apply_caps_upgrade(&mut self, app: &mut App, term: &mut dyn Terminal) {
+        if self.kitty_auto && self.kitty_flags.is_empty() && self.caps.kitty_keyboard {
+            let flags = KittyFlags::standard();
+            // Flush immediately: a kitty-only upgrade may not render a
+            // frame this turn, and unflushed flags on an idle app would
+            // arm the protocol arbitrarily late.
+            match term.set_kitty_keyboard(flags).and_then(|()| term.flush()) {
+                Ok(()) => self.kitty_flags = flags,
+                Err(e) => app.push_startup_notice(format!(
+                    "kitty keyboard: probe proved support but the flags push \
+                     is unavailable ({e})"
+                )),
+            }
+        }
         let fresh = present_caps_from(&self.caps);
         if fresh != self.present_caps {
             self.present_caps = fresh;
@@ -691,15 +797,6 @@ impl Driver {
     pub fn set_mouse_reporting(&mut self, term: &mut dyn Terminal, on: bool) -> Result<()> {
         term.set_mouse_reporting(on)?;
         term.flush()
-    }
-
-    /// Extract the active selection's screen text and queue its OSC 52
-    /// payload (release or copy-key path).
-    fn queue_selection_copy(&mut self, app: &mut App) {
-        if let Some(region) = self.selection.active_region() {
-            let text = super::selection::extract_text(&self.frame, &region);
-            self.queue_clipboard_text(app, &text);
-        }
     }
 
     /// Queue one OSC 52 clipboard write for presenter-custody emission.
@@ -729,10 +826,20 @@ impl Driver {
     /// pair does the work (alpha 7 never occurs: ui colors are opaque or
     /// fully transparent by convention).
     fn poison_prev(&mut self) {
+        self.poison_prev_rect(Rect::from_size(self.size));
+    }
+
+    /// Poison one region of the previous-frame model: the next diff
+    /// re-emits every cell there even when the model believes them
+    /// unchanged. Used whole-screen on resize/caps upgrade and per-rect
+    /// when a cursor-paint image (iTerm2/sixel) vacates cells the model
+    /// never saw painted over (driver_images pass A).
+    pub(super) fn poison_prev_rect(&mut self, rect: Rect) {
         let poison = Cell::EMPTY
             .with_fg(crate::base::Rgba::new(1, 2, 3, 7))
             .with_bg(crate::base::Rgba::new(3, 2, 1, 7));
-        self.prev.fill_rect(Rect::from_size(self.size), poison);
+        self.prev
+            .fill_rect(rect.intersect(Rect::from_size(self.size)), poison);
     }
 }
 

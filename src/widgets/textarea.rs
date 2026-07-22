@@ -11,10 +11,12 @@
 //! submit.
 //!
 //! Submit vs newline is builder policy (`SubmitPolicy`): the default is
-//! Enter-submits + Alt+Enter-inserts (works on every wire), and
-//! Shift+Enter also inserts where the kitty protocol reports it —
-//! chords the classic wire cannot carry are never the only path
-//! (docs/faq.md). History recall is edge-triggered with the reference
+//! Enter-submits + Alt+Enter-inserts (works on every wire), Ctrl+J
+//! always inserts (0x0a IS Ctrl+J on the legacy wire — the universal
+//! fallback, backlog 0295), and Shift+Enter also inserts where the
+//! kitty protocol reports it — chords the classic wire cannot carry are
+//! never the only path (docs/faq.md). History recall is edge-triggered
+//! with the reference
 //! console's semantics: arrows navigate the buffer first, reach for
 //! history only at the start/end edges, and the in-progress draft
 //! survives a round trip.

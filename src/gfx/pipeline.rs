@@ -313,10 +313,37 @@ impl ImageRenderer {
         if let (Some(WrapKind::Tmux), ImageOutput::Bytes { bytes, .. }) =
             (caps.wrap, &mut rendered.output)
         {
-            *bytes = crate::term::tmux_wrap(bytes);
+            *bytes = tmux_wrap_per_escape(bytes);
         }
         rendered
     }
+}
+
+/// tmux passthrough with ONE wrapper per escape frame. tmux discards
+/// any single input sequence over 1 MiB (hard input-buffer cap, tmux
+/// issue #487), so wrapping a whole chunked kitty transmission in a
+/// single `ESC Ptmux; … ESC \` frame silently drops large images at
+/// the multiplexer. Splitting at the ST boundaries our emitters
+/// produce keeps every wrapper ~4 KiB (one APC chunk). A payload
+/// without an ST terminator (the BEL-terminated iTerm2 OSC) is a
+/// single escape by construction and wraps whole; a sixel DCS is one
+/// ST-terminated frame and is unchanged by the split.
+fn tmux_wrap_per_escape(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len() + bytes.len() / 8 + 32);
+    let mut rest = bytes;
+    while !rest.is_empty() {
+        match rest.windows(2).position(|w| w == b"\x1b\\") {
+            Some(p) => {
+                out.extend_from_slice(&crate::term::tmux_wrap(&rest[..p + 2]));
+                rest = &rest[p + 2..];
+            }
+            None => {
+                out.extend_from_slice(&crate::term::tmux_wrap(rest));
+                break;
+            }
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -465,6 +492,68 @@ mod tests {
             &caps(true, false, false, None),
         );
         assert!(matches!(&out.output, ImageOutput::Cells(c) if c.is_empty()));
+    }
+
+    #[test]
+    fn tmux_wrap_is_per_escape_so_the_1mib_input_cap_cannot_bite() {
+        // A 64x64 uncompressed RGBA transmit chunks into several APCs;
+        // the tmux route must wrap EACH ONE (tmux discards any single
+        // input sequence over 1 MiB — issue #487 — so one wrapper
+        // around the whole stream silently drops big images).
+        let mut r = ImageRenderer::new();
+        r.config.kitty_format = kitty::Format::Rgba32;
+        // Hash noise defeats the zlib pass, so the payload stays
+        // multi-chunk (the property below must cover the chunked form,
+        // not collapse into the trivial single-frame case).
+        let img = Bitmap::from_fn(96, 96, |x, y| {
+            let mut h = x.wrapping_mul(0x9E37_79B9) ^ y.wrapping_mul(0x85EB_CA6B);
+            h ^= h >> 13;
+            h = h.wrapping_mul(0xC2B2_AE35);
+            h ^= h >> 16;
+            Rgba::new((h >> 16) as u8, (h >> 8) as u8, h as u8, 255)
+        });
+        let mut c = caps(true, false, false, None);
+        c.wrap = Some(WrapKind::Tmux);
+        let out = r.render(&img, Rect::new(0, 0, 8, 4), &c);
+        let ImageOutput::Bytes { bytes, .. } = &out.output else {
+            panic!("kitty bytes expected")
+        };
+        let wrappers = bytes.windows(7).filter(|w| *w == b"\x1bPtmux;").count();
+        let unwrapped = crate::testing::unwrap_tmux(bytes);
+        let inner_frames = unwrapped.windows(3).filter(|w| *w == b"\x1b_G").count();
+        assert!(inner_frames > 1, "noise payload must chunk: {inner_frames}");
+        assert_eq!(
+            wrappers, inner_frames,
+            "every APC escape gets its own tmux wrapper"
+        );
+        // Guard the BOUND, not just the census: each wrapper is one APC
+        // chunk (≤4096 encoded bytes) + keys + ESC doubling + framing —
+        // a few KiB, three orders of magnitude under tmux's 1 MiB
+        // discard cap. A chunking regression must not hide behind a
+        // passing wrapper count. (Wrappers are emitted back to back, so
+        // consecutive header offsets delimit them.)
+        let starts: Vec<usize> = (0..bytes.len())
+            .filter(|&i| bytes[i..].starts_with(b"\x1bPtmux;"))
+            .collect();
+        let max_wrapper = starts
+            .iter()
+            .enumerate()
+            .map(|(i, &s)| starts.get(i + 1).copied().unwrap_or(bytes.len()) - s)
+            .max()
+            .unwrap_or(0);
+        assert!(
+            max_wrapper <= 16 * 1024,
+            "a single tmux wrapper reached {max_wrapper} bytes — the 1 MiB discard cap is back in range"
+        );
+        // Byte-exact round trip: unwrapping reproduces the direct
+        // emission exactly.
+        let mut direct = ImageRenderer::new();
+        let plain_caps = caps(true, false, false, None);
+        let direct_out = direct.render(&img, Rect::new(0, 0, 8, 4), &plain_caps);
+        let ImageOutput::Bytes { bytes: plain, .. } = &direct_out.output else {
+            panic!()
+        };
+        assert_eq!(&unwrapped, plain, "unwrap(wrap(x)) must be byte-exact");
     }
 
     #[test]

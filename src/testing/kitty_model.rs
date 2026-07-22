@@ -38,7 +38,11 @@ impl KittyFrame {
 pub struct ImageState {
     /// Completed transmissions (a=t/T with final chunk m=0).
     pub transmits: u32,
-    /// Live placements (a=p or a=T; delete removes them).
+    /// Live placements (a=p or a=T; delete removes them). Spec
+    /// semantics: a placement carrying a placement id (`p=`) REPLACES
+    /// an existing placement with the same (image id, placement id) —
+    /// the flicker-free move — while pid-less placements ACCUMULATE
+    /// (each put adds another visible copy).
     pub placements: u32,
     /// Data deleted (uppercase delete verbs free data).
     pub data_freed: bool,
@@ -48,6 +52,12 @@ pub struct ImageState {
 #[derive(Default)]
 pub struct KittyModel {
     images: BTreeMap<u32, ImageState>,
+    /// Live pid'd placements per image (replace-on-same-pid, ghostty's
+    /// exact storage shape) — `ImageState::placements` derives from
+    /// this set plus the pid-less count below.
+    placement_pids: BTreeMap<u32, std::collections::BTreeSet<u32>>,
+    /// Live pid-less placements per image (accumulate per the spec).
+    placement_anon: BTreeMap<u32, u32>,
     /// Mid-transmission chunk state: id -> accumulated payload.
     open_chunks: Option<(u32, Vec<u8>)>,
     /// Protocol violations (chunk rules, place-before-transmit, id 0...).
@@ -203,7 +213,7 @@ impl KittyModel {
                     self.finish_transmit(id);
                 }
                 if frame.get("a") == Some("T") {
-                    self.images.entry(id).or_default().placements += 1;
+                    self.add_placement(id, frame.u32_key("p"));
                 }
             }
             "p" => {
@@ -211,12 +221,11 @@ impl KittyModel {
                     self.violations.push("place without an id".into());
                     return;
                 };
-                let st = self.images.entry(id).or_default();
-                if st.transmits == 0 {
+                if self.images.get(&id).map(|s| s.transmits).unwrap_or(0) == 0 {
                     self.violations
                         .push(format!("place of untransmitted image {id}"));
                 }
-                st.placements += 1;
+                self.add_placement(id, frame.u32_key("p"));
             }
             "d" => {
                 let verb = frame.get("d").unwrap_or("a");
@@ -224,14 +233,26 @@ impl KittyModel {
                 match verb.to_ascii_lowercase().as_str() {
                     "i" => {
                         if let Some(id) = frame.u32_key("i") {
-                            let st = self.images.entry(id).or_default();
-                            st.placements = 0;
+                            match frame.u32_key("p").filter(|&p| p != 0) {
+                                // Spec: with a `p` key, only the named
+                                // placement dies; data survives.
+                                Some(pid) => {
+                                    self.placement_pids.entry(id).or_default().remove(&pid);
+                                }
+                                None => {
+                                    self.placement_pids.remove(&id);
+                                    self.placement_anon.remove(&id);
+                                }
+                            }
+                            self.refresh_placements(id);
                             if frees {
-                                st.data_freed = true;
+                                self.images.entry(id).or_default().data_freed = true;
                             }
                         }
                     }
                     "a" => {
+                        self.placement_pids.clear();
+                        self.placement_anon.clear();
                         for st in self.images.values_mut() {
                             st.placements = 0;
                             if frees {
@@ -249,6 +270,25 @@ impl KittyModel {
                 .violations
                 .push(format!("action {other:?} not modeled")),
         }
+    }
+
+    /// One placement lands: pid'd placements REPLACE on the same
+    /// (image, pid) pair; pid-less placements accumulate. `p=0` means
+    /// "no placement id" per the spec.
+    fn add_placement(&mut self, id: u32, pid: Option<u32>) {
+        match pid.filter(|&p| p != 0) {
+            Some(pid) => {
+                self.placement_pids.entry(id).or_default().insert(pid);
+            }
+            None => *self.placement_anon.entry(id).or_default() += 1,
+        }
+        self.refresh_placements(id);
+    }
+
+    fn refresh_placements(&mut self, id: u32) {
+        let pids = self.placement_pids.get(&id).map_or(0, |s| s.len()) as u32;
+        let anon = self.placement_anon.get(&id).copied().unwrap_or(0);
+        self.images.entry(id).or_default().placements = pids + anon;
     }
 
     fn finish_transmit(&mut self, id: u32) {
@@ -342,6 +382,33 @@ mod tests {
         let mut m = KittyModel::new();
         m.feed(b"\x1b_Gi=5,a=p\x1b\\");
         assert!(m.violations.iter().any(|v| v.contains("untransmitted")));
+    }
+
+    #[test]
+    fn pid_placements_replace_and_anonymous_ones_accumulate() {
+        let mut m = KittyModel::new();
+        m.feed(b"\x1b_Gi=7,a=T,p=1,f=24,s=1,v=1;QUJD\x1b\\");
+        assert_eq!(m.image(7).unwrap().placements, 1);
+        // Same (i,p): the spec's flicker-free move — REPLACE, not add.
+        m.feed(b"\x1b_Gi=7,a=p,p=1\x1b\\");
+        m.feed(b"\x1b_Gi=7,a=p,p=1\x1b\\");
+        assert_eq!(m.image(7).unwrap().placements, 1, "same pid replaces");
+        // A different pid is a second placement.
+        m.feed(b"\x1b_Gi=7,a=p,p=2\x1b\\");
+        assert_eq!(m.image(7).unwrap().placements, 2);
+        // pid-less placements accumulate (spec: multiple placements).
+        m.feed(b"\x1b_Gi=7,a=p\x1b\\");
+        m.feed(b"\x1b_Gi=7,a=p\x1b\\");
+        assert_eq!(m.image(7).unwrap().placements, 4);
+        // Delete with a pid removes only that placement, keeps data.
+        m.feed(b"\x1b_Ga=d,d=i,i=7,p=2\x1b\\");
+        assert_eq!(m.image(7).unwrap().placements, 3);
+        assert!(!m.image(7).unwrap().data_freed);
+        // Delete without a pid clears every placement of the id.
+        m.feed(b"\x1b_Ga=d,d=I,i=7\x1b\\");
+        assert_eq!(m.image(7).unwrap().placements, 0);
+        assert!(m.image(7).unwrap().data_freed);
+        assert!(m.violations.is_empty(), "{:?}", m.violations);
     }
 
     #[test]

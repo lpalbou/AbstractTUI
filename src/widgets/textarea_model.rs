@@ -26,7 +26,8 @@ use crate::widgets::input::{word_step, ClusterMap};
 /// only path (docs/faq.md:164).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum SubmitPolicy {
-    /// Plain Enter submits; Alt+Enter (and kitty Shift+Enter) insert.
+    /// Plain Enter submits; Alt+Enter, Ctrl+J (every wire) and kitty
+    /// Shift+Enter insert.
     #[default]
     EnterSubmits,
     /// Plain Enter inserts a newline; submission is the app's own
@@ -446,6 +447,16 @@ pub(crate) fn apply_key(
                     EditOutcome::Handled { edited: true }
                 }
             }
+        }
+        // Ctrl+J: the UNIVERSAL newline chord (backlog 0295). A legacy
+        // terminal's 0x0a byte IS Ctrl+J (`input::legacy::control_key`)
+        // and the kitty protocol reports the same identity, so this one
+        // arm gives every terminal a working newline even where
+        // Shift+Enter cannot be reported. Built in so apps stop
+        // hand-rolling the fallback (and their hint text stays true).
+        Key::Char('j') if ctrl && !alt => {
+            insert_at_caret(text, c, "\n");
+            EditOutcome::Handled { edited: true }
         }
 
         _ => EditOutcome::Ignored,

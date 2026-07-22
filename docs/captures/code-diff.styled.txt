@@ -1,0 +1,162 @@
+size=84x20 cursor=0,19 modes=[7,1002,1004,1006,1049,2004]
+  0|                                                                                    |
+  1| ╭ review: present.rs ────────────────────────────────────────────────────────────╮ |
+  2| │ 1 │ diff --git a/src/render/present.rs b/src/render/present.rs                 │ |
+  3| │ 2 │ --- a/src/render/present.rs                                                │ |
+  4| │ 3 │ +++ b/src/render/present.rs                                                │ |
+  5| │ 4 │ @@ -41,7 +41,7 @@ fn emit_runs(out: &mut Vec<u8>) {                        │ |
+  6| │ 5 │      for run in runs {                                                     │ |
+  7| │ 6 │          // Idle frames must stay free.                                    │ |
+  8| │ 7 │ -        if run.cells.is_empty() {                                         │ |
+  9| │ 8 │ +        if run.is_empty() {                                               │ |
+ 10| │ 9 │              continue;                                                     │ |
+ 11| │10 │          }                                                                 │ |
+ 12| │11 │          emit(run, out);                                                   │ |
+ 13| │12 │ @@ -88,4 +88,6 @@ fn flush(out: &mut Vec<u8>) {                            │ |
+ 14| │13 │      term.write(out)?;                                                     │ |
+ 15| │14 │ +    // One flush per frame — the damage contract's §6.                    │ |
+ 16| │15 │ +    term.flush()?;                                                        │ |
+ 17| │16 │  }                                                                         │ |
+ 18| ╰────────────────────────────────────────────────────────────────────────────────╯ |
+ 19|                                                                                    |
+styles:
+  0:0..84 fg=#eeeeee bg=#1a1a2e
+  1:0..1 fg=#eeeeee bg=#1a1a2e
+  1:1..2 fg=#3c3c4d bg=#16213e
+  1:2..22 fg=#aaaaaa bg=#16213e
+  1:22..83 fg=#3c3c4d bg=#16213e
+  1:83..84 fg=#eeeeee bg=#1a1a2e
+  2:0..1 fg=#eeeeee bg=#1a1a2e
+  2:1..2 fg=#3c3c4d bg=#16213e
+  2:2..5 fg=#666666 bg=#0f3460
+  2:5..6 fg=#3c3c4d bg=#0f3460
+  2:6..7 fg=#eeeeee bg=#0f3460
+  2:7..65 fg=#aaaaaa bg=#0f3460
+  2:65..82 fg=#eeeeee bg=#0f3460
+  2:82..83 fg=#3c3c4d bg=#16213e
+  2:83..84 fg=#eeeeee bg=#1a1a2e
+  3:0..1 fg=#eeeeee bg=#1a1a2e
+  3:1..2 fg=#3c3c4d bg=#16213e
+  3:2..5 fg=#666666 bg=#0f3460
+  3:5..6 fg=#3c3c4d bg=#0f3460
+  3:6..7 fg=#eeeeee bg=#0f3460
+  3:7..34 fg=#eeeeee bg=#0f3460 attrs=B
+  3:34..82 fg=#eeeeee bg=#0f3460
+  3:82..83 fg=#3c3c4d bg=#16213e
+  3:83..84 fg=#eeeeee bg=#1a1a2e
+  4:0..1 fg=#eeeeee bg=#1a1a2e
+  4:1..2 fg=#3c3c4d bg=#16213e
+  4:2..5 fg=#666666 bg=#0f3460
+  4:5..6 fg=#3c3c4d bg=#0f3460
+  4:6..7 fg=#eeeeee bg=#0f3460
+  4:7..34 fg=#eeeeee bg=#0f3460 attrs=B
+  4:34..82 fg=#eeeeee bg=#0f3460
+  4:82..83 fg=#3c3c4d bg=#16213e
+  4:83..84 fg=#eeeeee bg=#1a1a2e
+  5:0..1 fg=#eeeeee bg=#1a1a2e
+  5:1..2 fg=#3c3c4d bg=#16213e
+  5:2..5 fg=#666666 bg=#0f3460
+  5:5..6 fg=#3c3c4d bg=#0f3460
+  5:6..7 fg=#eeeeee bg=#0f3460
+  5:7..24 fg=#60a5fa bg=#0f3460
+  5:24..82 fg=#eeeeee bg=#0f3460
+  5:82..83 fg=#3c3c4d bg=#16213e
+  5:83..84 fg=#eeeeee bg=#1a1a2e
+  6:0..1 fg=#eeeeee bg=#1a1a2e
+  6:1..2 fg=#3c3c4d bg=#16213e
+  6:2..5 fg=#666666 bg=#0f3460
+  6:5..6 fg=#3c3c4d bg=#0f3460
+  6:6..82 fg=#eeeeee bg=#0f3460
+  6:82..83 fg=#3c3c4d bg=#16213e
+  6:83..84 fg=#eeeeee bg=#1a1a2e
+  7:0..1 fg=#eeeeee bg=#1a1a2e
+  7:1..2 fg=#3c3c4d bg=#16213e
+  7:2..5 fg=#666666 bg=#0f3460
+  7:5..6 fg=#3c3c4d bg=#0f3460
+  7:6..82 fg=#eeeeee bg=#0f3460
+  7:82..83 fg=#3c3c4d bg=#16213e
+  7:83..84 fg=#eeeeee bg=#1a1a2e
+  8:0..1 fg=#eeeeee bg=#1a1a2e
+  8:1..2 fg=#3c3c4d bg=#16213e
+  8:2..5 fg=#666666 bg=#0f3460
+  8:5..6 fg=#3c3c4d bg=#0f3460
+  8:6..7 fg=#eeeeee bg=#0f3460
+  8:7..41 fg=#e74c3c bg=#0f3460
+  8:41..82 fg=#eeeeee bg=#0f3460
+  8:82..83 fg=#3c3c4d bg=#16213e
+  8:83..84 fg=#eeeeee bg=#1a1a2e
+  9:0..1 fg=#eeeeee bg=#1a1a2e
+  9:1..2 fg=#3c3c4d bg=#16213e
+  9:2..5 fg=#666666 bg=#0f3460
+  9:5..6 fg=#3c3c4d bg=#0f3460
+  9:6..7 fg=#eeeeee bg=#0f3460
+  9:7..35 fg=#27ae60 bg=#0f3460
+  9:35..82 fg=#eeeeee bg=#0f3460
+  9:82..83 fg=#3c3c4d bg=#16213e
+  9:83..84 fg=#eeeeee bg=#1a1a2e
+  10:0..1 fg=#eeeeee bg=#1a1a2e
+  10:1..2 fg=#3c3c4d bg=#16213e
+  10:2..5 fg=#666666 bg=#0f3460
+  10:5..6 fg=#3c3c4d bg=#0f3460
+  10:6..82 fg=#eeeeee bg=#0f3460
+  10:82..83 fg=#3c3c4d bg=#16213e
+  10:83..84 fg=#eeeeee bg=#1a1a2e
+  11:0..1 fg=#eeeeee bg=#1a1a2e
+  11:1..2 fg=#3c3c4d bg=#16213e
+  11:2..5 fg=#666666 bg=#0f3460
+  11:5..6 fg=#3c3c4d bg=#0f3460
+  11:6..82 fg=#eeeeee bg=#0f3460
+  11:82..83 fg=#3c3c4d bg=#16213e
+  11:83..84 fg=#eeeeee bg=#1a1a2e
+  12:0..1 fg=#eeeeee bg=#1a1a2e
+  12:1..2 fg=#3c3c4d bg=#16213e
+  12:2..5 fg=#666666 bg=#0f3460
+  12:5..6 fg=#3c3c4d bg=#0f3460
+  12:6..82 fg=#eeeeee bg=#0f3460
+  12:82..83 fg=#3c3c4d bg=#16213e
+  12:83..84 fg=#eeeeee bg=#1a1a2e
+  13:0..1 fg=#eeeeee bg=#1a1a2e
+  13:1..2 fg=#3c3c4d bg=#16213e
+  13:2..5 fg=#666666 bg=#0f3460
+  13:5..6 fg=#3c3c4d bg=#0f3460
+  13:6..7 fg=#eeeeee bg=#0f3460
+  13:7..24 fg=#60a5fa bg=#0f3460
+  13:24..82 fg=#eeeeee bg=#0f3460
+  13:82..83 fg=#3c3c4d bg=#16213e
+  13:83..84 fg=#eeeeee bg=#1a1a2e
+  14:0..1 fg=#eeeeee bg=#1a1a2e
+  14:1..2 fg=#3c3c4d bg=#16213e
+  14:2..5 fg=#666666 bg=#0f3460
+  14:5..6 fg=#3c3c4d bg=#0f3460
+  14:6..82 fg=#eeeeee bg=#0f3460
+  14:82..83 fg=#3c3c4d bg=#16213e
+  14:83..84 fg=#eeeeee bg=#1a1a2e
+  15:0..1 fg=#eeeeee bg=#1a1a2e
+  15:1..2 fg=#3c3c4d bg=#16213e
+  15:2..5 fg=#666666 bg=#0f3460
+  15:5..6 fg=#3c3c4d bg=#0f3460
+  15:6..7 fg=#eeeeee bg=#0f3460
+  15:7..62 fg=#27ae60 bg=#0f3460
+  15:62..82 fg=#eeeeee bg=#0f3460
+  15:82..83 fg=#3c3c4d bg=#16213e
+  15:83..84 fg=#eeeeee bg=#1a1a2e
+  16:0..1 fg=#eeeeee bg=#1a1a2e
+  16:1..2 fg=#3c3c4d bg=#16213e
+  16:2..5 fg=#666666 bg=#0f3460
+  16:5..6 fg=#3c3c4d bg=#0f3460
+  16:6..7 fg=#eeeeee bg=#0f3460
+  16:7..26 fg=#27ae60 bg=#0f3460
+  16:26..82 fg=#eeeeee bg=#0f3460
+  16:82..83 fg=#3c3c4d bg=#16213e
+  16:83..84 fg=#eeeeee bg=#1a1a2e
+  17:0..1 fg=#eeeeee bg=#1a1a2e
+  17:1..2 fg=#3c3c4d bg=#16213e
+  17:2..5 fg=#666666 bg=#0f3460
+  17:5..6 fg=#3c3c4d bg=#0f3460
+  17:6..82 fg=#eeeeee bg=#0f3460
+  17:82..83 fg=#3c3c4d bg=#16213e
+  17:83..84 fg=#eeeeee bg=#1a1a2e
+  18:0..1 fg=#eeeeee bg=#1a1a2e
+  18:1..83 fg=#3c3c4d bg=#16213e
+  18:83..84 fg=#eeeeee bg=#1a1a2e
+  19:0..84 fg=#eeeeee bg=#1a1a2e

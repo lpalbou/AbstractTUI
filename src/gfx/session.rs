@@ -255,6 +255,44 @@ impl ImageSession {
         self.slots.len()
     }
 
+    /// Slots on byte channels (kitty/iTerm2/sixel). The driver's scroll
+    /// guard reads this: terminal-executed scrolls (DECSTBM + SU/SD)
+    /// move protocol images WITH the text — kitty mandates it, sixel
+    /// pixels scroll on xterm-class emulators — which would desync the
+    /// session's placement bookkeeping. Mosaic slots live in the cell
+    /// model and scroll correctly through the ordinary diff.
+    pub fn live_byte_slots(&self) -> usize {
+        self.slots
+            .values()
+            .filter(|s| s.channel != Channel::Mosaic)
+            .count()
+    }
+
+    /// The channel and rect the session believes the terminal holds for
+    /// `key` — the driver's vacated-rect bookkeeping (which cells must
+    /// repaint when a placement moves/retires) and a diagnostics probe.
+    pub fn slot_info(&self, key: SlotKey) -> Option<(Channel, Rect)> {
+        self.slots.get(&key).map(|s| (s.channel, s.rect))
+    }
+
+    /// Forget a slot WITHOUT terminal-side deletes: the caller repainted
+    /// the cells under a cursor-paint slot (mosaic patches overwritten in
+    /// the surface; iTerm2/sixel pixels overwritten by re-emitted cells),
+    /// so the terminal no longer matches and the next `sync` must
+    /// re-emit in full. Kitty slots REFUSE: their state lives in
+    /// terminal image memory, not in cells — forgetting one would leak
+    /// the upload and re-transmit under a fresh id ([`Self::release`]
+    /// is the kitty verb).
+    pub(crate) fn invalidate_slot(&mut self, key: SlotKey) {
+        if self
+            .slots
+            .get(&key)
+            .is_some_and(|s| s.channel != Channel::Kitty)
+        {
+            self.slots.remove(&key);
+        }
+    }
+
     /// Kitty ids the session believes the terminal currently holds
     /// (sorted — cross-check against a protocol model's live set).
     pub fn live_kitty_ids(&self) -> Vec<u32> {
@@ -561,6 +599,69 @@ mod tests {
         s.slots.get_mut(&1).unwrap().kitty_id = None;
         let err = s.check_invariants().unwrap_err();
         assert!(err.contains("without an id"), "{err}");
+    }
+
+    #[test]
+    fn slot_info_and_byte_slot_census_track_the_channels() {
+        let mut s = ImageSession::new();
+        let mut sink = Sink(Vec::new());
+        let kitty = kitty_caps();
+        let mosaic = GraphicsCaps {
+            kitty_graphics: false,
+            ..kitty_caps()
+        };
+        s.sync(&mut sink, 1, 1, &img(), Rect::new(0, 0, 4, 2), &kitty);
+        s.sync(&mut sink, 2, 1, &img(), Rect::new(8, 0, 4, 2), &kitty);
+        assert_eq!(
+            s.slot_info(1),
+            Some((Channel::Kitty, Rect::new(0, 0, 4, 2)))
+        );
+        assert_eq!(s.live_byte_slots(), 2);
+        assert_eq!(s.slot_info(99), None);
+
+        // A mosaic slot joins the census as a NON-byte slot.
+        let mut s2 = ImageSession::new();
+        s2.sync(&mut sink, 7, 1, &img(), Rect::new(0, 0, 2, 1), &mosaic);
+        assert_eq!(s2.live_byte_slots(), 0, "mosaic lives in the cell model");
+        assert_eq!(s2.live_slots(), 1);
+    }
+
+    #[test]
+    fn invalidate_slot_forces_reemission_but_refuses_kitty() {
+        let mut s = ImageSession::new();
+        let mut sink = Sink(Vec::new());
+        let mosaic = GraphicsCaps {
+            kitty_graphics: false,
+            ..kitty_caps()
+        };
+        let rect = Rect::new(0, 0, 2, 1);
+        s.sync(&mut sink, 1, 1, &img(), rect, &mosaic);
+        assert!(matches!(
+            s.sync(&mut sink, 1, 1, &img(), rect, &mosaic),
+            SyncOutcome::Unchanged
+        ));
+        // Invalidate: the same (version, rect) re-renders — the caller
+        // repainted the cells under the slot and needs fresh patches.
+        s.invalidate_slot(1);
+        assert!(matches!(
+            s.sync(&mut sink, 1, 1, &img(), rect, &mosaic),
+            SyncOutcome::Cells(_)
+        ));
+
+        // Kitty slots refuse: their state is terminal image memory —
+        // forgetting one would leak the upload and re-transmit under a
+        // fresh id. The slot must survive and stay Unchanged.
+        let caps = kitty_caps();
+        s.sync(&mut sink, 5, 1, &img(), rect, &caps);
+        let before = sink.0.len();
+        s.invalidate_slot(5);
+        assert!(s.slot_info(5).is_some(), "kitty slot must survive");
+        assert!(matches!(
+            s.sync(&mut sink, 5, 1, &img(), rect, &caps),
+            SyncOutcome::Unchanged
+        ));
+        assert_eq!(sink.0.len(), before, "no retransmission");
+        s.check_invariants().unwrap();
     }
 
     #[test]

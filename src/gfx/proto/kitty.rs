@@ -16,6 +16,16 @@
 //! - `o=z` marks the (pre-base64) payload as zlib deflate.
 //! - Deletes: lowercase `d` values keep transmitted data, uppercase
 //!   free it.
+//! - Placements: `a=p` WITHOUT a placement id **accumulates** — the
+//!   spec is explicit that pid-less puts on the same image id create
+//!   multiple placements, so a "move" would leave a ghost at the old
+//!   rect on every correct terminal. With a placement id, "if you send
+//!   two placements with the same image id and placement id the second
+//!   one will replace the first. This can be used to resize or move
+//!   placements around the screen, without flicker." This module's
+//!   emission policy is therefore ONE placement per image, pinned as
+//!   `p=1` on both `a=T` and `a=p` (study-2 fix; callers wanting
+//!   multi-placement kitty layouts author their own escapes).
 
 use crate::gfx::base64;
 use crate::gfx::bitmap::Bitmap;
@@ -97,8 +107,10 @@ pub fn transmit_display(img: &Bitmap, opts: &Options) -> Vec<u8> {
         payload
     };
 
-    // Control data for the FIRST escape only.
-    let mut keys = format!("a=T,f={fmt_key},q=2,i={}", opts.id);
+    // Control data for the FIRST escape only. `p=1`: the module's
+    // one-placement-per-image policy (doc header) — a later `place()`
+    // REPLACES this placement instead of ghosting beside it.
+    let mut keys = format!("a=T,f={fmt_key},q=2,i={},p=1", opts.id);
     match opts.format {
         // Raw formats require explicit pixel geometry.
         Format::Rgba32 | Format::Rgb24 => {
@@ -124,9 +136,12 @@ pub fn transmit_display(img: &Bitmap, opts: &Options) -> Vec<u8> {
 }
 
 /// Re-display an already-transmitted image (`a=p`) with a new cell fit
-/// or z — no pixel retransmission.
+/// or z — no pixel retransmission. Carries the fixed placement id
+/// (`p=1`), so it REPLACES the placement `transmit_display` created:
+/// the spec's flicker-free move (a pid-less put would accumulate a
+/// second visible copy instead).
 pub fn place(id: u32, fit_cols: Option<u32>, fit_rows: Option<u32>, z: i32) -> Vec<u8> {
-    let mut keys = format!("a=p,q=2,i={id}");
+    let mut keys = format!("a=p,q=2,i={id},p=1");
     if let Some(c) = fit_cols {
         keys.push_str(&format!(",c={c}"));
     }
@@ -229,6 +244,10 @@ mod tests {
         assert!(keys.contains("f=32"));
         assert!(keys.contains("s=2") && keys.contains("v=2"));
         assert!(keys.contains("q=2"));
+        assert!(
+            keys.contains(",p=1"),
+            "one-placement-per-image policy: {keys}"
+        );
         assert!(!keys.contains(",m="), "single chunk must not carry m");
         let decoded = crate::gfx::base64::decode(std::str::from_utf8(payload).unwrap()).unwrap();
         assert_eq!(decoded.len(), 16);
@@ -322,6 +341,11 @@ mod tests {
         let frames = parse_escapes(&place(42, Some(8), Some(4), 3));
         assert_eq!(frames.len(), 1);
         assert!(frames[0].0.contains("a=p") && frames[0].0.contains("i=42"));
+        assert!(
+            frames[0].0.contains("p=1"),
+            "re-place must REPLACE via the fixed placement id: {}",
+            frames[0].0
+        );
 
         let frames = parse_escapes(&delete_by_id(42, false));
         assert!(frames[0].0.contains("d=i") && frames[0].0.contains("i=42"));

@@ -15,14 +15,14 @@
  │                                                                   │
  │channel         (•) stable                                         │
  │                ( ) beta                                           │
- │                ( ) nightly                                        │
  │                                                                   │
- │→ orion · notifications on · stable channel                        │
+ │channel select  ▐stable                   ▾▌                       │
  │                                                                   │
+ │theme           ▐Dark (Abstract)          ▾▌                       │
  │                                                                   │
+ │features        ▐enable features…         ▾▌                       │
  │                                                                   │
- │                                                                   │
- │                                                                   │
+ │→ orion · notifications on · stable channel · 0 features           │
  └───────────────────────────────────────────────────────────────────┘
 
 

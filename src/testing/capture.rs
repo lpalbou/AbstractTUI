@@ -253,6 +253,32 @@ impl Terminal for CaptureTerm {
             },
         )
     }
+
+    /// Mirrors the platform backends (backlog 0293): the delta bytes go
+    /// through the ordinary write path (byte log + VT model see the
+    /// push/pop) and the STORED options update, so `leave` pops exactly
+    /// what is pushed — tests assert the balance via
+    /// `screen().counters().kitty_push_depth`.
+    fn set_kitty_keyboard(&mut self, flags: crate::term::KittyFlags) -> Result<()> {
+        let Some(opts) = &mut self.entered else {
+            return Err(crate::base::Error::Term(
+                "set_kitty_keyboard outside a session — enter() first".into(),
+            ));
+        };
+        let prev = opts.kitty_keyboard;
+        if prev == flags {
+            return Ok(());
+        }
+        opts.kitty_keyboard = flags;
+        let mut bytes = Vec::with_capacity(16);
+        if !prev.is_empty() {
+            bytes.extend_from_slice(crate::term::KittyFlags::POP_BYTES);
+        }
+        if !flags.is_empty() {
+            bytes.extend_from_slice(&flags.push_bytes());
+        }
+        Terminal::write(self, &bytes)
+    }
 }
 
 #[cfg(test)]

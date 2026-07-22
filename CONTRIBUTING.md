@@ -13,7 +13,7 @@ cargo build
 
 The crate targets stable Rust (edition 2021) and builds from std plus five
 small, permissively licensed dependencies (see `Cargo.toml`). To try it out,
-run any of the 12 examples:
+run any of the 14 examples:
 
 ```sh
 cargo run --example hello
@@ -32,7 +32,7 @@ tests, the integration suites under `tests/`, and doctests:
 cargo test
 ```
 
-Two suites are ignored by default and run explicitly:
+Three suites are ignored by default and run explicitly:
 
 ```sh
 # Live pty smoke tests — spawn a real terminal session; run serially.
@@ -40,8 +40,13 @@ Two suites are ignored by default and run explicitly:
 cargo test --test live_smoke -- --ignored --test-threads=1
 
 # Performance budgets — meaningful only in release builds; run serially.
-cargo test --test perf_budgets --release -- --ignored --test-threads=1
+cargo test --test perf_budgets --release -- --ignored --test-threads=1        # engine primitives
+cargo test --test perf_app_surfaces --release -- --ignored --test-threads=1  # app-layer surfaces
 ```
+
+Timing budgets are load-sensitive: run them on a quiet host, and treat a
+red timing on a loaded machine as a re-run signal, not a regression
+(allocation and byte-count asserts are load-independent and always hold).
 
 ### Minimum supported Rust version (MSRV)
 

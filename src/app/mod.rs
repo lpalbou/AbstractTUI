@@ -36,6 +36,7 @@
 
 pub mod actions;
 pub mod anchored;
+mod caps;
 mod driver;
 mod driver_images;
 mod events;
@@ -52,6 +53,7 @@ mod viewport;
 mod acceptance;
 
 pub use actions::{ActionInfo, Actions};
+pub use caps::{current_caps, use_caps};
 pub use driver::{Driver, RunConfig, Turn};
 pub use keymap_help::KeymapHelp;
 pub use notices::use_startup_notices;

@@ -327,9 +327,24 @@ fn main() -> abstracttui::base::Result<()> {
                     status_feed.len()
                 ))
             }))
-            .child(text(
-                " Enter send · Alt+Enter newline · / commands · @ mentions · ↑↓ history · Ctrl+C quit",
-            ))
+            .child(dyn_view(LayoutStyle::line(1), {
+                // Honest per-terminal key hint (backlog 0295): advertise
+                // Shift+Enter ONLY where the kitty protocol is live —
+                // env-claimed at enter or probe-proven a frame later
+                // (0293 pushes the flags either way). Ctrl+J works on
+                // every wire and anchors the fallback wording.
+                let caps = use_caps(cx);
+                move || {
+                    let newline = if caps.get().kitty_keyboard {
+                        "Shift+Enter newline"
+                    } else {
+                        "Alt+Enter / Ctrl+J newline"
+                    };
+                    text(format!(
+                        " Enter send · {newline} · / commands · @ mentions · ↑↓ history · Ctrl+C quit"
+                    ))
+                }
+            }))
             .build()
     })?;
     app.run()

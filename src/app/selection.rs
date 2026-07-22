@@ -12,10 +12,14 @@
 //! - **Tier 3 — [`selection`]**: an opt-in engine selection layer. While
 //!   enabled, a left-button drag paints a selection highlight (theme
 //!   `selection_fg`/`selection_bg`) over the RENDERED screen; releasing
-//!   the button — or pressing Enter / `c` / Ctrl+C while a selection is
-//!   visible — copies the selected text to the system clipboard via
-//!   OSC 52 through the presenter's byte custody. Esc or a click clears.
-//!   Wheel scrolling is untouched (only left Down/Drag/Up are claimed).
+//!   the button — or pressing Enter / `c` / Ctrl+C mid-drag — copies the
+//!   selected text to the system clipboard via OSC 52 through the
+//!   presenter's byte custody. EVERY copy ends the gesture (backlog
+//!   0290): the region clears with the copy, so the app's next
+//!   Enter/`c` keystrokes route normally — a retained region used to
+//!   silently eat them (the composer footgun). Esc cancels without
+//!   copying; a fresh click re-anchors. Wheel scrolling is untouched
+//!   (only left Down/Drag/Up are claimed).
 //! - **[`copy_to_clipboard`]**: the app-reachable clipboard verb (backlog
 //!   0150's clipboard leg) — queue any text for OSC 52 emission through
 //!   the same custody path, from any component handler.
@@ -151,8 +155,11 @@ pub(crate) enum SelectionAct {
     Pass,
     /// Consumed by the selection layer (state may have changed).
     Consumed,
-    /// Consumed, and the active region should be copied.
-    Copy,
+    /// Consumed; copy this region's screen text. The act CARRIES the
+    /// region because a copy ENDS the gesture (backlog 0290): the layer
+    /// cleared its own state before answering, so no region lingers to
+    /// swallow the app's next Enter/`c` keystrokes.
+    Copy(Region),
 }
 
 #[derive(Default)]
@@ -208,7 +215,10 @@ impl Selection {
         on
     }
 
-    /// Whether a selection region is currently visible.
+    /// Whether a selection region is currently visible. Since every
+    /// copy ends the gesture (0290), this is true only mid-drag (and
+    /// only once the drag actually painted a region — a plain click
+    /// never does).
     pub fn is_active(&self) -> bool {
         self.state.borrow().region.is_some()
     }
@@ -276,10 +286,18 @@ impl Selection {
                         if st.drag.take().is_none() {
                             return SelectionAct::Pass; // orphan release
                         }
-                        if st.region.is_some() {
-                            SelectionAct::Copy // release copies; region stays visible
-                        } else {
-                            SelectionAct::Consumed // the click's paired release
+                        match st.region.take() {
+                            // Release copies AND ends the gesture (0290):
+                            // a retained region's only remaining power
+                            // was eating the app's next Enter/`c` — the
+                            // copy already happened, so nothing of value
+                            // is lost by clearing here. The highlight
+                            // cells recompose from truth next frame.
+                            Some(region) => {
+                                Self::clear_locked(&mut st);
+                                SelectionAct::Copy(region)
+                            }
+                            None => SelectionAct::Consumed, // the click's paired release
                         }
                     }
                     _ => SelectionAct::Pass, // wheel / motion / other buttons
@@ -287,8 +305,12 @@ impl Selection {
             }
             Event::Key(k) => {
                 // Copy/clear keys exist only while a selection is VISIBLE
-                // (Ctrl+C stays the default quit otherwise).
-                if st.region.is_none() || k.kind == KeyEventKind::Release {
+                // — i.e. mid-drag now that every copy clears (Ctrl+C
+                // stays the default quit otherwise).
+                let Some(region) = st.region else {
+                    return SelectionAct::Pass;
+                };
+                if k.kind == KeyEventKind::Release {
                     return SelectionAct::Pass;
                 }
                 let mods = k.mods.without_locks();
@@ -297,20 +319,22 @@ impl Selection {
                         Self::clear_locked(&mut st);
                         SelectionAct::Consumed
                     }
-                    KeyCode::Enter if mods == Mods::NONE => SelectionAct::Copy,
+                    // Key-copy is one-shot (0290): copy AND clear — the
+                    // deliberate second act ends the gesture exactly
+                    // like the release-copy does.
+                    KeyCode::Enter if mods == Mods::NONE => {
+                        Self::clear_locked(&mut st);
+                        SelectionAct::Copy(region)
+                    }
                     KeyCode::Char('c') if mods == Mods::NONE || mods == Mods::CTRL => {
-                        SelectionAct::Copy
+                        Self::clear_locked(&mut st);
+                        SelectionAct::Copy(region)
                     }
                     _ => SelectionAct::Pass,
                 }
             }
             _ => SelectionAct::Pass,
         }
-    }
-
-    /// The active region, for extraction at copy time.
-    pub(crate) fn active_region(&self) -> Option<Region> {
-        self.state.borrow().region
     }
 
     /// Pre-flatten hook: when the region changed since the last paint,

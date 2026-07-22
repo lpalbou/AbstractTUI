@@ -132,7 +132,8 @@ fn selection_claims_left_drag_only_wheel_and_buttons_pass() {
     let rdown = mouse(MouseKind::Down, MouseButton::Right, 3, 3);
     assert_eq!(sel.on_input(&rdown, &mut clamp), SelectionAct::Pass);
 
-    // Left down arms, drag paints, release copies (region stays).
+    // Left down arms, drag paints, release copies AND ends the gesture
+    // (0290): the region must not linger to swallow later Enter/'c'.
     let down = mouse(MouseKind::Down, MouseButton::Left, 2, 1);
     assert_eq!(sel.on_input(&down, &mut clamp), SelectionAct::Consumed);
     assert!(!sel.is_active(), "a click alone never paints");
@@ -140,13 +141,28 @@ fn selection_claims_left_drag_only_wheel_and_buttons_pass() {
     assert_eq!(sel.on_input(&drag, &mut clamp), SelectionAct::Consumed);
     assert!(sel.is_active());
     let up = mouse(MouseKind::Up, MouseButton::Left, 6, 2);
-    assert_eq!(sel.on_input(&up, &mut clamp), SelectionAct::Copy);
-    assert!(sel.is_active(), "release keeps the region visible");
+    match sel.on_input(&up, &mut clamp) {
+        SelectionAct::Copy(_) => {}
+        other => panic!("release must copy, got {other:?}"),
+    }
+    assert!(!sel.is_active(), "the copy ends the gesture (0290)");
 
-    // A fresh click clears (spec: Esc/click clears).
+    // Keys after the release-copy route normally — nothing lingers.
+    let enter = Event::Key(KeyEvent::plain(KeyCode::Enter));
+    let plain_c = Event::Key(KeyEvent::char('c'));
+    assert_eq!(sel.on_input(&enter, &mut clamp), SelectionAct::Pass);
+    assert_eq!(sel.on_input(&plain_c, &mut clamp), SelectionAct::Pass);
+
+    // A fresh click just re-anchors (nothing visible to clear).
     let down = mouse(MouseKind::Down, MouseButton::Left, 9, 9);
     assert_eq!(sel.on_input(&down, &mut clamp), SelectionAct::Consumed);
     assert!(!sel.is_active());
+    let up = mouse(MouseKind::Up, MouseButton::Left, 9, 9);
+    assert_eq!(
+        sel.on_input(&up, &mut clamp),
+        SelectionAct::Consumed,
+        "a click's paired release copies nothing"
+    );
 
     // Disabled: everything passes, even left drags.
     sel.set_enabled(false);
@@ -155,7 +171,7 @@ fn selection_claims_left_drag_only_wheel_and_buttons_pass() {
 }
 
 #[test]
-fn copy_and_clear_keys_exist_only_while_a_region_is_visible() {
+fn copy_keys_are_one_shot_and_exist_only_while_a_region_is_visible() {
     let sel = selection();
     sel.set_enabled(true);
     let mut clamp = viewport_clamp();
@@ -170,17 +186,37 @@ fn copy_and_clear_keys_exist_only_while_a_region_is_visible() {
         assert_eq!(sel.on_input(ev, &mut clamp), SelectionAct::Pass);
     }
 
-    // With a region: copy keys copy, Esc clears.
-    sel.on_input(&mouse(MouseKind::Down, MouseButton::Left, 1, 1), &mut clamp);
-    sel.on_input(&mouse(MouseKind::Drag, MouseButton::Left, 5, 1), &mut clamp);
-    assert_eq!(sel.on_input(&plain_c, &mut clamp), SelectionAct::Copy);
-    assert_eq!(sel.on_input(&ctrl_c, &mut clamp), SelectionAct::Copy);
-    assert_eq!(sel.on_input(&enter, &mut clamp), SelectionAct::Copy);
-    // Other keys route normally under an active selection.
+    // Mid-drag each copy key copies ONCE and ends the gesture (0290):
+    // the very next key routes to the app again.
+    let arm = |sel: &Selection, clamp: &mut Box<dyn FnMut(Point) -> Rect>| {
+        sel.on_input(&mouse(MouseKind::Down, MouseButton::Left, 1, 1), clamp);
+        sel.on_input(&mouse(MouseKind::Drag, MouseButton::Left, 5, 1), clamp);
+        assert!(sel.is_active());
+    };
+    for key in [&plain_c, &ctrl_c, &enter] {
+        arm(&sel, &mut clamp);
+        match sel.on_input(key, &mut clamp) {
+            SelectionAct::Copy(_) => {}
+            other => panic!("{key:?} must copy, got {other:?}"),
+        }
+        assert!(!sel.is_active(), "key-copy is one-shot: {key:?}");
+        assert_eq!(
+            sel.on_input(key, &mut clamp),
+            SelectionAct::Pass,
+            "the same key routes to the app right after the copy"
+        );
+    }
+
+    // Other keys route normally under an active (mid-drag) selection;
+    // Esc cancels without copying.
+    arm(&sel, &mut clamp);
     let other = Event::Key(KeyEvent::char('x'));
     assert_eq!(sel.on_input(&other, &mut clamp), SelectionAct::Pass);
     assert_eq!(sel.on_input(&esc, &mut clamp), SelectionAct::Consumed);
     assert!(!sel.is_active());
+    // The release after an Esc-cancelled drag copies nothing.
+    let up = mouse(MouseKind::Up, MouseButton::Left, 5, 1);
+    assert_eq!(sel.on_input(&up, &mut clamp), SelectionAct::Pass);
 }
 
 #[test]
@@ -195,7 +231,7 @@ fn drag_clamps_to_the_pane_resolved_at_anchor() {
         &mouse(MouseKind::Drag, MouseButton::Left, 50, 20),
         &mut clamp,
     );
-    let region = sel.active_region().expect("region");
+    let region = sel.state.borrow().region.expect("region");
     let mut out = Vec::new();
     region.row_spans(&mut out);
     for span in out {

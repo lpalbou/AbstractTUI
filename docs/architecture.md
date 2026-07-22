@@ -207,9 +207,14 @@ each clause: an idle frame emits zero bytes
 no-change frame allocates nothing
 (`alloc_budget::presenter_no_change_frame_emits_and_allocates_nothing`),
 steady-state diff and present allocate nothing
-(`alloc_budget::diff_present_steady_state_allocates_nothing`), and a static
+(`alloc_budget::diff_present_steady_state_allocates_nothing`), a static
 shader on an idle layer performs zero shade calls
-(`render::compositor::tests::shader_runs_only_for_damaged_cells_and_never_when_static`).
+(`render::compositor::tests::shader_runs_only_for_damaged_cells_and_never_when_static`),
+and the guarantee holds through the whole app layer with the modern
+mounts in play — a streaming `Feed`, an armed `interval`, a parked
+`Select` popup, a parked protocol image — where sixteen idle turns
+through the real driver allocate nothing and write nothing
+(`alloc_budget::idle_turns_with_feed_interval_parked_popup_and_parked_image_allocate_nothing`).
 
 Idle really means idle: the event loop blocks in a terminal read with zero
 wakeups until input, a resize, a cross-thread wake, or a timer deadline

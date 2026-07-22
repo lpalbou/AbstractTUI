@@ -51,6 +51,20 @@ pub(crate) fn append_emergency_leave(extra: &[u8]) {
     }
 }
 
+/// Prepend to the emergency restore bytes — for teardown that must run
+/// while the alternate screen is still active (the kitty keyboard pop:
+/// the protocol stacks are per screen buffer, so a pop AFTER `?1049l`
+/// would hit the main screen's stack, not the entry we pushed). Verb
+/// resets that target the MAIN screen keep using
+/// [`append_emergency_leave`]. No-op when no session is armed.
+pub(crate) fn prepend_emergency_leave(extra: &[u8]) {
+    if let Ok(mut g) = EMERGENCY.lock() {
+        if let Some(s) = g.as_mut() {
+            s.leave_bytes.splice(0..0, extra.iter().copied());
+        }
+    }
+}
+
 /// Restore the terminal from a context that cannot reach the `Terminal`
 /// instance (panic hook, signal-ish last resort). Idempotent; a subsequent
 /// `leave()`/`Drop` re-restore is harmless (same bytes, same termios).

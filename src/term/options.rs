@@ -76,6 +76,18 @@ impl KittyFlags {
     pub const fn is_empty(self) -> bool {
         self.0 == 0
     }
+
+    /// The `CSI > flags u` push realizing these flags. Shared by
+    /// [`EnterOptions::enter_bytes`] and the runtime upgrade verb
+    /// (`Terminal::set_kitty_keyboard`) so the two emission points can
+    /// never drift apart (the `MouseMode::arm_bytes` rule).
+    pub(crate) fn push_bytes(self) -> Vec<u8> {
+        format!("\x1b[>{}u", self.0).into_bytes()
+    }
+
+    /// The `CSI < u` pop undoing one push — the exact bytes
+    /// [`EnterOptions::leave_bytes`] emits for its own entry.
+    pub(crate) const POP_BYTES: &'static [u8] = b"\x1b[<u";
 }
 
 /// What `Terminal::enter` should switch on. Defaults are the full-screen
@@ -137,7 +149,7 @@ impl EnterOptions {
             // Push (>) rather than set (=): leave pops our entry, restoring
             // whatever the terminal had, instead of clobbering the outer
             // program's flags (matters under nested screens like ssh+kitty).
-            b.extend_from_slice(format!("\x1b[>{}u", self.kitty_keyboard.0).as_bytes());
+            b.extend_from_slice(&self.kitty_keyboard.push_bytes());
         }
         b
     }
@@ -147,7 +159,7 @@ impl EnterOptions {
     pub fn leave_bytes(&self) -> Vec<u8> {
         let mut b = Vec::with_capacity(64);
         if !self.kitty_keyboard.is_empty() {
-            b.extend_from_slice(b"\x1b[<u");
+            b.extend_from_slice(KittyFlags::POP_BYTES);
         }
         if self.focus_events {
             b.extend_from_slice(b"\x1b[?1004l");

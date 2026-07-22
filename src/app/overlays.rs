@@ -250,9 +250,13 @@ impl Overlays {
     }
 
     /// Register an image overlay: rendered through the gfx capability
-    /// ladder each time it is dirty (or the frame damages its rect).
-    /// Byte channels emit through presenter custody post-present; the
-    /// mosaic fallback blits cells into the root layer pre-flatten.
+    /// ladder each time it is dirty. Byte channels emit through
+    /// presenter custody post-present; the mosaic fallback blits cells
+    /// into the root layer pre-flatten. Repaints beneath a parked
+    /// placement: mosaic re-blits (driver repair scan), kitty floats
+    /// above cells unharmed; iTerm2/sixel pixels DECAY under
+    /// beneath-repaints — re-emission would cost the full payload per
+    /// frame, so that repair is deliberate design space (backlog 0660).
     pub fn image(&self, rect: Rect, bitmap: Bitmap) -> ImageHandle {
         let mut store = self.store.borrow_mut();
         store.next_id += 1;

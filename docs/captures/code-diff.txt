@@ -1,0 +1,20 @@
+
+ ╭ review: present.rs ────────────────────────────────────────────────────────────╮
+ │ 1 │ diff --git a/src/render/present.rs b/src/render/present.rs                 │
+ │ 2 │ --- a/src/render/present.rs                                                │
+ │ 3 │ +++ b/src/render/present.rs                                                │
+ │ 4 │ @@ -41,7 +41,7 @@ fn emit_runs(out: &mut Vec<u8>) {                        │
+ │ 5 │      for run in runs {                                                     │
+ │ 6 │          // Idle frames must stay free.                                    │
+ │ 7 │ -        if run.cells.is_empty() {                                         │
+ │ 8 │ +        if run.is_empty() {                                               │
+ │ 9 │              continue;                                                     │
+ │10 │          }                                                                 │
+ │11 │          emit(run, out);                                                   │
+ │12 │ @@ -88,4 +88,6 @@ fn flush(out: &mut Vec<u8>) {                            │
+ │13 │      term.write(out)?;                                                     │
+ │14 │ +    // One flush per frame — the damage contract's §6.                    │
+ │15 │ +    term.flush()?;                                                        │
+ │16 │  }                                                                         │
+ ╰────────────────────────────────────────────────────────────────────────────────╯
+

@@ -685,6 +685,39 @@ impl Terminal for UnixTerminal {
         })
     }
 
+    fn set_kitty_keyboard(&mut self, flags: super::options::KittyFlags) -> Result<()> {
+        // The push/pop accounting lives in the entered options: leave
+        // derives its pop from them, and suspend re-enters with them, so
+        // updating `opts.kitty_keyboard` here makes leave pop exactly
+        // once and suspend pop-then-re-push with zero extra state.
+        let Some(state) = &mut self.entered else {
+            return Err(Error::Term(
+                "set_kitty_keyboard outside a session — enter() first".into(),
+            ));
+        };
+        let prev = state.opts.kitty_keyboard;
+        if prev == flags {
+            return Ok(());
+        }
+        state.opts.kitty_keyboard = flags;
+        let mut bytes = Vec::with_capacity(16);
+        if !prev.is_empty() {
+            bytes.extend_from_slice(super::options::KittyFlags::POP_BYTES);
+        }
+        if !flags.is_empty() {
+            bytes.extend_from_slice(&flags.push_bytes());
+        }
+        if prev.is_empty() && !flags.is_empty() {
+            // The panic hook must now pop the entry it cannot know about
+            // — PREPENDED so the pop runs while the alternate screen is
+            // still active (kitty stacks are per screen buffer). The
+            // inverse transition leaves the captured pop in place: a pop
+            // on an empty stack is defined harmless (flags reset to 0).
+            sys::prepend_emergency_leave(super::options::KittyFlags::POP_BYTES);
+        }
+        self.write(&bytes)
+    }
+
     fn cell_pixel_size(&mut self) -> Option<PixelSize> {
         // TIOCGWINSZ reports the WHOLE window in pixels; one cell is the
         // quotient. Many terminals report 0 pixels — that is "unknown",

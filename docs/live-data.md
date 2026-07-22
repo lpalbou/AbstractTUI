@@ -122,9 +122,10 @@ The rendering side pairs the bounded window with the `Feed` widget
 follow-tail: the content extent is measured (no size hint), the offset
 sticks to the bottom until the user scrolls up, and setting the follow
 signal true jumps back to the latest. The window syncs into slot keys,
-so the Feed holds at most `capacity` items — bounded end to end. (When
-`FeedState::clear` lands, the sync body becomes clear-and-repush; slot
-keys are today's equivalent.)
+so the Feed holds at most `capacity` items — bounded end to end.
+(`FeedState::clear` enables a simpler clear-and-repush sync; the
+slot-key recipe shown here re-typesets only the slots whose content
+actually changed.)
 
 ```rust
 use std::sync::atomic::{AtomicBool, Ordering};

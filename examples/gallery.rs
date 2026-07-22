@@ -2,10 +2,12 @@
 //!
 //! One screen, one keypress: every token (grounds, text tiers, semantic
 //! and syntax inks, selection pair, chart ramp), every visual widget in
-//! its states, live charts, a highlighted code block and a rich markdown
-//! sample — all restyling together through the one theme signal. This is
-//! the design-system screenshot AND the visual-regression surface: any
-//! token or widget drift shows up here first.
+//! its states — including the choice controls (`Select`) and the
+//! multiline composer (`TextArea`) — live charts, a highlighted code
+//! block, a diff-tinted patch and a rich markdown sample — all restyling
+//! together through the one theme signal. This is the design-system
+//! screenshot AND the visual-regression surface: any token or widget
+//! drift shows up here first.
 //!
 //! Keys: t / T next / prev theme · Tab focus · Enter/Space activate ·
 //! q quit.
@@ -24,6 +26,9 @@ use abstracttui::widgets::{
 
 const CODE_SAMPLE: &str = "// tokens, not hex\nfn theme(id: &str) -> u32 {\n    let floor = 4.5;\n    resolve(id, \"dark\", floor)\n}";
 
+const DIFF_SAMPLE: &str =
+    "@@ -1,2 +1,2 @@ fn theme()\n-let floor = 4.4;\n+let floor = 4.5;\n resolve(id)";
+
 const MD_SAMPLE: &str = "## Rich text\nBody with **bold**, *italic*, `code` and a [link](x).\n> quotes recede politely\n- lists mark with accent_alt";
 
 fn main() -> abstracttui::base::Result<()> {
@@ -31,7 +36,7 @@ fn main() -> abstracttui::base::Result<()> {
         println!("gallery: needs an interactive terminal — skipping cleanly");
         return Ok(());
     }
-    let mut app = App::new(Size::new(112, 32));
+    let mut app = App::new(Size::new(112, 38));
     let quitter = app.quitter();
     app.mount(move |cx| {
         let theme = use_theme(cx);
@@ -40,6 +45,11 @@ fn main() -> abstracttui::base::Result<()> {
         let agree = cx.signal(true);
         let name = cx.signal(String::new());
         let spin = cx.signal(0u64);
+        let channel = cx.signal(0usize);
+        // Two seeded lines so the composer's multiline nature is visible
+        // on the still (a one-row TextArea reads as a TextInput).
+        let composer = TextAreaState::new(cx);
+        composer.set_text("a multiline composer —\nit grows with content");
 
         let step_theme = move |delta: i64| {
             let n = themes().len() as i64;
@@ -67,7 +77,9 @@ fn main() -> abstracttui::base::Result<()> {
                     let mut board = Element::new()
                         .style(LayoutStyle::row().gap(1).grow(1.0))
                         .child(tokens_panel(&t))
-                        .child(widgets_panel(gcx, &t, agree, name, spin));
+                        .child(widgets_panel(
+                            gcx, &t, agree, name, spin, channel, &composer,
+                        ));
                     if wide {
                         board = board.child(content_panel(&t));
                     }
@@ -241,6 +253,8 @@ fn widgets_panel(
     agree: Signal<bool>,
     name: Signal<String>,
     spin: Signal<u64>,
+    channel: Signal<usize>,
+    composer: &TextAreaState,
 ) -> View {
     let mut badges = Element::new().style(LayoutStyle::row().gap(1).h(1));
     for (tone, label) in [
@@ -282,6 +296,27 @@ fn widgets_panel(
                 .value(name)
                 .placeholder("focus me, type…")
                 .layout(LayoutStyle::default().h(1))
+                .element(gcx, t)
+                .build(),
+        )
+        // The 0500 choice family (Select face) and the 0120 multiline
+        // composer share the TextInput frame vocabulary — the parity
+        // is the point of showing them side by side.
+        .child(
+            Select::new(vec![
+                SelectOption::new("stable").hint("lts"),
+                SelectOption::new("beta"),
+                SelectOption::new("nightly").hint("daily"),
+            ])
+            .value(channel)
+            .layout(LayoutStyle::default().h(1).shrink(0.0))
+            .view(gcx),
+        )
+        .child(
+            TextArea::new()
+                .state(composer)
+                .rows(1, 2)
+                .placeholder("multiline composer…")
                 .element(gcx, t)
                 .build(),
         )
@@ -383,6 +418,16 @@ fn content_panel(t: &TokenSet) -> View {
         .child(
             CodeView::new(CODE_SAMPLE)
                 .layout(LayoutStyle::default().h(5))
+                .element(t)
+                .build(),
+        )
+        // The diff mapping (0140): added/removed/hunk ride the audited
+        // semantic inks — state, not syntax.
+        .child(
+            CodeView::new(DIFF_SAMPLE)
+                .lang("diff")
+                .line_numbers(false)
+                .layout(LayoutStyle::default().h(4))
                 .element(t)
                 .build(),
         )

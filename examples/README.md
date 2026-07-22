@@ -63,12 +63,13 @@ walks — no rand, no wall entropy.
 
 The whole design system on one screen: token swatches (grounds, text
 tiers, semantics, chart ramp, syntax-on-raised, border pair), every
-widget state (badges, action/disabled buttons, input, checkbox +
-selection pair, progress ramp, spinner families, focused pane ring), and
-a content column (2-series line chart, bar chart, syntax-colored code,
-rich markdown). One keypress restyles the entire board — the theme-switch
-acceptance surface and the marketing screenshot. Below ~104 cols the
-content column bows out and the board stays composed.
+widget state (badges, action/disabled buttons, input, Select trigger,
+multiline TextArea, checkbox + selection pair, progress ramp, spinner
+families, focused pane ring), and a content column (2-series line chart,
+bar chart, syntax-colored code, a diff-tinted patch, rich markdown). One
+keypress restyles the entire board — the theme-switch acceptance surface
+and the marketing screenshot. Below ~104 cols the content column bows
+out and the board stays composed.
 
 - Keys: `t`/`T` cycle themes, Tab focus, Enter/space activate, `q` quit.
 - Needs: 104+ cols for all three columns; degrades to two.
@@ -122,8 +123,8 @@ the image through the pixel-protocol ladder with the chosen channel
 named (kitty/iterm2/sixel/mosaic — degradation visible, never silent).
 Takes a PNG/JPEG path or generates a procedural test card.
 
-- Keys: `d` dither, `p` protocol placement, `q` quit. `--caps` prints
-  the capability report.
+- Keys: `d` dither, `p` protocol placement, `t` theme, `q` quit.
+  `--caps` prints the capability report.
 - Needs: any tty; pixel protocols where the terminal offers one.
 - Looks like: the same picture four ways, sharpening left to right.
 
@@ -147,8 +148,10 @@ The reference for the shareable-component claim: three reusable
 components (clickable `stat_card` with props + `on_click`, `field`
 composition wrapper, `toolbar`) composed repeatedly with different props
 into a settings screen; live signals flow input → summary as you type;
-cards carry `Block::shadow` elevation. Heavily commented — this file is
-documentation.
+cards carry `Block::shadow` elevation. The form also hosts the choice
+family — a channel `Select` sharing its signal with the radio group, a
+theme `Combobox` applying live, a features `MultiSelect`. Heavily
+commented — this file is documentation.
 
 - Keys: Tab focus, Enter/space activate, type in inputs, `q` quit.
 - Needs: any tty.
@@ -161,9 +164,46 @@ documentation.
 percent-framed) over the same children, cycled with `g`; a col_span hero
 card; fr largest-remainder tiling visible on resize.
 
-- Keys: `g` cycles recipes, `q` quit.
+- Keys: `g` cycles recipes, `t` theme, `q` quit.
 - Needs: any tty; resize to watch tracks re-tile.
 - Looks like: the same cards snapping between three different skeletons.
+
+## feed
+
+Live background data done the sanctioned way: a worker thread produces
+bursty synthetic log events into `bounded_source` (capacity, overflow
+policy, honest drop counters), rendered by `Feed` (keyed rich items,
+windowed paint) inside `Scroll` with the engine's follow-tail. A whole
+burst arrives as ONE repaint; the quiet gaps are byte-for-byte idle;
+the status line counts dropped events honestly; events/sec samples
+through `reactive::interval`. Drag-select is enabled throughout — drag
+paints the highlight, releasing (or `c`) copies via OSC 52.
+
+- Keys: space pauses/resumes the producer · `f` jumps to the tail ·
+  wheel/arrows scroll · drag selects, `c` copies · `q` or Ctrl+C quits.
+- Needs: any tty.
+- Looks like: a log pane filling in bursts, pinned to the tail until
+  you scroll up, with a drop counter that never lies.
+
+## transcript
+
+The streaming-conversation proof: scripted turns stream in token by
+token through `Feed` + `md::StreamSession` — closed blocks freeze,
+only the open block re-typesets, code fences tint from their opening
+line — while follow-tail breaks on scroll-up and re-pins at the
+bottom; an `s` stress toggle rebuilds with 10,000 history items to
+prove windowed drawing. The bottom composer is a `TextArea` (grows
+1..4 rows, Enter sends, Alt+Enter newline, ↑↓ history at the buffer
+edges) with `/` command + `@` mention completion in an anchored
+dropdown at the caret.
+
+- Keys (composer focused, its keys win while typing): Enter send ·
+  Alt+Enter newline (Shift+Enter on kitty) · ↑↓ caret then history ·
+  `/help` `/theme` `/clear` `/quit` · Ctrl+C quit. Tab off the
+  composer for `f` re-follow, space pause, `s` stress, `q`.
+- Needs: any tty.
+- Looks like: a chat client answering itself — markdown typesetting
+  live under a composer that completes your commands.
 
 ## splash
 
@@ -188,9 +228,13 @@ The deterministic screenshot pipeline: runs the built examples under a
 real pty at fixed sizes/themes, interprets the bytes with the testing
 rig's `VtScreen`, and dumps plain + styled text renders into
 `docs/captures/` — plus `themes-table.md` (every theme's token hex from
-the registry) and in-process splash stills (2D/3D at the burst and
-settled beats). The docs cycle embeds these as fenced "screenshots".
+the registry), in-process splash stills (2D/3D at the burst and settled
+beats), and in-process APP stills driven headlessly through
+`Driver` + `CaptureTerm` (streaming transcript with the completion
+dropdown open, an open Select popup, a diff-tinted `CodeView`, a feed
+with follow-tail broken) — those four are clockless and
+byte-deterministic. The docs cycle embeds these as fenced "screenshots".
 
 - Run: `cargo build --examples && cargo run --example capture`
-  (`-- themes|splash|shots` for one family).
+  (`-- themes|splash|shots|apps` for one family).
 - Needs: unix `script(1)` for the pty shots; nothing for the rest.

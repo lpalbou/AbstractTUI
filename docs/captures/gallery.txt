@@ -9,22 +9,28 @@
  │██ raised             Aa Aa Aa │  │                                     │  │    │   ⠈⢆⡀ ⢀⠔⠁⡀ ⢀⠤⠈⠢⡀ ⡠⠊⠁  ⠈⢆⠑│
  │                               │  │▐focus me, type…                    ▌│  │0   │     ⠈⠉⠁  ⠈⠉⠁   ⠈⠉       ⠈│
  │semantics                      │  │                                     │  │    └──────────────────────────│
- │●ok ●wrn ●err ●inf             │  │[x] selection pair on focus          │  │                               │
+ │●ok ●wrn ●err ●inf             │  │▐stable                            ▾▌│  │                               │
  │accent alt link  sel           │  │                                     │  │         ▁▁ ▃▃  ⠔⠉⠉⠦⣀⡠⠒⠉⠑⠤⣀⡠⠒⠉⠑│
- │                               │  │───────────── progress ──────────────│  │▅▅ ▆▆ ██ ██ ██                 │
- │chart ramp                     │  │                                     │  │                               │
+ │                               │  │▐a multiline composer —             ▌│  │▅▅ ▆▆ ██ ██ ██                 │
+ │chart ramp                     │  │▐it grows with content              ▌│  │                               │
  │▅▇ ▅▇ ▅▇ ▅▇ ▅▇ ▅▇ ▅▇ ▅▇        │  │                                     │  │1 │ // tokens, not hex         │
- │                               │  │█████████████                        │  │2 │ fn theme(id: &str) -> u32 {│
+ │                               │  │[x] selection pair on focus          │  │2 │ fn theme(id: &str) -> u32 {│
  │syntax (on raised)             │  │                                     │  │3 │     let floor = 4.5;       │
- │ fn name("str", 42)            │  │██████████████████████████▋          │  │4 │     resolve(id, "dark", flo│
+ │ fn name("str", 42)            │  │───────────── progress ──────────────│  │4 │     resolve(id, "dark", flo│
  │ // comments recede            │  │                                     │  │5 │ }                          │
- │                               │  │██████████████████████████████████▍  │  │                               │
- │border · border_focus          │  │                                     │  │Rich text                      │
- │────  ────                     │  │⣾ braille  | line                    │  │                               │
- │                               │  │                                     │  │Body with bold, italic, code   │
- │                               │  │╭ focused pane ─────────────────────╮│  │and a link.                    │
- │                               │  ││border_focus ring                  ││  │                               │
- │                               │  │╰───────────────────────────────────╯│  │▎ quotes recede politely       │
+ │                               │  │                                     │  │                               │
+ │border · border_focus          │  │█████████████                        │  │@@ -1,2 +1,2 @@ fn theme()     │
+ │────  ────                     │  │                                     │  │-let floor = 4.4;              │
+ │                               │  │                                     │  │+let floor = 4.5;              │
+ │                               │  │██████████████████████████▋          │  │ resolve(id)                   │
+ │                               │  │                                     │  │                               │
+ │                               │  │██████████████████████████████████▍  │  │Rich text                      │
+ │                               │  │                                     │  │                               │
+ │                               │  │⣾ braille  | line                    │  │Body with bold, italic, code   │
+ │                               │  │                                     │  │and a link.                    │
+ │                               │  │╭ focused pane ─────────────────────╮│  │                               │
+ │                               │  ││border_focus ring                  ││  │▎ quotes recede politely       │
+ │                               │  │╰───────────────────────────────────╯│  │  • lists mark with accent_alt │
  └───────────────────────────────┘  └─────────────────────────────────────┘  └───────────────────────────────┘
 
 

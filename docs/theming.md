@@ -191,7 +191,7 @@ luminance must agree with its declared `dark` flag by a margin
 marginal and breaks everything downstream that groups by polarity.
 
 Audit exceptions are named per `(theme, rule)` pair, never blanket, and a
-stale exception fails the test suite. Exactly one exists today:
+stale exception fails the test suite. Exactly one exists:
 `everforest-light`'s text on raised chrome measures ~4.25:1 — both values
 are verbatim upstream colors, the rule is stricter than the mandated
 text/ground floor, and 4.25:1 still clears WCAG AA-large.

@@ -147,22 +147,35 @@ fn submit_vs_newline_chords_on_both_wires_and_history_recall() {
     term.push_input(b"end");
     settle(&mut driver, &mut app, &mut term);
     assert_eq!(state.text(), "hi\nthere\nend");
-    // Grow-to-cap: three content rows at rows(1, 3); the composer's
-    // three frame-stroke rows are on screen along with all lines.
+    // Ctrl+J, the UNIVERSAL newline chord (0295): 0x0a IS Ctrl+J on the
+    // legacy wire — works even where Shift+Enter cannot be reported.
+    term.push_input(b"\n");
+    term.push_input(b"tail");
+    settle(&mut driver, &mut app, &mut term);
+    assert_eq!(state.text(), "hi\nthere\nend\ntail");
+    // Grow-to-cap: content rows at rows(1, 3); the composer's
+    // frame-stroke rows are on screen along with the visible lines.
     let lines = screen_lines(&term);
-    assert!(lines.iter().any(|l| l.contains("hi")));
     assert!(lines.iter().any(|l| l.contains("there")));
     assert!(lines.iter().any(|l| l.contains("end")));
+    assert!(lines.iter().any(|l| l.contains("tail")));
 
     term.push_input(b"\r"); // plain Enter: submit
     settle(&mut driver, &mut app, &mut term);
-    assert_eq!(*submitted.borrow(), vec!["hi\nthere\nend".to_string()]);
+    assert_eq!(
+        *submitted.borrow(),
+        vec!["hi\nthere\nend\ntail".to_string()]
+    );
     assert_eq!(state.text(), "", "submit handler cleared the buffer");
 
     // History recall through the wire: empty buffer, Up recalls.
     term.push_input(b"\x1b[A");
     settle(&mut driver, &mut app, &mut term);
-    assert_eq!(state.text(), "hi\nthere\nend", "Up recalled the entry");
+    assert_eq!(
+        state.text(),
+        "hi\nthere\nend\ntail",
+        "Up recalled the entry"
+    );
     // Down at the end: forward past the newest restores the draft ("").
     term.push_input(b"\x1b[B");
     settle(&mut driver, &mut app, &mut term);

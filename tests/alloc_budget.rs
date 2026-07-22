@@ -358,6 +358,143 @@ fn gltf_animation_sampling_is_allocation_free_per_frame() {
     );
 }
 
+// ---------------------------------------------------------------------------
+// Idle honesty for the 0.2.x app surfaces: a mounted Feed (streaming
+// item open), an ARMED interval (not yet due), a PARKED Select popup,
+// and a PARKED byte-channel image (study-2 image review) — the
+// always-mounted shapes of a modern transcript app — must cost literal
+// zero on idle turns: zero bytes, zero allocations, zero reallocations
+// on the UI thread. The byte half is pinned elsewhere (adv_app,
+// wave_livedata, adv_selection, adv_image_lifecycle); this is the
+// allocation half, re-verified on the CURRENT tree with the new
+// widgets in play. The parked kitty placement pins that a terminal-held
+// image costs nothing while nothing changes: `Driver::pre_image_pass`
+// never runs on idle turns (no frame), and a rendered frame with a
+// clean placement early-outs it allocation-free.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn idle_turns_with_feed_interval_parked_popup_and_parked_image_allocate_nothing() {
+    use abstracttui::app::{App, Driver, RunConfig};
+    use abstracttui::prelude::*;
+    use abstracttui::reactive::interval;
+    use abstracttui::testing::CaptureTerm;
+    use abstracttui::ui::text;
+    use abstracttui::widgets::{Feed, FeedItem, FeedState};
+    use std::time::Duration;
+
+    let _serial = serial();
+    let size = Size::new(60, 16);
+    let mut term = CaptureTerm::new(size);
+    let mut app = App::new(size);
+    let start = std::time::Instant::now();
+    app.mount(|cx| {
+        // A feed with history and an OPEN streaming item (live but quiet).
+        let feed = FeedState::new(cx);
+        for i in 0..8 {
+            feed.push(
+                format!("h{i}"),
+                FeedItem::markdown(format!("**msg {i}** body")),
+            );
+        }
+        feed.push_stream("live");
+        feed.stream_append("live", "streaming answer paused mid-");
+        // An armed interval: bounds the SLEEP, never the frames.
+        let ticks = cx.signal(0u32);
+        interval(cx, Duration::from_secs(3600), move || {
+            ticks.update(|t| *t += 1);
+        });
+        let follow = cx.signal(true);
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(
+                Select::new(vec![
+                    SelectOption::new("stable"),
+                    SelectOption::new("beta"),
+                    SelectOption::new("nightly"),
+                ])
+                .layout(LayoutStyle::default().w(20).h(1).shrink(0.0))
+                .view(cx),
+            )
+            .child(
+                Element::new()
+                    .style(LayoutStyle::column().grow(1.0))
+                    .child(
+                        Scroll::new(Feed::new(&feed).view(cx))
+                            .follow_tail(follow)
+                            .view(cx),
+                    )
+                    .build(),
+            )
+            .child(text(" status"))
+            .build()
+    })
+    .expect("mount");
+    let cfg = RunConfig {
+        caps: Some(abstracttui::term::Capabilities::with(|c| {
+            c.truecolor = true;
+            c.colors_256 = true;
+            // Byte channel for the parked image below: the placement
+            // must live in TERMINAL state (kitty), not the cell model.
+            c.kitty_graphics = true;
+        })),
+        enter: None,
+        probe: false,
+    };
+    let mut driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
+    // Injected clock, frozen: the interval stays armed-but-not-due for
+    // every measured turn.
+    let now = std::rc::Rc::new(std::cell::Cell::new(start));
+    let clock = now.clone();
+    driver.set_clock(move || clock.get());
+    // Park a protocol image (top-right, off the popup): transmitted
+    // once during setup, then held by the terminal.
+    let overlays = app.overlays();
+    let _img = overlays.image(
+        Rect::new(44, 2, 12, 6),
+        abstracttui::gfx::Bitmap::new(16, 12, Rgba::rgb(200, 40, 40)),
+    );
+    // Settle the mount, focus the trigger (Tab: first focusable), then
+    // park the Select popup open (Enter) and settle again.
+    for _ in 0..64 {
+        if driver.turn(&mut app, &mut term).expect("turn").idle {
+            break;
+        }
+    }
+    term.push_input(b"\t\r");
+    for _ in 0..64 {
+        if driver.turn(&mut app, &mut term).expect("turn").idle {
+            break;
+        }
+    }
+    assert!(
+        term.screen().to_text().contains("nightly"),
+        "precondition: the popup is open and parked:\n{}",
+        term.screen().to_text()
+    );
+    let setup_bytes = term.take_bytes();
+    assert!(
+        setup_bytes.windows(3).any(|w| w == b"\x1b_G"),
+        "precondition: the image went through the kitty byte channel"
+    );
+
+    // 16 idle turns: not one byte, not one allocation.
+    let (allocs, reallocs, bytes) = alloc_delta(|| {
+        for _ in 0..16 {
+            let turn = driver.turn(&mut app, &mut term).expect("idle turn");
+            assert!(turn.idle, "turn must report idle");
+            assert!(!turn.rendered, "idle turn rendered");
+        }
+    });
+    assert_eq!(
+        (allocs, reallocs),
+        (0, 0),
+        "idle turns allocated with the new mounts parked: \
+         {allocs} allocs / {reallocs} reallocs / {bytes} B over 16 turns"
+    );
+    assert!(term.bytes().is_empty(), "idle turns wrote bytes");
+}
+
 #[test]
 fn jpeg_hostile_corpus_allocation_is_bounded() {
     let _serial = serial();

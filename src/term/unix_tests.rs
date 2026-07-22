@@ -315,6 +315,61 @@ fn pty_suspend_restores_then_reenters() {
 }
 
 #[test]
+fn pty_runtime_kitty_push_pops_on_suspend_repushes_on_resume_and_pops_on_leave() {
+    // Backlog 0293: the probe-driven runtime push
+    // (`Terminal::set_kitty_keyboard`) must ride the SESSION accounting —
+    // enter carried no flags, the upgrade pushes, and from then on
+    // leave/suspend behave exactly as if enter had pushed: suspend pops
+    // before teardown, resume re-pushes after re-enter, leave pops.
+    let Some((master, slave)) = open_pty() else {
+        eprintln!("skipping: openpty unavailable in this environment");
+        return;
+    };
+    let mut term = UnixTerminal::from_fds(slave, slave, true);
+    term.enter(&EnterOptions::default()).expect("enter"); // no kitty flags
+    let entered = read_master(master, 100);
+    assert!(
+        !String::from_utf8_lossy(&entered).contains("\x1b[>"),
+        "enter must not push: env could not claim the protocol"
+    );
+
+    term.set_kitty_keyboard(KittyFlags::standard()).unwrap();
+    term.flush().unwrap();
+    let s = String::from_utf8_lossy(&read_master(master, 100)).into_owned();
+    assert!(s.contains("\x1b[>3u"), "runtime push: {s:?}");
+    assert!(!s.contains("\x1b[<u"), "first push pops nothing: {s:?}");
+
+    // Same flags again: zero bytes (idempotent).
+    term.set_kitty_keyboard(KittyFlags::standard()).unwrap();
+    term.flush().unwrap();
+    assert!(
+        read_master(master, 60).is_empty(),
+        "re-setting identical flags must emit nothing"
+    );
+
+    term.suspend().expect("suspend round-trip");
+    let s = String::from_utf8_lossy(&read_master(master, 200)).into_owned();
+    let pop = s.find("\x1b[<u").expect("suspend pops the runtime push");
+    let off = s.find("\x1b[?1049l").expect("left altscreen");
+    let back = s.rfind("\x1b[?1049h").expect("re-entered altscreen");
+    let repush = s.rfind("\x1b[>3u").expect("resume re-pushes");
+    assert!(
+        pop < off && back < repush,
+        "pop inside teardown, re-push inside re-enter: {s:?}"
+    );
+
+    term.leave().expect("leave");
+    let s = String::from_utf8_lossy(&read_master(master, 100)).into_owned();
+    assert_eq!(
+        s.matches("\x1b[<u").count(),
+        1,
+        "final leave pops exactly the one live push: {s:?}"
+    );
+    drop(term);
+    unsafe { libc::close(master) };
+}
+
+#[test]
 fn pty_resize_via_sigwinch_pipe() {
     let Some((master, slave)) = open_pty() else {
         eprintln!("skipping: openpty unavailable in this environment");

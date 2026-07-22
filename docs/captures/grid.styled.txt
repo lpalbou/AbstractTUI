@@ -1,19 +1,19 @@
-size=110x30 cursor=0,29 modes=[7,25,1049]
+size=110x30 cursor=0,0 modes=[7,25,1049]
   0|                                                                                                              |
-  1| grid — 3 equal fr columns    (g cycles · t theme · q quit)                                                   |
+  1|                                                                                                              |
   2|                                                                                                              |
-  3| ╭ hero — col_span 2 ──────────────────────────────────────────────────╮  ╭ beta ──────────────────────────╮  |
-  4| │cell 0                                                               │  │cell 1                          │  |
-  5| │                                                                     │  │                                │  |
-  6| ╰─────────────────────────────────────────────────────────────────────╯  ╰────────────────────────────────╯  |
+  3|                                                                                                              |
+  4|                                                                                                              |
+  5|                                                                                                              |
+  6|                                                                                                              |
   7|                                                                                                              |
-  8| ╭ gamma ──────────────────────────╮  ╭ delta ─────────────────────────╮  ╭ alpha ─────────────────────────╮  |
-  9| │cell 2                           │  │cell 3                          │  │cell 4                          │  |
- 10| ╰─────────────────────────────────╯  ╰────────────────────────────────╯  ╰────────────────────────────────╯  |
+  8|                                                                                                              |
+  9|                                                                                                              |
+ 10|                                                                                                              |
  11|                                                                                                              |
- 12| ╭ beta ───────────────────────────╮  ╭ gamma ─────────────────────────╮  ╭ delta ─────────────────────────╮  |
- 13| │cell 5                           │  │cell 6                          │  │cell 7                          │  |
- 14| ╰─────────────────────────────────╯  ╰────────────────────────────────╯  ╰────────────────────────────────╯  |
+ 12|                                                                                                              |
+ 13|                                                                                                              |
+ 14|                                                                                                              |
  15|                                                                                                              |
  16|                                                                                                              |
  17|                                                                                                              |
@@ -29,164 +29,3 @@ size=110x30 cursor=0,29 modes=[7,25,1049]
  27|                                                                                                              |
  28|                                                                                                              |
  29|                                                                                                              |
-styles:
-  0:0..110 fg=#eeeeee bg=#1a1a2e
-  1:0..110 fg=#eeeeee bg=#1a1a2e
-  2:0..110 fg=#eeeeee bg=#1a1a2e
-  3:0..1 fg=#eeeeee bg=#1a1a2e
-  3:1..2 fg=#3c3c4d bg=#16213e
-  3:2..21 fg=#aaaaaa bg=#16213e
-  3:21..72 fg=#3c3c4d bg=#16213e
-  3:72..74 fg=#eeeeee bg=#1a1a2e
-  3:74..75 fg=#3c3c4d bg=#16213e
-  3:75..81 fg=#aaaaaa bg=#16213e
-  3:81..108 fg=#3c3c4d bg=#16213e
-  3:108..110 fg=#eeeeee bg=#1a1a2e
-  4:0..1 fg=#eeeeee bg=#1a1a2e
-  4:1..2 fg=#3c3c4d bg=#16213e
-  4:2..8 fg=#aaaaaa bg=#16213e
-  4:8..71 fg=#16213e bg=#16213e
-  4:71..72 fg=#3c3c4d bg=#16213e
-  4:72..73 fg=#10101d bg=#10101d
-  4:73..74 fg=#eeeeee bg=#1a1a2e
-  4:74..75 fg=#3c3c4d bg=#16213e
-  4:75..81 fg=#aaaaaa bg=#16213e
-  4:81..107 fg=#16213e bg=#16213e
-  4:107..108 fg=#3c3c4d bg=#16213e
-  4:108..109 fg=#10101d bg=#10101d
-  4:109..110 fg=#eeeeee bg=#1a1a2e
-  5:0..1 fg=#eeeeee bg=#1a1a2e
-  5:1..2 fg=#3c3c4d bg=#16213e
-  5:2..71 fg=#16213e bg=#16213e
-  5:71..72 fg=#3c3c4d bg=#16213e
-  5:72..73 fg=#10101d bg=#10101d
-  5:73..74 fg=#eeeeee bg=#1a1a2e
-  5:74..75 fg=#3c3c4d bg=#16213e
-  5:75..107 fg=#16213e bg=#16213e
-  5:107..108 fg=#3c3c4d bg=#16213e
-  5:108..109 fg=#10101d bg=#10101d
-  5:109..110 fg=#eeeeee bg=#1a1a2e
-  6:0..1 fg=#eeeeee bg=#1a1a2e
-  6:1..72 fg=#3c3c4d bg=#16213e
-  6:72..73 fg=#10101d bg=#10101d
-  6:73..74 fg=#eeeeee bg=#1a1a2e
-  6:74..108 fg=#3c3c4d bg=#16213e
-  6:108..109 fg=#10101d bg=#10101d
-  6:109..110 fg=#eeeeee bg=#1a1a2e
-  7:0..2 fg=#eeeeee bg=#1a1a2e
-  7:2..73 fg=#10101d bg=#10101d
-  7:73..75 fg=#eeeeee bg=#1a1a2e
-  7:75..109 fg=#10101d bg=#10101d
-  7:109..110 fg=#eeeeee bg=#1a1a2e
-  8:0..1 fg=#eeeeee bg=#1a1a2e
-  8:1..2 fg=#3c3c4d bg=#16213e
-  8:2..9 fg=#aaaaaa bg=#16213e
-  8:9..36 fg=#3c3c4d bg=#16213e
-  8:36..38 fg=#eeeeee bg=#1a1a2e
-  8:38..39 fg=#3c3c4d bg=#16213e
-  8:39..46 fg=#aaaaaa bg=#16213e
-  8:46..72 fg=#3c3c4d bg=#16213e
-  8:72..74 fg=#eeeeee bg=#1a1a2e
-  8:74..75 fg=#3c3c4d bg=#16213e
-  8:75..82 fg=#aaaaaa bg=#16213e
-  8:82..108 fg=#3c3c4d bg=#16213e
-  8:108..110 fg=#eeeeee bg=#1a1a2e
-  9:0..1 fg=#eeeeee bg=#1a1a2e
-  9:1..2 fg=#3c3c4d bg=#16213e
-  9:2..8 fg=#aaaaaa bg=#16213e
-  9:8..35 fg=#16213e bg=#16213e
-  9:35..36 fg=#3c3c4d bg=#16213e
-  9:36..37 fg=#10101d bg=#10101d
-  9:37..38 fg=#eeeeee bg=#1a1a2e
-  9:38..39 fg=#3c3c4d bg=#16213e
-  9:39..45 fg=#aaaaaa bg=#16213e
-  9:45..71 fg=#16213e bg=#16213e
-  9:71..72 fg=#3c3c4d bg=#16213e
-  9:72..73 fg=#10101d bg=#10101d
-  9:73..74 fg=#eeeeee bg=#1a1a2e
-  9:74..75 fg=#3c3c4d bg=#16213e
-  9:75..81 fg=#aaaaaa bg=#16213e
-  9:81..107 fg=#16213e bg=#16213e
-  9:107..108 fg=#3c3c4d bg=#16213e
-  9:108..109 fg=#10101d bg=#10101d
-  9:109..110 fg=#eeeeee bg=#1a1a2e
-  10:0..1 fg=#eeeeee bg=#1a1a2e
-  10:1..36 fg=#3c3c4d bg=#16213e
-  10:36..37 fg=#10101d bg=#10101d
-  10:37..38 fg=#eeeeee bg=#1a1a2e
-  10:38..72 fg=#3c3c4d bg=#16213e
-  10:72..73 fg=#10101d bg=#10101d
-  10:73..74 fg=#eeeeee bg=#1a1a2e
-  10:74..108 fg=#3c3c4d bg=#16213e
-  10:108..109 fg=#10101d bg=#10101d
-  10:109..110 fg=#eeeeee bg=#1a1a2e
-  11:0..2 fg=#eeeeee bg=#1a1a2e
-  11:2..37 fg=#10101d bg=#10101d
-  11:37..39 fg=#eeeeee bg=#1a1a2e
-  11:39..73 fg=#10101d bg=#10101d
-  11:73..75 fg=#eeeeee bg=#1a1a2e
-  11:75..109 fg=#10101d bg=#10101d
-  11:109..110 fg=#eeeeee bg=#1a1a2e
-  12:0..1 fg=#eeeeee bg=#1a1a2e
-  12:1..2 fg=#3c3c4d bg=#16213e
-  12:2..8 fg=#aaaaaa bg=#16213e
-  12:8..36 fg=#3c3c4d bg=#16213e
-  12:36..38 fg=#eeeeee bg=#1a1a2e
-  12:38..39 fg=#3c3c4d bg=#16213e
-  12:39..46 fg=#aaaaaa bg=#16213e
-  12:46..72 fg=#3c3c4d bg=#16213e
-  12:72..74 fg=#eeeeee bg=#1a1a2e
-  12:74..75 fg=#3c3c4d bg=#16213e
-  12:75..82 fg=#aaaaaa bg=#16213e
-  12:82..108 fg=#3c3c4d bg=#16213e
-  12:108..110 fg=#eeeeee bg=#1a1a2e
-  13:0..1 fg=#eeeeee bg=#1a1a2e
-  13:1..2 fg=#3c3c4d bg=#16213e
-  13:2..8 fg=#aaaaaa bg=#16213e
-  13:8..35 fg=#16213e bg=#16213e
-  13:35..36 fg=#3c3c4d bg=#16213e
-  13:36..37 fg=#10101d bg=#10101d
-  13:37..38 fg=#eeeeee bg=#1a1a2e
-  13:38..39 fg=#3c3c4d bg=#16213e
-  13:39..45 fg=#aaaaaa bg=#16213e
-  13:45..71 fg=#16213e bg=#16213e
-  13:71..72 fg=#3c3c4d bg=#16213e
-  13:72..73 fg=#10101d bg=#10101d
-  13:73..74 fg=#eeeeee bg=#1a1a2e
-  13:74..75 fg=#3c3c4d bg=#16213e
-  13:75..81 fg=#aaaaaa bg=#16213e
-  13:81..107 fg=#16213e bg=#16213e
-  13:107..108 fg=#3c3c4d bg=#16213e
-  13:108..109 fg=#10101d bg=#10101d
-  13:109..110 fg=#eeeeee bg=#1a1a2e
-  14:0..1 fg=#eeeeee bg=#1a1a2e
-  14:1..36 fg=#3c3c4d bg=#16213e
-  14:36..37 fg=#10101d bg=#10101d
-  14:37..38 fg=#eeeeee bg=#1a1a2e
-  14:38..72 fg=#3c3c4d bg=#16213e
-  14:72..73 fg=#10101d bg=#10101d
-  14:73..74 fg=#eeeeee bg=#1a1a2e
-  14:74..108 fg=#3c3c4d bg=#16213e
-  14:108..109 fg=#10101d bg=#10101d
-  14:109..110 fg=#eeeeee bg=#1a1a2e
-  15:0..2 fg=#eeeeee bg=#1a1a2e
-  15:2..37 fg=#10101d bg=#10101d
-  15:37..39 fg=#eeeeee bg=#1a1a2e
-  15:39..73 fg=#10101d bg=#10101d
-  15:73..75 fg=#eeeeee bg=#1a1a2e
-  15:75..109 fg=#10101d bg=#10101d
-  15:109..110 fg=#eeeeee bg=#1a1a2e
-  16:0..110 fg=#eeeeee bg=#1a1a2e
-  17:0..110 fg=#eeeeee bg=#1a1a2e
-  18:0..110 fg=#eeeeee bg=#1a1a2e
-  19:0..110 fg=#eeeeee bg=#1a1a2e
-  20:0..110 fg=#eeeeee bg=#1a1a2e
-  21:0..110 fg=#eeeeee bg=#1a1a2e
-  22:0..110 fg=#eeeeee bg=#1a1a2e
-  23:0..110 fg=#eeeeee bg=#1a1a2e
-  24:0..110 fg=#eeeeee bg=#1a1a2e
-  25:0..110 fg=#eeeeee bg=#1a1a2e
-  26:0..110 fg=#eeeeee bg=#1a1a2e
-  27:0..110 fg=#eeeeee bg=#1a1a2e
-  28:0..110 fg=#eeeeee bg=#1a1a2e
-  29:0..110 fg=#eeeeee bg=#1a1a2e

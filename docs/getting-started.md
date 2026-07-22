@@ -99,6 +99,15 @@ the input handles cursor movement, selection (Shift+arrows), word jumps
 (Alt+arrows), and paste for you. Mouse clicks focus and activate the same
 widgets — no extra code.
 
+The same one-import surface covers the rest of a form or chat screen:
+`Select`/`Combobox`/`MultiSelect` for choices (a one-row trigger opening an
+anchored popup), `TextArea` + `TextAreaState` for a multiline composer that
+grows with its content, and `Feed` (`abstracttui::widgets`) with
+`Scroll::follow_tail` for streaming transcripts. The
+[API guide](api.md#widgets--the-built-in-library) walks each one;
+`cargo run --example transcript` and `--example components` show them
+composed.
+
 ## Layout basics
 
 Layout is a flexbox-style solver. The vocabulary: `LayoutStyle::column()` /
@@ -290,5 +299,5 @@ that way.
   compositor, and the render pipeline.
 - [API guide](api.md) — the public surface, module by module.
 - [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
-- [Examples catalog](../examples/README.md) — twelve runnable programs, from
+- [Examples catalog](../examples/README.md) — fourteen runnable programs, from
   the 53-line `hello` to the full `dashboard`, with the keys each answers to.

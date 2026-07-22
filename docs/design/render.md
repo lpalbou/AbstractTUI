@@ -353,7 +353,12 @@ Deterministic byte emission; REDTEAM snapshots exact bytes.
   the wrap hazard). The trailer means no SGR/link state ever crosses a
   frame boundary — cross-frame presenter state is just the virtual cursor
   and "pen is at defaults"; `invalidate()` forgets both after external
-  writes (gfx protocols, suspend).
+  writes (gfx protocols, suspend) **and on resize** (0298): an emulator
+  reflow moves the physical cursor unpredictably, so the parked virtual
+  cursor is a ghost — the driver pairs the prev-poison (re-emit every
+  cell) with a presenter invalidate (re-anchor absolutely), because a
+  poisoned frame PLACED by relative motion from a ghost cursor paints
+  the whole first run at an offset and leaves a stale band on screen.
 
 ### 2.4b External bytes + the flush contract [C2]
 

@@ -236,6 +236,32 @@ pub trait Terminal {
         ))
     }
 
+    /// Retarget the session's kitty keyboard progressive-enhancement
+    /// flags mid-session — the capability-upgrade verb (backlog 0293):
+    /// the driver calls this when the active probe PROVES the protocol
+    /// on a terminal the env pass could not claim (iTerm2 ≥ 3.5,
+    /// VS Code/Cursor, Warp), so Shift+Enter-class chords start working
+    /// without a restart.
+    ///
+    /// Contract: the terminal tracks its entered posture and emits the
+    /// exact delta — a push (`CSI > flags u`) when nothing was pushed, a
+    /// pop (`CSI < u`) when clearing, pop-then-push when changing — and
+    /// updates its session bookkeeping so `leave` pops exactly as many
+    /// entries as were pushed and job-control [`Terminal::suspend`]
+    /// stays symmetric (its internal leave pops, its re-enter
+    /// re-pushes). The default is an honest refusal for scripted
+    /// terminals that do not track a session posture; both platform
+    /// backends and `testing::CaptureTerm` implement it.
+    fn set_kitty_keyboard(&mut self, flags: KittyFlags) -> Result<()> {
+        let _ = flags;
+        Err(Error::Unsupported(
+            "set_kitty_keyboard needs a terminal that tracks its entered \
+             session posture (the platform backends and testing::CaptureTerm \
+             do; this scripted terminal does not)"
+                .into(),
+        ))
+    }
+
     /// Toggle SGR-Pixels mouse reporting (DEC 1016) mid-session — pixel
     /// coordinates for smooth drags over images. Contract: gate on
     /// `Capabilities::sgr_pixel_mouse` AND a known cell size, and switch

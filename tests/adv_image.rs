@@ -63,11 +63,17 @@ fn transmit_place_move_delete_accounting_via_emitters() {
     assert_eq!(model.transmit_count(31), 1);
     assert!(!model.image(31).unwrap().data_freed);
 
-    // "Move" = re-place by id: transmit count must NOT grow.
+    // "Move" = re-place by id: transmit count must NOT grow, and the
+    // placement REPLACES (fixed placement id `p=1` — a pid-less put
+    // would accumulate a visible ghost per the spec; study-2 fix).
     model.feed(&kitty::place(31, Some(10), Some(5), 0));
     model.feed(&kitty::place(31, Some(12), Some(6), 0));
     assert_eq!(model.transmit_count(31), 1, "moves must never re-transmit");
-    assert!(model.image(31).unwrap().placements >= 2);
+    assert_eq!(
+        model.image(31).unwrap().placements,
+        1,
+        "same (image id, placement id) must replace, not accumulate"
+    );
 
     // Drop: delete-by-id freeing data. No leaks left.
     model.feed(&kitty::delete_by_id(31, true));

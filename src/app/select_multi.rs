@@ -30,7 +30,7 @@ use super::core::{
     first_enabled, last_enabled, option_rows_view, page_highlight, resolve_overlays,
     step_highlight, trigger_view, OptionRows, TriggerLabel, DEFAULT_MAX_VISIBLE,
 };
-use super::SelectOption;
+use super::{anchor_cell, SelectHandle, SelectOption};
 
 struct MultiSession {
     popup: Option<Popup>,
@@ -63,6 +63,7 @@ pub struct MultiSelect {
     layout: Option<LayoutStyle>,
     overlays: Option<Overlays>,
     on_change: Option<Box<dyn FnMut(Vec<String>)>>,
+    handle: Option<SelectHandle>,
 }
 
 impl MultiSelect {
@@ -76,6 +77,7 @@ impl MultiSelect {
             layout: None,
             overlays: None,
             on_change: None,
+            handle: None,
         }
     }
 
@@ -118,6 +120,14 @@ impl MultiSelect {
     /// never fire it (the 0250 ruling: movement is not activation).
     pub fn on_change(mut self, f: impl FnMut(Vec<String>) + 'static) -> MultiSelect {
         self.on_change = Some(Box::new(f));
+        self
+    }
+
+    /// Programmatic-open wiring (backlog 0296): `handle.open()` opens
+    /// this face's popup without a trigger gesture. Anchor and
+    /// lifecycle contract on [`SelectHandle`].
+    pub fn handle(mut self, handle: &SelectHandle) -> MultiSelect {
+        self.handle = Some(handle.clone());
         self
     }
 
@@ -245,6 +255,26 @@ impl MultiSelect {
             }
         });
 
+        // Trigger rect recorded at draw time: the anchor source for
+        // programmatic opens (0296 — see SelectHandle's contract).
+        let last_rect = anchor_cell();
+        if let Some(h) = &self.handle {
+            if !disabled {
+                let open = open.clone();
+                let session = session.clone();
+                let last_rect = last_rect.clone();
+                h.wire(cx, move || {
+                    if session.borrow().popup.is_some() {
+                        return true; // already open counts as open
+                    }
+                    let Some(anchor) = last_rect.get() else {
+                        return false; // never painted: no honest anchor
+                    };
+                    open(anchor);
+                    session.borrow().popup.is_some()
+                });
+            }
+        }
         let access_options = options.clone();
         let mut el = Element::new()
             .style(self.layout.unwrap_or_else(|| {
@@ -266,6 +296,7 @@ impl MultiSelect {
                     .collect();
                 labels.join(", ")
             })
+            .draw(move |_canvas, rect| last_rect.set(Some(rect)))
             .hover_signal(hovered)
             .focus_signal(focused);
         if !disabled {

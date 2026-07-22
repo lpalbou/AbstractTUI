@@ -7,15 +7,22 @@ runs). `themes-table.md` lists every registered theme's token values.
 
 Sizes and demo data are fixed; wall-clock frame pacing may shift animated
 data by a tick between regenerations — regenerate deliberately, diff by eye.
+The app-surface stills (`transcript-stream`, `select-open`, `code-diff`,
+`feed-scrolled`) render in-process with scripted input and no clocks —
+those four are byte-deterministic.
 
 | artifact |
 |---|
+| `code-diff.styled.txt` |
+| `code-diff.txt` |
 | `components.styled.txt` |
 | `components.txt` |
 | `dashboard-dark.styled.txt` |
 | `dashboard-dark.txt` |
 | `dashboard-dawn.styled.txt` |
 | `dashboard-dawn.txt` |
+| `feed-scrolled.styled.txt` |
+| `feed-scrolled.txt` |
 | `gallery.styled.txt` |
 | `gallery.txt` |
 | `grid.styled.txt` |
@@ -24,6 +31,8 @@ data by a tick between regenerations — regenerate deliberately, diff by eye.
 | `hello.txt` |
 | `images.styled.txt` |
 | `images.txt` |
+| `select-open.styled.txt` |
+| `select-open.txt` |
 | `splash-2d-reveal.styled.txt` |
 | `splash-2d-reveal.txt` |
 | `splash-2d.styled.txt` |
@@ -35,6 +44,8 @@ data by a tick between regenerations — regenerate deliberately, diff by eye.
 | `themes-table.md` |
 | `themes.styled.txt` |
 | `themes.txt` |
+| `transcript-stream.styled.txt` |
+| `transcript-stream.txt` |
 | `viewer3d.styled.txt` |
 | `viewer3d.txt` |
 | `widgets.styled.txt` |

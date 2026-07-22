@@ -232,7 +232,15 @@ impl Capabilities {
             colorterm == "truecolor" || colorterm == "24bit" || term.contains("direct") || modern;
         c.colors_256 = c.truecolor || term.contains("256color") || apple_terminal;
 
-        c.kitty_keyboard = kitty || wezterm || ghostty || foot;
+        // Kitty keyboard: claimed only for terminals that speak it OUT OF
+        // THE BOX (it is part of their identity). WezTerm supports the
+        // protocol but ships `enable_kitty_keyboard = false` by default —
+        // an env claim there over-promises exactly where the user did not
+        // configure it (backlog 0293), so WezTerm's claim is evidence-
+        // gated: the active probe's `CSI ? u` raises it when the user
+        // enabled the protocol, and the driver pushes the enter flags at
+        // that moment (`Terminal::set_kitty_keyboard`).
+        c.kitty_keyboard = kitty || ghostty || foot;
         // WezTerm's kitty-graphics support is partial; its iTerm2 path is
         // complete, so we prefer that there and let the active probe raise
         // kitty_graphics only when the terminal proves it.
@@ -698,7 +706,13 @@ mod tests {
         let it = env(&[("TERM_PROGRAM", "iTerm.app"), ("TERM", "xterm-256color")]);
         assert!(it.iterm2_images && !it.kitty_graphics);
         let wt = env(&[("TERM_PROGRAM", "WezTerm"), ("TERM", "xterm-256color")]);
-        assert!(wt.iterm2_images && !wt.kitty_graphics && wt.kitty_keyboard);
+        assert!(wt.iterm2_images && !wt.kitty_graphics);
+        // 0293: WezTerm ships enable_kitty_keyboard = false by default, so
+        // the CLAIM is probe-gated — env alone must not assert it.
+        assert!(
+            !wt.kitty_keyboard,
+            "WezTerm kitty-keyboard claim must wait for probe evidence"
+        );
     }
 
     #[test]

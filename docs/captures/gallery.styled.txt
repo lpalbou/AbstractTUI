@@ -1,4 +1,4 @@
-size=112x32 cursor=0,31 modes=[7,25,1049]
+size=112x38 cursor=0,37 modes=[7,25,1049]
   0|                                                                                                                |
   1|      AbstractTUI         Dark (Abstract) · dark           ● · · · · · · · · · · · · · · · · · · · · · · · · ·  |
   2| the terminal, composed                                                                                         |
@@ -10,27 +10,33 @@ size=112x32 cursor=0,31 modes=[7,25,1049]
   8| │██ raised             Aa Aa Aa │  │                                     │  │    │   ⠈⢆⡀ ⢀⠔⠁⡀ ⢀⠤⠈⠢⡀ ⡠⠊⠁  ⠈⢆⠑│  |
   9| │                               │  │▐focus me, type…                    ▌│  │0   │     ⠈⠉⠁  ⠈⠉⠁   ⠈⠉       ⠈│  |
  10| │semantics                      │  │                                     │  │    └──────────────────────────│  |
- 11| │●ok ●wrn ●err ●inf             │  │[x] selection pair on focus          │  │                               │  |
+ 11| │●ok ●wrn ●err ●inf             │  │▐stable                            ▾▌│  │                               │  |
  12| │accent alt link  sel           │  │                                     │  │         ▁▁ ▃▃  ⠔⠉⠉⠦⣀⡠⠒⠉⠑⠤⣀⡠⠒⠉⠑│  |
- 13| │                               │  │───────────── progress ──────────────│  │▅▅ ▆▆ ██ ██ ██                 │  |
- 14| │chart ramp                     │  │                                     │  │                               │  |
+ 13| │                               │  │▐a multiline composer —             ▌│  │▅▅ ▆▆ ██ ██ ██                 │  |
+ 14| │chart ramp                     │  │▐it grows with content              ▌│  │                               │  |
  15| │▅▇ ▅▇ ▅▇ ▅▇ ▅▇ ▅▇ ▅▇ ▅▇        │  │                                     │  │1 │ // tokens, not hex         │  |
- 16| │                               │  │█████████████                        │  │2 │ fn theme(id: &str) -> u32 {│  |
+ 16| │                               │  │[x] selection pair on focus          │  │2 │ fn theme(id: &str) -> u32 {│  |
  17| │syntax (on raised)             │  │                                     │  │3 │     let floor = 4.5;       │  |
- 18| │ fn name("str", 42)            │  │██████████████████████████▋          │  │4 │     resolve(id, "dark", flo│  |
+ 18| │ fn name("str", 42)            │  │───────────── progress ──────────────│  │4 │     resolve(id, "dark", flo│  |
  19| │ // comments recede            │  │                                     │  │5 │ }                          │  |
- 20| │                               │  │██████████████████████████████████▍  │  │                               │  |
- 21| │border · border_focus          │  │                                     │  │Rich text                      │  |
- 22| │────  ────                     │  │⣾ braille  | line                    │  │                               │  |
- 23| │                               │  │                                     │  │Body with bold, italic, code   │  |
- 24| │                               │  │╭ focused pane ─────────────────────╮│  │and a link.                    │  |
- 25| │                               │  ││border_focus ring                  ││  │                               │  |
- 26| │                               │  │╰───────────────────────────────────╯│  │▎ quotes recede politely       │  |
- 27| └───────────────────────────────┘  └─────────────────────────────────────┘  └───────────────────────────────┘  |
- 28|                                                                                                                |
- 29|                                                                                                                |
- 30| t/T theme · tab focus · enter/space activate · space spin · q quit                                             |
- 31|                                                                                                                |
+ 20| │                               │  │                                     │  │                               │  |
+ 21| │border · border_focus          │  │█████████████                        │  │@@ -1,2 +1,2 @@ fn theme()     │  |
+ 22| │────  ────                     │  │                                     │  │-let floor = 4.4;              │  |
+ 23| │                               │  │                                     │  │+let floor = 4.5;              │  |
+ 24| │                               │  │██████████████████████████▋          │  │ resolve(id)                   │  |
+ 25| │                               │  │                                     │  │                               │  |
+ 26| │                               │  │██████████████████████████████████▍  │  │Rich text                      │  |
+ 27| │                               │  │                                     │  │                               │  |
+ 28| │                               │  │⣾ braille  | line                    │  │Body with bold, italic, code   │  |
+ 29| │                               │  │                                     │  │and a link.                    │  |
+ 30| │                               │  │╭ focused pane ─────────────────────╮│  │                               │  |
+ 31| │                               │  ││border_focus ring                  ││  │▎ quotes recede politely       │  |
+ 32| │                               │  │╰───────────────────────────────────╯│  │  • lists mark with accent_alt │  |
+ 33| └───────────────────────────────┘  └─────────────────────────────────────┘  └───────────────────────────────┘  |
+ 34|                                                                                                                |
+ 35|                                                                                                                |
+ 36| t/T theme · tab focus · enter/space activate · space spin · q quit                                             |
+ 37|                                                                                                                |
 styles:
   0:0..112 fg=#eeeeee bg=#1a1a2e
   1:0..14 fg=#eeeeee bg=#1a1a2e
@@ -299,10 +305,9 @@ styles:
   11:33..34 fg=#3c3c4d bg=#16213e
   11:34..35 fg=#10101d bg=#10101d
   11:35..36 fg=#eeeeee bg=#1a1a2e
-  11:36..37 fg=#3c3c4d bg=#16213e
-  11:37..64 fg=#eeeeee bg=#16213e
-  11:64..74 fg=#16213e bg=#16213e
-  11:74..75 fg=#3c3c4d bg=#16213e
+  11:36..38 fg=#3c3c4d bg=#16213e
+  11:38..73 fg=#eeeeee bg=#16213e
+  11:73..75 fg=#3c3c4d bg=#16213e
   11:75..76 fg=#10101d bg=#10101d
   11:76..77 fg=#eeeeee bg=#1a1a2e
   11:77..78 fg=#3c3c4d bg=#16213e
@@ -340,9 +345,9 @@ styles:
   13:33..34 fg=#3c3c4d bg=#16213e
   13:34..35 fg=#10101d bg=#10101d
   13:35..36 fg=#eeeeee bg=#1a1a2e
-  13:36..50 fg=#3c3c4d bg=#16213e
-  13:50..60 fg=#aaaaaa bg=#16213e
-  13:60..75 fg=#3c3c4d bg=#16213e
+  13:36..38 fg=#3c3c4d bg=#16213e
+  13:38..73 fg=#eeeeee bg=#16213e
+  13:73..75 fg=#3c3c4d bg=#16213e
   13:75..76 fg=#10101d bg=#10101d
   13:76..77 fg=#eeeeee bg=#1a1a2e
   13:77..78 fg=#3c3c4d bg=#16213e
@@ -366,9 +371,9 @@ styles:
   14:33..34 fg=#3c3c4d bg=#16213e
   14:34..35 fg=#10101d bg=#10101d
   14:35..36 fg=#eeeeee bg=#1a1a2e
-  14:36..37 fg=#3c3c4d bg=#16213e
-  14:37..74 fg=#16213e bg=#16213e
-  14:74..75 fg=#3c3c4d bg=#16213e
+  14:36..38 fg=#3c3c4d bg=#16213e
+  14:38..73 fg=#eeeeee bg=#16213e
+  14:73..75 fg=#3c3c4d bg=#16213e
   14:75..76 fg=#10101d bg=#10101d
   14:76..77 fg=#eeeeee bg=#1a1a2e
   14:77..78 fg=#3c3c4d bg=#16213e
@@ -418,8 +423,8 @@ styles:
   16:34..35 fg=#10101d bg=#10101d
   16:35..36 fg=#eeeeee bg=#1a1a2e
   16:36..37 fg=#3c3c4d bg=#16213e
-  16:37..50 fg=#e94560 bg=#0f3460
-  16:50..74 fg=#0f3460 bg=#0f3460
+  16:37..64 fg=#eeeeee bg=#16213e
+  16:64..74 fg=#16213e bg=#16213e
   16:74..75 fg=#3c3c4d bg=#16213e
   16:75..76 fg=#10101d bg=#10101d
   16:76..77 fg=#eeeeee bg=#1a1a2e
@@ -484,10 +489,9 @@ styles:
   18:33..34 fg=#3c3c4d bg=#16213e
   18:34..35 fg=#10101d bg=#10101d
   18:35..36 fg=#eeeeee bg=#1a1a2e
-  18:36..37 fg=#3c3c4d bg=#16213e
-  18:37..64 fg=#f39c12 bg=#0f3460
-  18:64..74 fg=#0f3460 bg=#0f3460
-  18:74..75 fg=#3c3c4d bg=#16213e
+  18:36..50 fg=#3c3c4d bg=#16213e
+  18:50..60 fg=#aaaaaa bg=#16213e
+  18:60..75 fg=#3c3c4d bg=#16213e
   18:75..76 fg=#10101d bg=#10101d
   18:76..77 fg=#eeeeee bg=#1a1a2e
   18:77..78 fg=#3c3c4d bg=#16213e
@@ -534,8 +538,7 @@ styles:
   20:34..35 fg=#10101d bg=#10101d
   20:35..36 fg=#eeeeee bg=#1a1a2e
   20:36..37 fg=#3c3c4d bg=#16213e
-  20:37..72 fg=#e74c3c bg=#0f3460
-  20:72..74 fg=#0f3460 bg=#0f3460
+  20:37..74 fg=#16213e bg=#16213e
   20:74..75 fg=#3c3c4d bg=#16213e
   20:75..76 fg=#10101d bg=#10101d
   20:76..77 fg=#eeeeee bg=#1a1a2e
@@ -552,13 +555,14 @@ styles:
   21:34..35 fg=#10101d bg=#10101d
   21:35..36 fg=#eeeeee bg=#1a1a2e
   21:36..37 fg=#3c3c4d bg=#16213e
-  21:37..74 fg=#16213e bg=#16213e
+  21:37..50 fg=#e94560 bg=#0f3460
+  21:50..74 fg=#0f3460 bg=#0f3460
   21:74..75 fg=#3c3c4d bg=#16213e
   21:75..76 fg=#10101d bg=#10101d
   21:76..77 fg=#eeeeee bg=#1a1a2e
   21:77..78 fg=#3c3c4d bg=#16213e
-  21:78..87 fg=#e94560 bg=#16213e attrs=B
-  21:87..109 fg=#16213e bg=#16213e
+  21:78..93 fg=#60a5fa bg=#0f3460
+  21:93..109 fg=#eeeeee bg=#0f3460
   21:109..110 fg=#3c3c4d bg=#16213e
   21:110..111 fg=#10101d bg=#10101d
   21:111..112 fg=#eeeeee bg=#1a1a2e
@@ -570,19 +574,13 @@ styles:
   22:34..35 fg=#10101d bg=#10101d
   22:35..36 fg=#eeeeee bg=#1a1a2e
   22:36..37 fg=#3c3c4d bg=#16213e
-  22:37..38 fg=#e94560 bg=#16213e
-  22:38..39 fg=#16213e bg=#16213e
-  22:39..46 fg=#aaaaaa bg=#16213e
-  22:46..48 fg=#16213e bg=#16213e
-  22:48..49 fg=#e94560 bg=#16213e
-  22:49..50 fg=#16213e bg=#16213e
-  22:50..54 fg=#aaaaaa bg=#16213e
-  22:54..74 fg=#16213e bg=#16213e
+  22:37..74 fg=#16213e bg=#16213e
   22:74..75 fg=#3c3c4d bg=#16213e
   22:75..76 fg=#10101d bg=#10101d
   22:76..77 fg=#eeeeee bg=#1a1a2e
   22:77..78 fg=#3c3c4d bg=#16213e
-  22:78..109 fg=#16213e bg=#16213e
+  22:78..95 fg=#e74c3c bg=#0f3460
+  22:95..109 fg=#eeeeee bg=#0f3460
   22:109..110 fg=#3c3c4d bg=#16213e
   22:110..111 fg=#10101d bg=#10101d
   22:111..112 fg=#eeeeee bg=#1a1a2e
@@ -598,13 +596,8 @@ styles:
   23:75..76 fg=#10101d bg=#10101d
   23:76..77 fg=#eeeeee bg=#1a1a2e
   23:77..78 fg=#3c3c4d bg=#16213e
-  23:78..88 fg=#eeeeee bg=#16213e
-  23:88..92 fg=#eeeeee bg=#16213e attrs=B
-  23:92..94 fg=#eeeeee bg=#16213e
-  23:94..100 fg=#eeeeee bg=#16213e attrs=I
-  23:100..102 fg=#eeeeee bg=#16213e
-  23:102..106 fg=#eeeeee bg=#0f3460
-  23:106..109 fg=#16213e bg=#16213e
+  23:78..95 fg=#27ae60 bg=#0f3460
+  23:95..109 fg=#eeeeee bg=#0f3460
   23:109..110 fg=#3c3c4d bg=#16213e
   23:110..111 fg=#10101d bg=#10101d
   23:111..112 fg=#eeeeee bg=#1a1a2e
@@ -615,17 +608,13 @@ styles:
   24:34..35 fg=#10101d bg=#10101d
   24:35..36 fg=#eeeeee bg=#1a1a2e
   24:36..37 fg=#3c3c4d bg=#16213e
-  24:37..38 fg=#e94560 bg=#16213e
-  24:38..52 fg=#eeeeee bg=#16213e
-  24:52..74 fg=#e94560 bg=#16213e
+  24:37..64 fg=#f39c12 bg=#0f3460
+  24:64..74 fg=#0f3460 bg=#0f3460
   24:74..75 fg=#3c3c4d bg=#16213e
   24:75..76 fg=#10101d bg=#10101d
   24:76..77 fg=#eeeeee bg=#1a1a2e
   24:77..78 fg=#3c3c4d bg=#16213e
-  24:78..84 fg=#eeeeee bg=#16213e
-  24:84..88 fg=#60a5fa bg=#16213e attrs=U
-  24:88..89 fg=#eeeeee bg=#16213e
-  24:89..109 fg=#16213e bg=#16213e
+  24:78..109 fg=#eeeeee bg=#0f3460
   24:109..110 fg=#3c3c4d bg=#16213e
   24:110..111 fg=#10101d bg=#10101d
   24:111..112 fg=#eeeeee bg=#1a1a2e
@@ -636,10 +625,7 @@ styles:
   25:34..35 fg=#10101d bg=#10101d
   25:35..36 fg=#eeeeee bg=#1a1a2e
   25:36..37 fg=#3c3c4d bg=#16213e
-  25:37..38 fg=#e94560 bg=#16213e
-  25:38..55 fg=#eeeeee bg=#16213e
-  25:55..73 fg=#16213e bg=#16213e
-  25:73..74 fg=#e94560 bg=#16213e
+  25:37..74 fg=#16213e bg=#16213e
   25:74..75 fg=#3c3c4d bg=#16213e
   25:75..76 fg=#10101d bg=#10101d
   25:76..77 fg=#eeeeee bg=#1a1a2e
@@ -655,34 +641,156 @@ styles:
   26:34..35 fg=#10101d bg=#10101d
   26:35..36 fg=#eeeeee bg=#1a1a2e
   26:36..37 fg=#3c3c4d bg=#16213e
-  26:37..74 fg=#e94560 bg=#16213e
+  26:37..72 fg=#e74c3c bg=#0f3460
+  26:72..74 fg=#0f3460 bg=#0f3460
   26:74..75 fg=#3c3c4d bg=#16213e
   26:75..76 fg=#10101d bg=#10101d
   26:76..77 fg=#eeeeee bg=#1a1a2e
-  26:77..79 fg=#3c3c4d bg=#16213e
-  26:79..80 fg=#16213e bg=#16213e
-  26:80..102 fg=#aaaaaa bg=#16213e
-  26:102..109 fg=#16213e bg=#16213e
+  26:77..78 fg=#3c3c4d bg=#16213e
+  26:78..87 fg=#e94560 bg=#16213e attrs=B
+  26:87..109 fg=#16213e bg=#16213e
   26:109..110 fg=#3c3c4d bg=#16213e
   26:110..111 fg=#10101d bg=#10101d
   26:111..112 fg=#eeeeee bg=#1a1a2e
   27:0..1 fg=#eeeeee bg=#1a1a2e
-  27:1..34 fg=#3c3c4d bg=#16213e
+  27:1..2 fg=#3c3c4d bg=#16213e
+  27:2..33 fg=#16213e bg=#16213e
+  27:33..34 fg=#3c3c4d bg=#16213e
   27:34..35 fg=#10101d bg=#10101d
   27:35..36 fg=#eeeeee bg=#1a1a2e
-  27:36..75 fg=#3c3c4d bg=#16213e
+  27:36..37 fg=#3c3c4d bg=#16213e
+  27:37..74 fg=#16213e bg=#16213e
+  27:74..75 fg=#3c3c4d bg=#16213e
   27:75..76 fg=#10101d bg=#10101d
   27:76..77 fg=#eeeeee bg=#1a1a2e
-  27:77..110 fg=#3c3c4d bg=#16213e
+  27:77..78 fg=#3c3c4d bg=#16213e
+  27:78..109 fg=#16213e bg=#16213e
+  27:109..110 fg=#3c3c4d bg=#16213e
   27:110..111 fg=#10101d bg=#10101d
   27:111..112 fg=#eeeeee bg=#1a1a2e
-  28:0..2 fg=#eeeeee bg=#1a1a2e
-  28:2..35 fg=#10101d bg=#10101d
-  28:35..37 fg=#eeeeee bg=#1a1a2e
-  28:37..76 fg=#10101d bg=#10101d
-  28:76..78 fg=#eeeeee bg=#1a1a2e
-  28:78..111 fg=#10101d bg=#10101d
+  28:0..1 fg=#eeeeee bg=#1a1a2e
+  28:1..2 fg=#3c3c4d bg=#16213e
+  28:2..33 fg=#16213e bg=#16213e
+  28:33..34 fg=#3c3c4d bg=#16213e
+  28:34..35 fg=#10101d bg=#10101d
+  28:35..36 fg=#eeeeee bg=#1a1a2e
+  28:36..37 fg=#3c3c4d bg=#16213e
+  28:37..38 fg=#e94560 bg=#16213e
+  28:38..39 fg=#16213e bg=#16213e
+  28:39..46 fg=#aaaaaa bg=#16213e
+  28:46..48 fg=#16213e bg=#16213e
+  28:48..49 fg=#e94560 bg=#16213e
+  28:49..50 fg=#16213e bg=#16213e
+  28:50..54 fg=#aaaaaa bg=#16213e
+  28:54..74 fg=#16213e bg=#16213e
+  28:74..75 fg=#3c3c4d bg=#16213e
+  28:75..76 fg=#10101d bg=#10101d
+  28:76..77 fg=#eeeeee bg=#1a1a2e
+  28:77..78 fg=#3c3c4d bg=#16213e
+  28:78..88 fg=#eeeeee bg=#16213e
+  28:88..92 fg=#eeeeee bg=#16213e attrs=B
+  28:92..94 fg=#eeeeee bg=#16213e
+  28:94..100 fg=#eeeeee bg=#16213e attrs=I
+  28:100..102 fg=#eeeeee bg=#16213e
+  28:102..106 fg=#eeeeee bg=#0f3460
+  28:106..109 fg=#16213e bg=#16213e
+  28:109..110 fg=#3c3c4d bg=#16213e
+  28:110..111 fg=#10101d bg=#10101d
   28:111..112 fg=#eeeeee bg=#1a1a2e
-  29:0..112 fg=#eeeeee bg=#1a1a2e
-  30:0..112 fg=#eeeeee bg=#1a1a2e
-  31:0..112 fg=#eeeeee bg=#1a1a2e
+  29:0..1 fg=#eeeeee bg=#1a1a2e
+  29:1..2 fg=#3c3c4d bg=#16213e
+  29:2..33 fg=#16213e bg=#16213e
+  29:33..34 fg=#3c3c4d bg=#16213e
+  29:34..35 fg=#10101d bg=#10101d
+  29:35..36 fg=#eeeeee bg=#1a1a2e
+  29:36..37 fg=#3c3c4d bg=#16213e
+  29:37..74 fg=#16213e bg=#16213e
+  29:74..75 fg=#3c3c4d bg=#16213e
+  29:75..76 fg=#10101d bg=#10101d
+  29:76..77 fg=#eeeeee bg=#1a1a2e
+  29:77..78 fg=#3c3c4d bg=#16213e
+  29:78..84 fg=#eeeeee bg=#16213e
+  29:84..88 fg=#60a5fa bg=#16213e attrs=U
+  29:88..89 fg=#eeeeee bg=#16213e
+  29:89..109 fg=#16213e bg=#16213e
+  29:109..110 fg=#3c3c4d bg=#16213e
+  29:110..111 fg=#10101d bg=#10101d
+  29:111..112 fg=#eeeeee bg=#1a1a2e
+  30:0..1 fg=#eeeeee bg=#1a1a2e
+  30:1..2 fg=#3c3c4d bg=#16213e
+  30:2..33 fg=#16213e bg=#16213e
+  30:33..34 fg=#3c3c4d bg=#16213e
+  30:34..35 fg=#10101d bg=#10101d
+  30:35..36 fg=#eeeeee bg=#1a1a2e
+  30:36..37 fg=#3c3c4d bg=#16213e
+  30:37..38 fg=#e94560 bg=#16213e
+  30:38..52 fg=#eeeeee bg=#16213e
+  30:52..74 fg=#e94560 bg=#16213e
+  30:74..75 fg=#3c3c4d bg=#16213e
+  30:75..76 fg=#10101d bg=#10101d
+  30:76..77 fg=#eeeeee bg=#1a1a2e
+  30:77..78 fg=#3c3c4d bg=#16213e
+  30:78..109 fg=#16213e bg=#16213e
+  30:109..110 fg=#3c3c4d bg=#16213e
+  30:110..111 fg=#10101d bg=#10101d
+  30:111..112 fg=#eeeeee bg=#1a1a2e
+  31:0..1 fg=#eeeeee bg=#1a1a2e
+  31:1..2 fg=#3c3c4d bg=#16213e
+  31:2..33 fg=#16213e bg=#16213e
+  31:33..34 fg=#3c3c4d bg=#16213e
+  31:34..35 fg=#10101d bg=#10101d
+  31:35..36 fg=#eeeeee bg=#1a1a2e
+  31:36..37 fg=#3c3c4d bg=#16213e
+  31:37..38 fg=#e94560 bg=#16213e
+  31:38..55 fg=#eeeeee bg=#16213e
+  31:55..73 fg=#16213e bg=#16213e
+  31:73..74 fg=#e94560 bg=#16213e
+  31:74..75 fg=#3c3c4d bg=#16213e
+  31:75..76 fg=#10101d bg=#10101d
+  31:76..77 fg=#eeeeee bg=#1a1a2e
+  31:77..79 fg=#3c3c4d bg=#16213e
+  31:79..80 fg=#16213e bg=#16213e
+  31:80..102 fg=#aaaaaa bg=#16213e
+  31:102..109 fg=#16213e bg=#16213e
+  31:109..110 fg=#3c3c4d bg=#16213e
+  31:110..111 fg=#10101d bg=#10101d
+  31:111..112 fg=#eeeeee bg=#1a1a2e
+  32:0..1 fg=#eeeeee bg=#1a1a2e
+  32:1..2 fg=#3c3c4d bg=#16213e
+  32:2..33 fg=#16213e bg=#16213e
+  32:33..34 fg=#3c3c4d bg=#16213e
+  32:34..35 fg=#10101d bg=#10101d
+  32:35..36 fg=#eeeeee bg=#1a1a2e
+  32:36..37 fg=#3c3c4d bg=#16213e
+  32:37..74 fg=#e94560 bg=#16213e
+  32:74..75 fg=#3c3c4d bg=#16213e
+  32:75..76 fg=#10101d bg=#10101d
+  32:76..77 fg=#eeeeee bg=#1a1a2e
+  32:77..78 fg=#3c3c4d bg=#16213e
+  32:78..80 fg=#16213e bg=#16213e
+  32:80..82 fg=#60a5fa bg=#16213e
+  32:82..108 fg=#eeeeee bg=#16213e
+  32:108..109 fg=#16213e bg=#16213e
+  32:109..110 fg=#3c3c4d bg=#16213e
+  32:110..111 fg=#10101d bg=#10101d
+  32:111..112 fg=#eeeeee bg=#1a1a2e
+  33:0..1 fg=#eeeeee bg=#1a1a2e
+  33:1..34 fg=#3c3c4d bg=#16213e
+  33:34..35 fg=#10101d bg=#10101d
+  33:35..36 fg=#eeeeee bg=#1a1a2e
+  33:36..75 fg=#3c3c4d bg=#16213e
+  33:75..76 fg=#10101d bg=#10101d
+  33:76..77 fg=#eeeeee bg=#1a1a2e
+  33:77..110 fg=#3c3c4d bg=#16213e
+  33:110..111 fg=#10101d bg=#10101d
+  33:111..112 fg=#eeeeee bg=#1a1a2e
+  34:0..2 fg=#eeeeee bg=#1a1a2e
+  34:2..35 fg=#10101d bg=#10101d
+  34:35..37 fg=#eeeeee bg=#1a1a2e
+  34:37..76 fg=#10101d bg=#10101d
+  34:76..78 fg=#eeeeee bg=#1a1a2e
+  34:78..111 fg=#10101d bg=#10101d
+  34:111..112 fg=#eeeeee bg=#1a1a2e
+  35:0..112 fg=#eeeeee bg=#1a1a2e
+  36:0..112 fg=#eeeeee bg=#1a1a2e
+  37:0..112 fg=#eeeeee bg=#1a1a2e

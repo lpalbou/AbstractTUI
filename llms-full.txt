@@ -66,14 +66,17 @@ through ordinary reactivity.*
 ## Highlights
 
 - **Widgets + layout** — buttons, text inputs, a multiline composer
-  (`TextArea` with history and completion dropdowns), lists, sortable tables,
+  (`TextArea` with history and completion dropdowns), selects (`Select` /
+  `Combobox` / `MultiSelect` over anchored popups that layer above modals),
+  lists and sortable tables with distinct selection and activation events,
   tabs, checkboxes, radio groups, scroll regions, panels, badges, progress
-  bars, spinners, modals, toasts — arranged by a flexbox-style solver
+  bars, spinners, modals, toasts, tooltips — arranged by a flexbox-style solver
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
 - **Transcripts and streams** — `Feed` renders append-only conversations and
-  logs with keyed rich blocks (markdown, code, custom draw) and streaming
-  markdown items that re-typeset only the open block per token;
+  logs with keyed rich blocks (markdown, code with syntax and diff tinting,
+  custom draw) and streaming markdown items that re-typeset only the open
+  block per token;
   `Scroll::follow_tail` pins to the bottom until the user scrolls and re-pins
   at the edge.
 - **Live data** — feed the UI from background threads through
@@ -317,6 +320,15 @@ the input handles cursor movement, selection (Shift+arrows), word jumps
 (Alt+arrows), and paste for you. Mouse clicks focus and activate the same
 widgets — no extra code.
 
+The same one-import surface covers the rest of a form or chat screen:
+`Select`/`Combobox`/`MultiSelect` for choices (a one-row trigger opening an
+anchored popup), `TextArea` + `TextAreaState` for a multiline composer that
+grows with its content, and `Feed` (`abstracttui::widgets`) with
+`Scroll::follow_tail` for streaming transcripts. The
+[API guide](api.md#widgets--the-built-in-library) walks each one;
+`cargo run --example transcript` and `--example components` show them
+composed.
+
 ## Layout basics
 
 Layout is a flexbox-style solver. The vocabulary: `LayoutStyle::column()` /
@@ -508,7 +520,7 @@ that way.
   compositor, and the render pipeline.
 - [API guide](api.md) — the public surface, module by module.
 - [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
-- [Examples catalog](../examples/README.md) — twelve runnable programs, from
+- [Examples catalog](../examples/README.md) — fourteen runnable programs, from
   the 53-line `hello` to the full `dashboard`, with the keys each answers to.
 
 
@@ -723,9 +735,14 @@ each clause: an idle frame emits zero bytes
 no-change frame allocates nothing
 (`alloc_budget::presenter_no_change_frame_emits_and_allocates_nothing`),
 steady-state diff and present allocate nothing
-(`alloc_budget::diff_present_steady_state_allocates_nothing`), and a static
+(`alloc_budget::diff_present_steady_state_allocates_nothing`), a static
 shader on an idle layer performs zero shade calls
-(`render::compositor::tests::shader_runs_only_for_damaged_cells_and_never_when_static`).
+(`render::compositor::tests::shader_runs_only_for_damaged_cells_and_never_when_static`),
+and the guarantee holds through the whole app layer with the modern
+mounts in play — a streaming `Feed`, an armed `interval`, a parked
+`Select` popup, a parked protocol image — where sixteen idle turns
+through the real driver allocate nothing and write nothing
+(`alloc_budget::idle_turns_with_feed_interval_parked_popup_and_parked_image_allocate_nothing`).
 
 Idle really means idle: the event loop blocks in a terminal read with zero
 wakeups until input, a resize, a cross-thread wake, or a timer deadline
@@ -1315,12 +1332,15 @@ Around the core loop the module provides:
   while open, Tab cycles inside, state created in the modal's scope dies on
   close. **Toast** — top-right chips that slide in, park for their duration
   at zero frame cost, then slide out and remove their layer.
-- **AnchoredPanel** (`app::anchored`) — a passive anchored popup layer:
-  placed against an anchor rect (below-preferred, flip-above, viewport
-  clamp), stacked above everything live via `Overlays::top_z()`, never
-  focused (keys stay with the anchor's owner), closed by its opener's
-  scope death. `Completion` builds the caret-anchored completion
-  dropdown on top of it (see the widgets section).
+- **AnchoredPanel / Popup / Tooltip** (`app::anchored`) — the three
+  routing modes of the anchored-popup substrate, one placement engine
+  (below-preferred, flip-above, viewport clamp): `AnchoredPanel` is the
+  PASSIVE layer (never focused — keys stay with the anchor's owner;
+  `Completion` builds the caret-anchored dropdown on it), `Popup` is the
+  OWNED modal tree above the whole live stack with `DismissReason`-named
+  endings (the Select family rides it), and `Tooltip` is the hover-timed
+  passive label. All three close with their opener's scope (see the
+  widgets section for the completion and select details).
 - **Hooks** — `use_theme(cx)` (the app-level theme signal), `use_viewport(cx)`
   (terminal size as a signal), `use_startup_notices(cx)` (labeled startup
   degradations as a reactive list).
@@ -1838,7 +1858,7 @@ luminance must agree with its declared `dark` flag by a margin
 marginal and breaks everything downstream that groups by polarity.
 
 Audit exceptions are named per `(theme, rule)` pair, never blanket, and a
-stale exception fails the test suite. Exactly one exists today:
+stale exception fails the test suite. Exactly one exists:
 `everforest-light`'s text on raised chrome measures ~4.25:1 — both values
 are verbatim upstream colors, the rule is stricter than the mandated
 text/ground floor, and 4.25:1 still clears WCAG AA-large.
@@ -2348,9 +2368,10 @@ The rendering side pairs the bounded window with the `Feed` widget
 follow-tail: the content extent is measured (no size hint), the offset
 sticks to the bottom until the user scrolls up, and setting the follow
 signal true jumps back to the latest. The window syncs into slot keys,
-so the Feed holds at most `capacity` items — bounded end to end. (When
-`FeedState::clear` lands, the sync body becomes clear-and-repush; slot
-keys are today's equivalent.)
+so the Feed holds at most `capacity` items — bounded end to end.
+(`FeedState::clear` enables a simpler clear-and-repush sync; the
+slot-key recipe shown here re-typesets only the slots whose content
+actually changed.)
 
 ```rust
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -2850,8 +2871,8 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.2.1 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.2.1 (2026-07-22).
+- Crate: `abstracttui` 0.2.2 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.2.2 (2026-07-22).
 - Description: a reactive, compositor-grade terminal UI engine — fine-grained signals,
   layered rendering with damage tracking, streaming transcripts and live-data ingestion,
   text selection with OSC 52 copy, images (kitty/iTerm2/sixel/mosaic),
@@ -2862,16 +2883,20 @@ timeouts, and no sleeps.
 - Dependencies (std plus this minimal set; everything else is implemented in-crate):
   - `unicode-width` 0.2 — cell-width measurement
   - `unicode-segmentation` 1 — grapheme segmentation
-  - `miniz_oxide` 0.8 — DEFLATE (PNG decoding)
+  - `miniz_oxide` 0.9 — DEFLATE (PNG decoding)
   - `libc` 0.2 — Unix terminal FFI (unix targets only)
-  - `windows-sys` 0.60 — Windows console FFI (windows targets only)
+  - `windows-sys` 0.61 — Windows console FFI (windows targets only)
 - Test invocation (from CONTRIBUTING.md):
   - `cargo test` — the whole suite (~1,440 tests: unit tests, integration suites under
     `tests/`, and doctests).
   - `cargo test --test live_smoke -- --ignored --test-threads=1` — live pty smoke tests
     (spawn a real terminal session; run serially).
   - `cargo test --test perf_budgets --release -- --ignored --test-threads=1` —
-    performance budgets (meaningful only in release builds; run serially).
+    engine-primitive performance budgets (meaningful only in release builds; run
+    serially).
+  - `cargo test --test perf_app_surfaces --release -- --ignored --test-threads=1` —
+    app-layer performance budgets: feed streaming, select popup, selection drag,
+    composer keystroke, diff scroll, startup time-to-first-frame (release, serial).
   - `UPDATE_GOLDENS=1 cargo test` — deliberately (re)mint golden snapshots under
     `tests/goldens/`.
   - Lint gates before submitting: `cargo fmt --all` and `cargo clippy --all-targets`

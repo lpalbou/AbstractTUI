@@ -405,3 +405,7 @@ fn select_trigger_renders_value_placeholder_and_a11y_roles() {
 // they reuse this module's Rig through `super::`.
 #[path = "select_tests_faces.rs"]
 mod faces;
+
+// SelectHandle (0296 programmatic open) cases — same split pattern.
+#[path = "select_tests_handle.rs"]
+mod handle_tests;
