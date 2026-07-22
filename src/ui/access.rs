@@ -48,6 +48,14 @@ pub enum Role {
     Menu,
     MenuItem,
     ScrollArea,
+    // SEMVER (budget 0002 entry 1): this enum is PUBLIC and EXHAUSTIVE
+    // in the published 0.2.0 — adding a variant is a major break, and a
+    // mid-enum insertion additionally shifts later discriminants (the
+    // Role::Select live catch, 2026-07-22). New variants (Select, Tree,
+    // TreeItem, ...) land batched inside the 0.3 window, AT THE END of
+    // the enum, together with `#[non_exhaustive]`. Until then, widgets
+    // reuse the closest existing role (a select trigger reports
+    // `Button` + its choice as the access value).
 }
 
 impl Role {

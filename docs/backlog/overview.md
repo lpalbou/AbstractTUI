@@ -20,9 +20,9 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 
 | State | Count |
 | --- | --- |
-| Planned | 3 |
-| Proposed | 41 |
-| Completed | 12 |
+| Planned | 4 |
+| Proposed | 43 |
+| Completed | 14 |
 | Deprecated | 0 |
 | Recurrent | 0 |
 
@@ -43,8 +43,9 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | ID | Title | Track |
 | --- | --- | --- |
 | 0001 | Roadmap: general capability classes, milestone bands, validation vehicles (canonical) | roadmap |
-| 0150 | Terminal verbs (notify/bell/title/clipboard) reachable from components | app-widgets |
-| 0180 | Platform-claim accuracy (Linux pty CI) + perf/fuzz/soak gates + MSRV | app-widgets |
+| 0002 | The 0.3 breaking budget (Role/TokenKind non_exhaustive, content_size deprecation) — Accepted-pending-maintainer; enforced by the CI semver gate | governance |
+| 0150 | Terminal verbs (notify/bell/title) reachable from components — clipboard leg SHIPPED with the selection wave | app-widgets |
+| 0180 | Platform claims + CI gates — MSRV 1.87 declared, semver/msrv/live-pty jobs SHIPPED 2026-07-22; scheduled perf/fuzz/soak gating remains | app-widgets |
 
 ## Completed ledger
 
@@ -66,6 +67,8 @@ composer wave).
 | 0220 | BUG fixed: autofocus in dyn_view regeneration panicked | completed/first-app/ |
 | 0230 | BUG fixed: modal shortcuts dead until focus entered the modal | completed/first-app/ |
 | 0240 | Footgun fixed: modal overflow crushed fixed rows (defaults + debug notice) | completed/first-app/ |
+| 0250 | Footgun fixed: `List::on_activate` per the 0250 ruling (selection follows movement; activation = Enter/Space/click-on-selected; bookkeeping-before-callbacks on List AND Table) — completed 2026-07-22 | completed/first-app/ |
+| 0500 | Anchored-popup substrate COMPLETE (owned + tooltip modes joined the shipped passive slice) + `Select`/`Combobox`/`MultiSelect` in `app::select` — completed 2026-07-22 | completed/app-kits/ |
 
 ## Proposed ledger
 
@@ -74,15 +77,17 @@ composer wave).
 | 0040 | Connection lifecycle model + jittered reconnect/backoff | live-data | Starting the watcher (0060) or either port. |
 | 0050 | Transport story: HTTP/WebSocket/TLS dependency decision (first ADR) | live-data | Decide only after the watcher's evidence (0060); do not settle from the armchair. |
 | 0060 | Milestone: read-only multi-room watcher over the a2a hub (dogfood) | live-data | Maintainer green-light; validates 0010/0020/0040. Explicitly not-now. |
-| 0070 | Recurring time source: `interval` beside `reactive::after` | live-data | With the live-data foundation, or the first consumer hand-rolling re-arming. |
-| 0140 | Stateful cross-line lexers (python/js/toml) + diff lexer | app-widgets | The coding-console port (0200) reaching syntax/tool-result previews. |
-| 0160 | Content selection + copy (take text out of any view) | app-widgets | Design ruling (per-widget vs screen-layer selection); a dogfood app reaching its copy phase. |
+| 0140 | Stateful cross-line lexers (python/js/toml) — diff lexer SHIPPED 2026-07-22 (`text::DiffLexer`, additive); stateful seam + language presets remain | app-widgets | A consumer needing real language tinting; the stateful-seam design note in the item gates python. |
+| 0160 | Content selection + copy — screen-level v1 SHIPPED via 0270; remaining scope = logical widget-content mapping (copy markdown source, unwrap soft-wraps) shared with 0148 | app-widgets | A consumer needing source-text copy (screen-text copy ships today). |
 | 0165 | Hyperlink/reference hit-testing through the event path | app-widgets | A dogfood app reaching its "activate a reference" phase. |
-| 0170 | 1.0-track API stability pass — PARTIALLY EXECUTED: ADRs 0001-0003 landed + `Capabilities`/`GraphicsCaps` now `#[non_exhaustive]`; the full 1.0 audit (prelude criteria, public-api gate, breaking budget enforcement) stays open | app-widgets | The remaining audit rides the 0.2 release prep. |
+| 0170 | 1.0-track API stability pass — PARTIALLY EXECUTED: ADRs 0001-0003 landed + `Capabilities`/`GraphicsCaps` now `#[non_exhaustive]`; the full 1.0 audit (prelude criteria, public-api gate, breaking budget enforcement) stays open | app-widgets | The remaining audit rides the 0.3 window (budget doc: planned/0002). |
 | 0200 | EPIC: coding-agent console over `abstractcode serve` JSONL | ports | Its widget + live-data dependencies land (Feed/stream/follow-tail + TextArea 0120 DONE — widget deps complete). |
 | 0210 | EPIC: a2a chat TUI over the agora hub | ports | Its widget + live-data dependencies land (Feed + TextArea 0120 DONE; lifecycle 0040/0050 remain). |
-| 0250 | Footgun: `List::on_select` fires on arrow movement (no activation event) | first-app | Fix per the 0250 ruling (selection follows movement; activation = Enter/click-when-selected — recorded in reviews/study/platform-on-appkits.md and encoded by app-kits items). |
 | 0260 | Disclosure widget: per-item fold/unfold for transcripts (maintainer ask) | first-app | Fold into Feed's item model (0100 shipped — extend), or standalone on a second consumer. |
+| 0280 | Feed custom blocks cannot host widgets; protocol images degrade to mosaic in Feed | first-app | Filed 2026-07-22 (0.2.0 adoption wave); design with Feed's item model + the 0144 protocol-images-in-flow question. |
+| 0290 | Selection region lingers after release-copy — `c`/Enter keep being swallowed | first-app | Filed 2026-07-22; small UX fix in app::selection claim rules. |
+| 0292 | Completion triggers fire on any mid-text token — no position policy (renumbered from 0300) | first-app | Filed 2026-07-22; add trigger-position policy to `Completion` (start-of-line/word options). |
+| 0294 | Anchored panel places short lists over the chrome below instead of flipping up (renumbered from 0310) | first-app | Filed 2026-07-22; placement scoring in `place_panel`. |
 | 0142 | Markdown tables (GFM subset) — shares `solve_columns` with the Table widget | app-widgets | mdpad-class reader green-light, or chat messages needing tables. |
 | 0144 | Markdown images — in-flow mosaic rendering, lazy decode | app-widgets | mdpad-class reader green-light; protocol-images-in-flow deferred by design. |
 | 0146 | Heading anchors + TOC extraction (`md::outline`) | app-widgets | mdpad-class reader; 0165 consumes the anchor ids. |
@@ -103,8 +108,7 @@ composer wave).
 | 0460 | mdpad-class reader enablement: parity dashboard + four core-gap seeds (0142-0148) | extensions | Maintainer green-light on the rebuild; seeds promote individually. |
 | 0470 | Web/HTML feasibility — verdict: full web NEVER; readable-subset slice gated on four criteria | extensions | All four criteria met — else the verdict stands. |
 | 0480 | Core seam: `StyledCanvas::register_link` (producer half of the link channel; OSC 8 works pre-0165) | extensions | Any canvas-link consumer (0430 M3, 0450) or 0165's scheduling; may merge into 0165. |
-| 0500 | Anchored-popup substrate (owned/passive/tooltip modes) + Select/Combobox/MultiSelect family — passive slice + `Overlays::top_z` SHIPPED 2026-07-22 via 0120 (`app::anchored`) | app-kits | First config surface or 0510; owned/tooltip modes + the three faces remain. |
-| 0510 | Form kit: field rows, form state signals, validation, submit gating, masked input | app-kits | 0520 or a second settings form; engine deltas: subtree focus step, `TextInput::masked`. |
+| 0510 | Form kit: field rows, form state signals, validation, submit gating, masked input — `TextInput::masked` engine delta SHIPPED 2026-07-22 (draw + access_value redaction) | app-kits | 0520 or a second settings form; remaining engine delta: subtree focus step. |
 | 0520 | Wizard flow: multi-step container on the form kit; crash-resume via 0340 (its first consumer) | app-kits | 0510 landing. |
 | 0530 | Table upgrades: rich cells, badges, row actions, activation event, row identity | app-kits | Admin-console validator scheduling. |
 | 0540 | Chips, counts, and tag-input vocabulary | app-kits | First consumer among 0500/0550/smart-note-class apps. |
@@ -123,15 +127,22 @@ are DONE.)
 1. ~~**0120 (TextArea)**~~ — DONE 2026-07-22 (with 0500's passive-panel
    substrate slice + `Overlays::top_z`). Both port epics now have their
    full widget dependency set.
-2. **The 0.2 budget batch** — remaining 0170 audit + the riders the
-   study queued (`Role` variants or `#[non_exhaustive]`, subtree focus
-   step, `TextInput::masked`; `Overlays::top_z` landed additively with
-   0120) + 0250's ruling fix + 0180's platform-claim honesty: one
-   budgeted breaking window, not a trickle.
+2. ~~**The 0.2 budget batch**~~ — RETIRED 2026-07-22: the 0.2 window was
+   spent by the 0.2.0 release. What shipped additively since:
+   `Overlays::top_z` (0120), `TextInput::masked` + 0250's ruling fix +
+   0180's MSRV/CI honesty (the 0.2.1 wave). What remains BREAKING moved
+   to the 0.3 budget document (`planned/0002_the_0_3_breaking_budget.md`,
+   maintainer-gated): `Role` non_exhaustive + end-appended variants,
+   `TokenKind` non_exhaustive, `Scroll::content_size` deprecation. The
+   subtree focus step (0510's engine delta) is additive and rides the
+   form kit.
 3. **0300 (lifecycle events)** — the control-plane band's foundation;
    cheap, additive, and everything agent-facing (0310-0360) consumes it.
-4. **0500 (popup substrate + selects)** — the app-kits trunk; unblocks
-   forms/wizards and the config-console app class.
+   NOTE: control-plane band ids 0300-0390 are distinct from first-app's
+   renumbered field reports (0292/0294 stay below 0300).
+4. ~~**0500 (popup substrate + selects)**~~ — DONE 2026-07-22 (owned +
+   tooltip modes, `app::select` family, gallery + wave coverage). The
+   app-kits trunk is in: 0510/0520/0530 consumers are unblocked.
 
 ## Sequencing (load-bearing)
 
@@ -174,6 +185,17 @@ are DONE.)
 - **Sibling extension crates inherit the dependency posture** (std +
   abstracttui + hand-rolled parsing); the TLS-class exception is not
   granted here — it rides live-data 0050's transport ADR.
+- **Same-z Modal stacking hazard (0500 follow-up 2, verified in code
+  2026-07-22)**: two `Modal::open` calls both mount at `MODAL_Z =
+  1000`; paint order is stable ascending-z (ties keep mount order —
+  the SECOND-mounted renders on top) while key dispatch sorts
+  `Reverse(z)` stably (ties keep mount order — the FIRST-mounted wins
+  keys): visually-top and key-owner DISAGREE for stacked modals. The
+  0500 owned popup is immune (`Overlays::top_z() + 1` is strictly
+  above). Whoever ships stacked-dialog UX (0510/0520 forms, 0530 row
+  actions, the 0590 validators) must give `Modal` a z-or-`top_z` story
+  first — details in `completed/app-kits/0500_select_combobox_family.md`
+  "Follow-ups revealed".
 
 ## ADR state
 

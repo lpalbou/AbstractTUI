@@ -154,12 +154,14 @@ impl Table {
             let on_select = on_select.clone();
             move |target: usize, body_h: i32| {
                 let target = target.min(len.saturating_sub(1));
-                if selection.get_untracked() != target {
+                let changed = selection.get_untracked() != target;
+                if changed {
                     selection.set(target);
-                    if let Some(f) = on_select.borrow_mut().as_mut() {
-                        f(target);
-                    }
                 }
+                // Ensure-visible BEFORE the user callback (0250 ruling
+                // clause 4, disposal-safety law — same inversion as
+                // List): an on_select that disposes the Table's scope
+                // must find no widget code left to run on dead signals.
                 let sel = target as i32;
                 offset.update(|o| {
                     if sel < *o {
@@ -170,6 +172,11 @@ impl Table {
                     }
                     *o = (*o).clamp(0, (len as i32 - body_h.max(1)).max(0));
                 });
+                if changed {
+                    if let Some(f) = on_select.borrow_mut().as_mut() {
+                        f(target);
+                    }
+                }
             }
         };
 
@@ -507,6 +514,38 @@ mod tests {
             canvas.cell(Point::new(0, 3)).unwrap().2,
             theme.tokens.selection_bg
         );
+    }
+
+    /// 0250 ruling clause 4 mirrored onto Table: `on_select` runs AFTER
+    /// all widget bookkeeping (the ensure-visible `offset.update` used
+    /// to run after the callback — the same disposal hazard the List
+    /// field report names), so a callback may dispose the Table's scope
+    /// synchronously.
+    #[test]
+    fn on_select_may_dispose_the_tables_scope() {
+        let t = default_theme().tokens;
+        let mut tree = crate::ui::UiTree::new(Size::new(20, 5));
+        let (root, ()) = crate::reactive::create_root(|cx| {
+            let picker_cx = cx.child();
+            let view = Table::new(vec![
+                Column::new("name", ColWidth::Flex(1.0)),
+                Column::new("size", ColWidth::Cells(6)),
+            ])
+            .rows(
+                (0..12)
+                    .map(|i| vec![format!("file-{i}"), format!("{i} kB")])
+                    .collect(),
+            )
+            .on_select(move |_| picker_cx.dispose())
+            .element(picker_cx, &t)
+            .build();
+            tree.mount(picker_cx, view);
+        });
+        tree.layout();
+        key(&mut tree, Key::Tab);
+        key(&mut tree, Key::Down); // fires on_select -> dispose, mid-dispatch
+        assert_eq!(tree.instance_count(), 0, "subtree unmounted by dispose");
+        root.dispose();
     }
 
     #[test]

@@ -1,9 +1,14 @@
 # App-grade widgets + API honesty backlog track
 
 ## Status
-Planned (not started). Numbering band: 0100–0290 (gaps deliberate; the
-0010–0090 band belongs to the live-data track, referenced but never
-authored here).
+Mostly executed (2026-07-21/22 waves). Numbering band: 0100–0190 (gaps
+deliberate). Completed and moved to `completed/app-widgets/`: 0100 Feed,
+0110 StreamSession, 0120 TextArea + completion, 0130 follow-tail +
+measured extent. Remaining planned here: 0150 terminal verbs (clipboard
+leg shipped with the selection wave; notify/bell/title remain) and 0180
+platform claims (MSRV + semver/msrv/live-pty CI jobs shipped 2026-07-22;
+scheduled perf/fuzz/soak gating remains). Proposed siblings live in
+`proposed/app-widgets/`.
 
 ## Purpose
 AbstractTUI 0.1.0 is a published, test-pinned terminal-UI **engine** —

@@ -2,9 +2,45 @@
 
 ## Metadata
 - Created: 2026-07-21
-- Status: Planned
+- Status: Planned — three of four legs executed 2026-07-22 (see status
+  note); the scheduled perf/fuzz/soak workflows remain open
 - Track: app-widgets (API/claims honesty lane)
 - Completed: N/A
+
+## Status note — 2026-07-22: MSRV + Linux pty job + claim rewording shipped
+
+- **MSRV declared and verified**: `rust-version = "1.87"` in Cargo.toml.
+  The floor is the library's own std usage — `is_multiple_of`
+  (stabilized 1.87; gfx/png, gfx/base64, three/validate, jpeg), above
+  `is_none_or` (1.82) and the windows-sys 0.61 Windows floor (1.71) the
+  audit recorded. Verified locally: `cargo +1.87.0 check --all-targets
+  --locked` compiles the whole tree (one inference-sensitive call in
+  `testing/fuzzish.rs` needed a turbofish — an inference accident, not
+  a feature need). CI `msrv` job added (pinned 1.87.0, ubuntu,
+  `--locked`; note lockfile v4 needs cargo ≥1.78, so 1.87 reads it
+  natively). Bump policy written into CONTRIBUTING (minor-version
+  event, declared in CHANGELOG) and echoed in README.
+- **Linux pty truth (want #1)**: CI job `live pty (ubuntu)` runs the
+  ignored live_smoke suite serially per CONTRIBUTING, with an explicit
+  `cargo build --examples` prebuild step (the R5 flake fix; the suite's
+  internal `ensure_examples_built` Once-guard then finds warm
+  binaries). README Linux row reworded to name its actual evidence
+  (default suite in CI + the dedicated pty job) instead of the bare
+  "pty coverage" claim; final validation is the job's first green run
+  on the hosted runner — if it proves un-runnable there, fall back to
+  the item's soften-the-row outcome.
+- **README perf nuance (want #4)**: the Performance paragraph now
+  states the split honestly — allocation budgets gate every CI run;
+  release-mode timing budgets are explicit manual suites until want #2
+  lands.
+- **Remaining (want #2)**: the scheduled/nightly perf + fuzz_big + soak
+  workflows. Untouched this cycle — they need the quiet-runner class
+  and a deliberate red-budget dry run, which is its own verification
+  exercise.
+- Rider shipped the same day (0170's remainder, re-anchored by the
+  audit): the `semver` CI gate (cargo-semver-checks vs latest published
+  release, verified locally: 196 checks pass vs 0.2.0) and the written
+  0.3 budget (`planned/0002_the_0_3_breaking_budget.md`).
 
 ## ADR status
 - Governing ADRs: None — no ADR system in this repo yet (see 0170).
@@ -92,7 +128,10 @@ downstream users get an MSRV contract.
 - `cargo +<msrv> test` green in CI; Cargo.toml declares the same version.
 
 ## Progress checklist
-- [ ] Linux live-pty CI job (with example prebuild) or README reword
+- [x] Linux live-pty CI job (with example prebuild) or README reword
+      (2026-07-22: BOTH — job wired + row reworded to its evidence;
+      green first run pending push)
 - [ ] Scheduled perf/fuzz/soak workflows
-- [ ] MSRV established + declared + CI job + policy line
-- [ ] README perf-claim nuance sentence
+- [x] MSRV established + declared + CI job + policy line (2026-07-22:
+      1.87, verified with the pinned toolchain locally)
+- [x] README perf-claim nuance sentence (2026-07-22)

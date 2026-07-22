@@ -27,7 +27,13 @@ use super::overlays::{LayerHandle, Overlays};
 use super::theme::current_theme;
 
 /// Overlay z bands: apps layer below 1000; modals stack above content,
-/// toasts above modals.
+/// toasts above modals. These bands order the STATIC primitives only:
+/// the owned [`Popup`](super::anchored::Popup) allocates dynamically at
+/// `Overlays::top_z() + 1` and may therefore transiently layer above a
+/// live toast — deliberate, and safe, because toasts are passive
+/// non-interactive draw layers while a popup is the key-owning surface
+/// the user is operating (cycle-3 addendum amendment in
+/// reviews/study/platform-on-appkits.md).
 pub const MODAL_Z: i32 = 1000;
 pub const TOAST_Z: i32 = 2000;
 

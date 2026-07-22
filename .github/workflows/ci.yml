@@ -1,11 +1,15 @@
 # CI for AbstractTUI — a pure-Rust library crate.
 #
 # Gates: build + full test suite on Linux/macOS, lib tests on Windows,
-# clippy (zero warnings) and rustdoc (zero warnings) on Linux.
-# Live/perf suites are #[ignore]d in the tree and deliberately not run here.
+# clippy (zero warnings) and rustdoc (zero warnings) on Linux, the live
+# pty suite on Linux (backlog 0180), MSRV check at the declared
+# `rust-version`, and a semver gate against the latest published release
+# (ADR-0001: additive-only between budgeted breaking windows).
 #
 # Deliberate omissions (see .github/SETUP.md "Follow-ups"):
-#   - no MSRV job: Cargo.toml declares no `rust-version` yet.
+#   - perf/fuzz/soak remain #[ignore]d and manual: the scheduled deep-gate
+#     workflows are 0180's open leg (timing budgets are load-sensitive
+#     and belong on a scheduled quiet-runner job, not per-PR).
 
 name: CI
 
@@ -40,9 +44,10 @@ jobs:
       - name: Build (all targets)
         run: cargo build --all-targets
       - name: Test
+        # `cargo test` already includes the doctest pass — no separate
+        # `cargo test --doc` step (cycle-2 review F13 nit: it ran the
+        # doctests twice).
         run: cargo test
-      - name: Doc tests
-        run: cargo test --doc
 
   test-windows:
     # The integration-test harness drives real terminals through a unix pty
@@ -80,3 +85,61 @@ jobs:
         run: cargo doc --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
+
+  # The live pty suite on a Linux runner (backlog 0180): the README's
+  # Linux row claims pty coverage, so CI must actually run it. The suite
+  # self-hosts through the in-tree pty helper; examples are prebuilt so
+  # no case pays a cold cargo build inside its deadline (review R5), and
+  # cases run serially per CONTRIBUTING.
+  live-pty-linux:
+    name: live pty (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Prebuild example binaries
+        run: cargo build --examples
+      - name: Live pty suite (serial)
+        run: cargo test --test live_smoke -- --ignored --test-threads=1
+
+  # MSRV gate (backlog 0180): the declared `rust-version` in Cargo.toml
+  # must actually compile the whole tree. Pinned toolchain, `--locked`
+  # so the check runs against the shipped lockfile (lockfile v4 needs
+  # cargo >= 1.78; 1.87 reads it natively). Bump policy: raising the
+  # floor is a minor-version event, declared in CHANGELOG.
+  msrv:
+    name: msrv (1.87)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.87.0"
+      - uses: Swatinem/rust-cache@v2
+      - name: Check (all targets at the declared floor)
+        run: cargo check --all-targets --locked
+
+  # Semver gate (ADR-0001 §2: additive-only between budgeted breaking
+  # windows; the 0.3 budget lives in docs/backlog/planned/). Baseline =
+  # the latest published release on crates.io (0.2.0 today) — the
+  # registry copy is what downstream actually resolves, so it is the
+  # honest comparison point. Tool verified locally 2026-07-22
+  # (`cargo semver-checks --baseline-version 0.2.0`: 196 checks; it
+  # then caught a live in-flight `Role` variant insertion as 2 major
+  # findings the same session — see the 0.3 budget doc's enforcement
+  # section). A registry outage fails only this job (separate +
+  # re-runnable), never the test jobs. An intended break in a budgeted
+  # 0.3 window will fail here by design — that failure is the release's
+  # cue to bump the version in the same PR, not a gate to soften.
+  semver:
+    name: semver (vs latest release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo-semver-checks
+        uses: obi1kenobi/cargo-semver-checks-action@v2

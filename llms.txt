@@ -32,8 +32,10 @@
   frame lifecycle, the zero-cost idle guarantee and the tests that pin it, the terminal
   layer (capabilities, kitty keyboard, tmux, restore), the 3D pipeline, platform posture.
 - [API guide](docs/api.md): The public surface, module by module — prelude, reactive, ui,
-  layout, the widget catalog, the app runtime (overlays, modal, toast, hooks), theme,
-  render (Style-as-patch, shaders), gfx, three, term/input, the testing harness, and plain
+  layout, the widget catalog (`List` activation, masked `TextInput`, diff-aware
+  `CodeView`), the app runtime (overlays, modal, toast, the anchored-popup substrate and
+  the Select/Combobox/MultiSelect pickers, completion, hooks), theme, render
+  (Style-as-patch, shaders), gfx, three, term/input, the testing harness, and plain
   statements of stability and limits.
 - [Documentation index](docs/README.md): One-line map of every guide and the reference
   material.
@@ -63,9 +65,9 @@
 
 ## Project
 
-- [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0 is the
-  first public release.
-- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,385 tests) and the two
+- [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
+  (2026-07-21) is the first public release, 0.2.1 (2026-07-22) the current one.
+- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,440 tests) and the two
   explicitly-run suites (live pty, perf budgets), golden snapshots, lint gates, the strict
   module layering rule, code conventions, and how to add a widget or a theme.
 - [Security policy](SECURITY.md): Private reporting (contact@abstractframework.ai); the

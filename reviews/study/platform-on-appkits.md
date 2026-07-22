@@ -319,6 +319,27 @@ and the wire just serializes the composed snapshot. Toasts stay above
 popups by the existing band constants; if a popup above `TOAST_Z` is
 ever wanted, that is a design smell to refuse, not a knob to add.
 
+**Amendment 2026-07-22 (cycle-3 close, resolving r2-cross-review F2)**:
+the last sentence above is RETIRED — it described the static-band
+world, and the shipped dynamic allocator contradicts it by
+construction: `Overlays::top_z()` maxes over ALL live layers (draw
+layers included), so a popup opened while a toast is showing allocates
+above `TOAST_Z`, and that is the CORRECT behavior, not a smell. Two
+facts make it safe: (1) toasts are passive, non-interactive draw
+layers (no tree, no focus, no handlers) — a popup covering one creates
+zero input conflict; (2) the popup is a transient, key-owning surface
+the user is actively operating — hiding it under a passive
+notification would invert the interaction priority. The overlap window
+is toast-lifetime × popup-open and resolves itself when either ends.
+Re-imposing toast superiority would need a static ceiling below
+`TOAST_Z` — exactly the band arithmetic the dynamic allocator was
+built to remove, and one a modal stack reaching z 1999 would break.
+The refusal that STANDS: no reserved band constants beyond the
+documented `MODAL_Z`/`TOAST_Z`, and no allocator object. Reality is
+now also documented at the source: `src/app/anchored_owned.rs` module
+doc ("Stacking note") and the band-constant comment in
+`src/app/popups.rs`.
+
 ## Cross-track answer recorded (extensions ask)
 The extensions track asked whether name+description is enough action
 metadata for extension-registered commands (my 0310 bus). Answered in

@@ -4,7 +4,7 @@
 //! ```ignore
 //! use abstracttui::widgets::CodeView;
 //! let view = CodeView::new(source_text)
-//!     .lang_label("rust")
+//!     .lang("rust")
 //!     .scroll_offset(top_line.get())
 //!     .element(&t)
 //!     .build();
@@ -17,6 +17,13 @@
 //! `syntax_func` inks stand ready for richer lexers (mapping documented
 //! there, not invented per widget).
 //!
+//! [`diff_token_color`] is the diff twin (backlog 0140's additive
+//! slice): `text::DiffKind` onto the SEMANTIC inks — added `ok`,
+//! removed `error`, hunk headers `info`, chrome `text_muted` — so a
+//! patch scans red/green in every theme without any theme knowing diff.
+//! `CodeView::lang("diff")` and diff-labeled markdown fences both route
+//! through it (one mapping, no drift).
+//!
 //! Chrome: code sits on `surface_raised` (the audited code ground), line
 //! numbers right-aligned in `text_faint` with a `border` separator.
 //!
@@ -26,9 +33,9 @@ use std::rc::Rc;
 
 use crate::base::{Point, Rgba};
 use crate::layout::Style as LayoutStyle;
-use crate::render::rich::RichLine;
-use crate::render::Style;
-use crate::text::{CLikeLexer, Highlighter, TokenKind};
+use crate::render::rich::{RichLine, Span};
+use crate::render::{Attrs, Style};
+use crate::text::{CLikeLexer, DiffKind, DiffLexer, Highlighter, TokenKind};
 use crate::theme::TokenSet;
 use crate::ui::Element;
 
@@ -46,9 +53,63 @@ pub fn code_token_color(kind: TokenKind, t: &TokenSet) -> Rgba {
     }
 }
 
+/// The theming of diffs: diff line kind -> theme ink, beside
+/// [`code_token_color`] so kinds become colors in exactly one place.
+/// Semantic inks, not syntax inks: added/removed are *state* ("this
+/// changed"), so they ride `ok`/`error` — the tokens every theme already
+/// audits — never a hue a diff invents.
+pub fn diff_token_color(kind: DiffKind, t: &TokenSet) -> Rgba {
+    match kind {
+        DiffKind::Added => t.ok,
+        DiffKind::Removed => t.error,
+        DiffKind::HunkHeader => t.info,
+        DiffKind::FileHeader => t.text,
+        DiffKind::Meta => t.text_muted,
+        DiffKind::Context => t.text,
+        // DiffKind is #[non_exhaustive]; in-crate this match stays
+        // exhaustive so the compiler walks every new kind through here,
+        // but FOREIGN matches need a `_` arm — document theirs as body
+        // text (never invisible).
+    }
+}
+
+/// One diff line -> themed spans: the crate-shared recipe both
+/// `CodeView` (lang "diff") and diff-labeled markdown fences render
+/// through, mirroring `RichLine::from_highlighted`'s gap-filling
+/// contract. File
+/// headers additionally carry BOLD (the anchor a reader scans for);
+/// everything else is ink-only.
+pub(crate) fn diff_rich_line(line: &str, lexer: &DiffLexer, base: Style, t: &TokenSet) -> RichLine {
+    let mut out = RichLine::new();
+    let mut cursor = 0;
+    for (range, kind) in lexer.spans(line) {
+        if range.start > cursor {
+            out.push(Span::new(&line[cursor..range.start], base));
+        }
+        let mut style = Style::new().fg(diff_token_color(kind, t));
+        if kind == DiffKind::FileHeader {
+            style = style.attrs(Attrs::BOLD);
+        }
+        out.push(Span::new(&line[range.clone()], style));
+        cursor = range.end;
+    }
+    if cursor < line.len() {
+        out.push(Span::new(&line[cursor..], base));
+    }
+    out
+}
+
+/// How a `CodeView` tints lines: a token lexer behind the
+/// [`Highlighter`] seam, or the line-oriented diff lexer (a different
+/// span vocabulary, so a different arm — see `text::diff`).
+enum Tinter {
+    Syntax(Rc<dyn Highlighter>),
+    Diff(DiffLexer),
+}
+
 pub struct CodeView {
     source: String,
-    lexer: Rc<dyn Highlighter>,
+    tinter: Tinter,
     line_numbers: bool,
     scroll_offset: i32,
     layout: Option<LayoutStyle>,
@@ -58,7 +119,7 @@ impl CodeView {
     pub fn new(source: impl Into<String>) -> CodeView {
         CodeView {
             source: source.into(),
-            lexer: Rc::new(CLikeLexer::default()),
+            tinter: Tinter::Syntax(Rc::new(CLikeLexer::default())),
             line_numbers: true,
             scroll_offset: 0,
             layout: None,
@@ -68,7 +129,26 @@ impl CodeView {
     /// Swap the lexer (language modes; the default is the C-like demo
     /// lexer).
     pub fn lexer(mut self, lexer: impl Highlighter + 'static) -> CodeView {
-        self.lexer = Rc::new(lexer);
+        self.tinter = Tinter::Syntax(Rc::new(lexer));
+        self
+    }
+
+    /// Pick the built-in lexer by language label (best effort, the same
+    /// labels markdown fences carry): `"diff"`/`"patch"`/`"udiff"` route
+    /// to the diff lexer ([`diff_token_color`] inks), `"rust"`/`"rs"`
+    /// and `"c"` pick the matching [`CLikeLexer`] preset, anything else
+    /// keeps the default C-like lexer — unknown labels never change
+    /// today's rendering.
+    pub fn lang(mut self, label: &str) -> CodeView {
+        let first = label.split_whitespace().next().unwrap_or("");
+        self.tinter = if DiffLexer::matches_lang(first) {
+            Tinter::Diff(DiffLexer::new())
+        } else if first.eq_ignore_ascii_case("c") {
+            Tinter::Syntax(Rc::new(CLikeLexer::c()))
+        } else {
+            // "rust"/"rs" and unknown labels: the rust-preset default.
+            Tinter::Syntax(Rc::new(CLikeLexer::default()))
+        };
         self
     }
 
@@ -99,7 +179,7 @@ impl CodeView {
         let gutter_fg = t.text_faint;
         let rule_fg = t.border;
         let base = Style::new().fg(t.text);
-        let lexer = self.lexer;
+        let tinter = self.tinter;
         let line_numbers = self.line_numbers;
         let offset = self.scroll_offset as usize;
         let lines: Vec<String> = self.source.lines().map(|s| s.to_string()).collect();
@@ -131,9 +211,14 @@ impl CodeView {
                     canvas.put(Point::new(x, y), '│', rule_fg, ground);
                     x += 2;
                 }
-                let rich = RichLine::from_highlighted(line, &*lexer, base, |kind| {
-                    Style::new().fg(code_token_color(kind, &tokens))
-                });
+                let rich = match &tinter {
+                    Tinter::Syntax(lexer) => {
+                        RichLine::from_highlighted(line, &**lexer, base, |kind| {
+                            Style::new().fg(code_token_color(kind, &tokens))
+                        })
+                    }
+                    Tinter::Diff(lexer) => diff_rich_line(line, lexer, base, &tokens),
+                };
                 for span in &rich.spans {
                     x += crate::widgets::richtext::print_span_clipped(
                         canvas,
@@ -225,6 +310,96 @@ mod tests {
         );
         assert!(row(&c, 0).starts_with("4 │"), "{:?}", row(&c, 0));
         assert_eq!(CodeView::line_count(SRC), 4);
+    }
+
+    const DIFF: &str = "diff --git a/x.rs b/x.rs\n@@ -1,2 +1,2 @@ fn main() {\n-let a = 0;\n+let a = 1;\n context\n\\ No newline at end of file";
+
+    #[test]
+    fn diff_kinds_map_to_semantic_inks() {
+        let t = default_theme().tokens;
+        assert_eq!(diff_token_color(DiffKind::Added, &t), t.ok);
+        assert_eq!(diff_token_color(DiffKind::Removed, &t), t.error);
+        assert_eq!(diff_token_color(DiffKind::HunkHeader, &t), t.info);
+        assert_eq!(diff_token_color(DiffKind::FileHeader, &t), t.text);
+        assert_eq!(diff_token_color(DiffKind::Meta, &t), t.text_muted);
+        assert_eq!(diff_token_color(DiffKind::Context, &t), t.text);
+    }
+
+    #[test]
+    fn lang_diff_renders_added_removed_inks_through_the_real_draw_path() {
+        let t = default_theme().tokens;
+        let c = draw_into(
+            CodeView::new(DIFF).lang("diff").element(&t),
+            Size::new(36, 6),
+        );
+        // Meta chrome (diff --git) in muted ink on the code ground.
+        let (ch, fg, bg) = c.cell(Point::new(4, 0)).unwrap();
+        assert_eq!(ch, 'd');
+        assert_eq!(fg, t.text_muted);
+        assert_eq!(bg, t.surface_raised);
+        // Hunk header in info; its trailing function context in body ink.
+        let hunk_x = cell_of(&row(&c, 1), "@@");
+        assert_eq!(c.cell(Point::new(hunk_x, 1)).unwrap().1, t.info);
+        let fn_x = cell_of(&row(&c, 1), "fn main");
+        assert_eq!(c.cell(Point::new(fn_x, 1)).unwrap().1, t.text);
+        // Removed line in error ink, added line in ok ink — whole line.
+        let minus_x = cell_of(&row(&c, 2), "-let");
+        assert_eq!(c.cell(Point::new(minus_x, 2)).unwrap().1, t.error);
+        assert_eq!(c.cell(Point::new(minus_x + 6, 2)).unwrap().1, t.error);
+        let plus_x = cell_of(&row(&c, 3), "+let");
+        assert_eq!(c.cell(Point::new(plus_x, 3)).unwrap().1, t.ok);
+        // Context body ink; no-newline marker muted.
+        let ctx_x = cell_of(&row(&c, 4), "context");
+        assert_eq!(c.cell(Point::new(ctx_x, 4)).unwrap().1, t.text);
+        let nn_x = cell_of(&row(&c, 5), "\\ No newline");
+        assert_eq!(c.cell(Point::new(nn_x, 5)).unwrap().1, t.text_muted);
+    }
+
+    #[test]
+    fn lang_labels_route_and_unknown_labels_keep_todays_rendering() {
+        let t = default_theme().tokens;
+        // "rust" and an unknown label both render the keyword ink (the
+        // default C-like path — unknown labels change nothing).
+        for label in ["rust", "elixir"] {
+            let c = draw_into(CodeView::new(SRC).lang(label).element(&t), Size::new(28, 4));
+            assert_eq!(c.cell(Point::new(4, 0)).unwrap().1, t.syntax_keyword);
+        }
+        // A diff label with fence-style extra words still routes.
+        let c = draw_into(
+            CodeView::new("+x")
+                .lang("diff filename=a.patch")
+                .line_numbers(false)
+                .element(&t),
+            Size::new(8, 1),
+        );
+        assert_eq!(c.cell(Point::new(0, 0)).unwrap().1, t.ok);
+    }
+
+    /// Theme honesty for the diff mapping: the inks it borrows (`ok`,
+    /// `error`, `info`, `text_muted`) must stay readable on
+    /// `surface_raised`, the declared code ground — measured across
+    /// every built-in theme, not assumed from the `bg`-anchored audit.
+    /// The floor matches the semantic-state class (3.0:1); the failure
+    /// message names the theme and measured value.
+    #[test]
+    fn diff_inks_clear_contrast_on_the_code_ground_in_every_theme() {
+        use crate::theme::{contrast_ratio, themes};
+        for theme in themes() {
+            let t = &theme.tokens;
+            for (name, ink) in [
+                ("ok", t.ok),
+                ("error", t.error),
+                ("info", t.info),
+                ("text_muted", t.text_muted),
+            ] {
+                let ratio = contrast_ratio(ink, t.surface_raised);
+                assert!(
+                    ratio >= 3.0,
+                    "{}: diff ink `{name}` measures {ratio:.2}:1 on surface_raised",
+                    theme.id
+                );
+            }
+        }
     }
 
     #[test]

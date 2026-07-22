@@ -1,7 +1,14 @@
 [package]
 name = "abstracttui"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
+# MSRV (backlog 0180): the floor is set by the library's own std usage —
+# `is_multiple_of` (1.87: gfx/png, gfx/base64, three/validate, jpeg),
+# above `is_none_or` (1.82: render) and the windows-sys 0.61 target
+# floor (1.71). Verified by `cargo +1.87.0 check --all-targets --locked`
+# and gated by the `msrv` CI job. Bump policy: an MSRV raise is a
+# minor-version event, declared in CHANGELOG (see CONTRIBUTING.md).
+rust-version = "1.87"
 license = "MIT"
 authors = ["Laurent-Philippe Albou <contact@abstractframework.ai>"]
 description = "A reactive, compositor-grade terminal UI engine: fine-grained signals, layered rendering with damage tracking, images (kitty/iTerm2/sixel/mosaic), software-rasterized 3D (GLB), themes and animation."
@@ -19,13 +26,13 @@ exclude = ["reviews/", "docs/captures/", "docs/media/", ".github/", "book.toml"]
 [dependencies]
 unicode-width = "0.2"
 unicode-segmentation = "1"
-miniz_oxide = "0.8"
+miniz_oxide = "0.9"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.60", features = [
+windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_System_Console",
     "Win32_Storage_FileSystem",

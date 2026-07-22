@@ -79,8 +79,10 @@ pub enum FeedBlock {
     Markdown(String),
     /// A fenced code block: highlighted like a markdown fence.
     Code {
-        /// Language label (currently informational; the C-like lexer
-        /// highlights all languages).
+        /// Language label. Routes the lexer like a markdown fence:
+        /// `"diff"`/`"patch"` tint through the diff mapping
+        /// (`code::diff_token_color`); every other label renders with
+        /// the C-like lexer.
         lang: String,
         /// Verbatim source.
         source: String,

@@ -39,14 +39,17 @@ through ordinary reactivity.*
 ## Highlights
 
 - **Widgets + layout** — buttons, text inputs, a multiline composer
-  (`TextArea` with history and completion dropdowns), lists, sortable tables,
+  (`TextArea` with history and completion dropdowns), selects (`Select` /
+  `Combobox` / `MultiSelect` over anchored popups that layer above modals),
+  lists and sortable tables with distinct selection and activation events,
   tabs, checkboxes, radio groups, scroll regions, panels, badges, progress
-  bars, spinners, modals, toasts — arranged by a flexbox-style solver
+  bars, spinners, modals, toasts, tooltips — arranged by a flexbox-style solver
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
 - **Transcripts and streams** — `Feed` renders append-only conversations and
-  logs with keyed rich blocks (markdown, code, custom draw) and streaming
-  markdown items that re-typeset only the open block per token;
+  logs with keyed rich blocks (markdown, code with syntax and diff tinting,
+  custom draw) and streaming markdown items that re-typeset only the open
+  block per token;
   `Scroll::follow_tail` pins to the bottom until the user scrolls and re-pins
   at the edge.
 - **Live data** — feed the UI from background threads through
@@ -153,8 +156,12 @@ The animations above are recorded straight from these examples with
 | Platform | Status |
 | --- | --- |
 | macOS | Verified — the full test suite includes live pty tests (real controlling terminal, signal-driven resize, suspend/resume). |
-| Linux | Verified — same unix code paths and pty coverage. |
-| Windows | Best-effort — compiles clean and lint-free against the MSVC target, and the platform-independent logic is unit-tested on every host, but it has not yet been run on a live Windows console. Treat the first Windows run as a beta event. |
+| Linux | Verified — same unix code paths; the full default suite runs in CI on ubuntu, and the live pty suite runs in a dedicated CI job (`live pty (ubuntu)`, real pseudo-terminal, examples prebuilt). |
+| Windows | Best-effort — compiles clean and lint-free against the MSVC target, the library suite runs in CI on a real Windows runner, but it has not yet been run on a live Windows console. Treat the first Windows run as a beta event. |
+
+Minimum supported Rust version: **1.87** (declared as `rust-version` in
+Cargo.toml and checked by a pinned-toolchain CI job; raising it is a
+minor-version event, declared in the CHANGELOG).
 
 The terminal is always restored — on quit, on panic, and on Ctrl+Z suspend —
 including cursor style, mouse modes, and kitty keyboard flags.
@@ -164,8 +171,9 @@ including cursor style, mouse modes, and kitty keyboard flags.
 Measured (release build, M-class laptop): a full 200×60 diff+present costs
 ~0.5 ms, a keystroke reaches the painted frame in ~50 µs through the real event
 loop, and an idle app costs zero — zero bytes written, zero heap allocations,
-zero wakeups. These are enforced by in-tree perf budgets and allocation-counting
-tests, not aspirations.
+zero wakeups. The allocation budgets gate every CI run; the release-mode
+timing budgets are in-tree suites run explicitly (see CONTRIBUTING) —
+budgets, not aspirations, with the honest split stated.
 
 ## Documentation
 

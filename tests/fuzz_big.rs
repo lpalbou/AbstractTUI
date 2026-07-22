@@ -201,3 +201,63 @@ fn markup_and_highlighter_5k_each() {
     }
     eprintln!("markup: 5000 md docs + 5000 code lines, 0 panics, all ranges valid");
 }
+
+/// Diff lexer (0140's additive slice) joins the campaign at the same
+/// bar as the C-like lexer: 5,000 seeded hostile lines, no panic, valid
+/// ascending char-boundary ranges, and every byte of every line covered
+/// by at most one span (whole-line classification never overlaps).
+#[test]
+#[ignore = "big fuzz"]
+fn diff_lexer_5k() {
+    use abstracttui::text::DiffLexer;
+
+    let lexer = DiffLexer::new();
+    let atoms = [
+        "+",
+        "-",
+        " ",
+        "@@",
+        "@@ -1,2 +3,4 @@",
+        "@@@",
+        "---",
+        "--- a/f",
+        "+++",
+        "+++ b/f\t2026",
+        "diff --git a/x b/y",
+        "index 83db48f..bf3a1a5 100644",
+        "\\",
+        "\\ No newline at end of file",
+        "Binary files a and b differ",
+        "rename from x",
+        "text",
+        "fn main() {",
+        "é",
+        "漢",
+        "🎉",
+        "\u{1b}[31m",
+        "\u{0}",
+        "\t",
+        "  ",
+    ];
+    let mut rng = Rng::new(0x_D1FF_FACE);
+    for _ in 0..5_000 {
+        let n = 1 + rng.below(12);
+        let mut line = String::new();
+        for _ in 0..n {
+            line.push_str(atoms[rng.below(atoms.len())]);
+        }
+        let mut prev_end = 0usize;
+        for (r, _) in lexer.spans(&line) {
+            assert!(r.start >= prev_end && r.end <= line.len() && r.start <= r.end);
+            assert!(line.is_char_boundary(r.start) && line.is_char_boundary(r.end));
+            prev_end = r.end;
+        }
+        // Non-empty lines always classify (no silent byte-0 gap): the
+        // first span starts at 0.
+        if !line.is_empty() {
+            let first = lexer.spans(&line);
+            assert_eq!(first.first().map(|(r, _)| r.start), Some(0), "{line:?}");
+        }
+    }
+    eprintln!("diff: 5000 hostile lines, 0 panics, all ranges valid");
+}

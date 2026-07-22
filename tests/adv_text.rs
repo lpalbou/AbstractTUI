@@ -313,3 +313,55 @@ fn from_highlighted_preserves_source_text() {
         assert_eq!(line.plain(), src, "highlight bridge altered the text");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Diff lexer (backlog 0140, additive slice) — the downstream view.
+// ---------------------------------------------------------------------------
+
+/// From a foreign crate (this test target), the diff vocabulary works
+/// with the documented downstream idiom: `DiffKind` is
+/// `#[non_exhaustive]`, so a foreign `match` carries a `_` arm mapping
+/// unknown future kinds to body text (never invisible). This test is
+/// the compile-time proof the contract holds (ADR-0003 §4).
+#[test]
+fn diff_lexer_public_api_and_non_exhaustive_idiom() {
+    use abstracttui::text::{DiffKind, DiffLexer};
+
+    let lexer = DiffLexer::new();
+    let classify = |line: &str| lexer.spans(line).first().map(|(_, k)| *k);
+    assert_eq!(classify("+added"), Some(DiffKind::Added));
+    assert_eq!(classify("-removed"), Some(DiffKind::Removed));
+    assert_eq!(classify("@@ -1 +1 @@"), Some(DiffKind::HunkHeader));
+    assert_eq!(classify("--- a/f"), Some(DiffKind::FileHeader));
+    assert_eq!(
+        classify("\\ No newline at end of file"),
+        Some(DiffKind::Meta)
+    );
+    assert_eq!(classify(" ctx"), Some(DiffKind::Context));
+
+    // The downstream mapping idiom: `_` catches kinds this crate may
+    // grow, rendered as body text — the arm this match REQUIRES to
+    // compile is the non_exhaustive proof.
+    let label = |k: DiffKind| match k {
+        DiffKind::Added => "add",
+        DiffKind::Removed => "del",
+        _ => "body",
+    };
+    assert_eq!(label(DiffKind::Added), "add");
+    assert_eq!(label(DiffKind::Context), "body");
+
+    // Totality over the shared hostile byte corpus (same bar as the
+    // C-like lexer above): valid ascending char-boundary ranges, no
+    // panic, on lossy-decoded hostile bytes reinterpreted as diff lines.
+    for chunk in hostile_corpus(0xD1FF_600D, 200) {
+        let src = String::from_utf8_lossy(&chunk);
+        for line in src.lines() {
+            let mut prev_end = 0usize;
+            for (r, _) in lexer.spans(line) {
+                assert!(r.start >= prev_end && r.end <= line.len() && r.start <= r.end);
+                assert!(line.is_char_boundary(r.start) && line.is_char_boundary(r.end));
+                prev_end = r.end;
+            }
+        }
+    }
+}

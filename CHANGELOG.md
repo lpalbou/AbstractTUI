@@ -5,6 +5,102 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-07-22
+
+### Added
+
+- widgets: `List::on_activate(FnMut(usize))` — the explicit activation
+  event (backlog 0250, ruling in reviews/study/platform-on-appkits.md):
+  fires on Enter (always), Space (no toggle meaning in a List), and a
+  click on the already-selected row; `on_select` stays the
+  selection-changed notification and fires on movement exactly as
+  before. When unbound, Enter/Space pass through to app shortcuts
+  (existing consumers unchanged).
+- widgets: `TextInput::masked(bool)` — secret/password mode (backlog
+  0510 §masked, shipped early): the draw substitutes one `•` per
+  grapheme cluster (count-honest, geometry identical) and
+  `access_value` exports the same bullets, so the accessibility/
+  automation tree never carries plaintext. Editing, selection, cursor
+  math, and paste untouched — except Alt+arrow word jumps, which
+  treat the whole masked value as ONE word (start/end, like Home/End;
+  real word boundaries would reveal the secret's word structure
+  through caret positions).
+- text: diff highlighting (backlog 0140's additive slice) —
+  `text::DiffLexer` classifies unified-diff lines into the new
+  `#[non_exhaustive]` `text::DiffKind` vocabulary (added/removed/hunk
+  header/file header/meta/context; stateless per line, totality-fuzzed,
+  documented `---`-content ambiguity resolved header-first).
+  `widgets::diff_token_color` maps kinds onto the audited semantic inks
+  (added `ok`, removed `error`, hunk `info`, chrome `text_muted`;
+  measured ≥3.0:1 on the `surface_raised` code ground across all 26
+  themes, test-pinned). `TokenKind` is deliberately untouched — its
+  `#[non_exhaustive]` question is parked in the written 0.3 budget.
+- widgets: `CodeView::lang(label)` — best-effort lexer selection by
+  language label: `"diff"`/`"patch"`/`"udiff"` route to the diff
+  mapping, `"rust"`/`"c"` pick the matching `CLikeLexer` preset,
+  unknown labels keep today's rendering. Markdown and Feed code fences
+  labeled `diff` route automatically through the same shared recipe.
+- docs/backlog: the written 0.3 breaking budget
+  (`docs/backlog/planned/0002_the_0_3_breaking_budget.md`) — ADR-0001
+  §2's required budget list, seeded with the `Role` non_exhaustive
+  (+`Tree`/`TreeItem`) entry, the `TokenKind` non_exhaustive ruling,
+  and the `Scroll::content_size` deprecation fate.
+- CI: three new gates — `msrv` (pinned 1.87.0 toolchain,
+  `cargo check --all-targets --locked`), `semver` (cargo-semver-checks
+  against the latest published crates.io release; enforces ADR-0001's
+  additive-only regime between budgeted windows), and
+  `live pty (ubuntu)` (the ignored live_smoke suite under a real
+  pseudo-terminal, examples prebuilt, serial — backlog 0180). Cargo.toml
+  now declares `rust-version = "1.87"` (floor: `is_multiple_of`,
+  stabilized 1.87, used in gfx/three; MSRV bumps are minor-version
+  events per CONTRIBUTING).
+- app: the anchored-popup substrate is COMPLETE (backlog 0500's two
+  remaining routing modes, extending `app::anchored`): `Popup` — the
+  OWNED mode, a modal tree at `top_z() + 1` (layers above any modal
+  stack), placement/flip/clamp via the shipped `place_panel` contract
+  plus `open_including_anchor_row` (the popup starts at the trigger
+  row), Escape/outside-press/anchor-death/viewport-resize dismissal
+  with `DismissReason`
+  (`Commit`/`Escape`/`OutsidePress`/`AnchorGone`/`Resize`)
+  delivered once through `on_dismiss` (a resize invalidates both the
+  solved placement and the captured anchor rect, so an open popup
+  closes instead of floating at stale coordinates); and `Tooltip` — the
+  hover-timed, non-interactive passive-label mode (one-shot timer,
+  zero wakeups until due; extensions 0430's consumer).
+- app: the choice-control family (backlog 0500): `Select` (closed
+  one-of-N over a `Signal<usize>`; popup type-ahead with same-char
+  cycling; opt-in `commit_on_move` live preview whose Escape restores
+  the pre-open value), `Combobox` (popup-mounted `TextInput` on the
+  trigger row — zero visual jump; case-insensitive substring filter;
+  the filter text is never the value; count/"no matches" status line),
+  `MultiSelect` (Space/click toggles a working copy, Enter commits the
+  key set once, Esc abandons; collapsed row joins labels and degrades
+  to "N selected"). Shared contract: highlight-vs-value separation
+  (0250 — `on_change` on commit only, and only on a real change),
+  `SelectOption { key, label, hint, disabled }` with disabled rows
+  skipped by movement, `Role::Button` + live access value on the
+  trigger (a dedicated `Role::Select` variant would break the
+  published exhaustive enum — parked in the 0.3 budget, 0002 entry 1)
+  and `Menu`/`MenuItem` in the popup, theme-token styling
+  consistent with `TextInput`/`List`. Faces live in `app::select`
+  (they ride the overlay store; layer map R4-1) and re-export through
+  the prelude; `App::mount` now provides the overlay store as reactive
+  context so `Select::new(..).view(cx)` works with no wiring.
+  `examples/components.rs` gained a picker section (theme Combobox
+  wired to `set_theme_by_id` — the 0200 console's `/theme` recipe).
+
+### Fixed
+
+- widgets: `List` and `Table` now complete ALL internal bookkeeping
+  (selection write, ensure-visible scrolling) BEFORE invoking their
+  selection callbacks — `on_select`, and on `List` also `on_activate`
+  (0250 ruling clause 4; `Table` has no activation event) — so a
+  callback that synchronously disposes the widget's scope (the
+  modal-picker close) no longer panics on the widget's own
+  post-callback signal use.
+- widgets: arrow keys on an EMPTY focused `List` no longer index past
+  the row prefix sums (latent panic).
+
 ## [0.2.0] - 2026-07-22
 
 ### Added
@@ -104,6 +200,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `term::Capabilities` and `GraphicsCaps` are now `#[non_exhaustive]`
   (construct via `Default` plus mutation or the new customization
   constructor; in-crate FRU continues to work).
+- Compatibility note (recorded 2026-07-22, after release): this release
+  also added `Role::TextArea` to the public exhaustive `ui::access::Role`
+  enum — technically a breaking change for downstream code that matches
+  `Role` exhaustively, shipped without a migration note (no known
+  consumer matches `Role`; verified against abstractcode-tui). Migration:
+  add a `Role::TextArea` arm or a `_` arm. `Role` is slated for
+  `#[non_exhaustive]` in the written 0.3 budget
+  (`docs/backlog/planned/0002_the_0_3_breaking_budget.md`).
 
 ## [0.1.0] - 2026-07-21
 
@@ -139,5 +243,6 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[0.2.1]: https://github.com/lpalbou/abstracttui/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/lpalbou/abstracttui/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/lpalbou/abstracttui/releases/tag/v0.1.0

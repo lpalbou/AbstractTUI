@@ -1,9 +1,9 @@
-# Proposed: `List::on_select` fires on arrow movement — no activation concept
+# Completed: `List::on_select` fires on arrow movement — no activation concept
 
 ## Metadata
 - Created: 2026-07-21
-- Status: Proposed (API footgun report — first-app finding)
-- Completed: N/A
+- Status: Completed (was: Proposed — API footgun report, first-app finding)
+- Completed: 2026-07-22
 
 ## ADR status
 - Governing ADRs: None. ADR impact: none — widget API semantics, worth a line
@@ -76,3 +76,47 @@ ships (same interaction family).
 ## Non-goals
 No change to selection semantics or keyboard bindings; no double-click
 gesture machinery beyond what mouse support already provides.
+
+## Completion report
+
+- Completed: 2026-07-22.
+- Ruling: implemented per the recorded 0250 ruling
+  (reviews/study/platform-on-appkits.md §"The 0250 ruling (queued ask,
+  answered)"), clauses 1, 2, and 4.
+- Shipped API (all additive, v0.2.x compatible):
+  - `List::on_activate(FnMut(usize))` — fires on Enter (always), on
+    Space (List has no toggle meaning → Space aliases Enter, clause 2),
+    and on a mouse click on the ALREADY-selected row; a click on an
+    unselected row only selects. No double-click synthesis. When
+    unbound, Enter/Space are NOT consumed — existing consumers (the
+    field's root-Enter workaround, the dashboard nav) are unchanged.
+  - `on_select` unchanged in meaning: the selection-changed
+    notification, firing on movement — now documented as such
+    (docs/api.md "List — selection vs activation").
+- Disposal-safety law (clause 4) made structural: `List::select` and
+  `Table::select` now complete ALL widget bookkeeping (selection write,
+  sticky-key write, ensure-visible `offset.update`) BEFORE the user
+  callback, so a callback may dispose the widget's scope synchronously
+  — the exact field crash ("handle used after its node was disposed"
+  from the post-callback `offset.update`) is test-pinned on both
+  widgets. Table's sort callbacks were audited: after they fire, only
+  dispatch-owned `EventCtx` state is touched — no ordering hazard.
+- Also fixed while touching `select`: arrow keys on an EMPTY focused
+  List indexed past the prefix sums (latent panic); movement and
+  activation keys on an empty List are now inert.
+- Tests (all green in the whole-tree run):
+  - unit (src/widgets/list_tests.rs — tests split out of list.rs for
+    the 600-line budget): `movement_fires_on_select_never_on_activate`,
+    `enter_space_and_click_on_selected_row_activate`,
+    `enter_and_space_pass_through_without_on_activate`,
+    `on_select_may_dispose_the_lists_scope`,
+    `on_activate_may_dispose_the_lists_scope`,
+    `empty_list_ignores_movement_and_activation_keys`;
+    (src/widgets/table.rs) `on_select_may_dispose_the_tables_scope`.
+  - integration (tests/adv_activation.rs, real Driver + CaptureTerm,
+    SGR click bytes + key bytes in, modeled VT screen out):
+    `sgr_click_selects_then_activates_and_enter_space_activate`,
+    `nav_list_without_on_activate_leaves_enter_to_app_shortcuts`.
+- The field workaround (root Enter shortcut + deferred modal close) can
+  now be deleted in abstractcode-tui: bind `on_activate` and close the
+  modal directly inside it.

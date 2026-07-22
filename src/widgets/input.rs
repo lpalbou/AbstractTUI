@@ -14,6 +14,20 @@
 //! sends (kitty text events land as chars); dead-key composition happens
 //! terminal-side or not at all.
 //!
+//! MASKED MODE (0510 §masked): `.masked(true)` substitutes one `•` per
+//! grapheme cluster in BOTH the draw and the `access_value` export —
+//! the accessibility snapshot is shipped off-process by the
+//! control-plane band, so a masked field must never export plaintext
+//! through the semantic tree (PLATFORM cycle-2 F2). Editing, selection,
+//! cursor math, and paste are untouched: masking is a presentation +
+//! export substitution, never a second editing model. One deliberate
+//! editing-model exception (cycle-3 review F7): WORD JUMPS degrade to
+//! whole-field jumps — `word_step` over the real text would park the
+//! caret on the secret's word boundaries, telegraphing word count and
+//! word lengths to a shoulder-surfer through cursor motion alone, so a
+//! masked field treats the whole value as ONE word (the native
+//! password-field convention).
+//!
 //! OWNER: REACT.
 
 use std::cell::RefCell;
@@ -36,6 +50,7 @@ pub(crate) type TextCallback = Rc<RefCell<Option<BoxedTextFn>>>;
 pub struct TextInput {
     value: Option<Signal<String>>,
     placeholder: String,
+    masked: bool,
     layout: Option<LayoutStyle>,
     on_change: Option<BoxedTextFn>,
     on_submit: Option<BoxedTextFn>,
@@ -105,6 +120,7 @@ impl TextInput {
         TextInput {
             value: None,
             placeholder: String::new(),
+            masked: false,
             layout: None,
             on_change: None,
             on_submit: None,
@@ -120,6 +136,26 @@ impl TextInput {
 
     pub fn placeholder(mut self, text: impl Into<String>) -> TextInput {
         self.placeholder = text.into();
+        self
+    }
+
+    /// Secret/password mode: the DRAW substitutes one `•` per grapheme
+    /// cluster (count-honest: a ZWJ family is one bullet; each bullet
+    /// occupies its cluster's own width so scroll/cursor geometry is
+    /// byte-identical to the unmasked field), and `access_value` — the
+    /// accessibility/automation export, a leak surface shipped
+    /// off-process — exports the same bullets, never the plaintext.
+    /// Editing, selection, cursor math, and paste are untouched; the
+    /// bound value signal still holds the real text (the app owns it).
+    /// One exception: Alt+arrow WORD jumps treat the whole value as a
+    /// single word (they go to start/end, like Home/End, including
+    /// Shift extension) — real word boundaries would reveal the
+    /// secret's word structure through caret positions.
+    /// The placeholder is not secret and renders as usual. A reveal
+    /// toggle is a rebuild with `masked(false)` (wrap the field in your
+    /// `dyn_view_scoped` on the reveal signal).
+    pub fn masked(mut self, masked: bool) -> TextInput {
+        self.masked = masked;
         self
     }
 
@@ -170,6 +206,7 @@ impl TextInput {
         });
         let focused = cx.signal(false);
         let placeholder = self.placeholder;
+        let masked = self.masked;
         let on_change: TextCallback = Rc::new(RefCell::new(self.on_change));
         let on_submit: TextCallback = Rc::new(RefCell::new(self.on_submit));
 
@@ -189,7 +226,9 @@ impl TextInput {
                 let width = (ctx.current_rect().w - 2).max(1);
                 match ev {
                     UiEvent::Key(k) => {
-                        if edit_key(k.key, k.mods, value, caret, width, &on_change, &on_submit) {
+                        if edit_key(
+                            k.key, k.mods, value, caret, width, masked, &on_change, &on_submit,
+                        ) {
                             ctx.stop_propagation();
                         }
                     }
@@ -212,7 +251,18 @@ impl TextInput {
             .style(layout)
             .role(crate::ui::Role::Input)
             .access_label(placeholder.clone())
-            .access_value(move || value.get_untracked())
+            .access_value(move || {
+                // Masked fields redact AT THE WIDGET (0510 §masked):
+                // this closure is the semantic-tree export the
+                // control-plane band ships off-process — plaintext must
+                // never leave through it. Bullets keep the
+                // grapheme-cluster count (and nothing else).
+                if masked {
+                    value.with_untracked(|v| "•".repeat(crate::text::segments(v).count()))
+                } else {
+                    value.get_untracked()
+                }
+            })
             .focusable()
             .focus_signal(focused)
             .on(Phase::Bubble, handler)
@@ -274,11 +324,33 @@ impl TextInput {
                                     } else {
                                         Style::new().fg(text_fg).bg(bg)
                                     };
-                                    canvas.print_styled(
-                                        crate::base::Point::new(tx + col, rect.y),
-                                        seg.cluster,
-                                        &style,
-                                    );
+                                    if masked {
+                                        // One bullet per cluster in the
+                                        // cluster's own width slot —
+                                        // count-honest, geometry
+                                        // identical to the plain draw
+                                        // (padding cells carry the same
+                                        // style so selection/cursor
+                                        // blocks stay whole).
+                                        canvas.print_styled(
+                                            crate::base::Point::new(tx + col, rect.y),
+                                            "•",
+                                            &style,
+                                        );
+                                        for pad in 1..w {
+                                            canvas.print_styled(
+                                                crate::base::Point::new(tx + col + pad, rect.y),
+                                                " ",
+                                                &style,
+                                            );
+                                        }
+                                    } else {
+                                        canvas.print_styled(
+                                            crate::base::Point::new(tx + col, rect.y),
+                                            seg.cluster,
+                                            &style,
+                                        );
+                                    }
                                 }
                                 col += w;
                             }
@@ -404,6 +476,9 @@ pub(crate) fn word_step(text: &str, map: &ClusterMap, from: usize, dir: i32) -> 
 }
 
 /// Apply one key to the editing state. Returns true when consumed.
+/// `masked` degrades word jumps to whole-field jumps (F7: word
+/// boundaries over the real text would leak the secret's word
+/// structure through caret positions).
 #[allow(clippy::too_many_arguments)]
 fn edit_key(
     key: Key,
@@ -411,6 +486,7 @@ fn edit_key(
     value: Signal<String>,
     caret: Signal<Caret>,
     width: i32,
+    masked: bool,
     on_change: &TextCallback,
     on_submit: &TextCallback,
 ) -> bool {
@@ -440,7 +516,9 @@ fn edit_key(
     };
     match key {
         Key::Left => {
-            let target = if alt {
+            let target = if alt && masked {
+                0 // masked: the whole value is ONE word (F7)
+            } else if alt {
                 word_step(&text_snapshot, &map, c.cursor, -1)
             } else {
                 c.cursor.saturating_sub(1)
@@ -451,7 +529,9 @@ fn edit_key(
             return true;
         }
         Key::Right => {
-            let target = if alt {
+            let target = if alt && masked {
+                len // masked: the whole value is ONE word (F7)
+            } else if alt {
                 word_step(&text_snapshot, &map, c.cursor, 1)
             } else {
                 c.cursor + 1
@@ -524,140 +604,5 @@ fn edit_key(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::base::{Point, Size};
-    use crate::theme::default_theme;
-    use crate::ui::{Key, Mods, UiEvent, UiTree};
-    use crate::widgets::itest_util::{key, key_mod, mount_widget, render, type_str};
-
-    fn focused_input(size: Size) -> (crate::reactive::RootScope, UiTree, Signal<String>) {
-        let t = &default_theme().tokens;
-        let holder: Rc<RefCell<Option<Signal<String>>>> = Rc::new(RefCell::new(None));
-        let h = holder.clone();
-        let (root, mut tree) = mount_widget(size, move |cx| {
-            let value = cx.signal(String::new());
-            *h.borrow_mut() = Some(value);
-            TextInput::new()
-                .value(value)
-                .placeholder("type here")
-                .element(cx, t)
-                .build()
-        });
-        key(&mut tree, Key::Tab); // focus the field
-        let sig = holder.borrow().expect("value signal");
-        (root, tree, sig)
-    }
-
-    #[test]
-    fn typing_inserts_and_renders_inside_the_frame() {
-        let theme = default_theme();
-        let size = Size::new(16, 1);
-        let (_root, mut tree, value) = focused_input(size);
-        type_str(&mut tree, "hello");
-        assert_eq!(value.get_untracked(), "hello");
-        let canvas = render(&mut tree, size);
-        assert_eq!(
-            canvas.cell(Point::new(1, 0)).unwrap().0,
-            'h',
-            "text starts after the stroke"
-        );
-        assert!(canvas.row_text(0).contains("hello"));
-        // Focused frame wears border_focus (§3.2 bordered row).
-        assert_eq!(
-            canvas.cell(Point::new(0, 0)).unwrap().1,
-            theme.tokens.border_focus
-        );
-    }
-
-    #[test]
-    fn backspace_delete_home_end_word_jump() {
-        let size = Size::new(20, 1);
-        let (_root, mut tree, value) = focused_input(size);
-        type_str(&mut tree, "one two three");
-        key(&mut tree, Key::Backspace); // "one two thre"
-        assert_eq!(value.get_untracked(), "one two thre");
-        key_mod(&mut tree, Key::Left, Mods::ALT); // to start of "thre"
-        key(&mut tree, Key::Delete); // "one two hre"
-        assert_eq!(value.get_untracked(), "one two hre");
-        key(&mut tree, Key::Home);
-        key(&mut tree, Key::Delete);
-        assert_eq!(value.get_untracked(), "ne two hre");
-        key(&mut tree, Key::End);
-        type_str(&mut tree, "!");
-        assert_eq!(value.get_untracked(), "ne two hre!");
-    }
-
-    #[test]
-    fn selection_replaces_on_type_and_renders_selected_style() {
-        let theme = default_theme();
-        let t = &theme.tokens;
-        let size = Size::new(20, 1);
-        let (_root, mut tree, value) = focused_input(size);
-        type_str(&mut tree, "abcdef");
-        key(&mut tree, Key::Home);
-        key_mod(&mut tree, Key::Right, Mods::SHIFT);
-        key_mod(&mut tree, Key::Right, Mods::SHIFT); // select "ab"
-        let canvas = render(&mut tree, size);
-        assert_eq!(canvas.cell(Point::new(1, 0)).unwrap().2, t.selection_bg);
-        type_str(&mut tree, "X"); // replaces the selection
-        assert_eq!(value.get_untracked(), "Xcdef");
-    }
-
-    #[test]
-    fn paste_goes_in_whole_and_scrolls_to_cursor() {
-        let size = Size::new(8, 1);
-        let (_root, mut tree, value) = focused_input(size);
-        tree.dispatch(&UiEvent::Paste("pasted line\nwith break".into()));
-        assert_eq!(value.get_untracked(), "pasted line with break");
-        // Cursor is at the end; the visible window must include it: the
-        // start of the text is scrolled out of the frame.
-        let canvas = render(&mut tree, size);
-        assert_ne!(
-            canvas.cell(Point::new(1, 0)).unwrap().0,
-            'p',
-            "scrolled: {:?}",
-            canvas.row_text(0)
-        );
-    }
-
-    #[test]
-    fn submit_fires_with_current_value() {
-        let t = &default_theme().tokens;
-        let submitted: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
-        let s2 = submitted.clone();
-        let (_root, mut tree) = mount_widget(Size::new(16, 1), move |cx| {
-            TextInput::new()
-                .on_submit(move |v| s2.borrow_mut().push(v.to_string()))
-                .element(cx, t)
-                .build()
-        });
-        key(&mut tree, Key::Tab);
-        type_str(&mut tree, "ok");
-        key(&mut tree, Key::Enter);
-        assert_eq!(*submitted.borrow(), vec!["ok".to_string()]);
-    }
-
-    #[test]
-    fn placeholder_shows_only_unfocused_empty() {
-        let size = Size::new(16, 1);
-        let t = &default_theme().tokens;
-        let (_root, mut tree) = mount_widget(size, |cx| {
-            TextInput::new()
-                .placeholder("type here")
-                .element(cx, t)
-                .build()
-        });
-        let theme = default_theme();
-        let canvas = render(&mut tree, size);
-        assert!(canvas.row_text(0).contains("type here"));
-        assert_eq!(
-            canvas.cell(Point::new(1, 0)).unwrap().1,
-            theme.tokens.text_faint,
-            "placeholder ink is text_faint (§3)"
-        );
-        key(&mut tree, Key::Tab); // focus hides placeholder, shows cursor
-        let canvas = render(&mut tree, size);
-        assert!(!canvas.row_text(0).contains("type here"));
-    }
-}
+#[path = "input_tests.rs"]
+mod tests;

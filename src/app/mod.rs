@@ -43,6 +43,7 @@ pub mod keymap_help;
 mod notices;
 pub mod overlays;
 pub mod popups;
+pub mod select;
 pub mod selection;
 mod theme;
 mod viewport;
@@ -56,6 +57,7 @@ pub use keymap_help::KeymapHelp;
 pub use notices::use_startup_notices;
 pub use overlays::{ImageHandle, LayerHandle, Overlays};
 pub use popups::{Modal, Toast, MODAL_Z, TOAST_Z};
+pub use select::{Combobox, MultiSelect, Select, SelectOption};
 pub use theme::{current_theme, set_theme, set_theme_by_id, use_theme};
 pub use viewport::{current_viewport, use_viewport};
 
@@ -231,6 +233,7 @@ impl App {
             return Err(crate::base::Error::App("App::mount called twice".into()));
         }
         let tree = &mut self.tree;
+        let overlays = self.overlays.clone();
         let (root, ()) = create_root(|cx| {
             let theme_sig = use_theme(cx);
             // The ACTIVE theme rides reactive CONTEXT so widgets below
@@ -238,6 +241,10 @@ impl App {
             // `Widget::view(cx)` resolves tokens through this (tracked:
             // a widget built inside a dyn_view re-renders on switch).
             cx.provide_context(theme_sig);
+            // The overlay store rides context too: popup-opening
+            // controls (`app::select` family) resolve it without prop
+            // drilling — `Select::new(..).view(cx)` just works.
+            cx.provide_context(overlays);
             let invalidate = tree.invalidator();
             cx.effect_labeled("app-theme-watcher", move || {
                 let _ = theme_sig.get(); // subscribe

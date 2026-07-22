@@ -25,11 +25,11 @@ use crate::layout::Style as LayoutStyle;
 use crate::render::md::{self, Block, Marker, MdStyles};
 use crate::render::rich::{RichLine, RichText, Span};
 use crate::render::{Attrs, Style};
-use crate::text::CLikeLexer;
+use crate::text::{CLikeLexer, DiffLexer};
 use crate::theme::TokenSet;
 use crate::ui::{Element, StyledCanvas};
 
-use super::code::code_token_color;
+use super::code::{code_token_color, diff_rich_line};
 
 /// One typeset row: a rich line plus its chrome. Crate-shared: the Feed
 /// widget caches these per item/block (backlog 0100) — ONE row recipe,
@@ -160,6 +160,7 @@ fn layout_rows(source: &str, t: &TokenSet, width: i32) -> Vec<Row> {
 pub(crate) struct BlockTypesetter {
     styles: MdStyles,
     lexer: CLikeLexer,
+    diff: DiffLexer,
     code_base: Style,
     t: TokenSet,
 }
@@ -169,6 +170,7 @@ impl BlockTypesetter {
         BlockTypesetter {
             styles: md_styles(t),
             lexer: CLikeLexer::default(),
+            diff: DiffLexer::new(),
             code_base: Style::new().fg(t.text),
             t: *t,
         }
@@ -268,13 +270,20 @@ impl BlockTypesetter {
                     });
                 }
             }
-            Block::CodeFence { lang: _, lines } => {
+            Block::CodeFence { lang, lines } => {
                 blank(out);
+                // Fence labels route the lexer (0140's diff slice):
+                // ```diff / ```patch tint through the diff mapping; every
+                // other label keeps the C-like lexer as before.
+                let diff_fence = DiffLexer::matches_lang(lang);
                 for code_line in lines {
-                    let rich =
+                    let rich = if diff_fence {
+                        diff_rich_line(code_line, &self.diff, self.code_base, t)
+                    } else {
                         RichLine::from_highlighted(code_line, &self.lexer, self.code_base, |k| {
                             Style::new().fg(code_token_color(k, t))
-                        });
+                        })
+                    };
                     let mut padded = RichLine::new();
                     padded.push(Span::new(" ", self.code_base));
                     for span in rich.spans {
@@ -423,6 +432,27 @@ mod tests {
             Size::new(28, 6),
         );
         assert!(!row(&c, 0).contains("Title"));
+    }
+
+    #[test]
+    fn diff_fences_tint_added_removed_and_plain_fences_stay_clike() {
+        let t = default_theme().tokens;
+        let doc = "```diff\n-old line\n+new line\n```\n\n```\nfn main() {}\n```\n";
+        let c = draw_into(MarkdownView::new(doc).element(&t), Size::new(28, 10));
+        // Diff fence: removed line in error ink, added in ok, on the
+        // fence's raised ground.
+        let minus_y = (0..10).find(|y| row(&c, *y).contains("-old")).unwrap();
+        let mx = cell_of(&row(&c, minus_y), "-old");
+        let (_, fg, bg) = c.cell(Point::new(mx, minus_y)).unwrap();
+        assert_eq!(fg, t.error);
+        assert_eq!(bg, t.surface_raised);
+        let plus_y = (0..10).find(|y| row(&c, *y).contains("+new")).unwrap();
+        let px = cell_of(&row(&c, plus_y), "+new");
+        assert_eq!(c.cell(Point::new(px, plus_y)).unwrap().1, t.ok);
+        // The unlabeled fence still renders the C-like keyword ink.
+        let fn_y = (0..10).find(|y| row(&c, *y).contains("fn main")).unwrap();
+        let fx = cell_of(&row(&c, fn_y), "fn");
+        assert_eq!(c.cell(Point::new(fx, fn_y)).unwrap().1, t.syntax_keyword);
     }
 
     #[test]

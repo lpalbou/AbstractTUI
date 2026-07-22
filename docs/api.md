@@ -131,9 +131,9 @@ widgets take just `&TokenSet`, no `Scope`. The catalog:
 
 - **Block** — the bordered panel primitive: title, fill, focus ring, `BorderKind`.
 - **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
-- **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`.
+- **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
 - **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
-- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`.
+- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`. Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected).
 - **Feed** — virtualized, append-only, keyed rich items (markdown, plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open markdown block; 10k items draw one screenful.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
@@ -150,6 +150,79 @@ widgets take just `&TokenSet`, no `Scope`. The catalog:
 - **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals.
 - **MarkdownView / RichTextView / CodeView** — typeset markdown, wrapped styled spans, read-only highlighted code.
 - **Logo** — the AbstractTUI wordmark for headers, about screens, empty states.
+
+### Code and diffs — lexers and their theme mappings
+
+`CodeView` tints through the pluggable `text::Highlighter` seam (byte
+ranges + `TokenKind`; the built-in `CLikeLexer` is honest demo-grade),
+and `widgets::code_token_color` is the ONE place token kinds become
+theme inks. Diffs are line-oriented, not token-oriented, so they ride a
+dedicated additive vocabulary: `text::DiffLexer` classifies each line
+(`DiffKind`: added, removed, hunk header, file header, meta chrome,
+context — `#[non_exhaustive]`, so downstream matches carry a `_` arm
+rendering unknown kinds as body text), and `widgets::diff_token_color`
+maps it onto the SEMANTIC inks — added `ok`, removed `error`, hunk
+headers `info`, chrome `text_muted` — readable on the `surface_raised`
+code ground in every built-in theme (measured, test-pinned).
+
+Routing is by language label, best effort: `CodeView::lang("diff")`
+(also `"patch"`/`"udiff"`; `"rust"`/`"c"` pick C-like presets; unknown
+labels change nothing), and markdown/Feed code fences labeled
+` ```diff ` route automatically — one shared recipe, so a fence and a
+`CodeView` can never tint the same patch differently:
+
+```rust
+use abstracttui::widgets::CodeView;
+
+fn patch_pane(patch: &str, t: &abstracttui::theme::TokenSet) -> abstracttui::ui::Element {
+    CodeView::new(patch).lang("diff").element(t)
+}
+```
+
+Classification is stateless per line (scroll-position-invariant by
+design) and approximate by contract: a removed line whose content
+begins `-- ` reads as a file header (the classic highlighter
+resolution), and prose between hunks stays untinted.
+
+### List — selection vs activation
+
+Selection FOLLOWS MOVEMENT: arrows/Home/End/Page keys and clicks move
+the highlight, and `on_select` is the selection-changed notification —
+never wire commitment, navigation, or destruction to it. Activation is
+the EXPLICIT "user chose this row" event: `on_activate` fires on Enter
+(always), on Space (a List has no toggle meaning), and on a click on
+the already-selected row; a click on an unselected row only selects,
+and there is no double-click synthesis. Both callbacks run after the
+List's own bookkeeping (selection write, ensure-visible), so an
+`on_activate` may close the surrounding modal — disposing the List's
+scope synchronously is safe. When `on_activate` is unbound, Enter and
+Space pass through to your shortcuts unchanged:
+
+```rust
+use abstracttui::prelude::*;
+
+fn theme_picker(cx: Scope, apply_and_close: impl FnMut(usize) + 'static) -> View {
+    List::of(["dark", "light", "solarized"])
+        .on_activate(apply_and_close) // Enter / Space / click-on-selected
+        .view(cx) // browsing with arrows only moves the highlight
+}
+```
+
+### TextInput — masked (secret) fields
+
+`.masked(true)` renders one `•` per grapheme cluster (a ZWJ emoji
+family is one bullet; each bullet occupies its cluster's width, so
+scroll and cursor geometry match the unmasked field) and exports the
+same bullets through `access_value` — the accessibility snapshot is
+shipped off-process by automation consumers, so a masked field never
+leaks plaintext through the semantic tree either. Editing, selection,
+cursor math, and paste are untouched; the bound value signal holds the
+real text. One deliberate exception: Alt+arrow word jumps treat the
+whole masked value as a single word (start/end, like Home/End,
+Shift-extension included) — true word boundaries would reveal the
+secret's word count and word lengths through caret motion. For a
+reveal toggle, rebuild the field with `masked(false)`
+inside a `dyn_view_scoped` over your reveal signal.
 
 ### Feed — streaming transcripts
 
@@ -288,9 +361,73 @@ fn composer_with_commands(cx: Scope, app: &App) -> View {
 ```
 
 Providers run synchronously with the query typed after the trigger;
-an empty Vec closes the dropdown. The OWNED and TOOLTIP popup modes
-(the select/combobox family, hover tips) are future 0500 work on the
-same placement engine.
+an empty Vec closes the dropdown. The OWNED mode (`Popup`, a modal
+tree above the whole live stack with `DismissReason`-labeled endings:
+commit, Escape, outside press, anchor scope death, and viewport
+resize — a resize stales both the solved placement and the captured
+anchor, so an open popup closes rather than float at stale
+coordinates) and the TOOLTIP mode (`Tooltip::attach`, a hover-timed
+passive label) ship beside it on the same placement engine — the
+select family below rides the owned mode.
+
+### Select / Combobox / MultiSelect — the choice controls
+
+One family over one popup substrate, three faces (`app::select`,
+re-exported in the prelude). All three render as a one-row focusable
+trigger (side strokes carry focus, `▾` affordance, `text_faint`
+placeholder); Enter/Space or a click opens an anchored popup that
+layers above EVERYTHING live — a select inside stacked modals works —
+and is placed below the trigger, flipped above when cramped. Inside,
+Up/Down/PageUp/PageDown move a HIGHLIGHT (never the bound value),
+Enter commits, Esc abandons, and an outside press dismisses without
+acting on what is below. `on_change` fires on COMMIT only, and only
+when the value actually changed; `Select::commit_on_move(true)` is the
+opt-in live-preview exception (Escape then restores the pre-open
+value). Options carry a stable `key`, a `label`, an optional muted
+right-aligned `hint`, and `disabled` (skipped by movement, out of the
+focus order). The closed control reports `Role::Button` (a select
+trigger is a button that opens a menu; a dedicated `Select` role is
+parked in the 0.3 breaking budget) with the current choice as its
+access value; popups report `Menu`/`MenuItem`.
+
+- **`Select`** — closed one-of-N bound to a `Signal<usize>`;
+  type-ahead inside the popup jumps by label prefix, a repeated char
+  cycles.
+- **`Combobox`** — the popup includes the trigger row and mounts a
+  real `TextInput` there (zero visual jump); typing filters
+  (case-insensitive substring), the filter text is never the value, a
+  non-matching buffer commits nothing, and a count/"no matches" line
+  is part of the popup.
+- **`MultiSelect`** — checkbox-marked rows; Space (or click) toggles
+  a working copy without closing, Enter commits the whole set into a
+  `Signal<Vec<String>>` of keys (canonical option order), Esc abandons
+  it. The collapsed row joins the chosen labels and degrades to
+  "N selected" when they overflow.
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::theme::themes;
+
+fn theme_picker(cx: Scope) -> View {
+    let picked = cx.signal(usize::MAX); // nothing chosen yet
+    Combobox::new(
+        themes().iter().map(|t| SelectOption::new(t.label)).collect(),
+    )
+    .value(picked)
+    .placeholder("type to search themes…")
+    .on_change(|i| {
+        set_theme_by_id(themes()[i].id);
+    })
+    .view(cx)
+}
+```
+
+Inside an `App` the popup finds the overlay store through reactive
+context automatically; outside one (bare-tree tests), pass
+`.overlays(&overlays)` explicitly. The faces live app-side (they need
+the overlay store; `widgets` sits below `app` in the layer map), but
+they are plain token-consuming components with the standard
+`.view(cx)` / `.element(cx, &tokens)` builds.
 
 ## app — the runtime
 

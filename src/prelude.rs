@@ -42,6 +42,8 @@ pub use crate::app::{
 
 pub use crate::anim::{Easing, Timeline, Transition, Tween};
 
+pub use crate::app::anchored::{DismissReason, Popup, Tooltip};
+pub use crate::app::select::{Combobox, MultiSelect, Select, SelectOption};
 pub use crate::app::selection::{copy_to_clipboard, mouse_capture, selection};
 pub use crate::{
     app::anchored::{AnchoredPanel, Completion, CompletionCandidate},

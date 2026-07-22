@@ -1,5 +1,20 @@
 //! List: virtualized, selectable, keyboard+mouse vertical list.
 //!
+//! SELECTION vs ACTIVATION (0250 ruling, recorded in
+//! reviews/study/platform-on-appkits.md §"The 0250 ruling"): selection
+//! FOLLOWS MOVEMENT — arrows/Home/End/Page keys/click move it and
+//! `on_select` is the selection-changed NOTIFICATION; activation is the
+//! EXPLICIT "user chose this row" event — `on_activate` fires on Enter
+//! (always), on Space (List has no toggle meaning, so Space aliases
+//! Enter here), and on a click on the ALREADY-selected row. Never wire
+//! commitment, navigation, or destruction to `on_select`.
+//!
+//! Disposal-safety law (ruling clause 4): the List completes ALL of its
+//! own bookkeeping (selection write, sticky-key write, ensure-visible
+//! scrolling) BEFORE any user callback runs, so a callback may dispose
+//! the List's scope synchronously (the modal-picker close) without
+//! tripping over dead signals.
+//!
 //! Cycle-7 hardening: VARIABLE-HEIGHT items (per-item height callback,
 //! prefix-sum windowing — offsets are CONTENT CELL ROWS, item lookup is
 //! a binary search), STICKY SELECTION BY KEY (`key_fn` +
@@ -61,6 +76,7 @@ pub struct List {
     focused: Option<Signal<bool>>,
     layout: Option<LayoutStyle>,
     on_select: Option<Box<dyn FnMut(usize)>>,
+    on_activate: Option<Box<dyn FnMut(usize)>>,
 }
 
 impl List {
@@ -87,6 +103,7 @@ impl List {
             focused: None,
             layout: None,
             on_select: None,
+            on_activate: None,
         }
     }
 
@@ -136,8 +153,27 @@ impl List {
         self
     }
 
+    /// Selection-changed NOTIFICATION: fires whenever the highlighted
+    /// index MOVES (arrows, Page keys, Home/End, a click on a different
+    /// row). It is not a commitment — for "the user chose this row",
+    /// bind [`List::on_activate`]. All List bookkeeping (selection
+    /// write, ensure-visible) completes before this runs, so the
+    /// callback may dispose the List's scope synchronously.
     pub fn on_select(mut self, f: impl FnMut(usize) + 'static) -> List {
         self.on_select = Some(Box::new(f));
+        self
+    }
+
+    /// ACTIVATION: the user committed the selected row (0250 ruling).
+    /// Fires with the current index on Enter, on Space (no toggle
+    /// meaning in a List), and on a click on the ALREADY-selected row —
+    /// a click on an unselected row only selects. No double-click
+    /// synthesis. When unbound, Enter/Space pass through to app
+    /// shortcuts exactly as before this event existed. The callback may
+    /// dispose the List's scope synchronously (close-the-picker is the
+    /// intended use).
+    pub fn on_activate(mut self, f: impl FnMut(usize) + 'static) -> List {
+        self.on_activate = Some(Box::new(f));
         self
     }
 
@@ -208,6 +244,8 @@ impl List {
         let offset = cx.signal(0i32); // first visible CONTENT ROW
         let on_select: crate::widgets::SharedCallback<usize> =
             Rc::new(RefCell::new(self.on_select));
+        let on_activate: crate::widgets::SharedCallback<usize> =
+            Rc::new(RefCell::new(self.on_activate));
         let layout = self
             .layout
             .unwrap_or_else(|| LayoutStyle::default().grow(1.0));
@@ -216,19 +254,24 @@ impl List {
         let select = {
             let on_select = on_select.clone();
             move |target: usize, view_h: i32| {
-                let target = target.min(len.saturating_sub(1));
-                if selection.get_untracked() != target {
+                if len == 0 {
+                    return; // nothing to select (prefix has no item span)
+                }
+                let target = target.min(len - 1);
+                let changed = selection.get_untracked() != target;
+                if changed {
                     selection.set(target);
                     if let (Some(key_sig), Some(keys)) = (selection_key, keys_for_select.as_ref()) {
                         if let Some(k) = keys.get(target) {
                             key_sig.set(k.clone());
                         }
                     }
-                    if let Some(f) = on_select.borrow_mut().as_mut() {
-                        f(target);
-                    }
                 }
                 // ensure-visible on CONTENT ROWS (variable heights).
+                // ALL widget bookkeeping lands BEFORE the user callback
+                // (0250 ruling clause 4, disposal-safety law): a
+                // callback that disposes this List's scope must find no
+                // widget code left to run on dead signals.
                 let top = prefix_for_select[target];
                 let bottom = prefix_for_select[target + 1];
                 offset.update(|o| {
@@ -240,6 +283,11 @@ impl List {
                     }
                     *o = (*o).clamp(0, (total_rows - view_h.max(1)).max(0));
                 });
+                if changed {
+                    if let Some(f) = on_select.borrow_mut().as_mut() {
+                        f(target);
+                    }
+                }
             }
         };
 
@@ -259,11 +307,26 @@ impl List {
         }
 
         let prefix_for_handler = prefix.clone();
+        let activate = on_activate;
         let handler = move |ctx: &mut EventCtx, ev: &UiEvent| {
             let rect = ctx.current_rect();
             let h = rect.h.max(1);
             match ev {
                 UiEvent::Key(k) => {
+                    // Activation keys (0250 ruling clause 2): Enter
+                    // always; Space too, because a List has no toggle
+                    // meaning. Consumed ONLY when a callback is bound —
+                    // an unbound List leaves Enter/Space to the app's
+                    // own shortcuts (pre-0250 behavior, kept).
+                    if matches!(k.key, Key::Enter | Key::Char(' ')) {
+                        if len > 0 {
+                            if let Some(f) = activate.borrow_mut().as_mut() {
+                                f(selection.get_untracked().min(len - 1));
+                                ctx.stop_propagation();
+                            }
+                        }
+                        return;
+                    }
                     let cur = selection.get_untracked();
                     let page = (h as usize).max(1);
                     let target = match k.key {
@@ -296,7 +359,20 @@ impl List {
                                 .partition_point(|&p| p <= row)
                                 .saturating_sub(1);
                             if idx < len {
+                                // Click on the ALREADY-selected row
+                                // activates; on an unselected row it
+                                // only selects (0250 ruling clause 2 —
+                                // no double-click synthesis). select()
+                                // finishes all bookkeeping first, so
+                                // the activate callback runs last and
+                                // may dispose the List's scope.
+                                let was_selected = selection.get_untracked() == idx;
                                 select(idx, h);
+                                if was_selected {
+                                    if let Some(f) = activate.borrow_mut().as_mut() {
+                                        f(idx);
+                                    }
+                                }
                             }
                         }
                         ctx.stop_propagation();
@@ -422,215 +498,5 @@ pub(crate) fn draw_scrollbar(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::base::Size;
-    use crate::theme::default_theme;
-    use crate::widgets::itest_util::{key, mount_widget, mouse, render};
-
-    fn rows(canvas: &crate::ui::BufferCanvas, n: i32) -> Vec<String> {
-        (0..n).map(|y| canvas.row_text(y)).collect()
-    }
-
-    #[test]
-    fn keyboard_selection_scrolls_window_and_fires_on_select() {
-        let t = default_theme().tokens;
-        let picked: Rc<RefCell<Vec<usize>>> = Rc::new(RefCell::new(Vec::new()));
-        let p = picked.clone();
-        let (_root, mut tree) = mount_widget(Size::new(12, 3), |cx| {
-            Element::new()
-                .style(
-                    LayoutStyle::default()
-                        .width(Dimension::Percent(1.0))
-                        .height(Dimension::Percent(1.0)),
-                )
-                .child(
-                    List::of((0..8).map(|i| format!("item {i}")))
-                        .on_select(move |i| p.borrow_mut().push(i))
-                        .element(cx, &t)
-                        .build(),
-                )
-                .build()
-        });
-        key(&mut tree, Key::Tab);
-        for _ in 0..4 {
-            key(&mut tree, Key::Down);
-        }
-        crate::reactive::flush_effects();
-        tree.layout();
-        let canvas = render(&mut tree, Size::new(12, 3));
-        // Selection 4 scrolled into view (rows 2..5 visible).
-        assert!(
-            rows(&canvas, 3).iter().any(|r| r.contains("item 4")),
-            "{:?}",
-            rows(&canvas, 3)
-        );
-        assert_eq!(*picked.borrow(), vec![1, 2, 3, 4]);
-    }
-
-    #[test]
-    fn click_selects_by_visible_row_and_wheel_scrolls() {
-        let t = default_theme().tokens;
-        let mut sel_probe = None;
-        let (_root, mut tree) = mount_widget(Size::new(12, 4), |cx| {
-            let sel = cx.signal(0usize);
-            sel_probe = Some(sel);
-            Element::new()
-                .style(
-                    LayoutStyle::default()
-                        .width(Dimension::Percent(1.0))
-                        .height(Dimension::Percent(1.0)),
-                )
-                .child(
-                    List::of((0..20).map(|i| format!("row {i}")))
-                        .selection(sel)
-                        .element(cx, &t)
-                        .build(),
-                )
-                .build()
-        });
-        let sel = sel_probe.unwrap();
-        mouse(&mut tree, MouseKind::Down(MouseButton::Left), 2, 2);
-        assert_eq!(sel.get_untracked(), 2);
-        mouse(&mut tree, MouseKind::ScrollDown, 2, 2);
-        crate::reactive::flush_effects();
-        tree.layout();
-        let canvas = render(&mut tree, Size::new(12, 4));
-        assert!(
-            canvas.row_text(0).contains("row 3"),
-            "{:?}",
-            canvas.row_text(0)
-        );
-    }
-
-    #[test]
-    fn selection_key_survives_data_mutation_rebuild() {
-        // STICKY SELECTION (cycle 7): the key signal re-finds its item's
-        // NEW index after items shift — a rebuild with an inserted row
-        // keeps the same logical item selected.
-        let t = default_theme().tokens;
-        let mut probes = None;
-        let (_root, mut tree) = mount_widget(Size::new(14, 5), |cx| {
-            let data = cx.signal(vec!["alpha".to_string(), "beta".into(), "gamma".into()]);
-            let sel_key = cx.signal(String::from("beta"));
-            let sel_ix = cx.signal(0usize);
-            probes = Some((data, sel_key, sel_ix));
-            let tokens = t;
-            Element::new()
-                .style(
-                    LayoutStyle::default()
-                        .width(Dimension::Percent(1.0))
-                        .height(Dimension::Percent(1.0)),
-                )
-                .child(crate::ui::dyn_view_scoped(
-                    LayoutStyle::default()
-                        .width(Dimension::Percent(1.0))
-                        .height(Dimension::Percent(1.0)),
-                    move |gen_cx| {
-                        List::new(data.get())
-                            .key_fn(|_, s| s.to_string())
-                            .selection_key(sel_key)
-                            .selection(sel_ix)
-                            .element(gen_cx, &tokens)
-                            .build()
-                    },
-                ))
-                .build()
-        });
-        let (data, sel_key, sel_ix) = probes.unwrap();
-        crate::reactive::flush_effects();
-        assert_eq!(sel_ix.get_untracked(), 1, "key 'beta' resolved to index 1");
-        // Mutate: insert two rows BEFORE beta -> its index becomes 3.
-        data.update(|v| {
-            v.insert(0, "zero".into());
-            v.insert(1, "one".into());
-        });
-        crate::reactive::flush_effects();
-        assert_eq!(
-            sel_ix.get_untracked(),
-            3,
-            "sticky: beta re-found after mutation"
-        );
-        assert_eq!(sel_key.get_untracked(), "beta");
-        // And selecting a different row updates the key.
-        key(&mut tree, Key::Tab);
-        key(&mut tree, Key::Down);
-        crate::reactive::flush_effects();
-        assert_eq!(sel_key.get_untracked(), "gamma");
-    }
-
-    #[test]
-    fn variable_heights_window_by_content_rows_and_click_maps_rows_to_items() {
-        let t = default_theme().tokens;
-        let mut sel_probe = None;
-        let (_root, mut tree) = mount_widget(Size::new(14, 4), |cx| {
-            let sel = cx.signal(0usize);
-            sel_probe = Some(sel);
-            Element::new()
-                .style(
-                    LayoutStyle::default()
-                        .width(Dimension::Percent(1.0))
-                        .height(Dimension::Percent(1.0)),
-                )
-                .child(
-                    List::of((0..6).map(|i| format!("it {i}")))
-                        .item_heights(|i, _| if i % 2 == 0 { 2 } else { 1 })
-                        .selection(sel)
-                        .element(cx, &t)
-                        .build(),
-                )
-                .build()
-        });
-        let sel = sel_probe.unwrap();
-        tree.layout();
-        let canvas = render(&mut tree, Size::new(14, 4));
-        // it0 occupies rows 0-1 (h=2), it1 row 2, it2 rows 3+.
-        assert!(canvas.row_text(0).contains("it 0"));
-        assert_eq!(
-            canvas.row_text(1).trim(),
-            "│",
-            "spacer row of the 2-tall item (+bar)"
-        );
-        assert!(canvas.row_text(2).contains("it 1"));
-        // Clicking the SECOND row of it0 still selects item 0.
-        mouse(&mut tree, MouseKind::Down(MouseButton::Left), 2, 1);
-        assert_eq!(sel.get_untracked(), 0);
-        // Clicking row 2 selects item 1 (row->item binary search).
-        mouse(&mut tree, MouseKind::Down(MouseButton::Left), 2, 2);
-        assert_eq!(sel.get_untracked(), 1);
-    }
-
-    #[test]
-    fn scroll_to_command_scrolls_and_consumes() {
-        let t = default_theme().tokens;
-        let mut probe = None;
-        let (_root, mut tree) = mount_widget(Size::new(12, 3), |cx| {
-            let req = cx.signal(None::<usize>);
-            probe = Some(req);
-            Element::new()
-                .style(
-                    LayoutStyle::default()
-                        .width(Dimension::Percent(1.0))
-                        .height(Dimension::Percent(1.0)),
-                )
-                .child(
-                    List::of((0..30).map(|i| format!("row {i}")))
-                        .scroll_to(req)
-                        .element(cx, &t)
-                        .build(),
-                )
-                .build()
-        });
-        let req = probe.unwrap();
-        req.set(Some(20));
-        crate::reactive::flush_effects();
-        tree.layout();
-        let canvas = render(&mut tree, Size::new(12, 3));
-        assert!(
-            canvas.row_text(0).contains("row 20"),
-            "{:?}",
-            canvas.row_text(0)
-        );
-        assert_eq!(req.get_untracked(), None, "request consumed");
-    }
-}
+#[path = "list_tests.rs"]
+mod tests;

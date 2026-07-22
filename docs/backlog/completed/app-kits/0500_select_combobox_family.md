@@ -2,8 +2,10 @@
 
 ## Metadata
 - Created: 2026-07-22
-- Status: Proposed (substrate partially SHIPPED — see the 2026-07-22
-  status note below; the select family itself remains unbuilt)
+- Status: Completed 2026-07-22 (full scope: owned + tooltip substrate
+  modes joined the 0120-shipped passive slice; all three faces,
+  option model, type-ahead, a11y, gallery, unit + wave acceptance —
+  see the completion report at the end)
 - Track: app-kits
 - Completed: N/A
 - Depends on: nothing in-band (this item is the band's trunk). Engine
@@ -296,19 +298,164 @@ implementers extend `app::anchored` rather than starting fresh.
 ## Progress checklist (substrate-first — nothing else starts before 1-3)
 - [x] 1. `Overlays::top_z()` engine delta (one method; 0170-gated,
       rides the 0.2 budget window) — SHIPPED 2026-07-22 via 0120
-- [ ] 2. Substrate spec sign-off by the enumerated consumers (0120
+- [x] 2. Substrate spec sign-off by the enumerated consumers (0120
       owner for the passive-panel mode — SIGNED by consumption
-      2026-07-22; 0530; extensions/0430 for tooltip + panned-anchor
-      cases)
-- [ ] 3. Substrate implementation: placement engine (below/flip/clamp,
-      width policy — SHIPPED), three routing modes (PASSIVE shipped;
-      owned + tooltip remain), dismiss contract (passive half shipped),
-      anchor-unmount safety test (SHIPPED), stacked-modals test (owned
-      mode — remains)
-- [ ] 4. Select (closed) with type-ahead + commit semantics
-- [ ] 5. Combobox over TextInput (popup-mounted editor,
+      2026-07-22; the three 0500 faces sign the OWNED mode by
+      consumption 2026-07-22; 0530/0430 are unbuilt — their rows stand
+      as the contract those items consume, integrator note below)
+- [x] 3. Substrate implementation: placement engine (below/flip/clamp,
+      width policy — SHIPPED), three routing modes (PASSIVE shipped
+      via 0120; OWNED + TOOLTIP shipped 2026-07-22), dismiss contract
+      (both halves), anchor-unmount safety test (both modes),
+      stacked-modals test (owned mode) — COMPLETE
+- [x] 4. Select (closed) with type-ahead + commit semantics
+- [x] 5. Combobox over TextInput (popup-mounted editor,
       include_anchor_row)
-- [ ] 6. MultiSelect with chip rendering (0540 vocabulary)
-- [ ] 7. Option model incl. hints + disabled
-- [ ] 8. A11y roles + access values
-- [ ] 9. Acceptance + regression tests; gallery entry
+- [x] 6. MultiSelect — joined labels degrading to "N selected"
+      (see the chip note in the completion report: the 0540 chip
+      vocabulary does not exist yet; upgrade rides 0540)
+- [x] 7. Option model incl. hints + disabled
+- [x] 8. A11y roles + access values
+- [x] 9. Acceptance + regression tests; gallery entry
+
+## Completion report (2026-07-22)
+
+Full scope landed: the substrate's two remaining routing modes and
+the three faces, in one wave. Whole tree green (1,435 tests, 0
+failed, alloc/perf pins included), clippy zero across the tree,
+fmt clean.
+
+**Where it lives** (all new files < 600 lines; split siblings per the
+file budget):
+
+- `src/app/anchored_owned.rs` (+ `anchored_owned_tests.rs`) — OWNED
+  mode `Popup`: modal tree at `Overlays::top_z() + 1`; `place_owned`
+  extends the shipped `place_panel` contract with
+  `include_anchor_row` (below: bounds start at the anchor row;
+  flipped: the anchor row is the LAST row — the build closure
+  receives `flipped` to order content against gravity). Dismissal is
+  one idempotent seam with `DismissReason::{Commit, Escape,
+  OutsidePress, AnchorGone}` delivered exactly once via `on_dismiss`;
+  Escape is substrate-owned (bubble handler on the wrapper), outside
+  press rides the engine's modal `on_outside_press` hook,
+  anchor-death rides a cleanup on the popup's content scope (a child
+  of the opener — cascaded disposal, no re-dispose from inside the
+  cleanup). TOOLTIP mode `Tooltip::attach`: hover-timed (`after`
+  one-shot, generation-guarded against leave-before-due), a
+  non-interactive `layer_draw` label, zero wakeups until due.
+  Re-exported through `app::anchored` beside the passive slice.
+- `src/app/select.rs` (+ `select_core.rs`, `select_combobox.rs`,
+  `select_multi.rs`, `select_tests.rs`, `select_tests_faces.rs`) —
+  `SelectOption { key,
+  label, hint, disabled }` and the three faces over one shared core
+  (trigger row, option-rows renderer, enabled-skipping movement,
+  type-ahead with same-char cycling). `on_change` fires on COMMIT
+  only and only on a real change (0250); `Select::commit_on_move`
+  is the opt-in preview (Escape restores the pre-open value).
+  Combobox mounts a REAL `TextInput` on the anchor row (zero visual
+  jump; wave-pinned); its popup owns Up/Down/PageUp/PageDown/Enter
+  at capture phase, the editor keeps everything else (Home/End stay
+  cursor motion). MultiSelect toggles a working copy (Space/click,
+  never closes), commits the canonicalized key set on Enter,
+  abandons on Escape/outside-press.
+- `Role::Select` added to `ui::access` (one new variant + `as_str`
+  arm; the popup reuses `Menu`/`MenuItem` per spec). SUPERSEDED
+  2026-07-22 (cycle 2, same working session, before any release): the
+  semver gate flagged the addition as a major break (exhaustive public
+  enum + mid-enum discriminant shift — budget 0002 "live catch"); the
+  variant was REMOVED and the trigger reports `Role::Button` with the
+  current choice as its access value. `Role::Select` lands at the END
+  of the enum inside the 0.3 window (budget 0002 entry 1).
+- `App::mount` now provides the `Overlays` handle as reactive context
+  (one `provide_context` beside the theme signal), so
+  `Select::new(..).view(cx)` needs no wiring; `.overlays(..)` stays
+  for bare-tree tests/embeddings.
+- Gallery: `examples/components.rs` gained a picker section wired to
+  real state — a channel `Select` sharing the RadioGroup's signal, the
+  theme `Combobox` (the consumer's `/theme` recipe:
+  `set_theme_by_id` on commit), a features `MultiSelect` feeding the
+  live summary. Headless exit-0 guard untouched.
+
+**Placement deviation, recorded**: the faces live in `app::select`,
+NOT `src/widgets/` — they open popups, which needs the overlay store,
+and `widgets` sits below `app` in the layer map (R4-1: no upward
+imports; the exact reasoning that put Modal/Toast/Completion
+app-side). They are otherwise plain token-consuming components
+(RT1-9b holds: tokens only, no color literals/arithmetic) with the
+standard `.view(cx)`/`.element(cx, &t)` builds, re-exported through
+the prelude.
+
+**Tooltip verdict**: SHIPPED, not deferred — the geometry was shared
+`place_panel`, the mode is ~90 lines (hover timer + draw layer), and
+it closes the substrate's three-mode contract. 0430 consumes it
+as-is.
+
+**Validation** (test names):
+- Substrate unit (`app::anchored::owned::tests`):
+  `place_owned_plain_mode_matches_place_panel_and_reports_flip`,
+  `place_owned_anchor_row_inclusion_below_and_flipped`,
+  `popup_stacks_above_modals_owns_keys_and_returns_them_on_dismiss`,
+  `outside_press_dismisses_without_acting_below`,
+  `dismiss_is_idempotent_and_close_spells_commit`,
+  `opener_scope_death_dismisses_with_anchor_gone`,
+  `tooltip_shows_after_delay_hides_on_leave_and_stale_timer_never_opens`.
+- Face unit (`app::select::tests`; the Combobox/MultiSelect cases sit
+  in the `faces` child module — split sibling, same rig):
+  `select_arrows_move_highlight_only_and_enter_commits_once` (the
+  0250 regression as a birth test),
+  `select_escape_and_outside_press_abandon_without_committing`,
+  `select_type_ahead_prefix_jump_cycle_and_disabled_skip`,
+  `select_commit_on_move_previews_live_and_escape_restores`,
+  `select_disabled_neither_focuses_nor_opens_and_empty_options_never_open`,
+  `select_click_trigger_opens_and_click_row_commits`,
+  `select_trigger_renders_value_placeholder_and_a11y_roles`,
+  `combobox_typing_filters_and_enter_commits_a_match_only`,
+  `combobox_navigation_moves_highlight_through_the_filtered_list`,
+  `multiselect_space_toggles_enter_commits_once_escape_abandons`,
+  `multiselect_click_toggles_and_collapsed_row_degrades_to_count`.
+- Wave acceptance (`tests/wave_select.rs` +
+  `tests/wave_select_faces.rs`, real `Driver`/`CaptureTerm`, wire
+  bytes in, modeled VT screen out, `unknown_seq_count == 0`):
+  `select_full_keyboard_round_trip_with_damage_containment`,
+  `sgr_click_opens_picks_and_outside_press_never_acts_below` (the
+  press over a live button dismisses AND the button does not fire;
+  the same click fires it once the popup is closed),
+  `select_popup_inside_stacked_modals_receives_keys_and_returns_them`
+  (THE F1 stacking proof: modal z1000 → modal z1100 → popup at
+  `top_z()+1` = 1101 receives the keys; commit closes; a probe key
+  then lands in the second modal),
+  `combobox_editor_sits_on_the_trigger_row_types_and_commits`,
+  `multiselect_space_toggles_and_enter_commits_through_the_wire`.
+- Measured (debug): select popup-open frame 1,218 bytes;
+  highlight-move frame 149 bytes — rows outside the popup
+  byte-identical during navigation (asserted row-by-row), static
+  chrome never re-emits.
+
+**Follow-ups revealed** (none blocking):
+1. **Chip upgrade rides 0540**: the MultiSelect collapsed row joins
+   labels and degrades to "N selected" (draw-time width decision).
+   When 0540's chip vocabulary lands, the trigger upgrades to chips +
+   `+N` — one `TriggerLabel` render change in `select_core.rs`.
+2. **Same-z Modal stacking note (integrator/0530 lane)**: two
+   `Modal::open` calls both mount at `MODAL_Z = 1000`; the engine's
+   key dispatch sorts by `Reverse(z)` STABLY, so for equal z the
+   FIRST-mounted modal wins keys — the opposite of visual
+   expectation. The 0500 popup is immune (`top_z() + 1` is always
+   strictly above), and the wave test builds its stack at explicit
+   z 1000/1100. Whoever ships stacked-dialog UX should give Modal a
+   z-or-top_z story.
+3. **Popup placement is open-time** (v1, documented): the owned popup
+   places once at open — a modal owns all input, so the anchor cannot
+   move under it. A future resize-while-open story would re-place from
+   the stored anchor (the passive panel's `update` shape exists as
+   the precedent). CLOSED 2026-07-22 (cycle-3, r2-cross-review F9):
+   shipped as dismiss-on-resize, not re-place — a resize stales the
+   captured ANCHOR rect too, so re-placing would aim at a guess. New
+   `DismissReason::Resize` (enum still unreleased — free window); an
+   effect on the popup's content scope watches the driver-published
+   viewport signal against its at-open value and dismisses on change.
+   `on_dismiss` exactly-once holds (unit:
+   `viewport_resize_dismisses_open_popup_with_resize_reason_exactly_once`;
+   wire through Driver/CaptureTerm: `tests/wave_r3_close.rs`).
+4. **Grouping/section headers + multi-region Tab traversal inside
+   owned popups** stay v2 non-goals, unchanged.

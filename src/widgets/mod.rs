@@ -67,6 +67,8 @@ pub use table::{ColWidth, Column, Table};
 pub use tabs::Tabs;
 pub use textarea::{SubmitPolicy, TextArea, TextAreaState};
 pub use viewport3d::Viewport3D;
+// Appended (0140 diff slice): the diff twin of `code_token_color`.
+pub use code::diff_token_color;
 
 /// Shared callback-slot shape for interactive widgets: the builder's
 /// `Option<Box<dyn FnMut(..)>>` moved behind `Rc<RefCell<..>>` so

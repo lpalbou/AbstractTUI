@@ -235,7 +235,13 @@ impl Overlays {
     /// layers correctly where a static z constant cannot.
     ///
     /// Read-only. Returns 0 while the store is mid-phase (layer ops are
-    /// forbidden inside draw closures by draw purity anyway).
+    /// forbidden inside draw closures by draw purity anyway). Keep the
+    /// `unwrap_or(0)`: it is deliberate defense-in-depth honesty, not a
+    /// bug to "fix" into a panic — draw purity already forbids the only
+    /// path that could observe it, so a soft 0 can never misplace a
+    /// popup on a live path, while a panic here would turn a harmless
+    /// impossible-by-doctrine read into a process kill (cycle-2 review
+    /// F10, recorded so the intent survives refactors).
     pub fn top_z(&self) -> i32 {
         self.store
             .try_borrow()

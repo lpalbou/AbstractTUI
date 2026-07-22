@@ -164,6 +164,34 @@ pattern remains the truth; the kit is its packaging (no second model).
 - [ ] field()/fold helpers with touched-gated errors
 - [ ] Packaged submit gating (disable + first-error focus)
 - [ ] Enter-advances focus step (subtree-scoped traversal)
-- [ ] TextInput masked mode + reveal (draw + access_value together;
+- [x] TextInput masked mode + reveal (draw + access_value together;
       leak test)
 - [ ] docs/forms.md + gallery form + acceptance tests
+
+## Status note — 2026-07-22 (masked leg shipped early)
+
+Engine delta (b) landed ahead of the kit: `TextInput::masked(bool)` is
+shipped (additive builder, static bool — a reveal toggle rebuilds via
+`dyn_view_scoped` on the reveal signal; a `Signal<bool>` overload can
+ride the kit if the gallery form wants caret-preserving reveal). Both
+halves of §5 hold as specified: the draw substitutes one `•` per
+grapheme cluster (ZWJ family = one bullet, each bullet in its cluster's
+own width slot so geometry matches unmasked) AND `access_value` exports
+the same bullets — the F2 leak surface is closed at the widget. Leak
+tests pin both surfaces: unit
+(`masked_field_leaks_no_plaintext_through_screen_or_semantic_tree`,
+`masked_editing_stays_cluster_atomic_and_value_stays_real` in
+src/widgets/input_tests.rs) and wire-level
+(`masked_input_never_leaks_plaintext_through_wire_or_semantic_tree` in
+tests/adv_activation.rs: typed bytes → VT screen + a11y snapshot both
+bullet-only). Docs: docs/api.md "TextInput — masked (secret) fields".
+Follow-up closed 2026-07-22 (cycle-3, r2-cross-review F7): masked
+word jumps degraded to whole-field jumps — Alt+arrow over the real
+text parked the caret on the secret's word boundaries, telegraphing
+word count/lengths through cursor motion; masked fields now treat the
+whole value as ONE word (pinned:
+`masked_word_jump_treats_whole_value_as_one_word`).
+The REST of the form kit (FieldRow, field helpers, submit gating,
+enter_advances + its subtree-focus engine delta, forms.md) remains
+open. The 0250 activation ruling this kit inherits is now engine
+reality (`List::on_activate`; see completed/first-app/0250).

@@ -25,8 +25,9 @@
 //! to the app, whose focus rules blur the owner and thereby dismiss.
 //!
 //! The OWNED and TOOLTIP routing modes of 0500 (select family, menus,
-//! hover tips) are future consumers of the same `place_panel` geometry;
-//! they are NOT built here.
+//! hover tips) ride the same `place_panel` geometry and live in the
+//! private sibling `anchored_owned.rs` ([`Popup`]/[`DismissReason`],
+//! [`Tooltip`]), re-exported here.
 //!
 //! ## The completion controller
 //!
@@ -243,6 +244,13 @@ impl AnchoredPanel {
 #[path = "anchored_completion.rs"]
 mod completion;
 pub use completion::{Completion, CompletionCandidate};
+
+// The OWNED + TOOLTIP routing modes (backlog 0500, completing the
+// three-mode substrate) — same private-sibling pattern; the app-facing
+// path stays `app::anchored::{Popup, DismissReason, Tooltip}`.
+#[path = "anchored_owned.rs"]
+mod owned;
+pub use owned::{DismissReason, Popup, Tooltip};
 
 #[cfg(test)]
 #[path = "anchored_tests.rs"]

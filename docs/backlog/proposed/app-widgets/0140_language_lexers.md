@@ -2,10 +2,48 @@
 
 ## Metadata
 - Created: 2026-07-21
-- Status: Proposed (larger than it looks; token-vocabulary and scope
-  questions need a ruling before it is planned)
+- Status: Proposed — DIFF SLICE SHIPPED 2026-07-22 (see status note
+  below); the stateful seam + python/js/toml presets remain the open
+  scope and still need the seam-shape ruling before planning
 - Track: app-widgets
 - Completed: N/A
+
+## Status note — 2026-07-22: the diff slice shipped, additively
+
+The audit (`reviews/study/backlog-audit-2026-07-22.md` C5 + move 6)
+re-ranked this item's options: post-0.2, widening `TokenKind` is a
+0.3-window breaking change, while a separate diff vocabulary is additive
+and shippable now. The live consumer (abstractcode-tui) renders diffs
+TODAY, so the diff leg shipped on the additive path:
+
+- **Vocabulary ruling (diff half) TAKEN**: separate `text::DiffKind`
+  (Added/Removed/HunkHeader/FileHeader/Meta/Context), born
+  `#[non_exhaustive]` per ADR-0003 §3 — no TokenKind churn, no theme
+  reshape. `TokenKind` → `#[non_exhaustive]` is parked on the 0.3
+  budget (`planned/0002_the_0_3_breaking_budget.md` entry 2), which
+  also unblocks the future Type/Func kinds the stateful presets want.
+- **Shipped**: `text::DiffLexer` (stateless line classification —
+  deliberate: `CodeView` renders from a scroll offset, so cross-line
+  state would tint scroll-dependently; the one `---`-content ambiguity
+  is documented and pinned in tests), `widgets::code::diff_token_color`
+  (added→`ok`, removed→`error`, hunk→`info`, meta→`text_muted`, file
+  headers bold body ink — measured ≥3.0:1 on `surface_raised` across
+  all 26 themes, test-pinned), `CodeView::lang(label)`, and diff-labeled
+  markdown/Feed fence routing (one shared recipe, `diff_rich_line`).
+- **Validation shipped**: unit tests (headers/hunk-split/no-newline
+  marker/ambiguities), a 2k-case default-suite totality sweep, a
+  5k-case `fuzz_big` campaign (`diff_lexer_5k`), the foreign-crate
+  non_exhaustive idiom test (`adv_text`), and render-path cell asserts
+  through CodeView and MarkdownView.
+- **Deferred, honestly**: the stateful seam (`StatefulHighlighter` +
+  adapter) and the python/js/toml presets — the seam SHAPE still needs
+  its design ruling (this item's original caution stands), and per-item
+  scope discipline kept it out of the diff cycle. The state-threading
+  invariance property (whole vs incremental) belongs to that leg.
+  NOTE for the seam design: statelessness is load-bearing for the diff
+  lexer (scroll invariance); a stateful seam must decide how offset
+  rendering re-seeds state (re-lex from top, cached line states, or
+  documented approximation) before python lands.
 
 ## ADR status
 - Governing ADRs: None — no ADR system in this repo yet (see 0170).
@@ -99,9 +137,13 @@ by in-crate implementations.
   all 26 themes.
 
 ## Progress checklist
-- [ ] Design ruling: stateful seam shape + diff token vocabulary
+- [ ] Design ruling: stateful seam shape (diff token vocabulary: RULED
+      2026-07-22 — separate non_exhaustive `DiffKind`, additive)
 - [ ] Stateful seam + adapter
-- [ ] Diff lexer + consumer mapping
+- [x] Diff lexer + consumer mapping (2026-07-22)
 - [ ] python / js / toml presets
-- [ ] Fuzz + invariance + golden tests
-- [ ] Theme mapping (+ contrast audit if vocabulary widened)
+- [ ] Fuzz + invariance + golden tests (diff legs done 2026-07-22:
+      fuzz_big `diff_lexer_5k`, render-path goldens; invariance property
+      belongs to the stateful seam leg)
+- [x] Theme mapping — no vocabulary widening: semantic inks, measured
+      ≥3.0:1 on the code ground across all 26 themes (2026-07-22)

@@ -25,7 +25,7 @@ See `examples/README.md` for the full list.
 
 ## Testing
 
-The default test pass runs the whole suite — roughly 1,385 tests across unit
+The default test pass runs the whole suite — roughly 1,440 tests across unit
 tests, the integration suites under `tests/`, and doctests:
 
 ```sh
@@ -36,11 +36,26 @@ Two suites are ignored by default and run explicitly:
 
 ```sh
 # Live pty smoke tests — spawn a real terminal session; run serially.
+# (CI runs these on ubuntu in the `live pty (ubuntu)` job.)
 cargo test --test live_smoke -- --ignored --test-threads=1
 
 # Performance budgets — meaningful only in release builds; run serially.
 cargo test --test perf_budgets --release -- --ignored --test-threads=1
 ```
+
+### Minimum supported Rust version (MSRV)
+
+The crate declares `rust-version = "1.87"` in Cargo.toml (the floor is
+set by the library's own std usage — `is_multiple_of`, stabilized 1.87 —
+which sits above the windows-sys 0.61 target floor of 1.71). CI checks
+it with a pinned toolchain: `cargo +1.87.0 check --all-targets --locked`.
+
+Bump policy: raising the MSRV is a **minor-version** event — never a
+patch release — and is declared in `CHANGELOG.md` with the new floor and
+the feature that forced it. Code changes must not raise the floor
+silently: if the MSRV job goes red on a new std API, either replace the
+call or bump the declaration (and the CI pin) deliberately in the same
+change, with the CHANGELOG line.
 
 ### Golden snapshots
 

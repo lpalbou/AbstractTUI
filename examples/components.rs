@@ -50,6 +50,7 @@ fn main() -> abstracttui::base::Result<()> {
         let notify = cx.signal(true);
         let channel = cx.signal(0usize);
         let theme_ix = cx.signal(0usize);
+        let features = cx.signal(Vec::<String>::new());
 
         Element::new()
             .style(LayoutStyle::column().padding(Edges::all(1)).gap(1))
@@ -130,15 +131,70 @@ fn main() -> abstracttui::base::Result<()> {
                                 .element(gcx, &t)
                                 .build(),
                             ))
+                            // -- the 0500 choice family, real state ------
+                            // The SAME channel signal as the radio above:
+                            // committing here moves the radio dot too.
+                            .child(field(
+                                &t,
+                                "channel select",
+                                Select::new(vec![
+                                    SelectOption::new("stable").hint("lts"),
+                                    SelectOption::new("beta"),
+                                    SelectOption::new("nightly").hint("daily"),
+                                ])
+                                .value(channel)
+                                .layout(LayoutStyle::default().w(28).h(1).shrink(0.0))
+                                .element(gcx, &t)
+                                .build(),
+                            ))
+                            // The consumer's /theme case: pick a theme by
+                            // typing — commit applies it live.
+                            .child(field(
+                                &t,
+                                "theme",
+                                Combobox::new(
+                                    themes()
+                                        .iter()
+                                        .map(|th| {
+                                            SelectOption::new(th.label)
+                                                .hint(if th.dark { "dark" } else { "light" })
+                                        })
+                                        .collect(),
+                                )
+                                .value(theme_ix)
+                                .placeholder("type to search themes…")
+                                .on_change(|i| {
+                                    set_theme_by_id(themes()[i].id);
+                                })
+                                .layout(LayoutStyle::default().w(28).h(1).shrink(0.0))
+                                .element(gcx, &t)
+                                .build(),
+                            ))
+                            .child(field(
+                                &t,
+                                "features",
+                                MultiSelect::new(vec![
+                                    SelectOption::new("autosave"),
+                                    SelectOption::new("telemetry"),
+                                    SelectOption::new("backups"),
+                                    SelectOption::new("beta api").disabled(true),
+                                ])
+                                .values(features)
+                                .placeholder("enable features…")
+                                .layout(LayoutStyle::default().w(28).h(1).shrink(0.0))
+                                .element(gcx, &t)
+                                .build(),
+                            ))
                             // Live summary: a Dyn reading the SAME signals
                             // the form writes — edits appear as you type.
                             .child(dyn_view(LayoutStyle::default().h(1), move || {
                                 let ch = ["stable", "beta", "nightly"][channel.get().min(2)];
                                 text(format!(
-                                    "→ {} · notifications {} · {} channel",
+                                    "→ {} · notifications {} · {} channel · {} features",
                                     if name.get().is_empty() { "unnamed".into() } else { name.get() },
                                     if notify.get() { "on" } else { "off" },
                                     ch,
+                                    features.get().len(),
                                 ))
                             }))
                             .element(&t)

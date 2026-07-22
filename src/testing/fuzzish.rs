@@ -164,7 +164,11 @@ pub fn truncated_utf8(rng: &mut Rng) -> Vec<u8> {
     ];
     let mut s = String::new();
     for _ in 0..rng.range(1, 5) {
-        s.push_str(rng.pick(POOL));
+        // Turbofish pins `T = &str`: without it, older rustc (≤1.87, the
+        // declared MSRV) back-propagates `push_str`'s `&str` expectation
+        // into `T = str` and rejects the call — an inference accident,
+        // not a feature need.
+        s.push_str(rng.pick::<&str>(POOL));
     }
     let mut bytes = s.into_bytes();
     if rng.chance(2, 3) && !bytes.is_empty() {
