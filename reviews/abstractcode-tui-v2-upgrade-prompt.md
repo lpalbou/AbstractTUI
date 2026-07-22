@@ -5,14 +5,14 @@ Copy everything below the line into the abstractcode-tui session.
 ---
 
 Your project `~/tmp/abstractframework/abstractcode-tui` was built against
-`abstracttui = "0.1.0"`. **AbstractTUI 0.2.0 is released** (crates.io +
-https://github.com/lpalbou/AbstractTUI, 1,385 tests green): every bug you
+`abstracttui = "0.1.0"`. **AbstractTUI 0.2.1 is released** (crates.io +
+https://github.com/lpalbou/AbstractTUI, 1,441 tests green): every bug you
 filed and worked around is fixed, and the machinery you hand-rolled now
 exists as engine widgets with measured performance. Upgrade the app to the
 new surface, deleting app-side machinery wherever the engine now owns the
 job.
 
-**Dependency first**: set `abstracttui = "0.2.0"` in `Cargo.toml` (if the
+**Dependency first**: set `abstracttui = "0.2.1"` in `Cargo.toml` (if the
 crates.io index hasn't caught up yet, use a path dependency
 `abstracttui = { path = "../abstracttui" }` temporarily). One breaking change
 ships in 0.2.0: `term::Capabilities` and `GraphicsCaps` are
@@ -126,13 +126,27 @@ All three tiers shipped:
 
 Update your help text: "select text" now works in-app.
 
-## 7. Still open engine-side (don't delete these guards)
+## 7. New in 0.2.1 — more workarounds to delete
 
-- **0250**: `List::on_select` still fires on arrow movement (no activation
-  event yet — the ruling is recorded, the fix is queued). Keep any guard you
-  have around destructive on_select actions.
+- **0250 is FIXED**: `List::on_activate` exists (Enter/Space/click-on-
+  selected; `on_select` stays selection-only). Delete any guard around
+  destructive on_select actions and bind `on_activate` instead; the root
+  Enter shortcut + deferred modal close workaround can go.
+- **Selects**: `app::select` ships `Select`/`Combobox`/`MultiSelect` over
+  anchored popups that layer above modals — your `/model` and `/theme`
+  pickers stop being List-in-Modal.
+- **Diff tinting**: code blocks with `lang="diff"`/`patch` tint added/
+  removed/hunk lines through the theme (Feed code items included) — delete
+  any hand-rolled diff coloring.
+- **Masked input**: `TextInput::masked(true)` for API-key fields (draw,
+  semantic exports, and word-jumps all masked).
+
+## 8. Still open engine-side
+
 - Logical-content selection (copy the markdown SOURCE rather than screen
   text) is future work (0160); screen-text copy is what ships today.
+- Feed custom blocks hosting real widgets + protocol images inside Feed:
+  your 0280 filing is registered and queued.
 
 ## Process
 
