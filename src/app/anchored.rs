@@ -31,7 +31,8 @@
 //! ## The completion controller
 //!
 //! [`Completion`] wires trigger-character providers ('/' commands, '@'
-//! mentions, any prefix char) onto a [`TextAreaState`]: an effect
+//! mentions, any prefix char) onto a
+//! [`TextAreaState`](crate::widgets::TextAreaState): an effect
 //! watches value/caret/focus/caret-cell, scans the token behind the
 //! caret, asks the matching provider (synchronous, v1), and renders
 //! candidates in a passive panel anchored at the caret cell. A

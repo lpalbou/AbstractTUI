@@ -5,18 +5,20 @@ Copy everything below the line into the abstractcode-tui session.
 ---
 
 Your project `~/tmp/abstractframework/abstractcode-tui` was built against
-`abstracttui = "0.1.0"` from crates.io. The engine tree at
-`~/tmp/abstractframework/abstracttui` has since landed a large wave (unreleased
-0.2 state: 1,383 tests green): every bug you filed and worked around is fixed,
-and the machinery you hand-rolled now exists as engine widgets with measured
-performance. Upgrade the app to the new surface, deleting app-side machinery
-wherever the engine now owns the job.
+`abstracttui = "0.1.0"`. **AbstractTUI 0.2.0 is released** (crates.io +
+https://github.com/lpalbou/AbstractTUI, 1,385 tests green): every bug you
+filed and worked around is fixed, and the machinery you hand-rolled now
+exists as engine widgets with measured performance. Upgrade the app to the
+new surface, deleting app-side machinery wherever the engine now owns the
+job.
 
-**Dependency first**: switch `Cargo.toml` to a path dependency
-(`abstracttui = { path = "../abstracttui" }`) until 0.2 is published. One
-breaking change ships in the tree: `term::Capabilities` and `GraphicsCaps` are
+**Dependency first**: set `abstracttui = "0.2.0"` in `Cargo.toml` (if the
+crates.io index hasn't caught up yet, use a path dependency
+`abstracttui = { path = "../abstracttui" }` temporarily). One breaking change
+ships in 0.2.0: `term::Capabilities` and `GraphicsCaps` are
 `#[non_exhaustive]` — only literal construction breaks (reading fields is
-untouched); construct via `Default` + mutation if you do that anywhere.
+untouched); construct via `Default` + mutation (or `Capabilities::with`) if
+you do that anywhere. Full release notes: CHANGELOG.md in the engine repo.
 
 Then work through these, verifying each against your own tests as you go:
 
@@ -33,11 +35,20 @@ Then work through these, verifying each against your own tests as you go:
 - **0240 fixed** — overflowing modal content no longer crushes fixed rows:
   one-row controls (button/input/progress/badge/spinner/separator/tabs) now
   default `shrink(0.0)`, `Scroll` defaults to `grow(1).basis(0)`, and debug
-  builds print a zero-collapse diagnostic naming the offending node. Delete
+  builds record a zero-collapse diagnostic naming the offending node. Delete
   the manual `shrink(0.0)` armor in `src/ui/modals.rs` (e.g. :29, :45, :214,
   :224) where it exists purely as defense; keep it only where it documents a
   deliberate layout choice. The "Scroll-in-Modal" recipe is now documented in
   the engine's `docs/api.md`.
+  Two gotchas worth knowing: (a) the shrink-resistant defaults apply to the
+  widgets' DEFAULT layouts — any explicit `.layout(...)`/`.style(...)` you
+  pass replaces them wholesale, so your own fixed-height rows (e.g.
+  transcript chrome built from raw `Element`s with `h(1)`) should declare
+  `shrink(0.0)` themselves if they must never yield to overflow; (b) the
+  zero-collapse diagnostic surfaces through the startup-notices lane
+  (`use_startup_notices`) in debug builds and flushes to stderr only after
+  the terminal is restored — render the notices somewhere (a status line or
+  toast) and you get free layout diagnostics during development.
 
 ## 2. Replace the hand-rolled transcript with `widgets::Feed`
 

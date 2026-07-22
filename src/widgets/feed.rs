@@ -33,8 +33,9 @@
 //! recipe as [`MarkdownView`](super::MarkdownView) — one recipe, no
 //! drift), a code fence, or a custom-draw block (app escape hatch with
 //! an honest height-at-width callback). A STREAMING item wraps
-//! [`md::StreamSession`]: closed blocks typeset once and freeze; only
-//! the open tail block re-typesets per delta.
+//! [`md::StreamSession`](crate::render::md::StreamSession): closed
+//! blocks typeset once and freeze; only the open tail block
+//! re-typesets per delta.
 //!
 //! ## Windowing
 //!
