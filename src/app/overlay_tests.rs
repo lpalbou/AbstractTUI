@@ -70,6 +70,21 @@ fn draw_layer_repaints_only_when_damaged() {
 }
 
 #[test]
+fn top_z_tracks_the_live_maximum() {
+    let overlays = Overlays::new();
+    assert_eq!(overlays.top_z(), 0, "empty store: baseline 0");
+    overlays.ensure_root(Size::new(10, 4));
+    assert_eq!(overlays.top_z(), 0, "root layer sits at z 0");
+    let a = overlays.layer(5, Rect::new(0, 0, 2, 1));
+    let b = overlays.layer(1500, Rect::new(0, 0, 2, 1));
+    assert_eq!(overlays.top_z(), 1500, "highest live z wins");
+    b.remove();
+    assert_eq!(overlays.top_z(), 5, "removal re-derives the maximum");
+    a.remove();
+    assert_eq!(overlays.top_z(), 0);
+}
+
+#[test]
 fn non_modal_overlay_with_focus_owns_keys_until_outside_press() {
     use crate::reactive::create_root;
     use crate::ui::{Key, KeyEvent};

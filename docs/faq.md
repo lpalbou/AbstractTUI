@@ -161,6 +161,13 @@ bracketed paste, which is fuzz-hardened: multi-megabyte pastes stream in
 bounded chunks, byte-exactly, with embedded escape sequences neutralized
 as content.
 
+Writing is easy to reach: `copy_to_clipboard(text)` from any handler, or
+enable the engine's drag-select (`selection()`) so users copy what they
+see — both in the
+[api.md selection section](api.md#appselection--screen-text-selection-and-clipboard-copy).
+If a copy never arrives, see
+[troubleshooting](troubleshooting.md#the-engines-copy-doesnt-reach-my-clipboard).
+
 ## Why doesn't Ctrl+Enter (or Shift+Enter) do anything?
 
 On the classic terminal wire, Ctrl+Enter, Shift+Enter, and Ctrl+Backspace

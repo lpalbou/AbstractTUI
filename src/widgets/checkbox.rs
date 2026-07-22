@@ -82,9 +82,11 @@ impl Checkbox {
             std::rc::Rc::new(std::cell::RefCell::new(self.on_change));
         let width = crate::text::width(&label) + 4; // "[x] "
         let layout = self.layout.unwrap_or_else(|| {
+            // shrink 0: never crushed to zero by overflow (0240 #2).
             LayoutStyle::default()
                 .width(Dimension::Cells(width))
                 .height(Dimension::Cells(1))
+                .shrink(0.0)
         });
 
         let hovered = cx.signal(false);

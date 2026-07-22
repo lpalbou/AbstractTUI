@@ -232,6 +232,27 @@ impl Terminal for CaptureTerm {
         self.flush_count += 1;
         Ok(())
     }
+
+    /// Mirrors the platform backends: the entered options know the armed
+    /// mode; the exact arm/disarm byte pairs go through the ordinary
+    /// write path so byte logs and the VT model's mode set both observe
+    /// the flip (the tier-2 suspend-verb acceptance surface).
+    fn set_mouse_reporting(&mut self, on: bool) -> Result<()> {
+        let Some(opts) = self.entered else {
+            return Err(crate::base::Error::Term(
+                "set_mouse_reporting outside a session — enter() first".into(),
+            ));
+        };
+        let mode = opts.mouse;
+        Terminal::write(
+            self,
+            if on {
+                mode.arm_bytes()
+            } else {
+                mode.disarm_bytes()
+            },
+        )
+    }
 }
 
 #[cfg(test)]

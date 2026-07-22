@@ -60,7 +60,8 @@ applications can trust.
 ## Dependency shape
 0100 (Feed) is the trunk. 0110 (streaming markdown) feeds 0100's open tail
 item; 0130 (follow-tail + size query) is how 0100 composes with `Scroll` and
-should be designed together with it; 0120 (TextArea) is independent; 0140
+should be designed together with it; 0120 (TextArea — completed
+2026-07-22, now in `../../completed/app-widgets/`) is independent; 0140
 (lexers) plugs into blocks 0100/0110 typeset; 0150 is independent and small.
 0170 should rule on API shape **before** 0100/0130 ship public surfaces,
 because those two items land exactly on the crate's own named churn points
@@ -74,8 +75,8 @@ bounded/coalescing ingestion, and connection-lifecycle/transport work;
 the port epics depend on both tracks.
 
 ## Reading order
-0100 → 0110 → 0130 → 0120 → 0150 → 0180, then the proposed items
-(0140, 0170) and the port epics (0200, 0210).
+0100 → 0110 → 0130 → 0120 (all four completed) → 0150 → 0180, then the
+proposed items (0140, 0170) and the port epics (0200, 0210).
 
 ## Governing ADRs
 None — this repository has no ADR system (docs/design/ holds design notes,

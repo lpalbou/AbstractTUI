@@ -92,9 +92,11 @@ impl RadioGroup {
             .unwrap_or(0)
             + 4;
         let layout = self.layout.unwrap_or_else(|| {
+            // shrink 0: overflow must not silently hide options (0240 #2).
             LayoutStyle::default()
                 .width(Dimension::Cells(width))
                 .height(Dimension::Cells(len as i32))
+                .shrink(0.0)
         });
 
         let focused = cx.signal(false);

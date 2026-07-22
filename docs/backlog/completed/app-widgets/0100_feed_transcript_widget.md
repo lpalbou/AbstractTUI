@@ -1,10 +1,10 @@
-# 0100 — Feed/Transcript widget (virtualized, append-only, rich blocks)
+# Completed: 0100 — Feed/Transcript widget (virtualized, append-only, rich blocks)
 
 ## Metadata
 - Created: 2026-07-21
-- Status: Planned
+- Status: Completed (app-widgets wave, CONTENT seat — cycles 2 and 3)
 - Track: app-widgets
-- Completed: N/A
+- Completed: 2026-07-21
 
 ## ADR status
 - Governing ADRs: None — this repo has no ADR system yet (see 0170).
@@ -115,12 +115,12 @@ unmodified.
 - VtScreen byte assertion: appended rows ride the scroll-region emitter.
 
 ## Progress checklist
-- [ ] Item/block model + per-item typeset cache
-- [ ] Prefix-sum windowing (lifted/shared with List)
-- [ ] Keyed push/update + frozen/closed semantics
-- [ ] Tail-stream seam (0110 integration point)
-- [ ] Scroll composition (with 0130)
-- [ ] Example + acceptance/alloc/perf tests
+- [x] Item/block model + per-item typeset cache
+- [x] Prefix-sum windowing (lifted/shared with List)
+- [x] Keyed push/update + frozen/closed semantics
+- [x] Tail-stream seam (0110 integration point)
+- [x] Scroll composition (with 0130)
+- [x] Example + acceptance/alloc/perf tests
 
 ## Field evidence (2026-07-21, first app)
 `abstractcode-tui` (the AbstractGateway coding-agent client) hand-rolled this
@@ -131,3 +131,57 @@ It works at agent-event cadence but confirms every cost this item names —
 whole-transcript re-typeset per append, measurement/builder drift risk, and
 the manual stick-to-tail machinery (two effects + a stickiness cell). That app
 is the first migration target when this lands.
+
+## Completion report
+- Final path: docs/backlog/completed/app-widgets/0100_feed_transcript_widget.md
+- Date: 2026-07-21
+- Shipped: `widgets::Feed` + `widgets::FeedState` (src/widgets/feed.rs;
+  entry storage + typesetting in the private child module
+  feed_typeset.rs — file-size split, cycle 3; tests in feed_tests.rs;
+  design record in reviews/wave/content-cycle2.md).
+  Keyed rich-block items (`Text`/`Markdown`/`Code`/`Custom` with an honest
+  height-at-width callback); O(1) appends (typeset one item, extend prefix
+  sums, damage one dyn region — never a per-append item-vector rebuild);
+  typesetting through the crate-internal `BlockTypesetter` extracted from
+  `MarkdownView` (one recipe, no drift); streaming items wrap
+  `md::StreamSession` (closed blocks typeset once into a frozen segment,
+  only the open tail re-typesets per delta); content-sized mode (reactive
+  `total_rows` height — what `Scroll` measures) and fixed-box mode (clips);
+  `clear()` as the bounded-window rebuild seam (cycle 3, the LIVEDATA
+  pairing ask); `blocks_typeset_total()` as the honest cost meter.
+- Tests (unit, src/widgets/feed_tests.rs):
+  `markdown_text_and_code_items_render_with_gap_rows`,
+  `duplicate_key_replaces_and_update_reflows_later_items`,
+  `streamed_item_matches_static_item_pixels`,
+  `stream_appends_typeset_only_the_open_block`,
+  `feed_10k_items_draws_only_the_window`,
+  `width_change_retypesets_and_resyncs_the_extent`,
+  `custom_blocks_occupy_their_height_and_draw`,
+  `appends_at_known_width_sync_the_extent_immediately`.
+  Wave acceptance (tests/wave_content.rs, real `Driver`/`CaptureTerm`
+  loop): `streaming_append_damage_stays_inside_the_pane_and_bytes_stay_bounded`,
+  `tail_tokens_behind_closed_blocks_typeset_only_the_open_block`,
+  `feed_10k_inside_measured_scroll_draws_only_a_screenful`,
+  `measure_100k_appends_and_full_feed_repaint`,
+  `clear_rebuilds_a_bounded_window_and_follow_repins`.
+- Measured (release; debug in parentheses): 100k batched appends 632 ms
+  = 6.3 µs/item (debug 4.84 s = 48.4 µs/item); 1k unbatched appends
+  6.6 µs/item (debug 56.8 µs/item); full windowed repaint over a
+  101k-item feed 42 µs; 10k items pinned inside a measured Scroll draw
+  171 puts against a 900-put budget; steady token streaming emits
+  ~104 bytes/token average (1,000 max) with static chrome byte-identical.
+- Validation notes vs the item's wish list: the freeze contract is
+  pinned by WORK COUNTERS (`blocks_typeset_total`, the session's
+  `bytes_reparsed_total`) rather than the allocator — same assertion,
+  deterministic under any test parallelism; the alloc_budget binary
+  keeps pinning the diff/present hot path it owns. Scroll-region
+  engagement is not separately asserted here (the presenter's
+  adv_scroll suite owns that property); the measured bytes/token above
+  is the end-to-end number. Example: examples/transcript.rs (streamed
+  markdown answers, follow-tail break/re-pin, 10k stress toggle).
+- Deferred, still honest: optional selection by key (item 6) — neither
+  port needs it for v1; per-item rows are kept for ONE width at a time
+  (a feed lives in one pane); rows are eager for all items — the 100k
+  wall-time and repaint numbers above say that holds comfortably, and
+  height-only + windowed row materialization remains the internal,
+  non-breaking fix if an app ever measures memory pressure.

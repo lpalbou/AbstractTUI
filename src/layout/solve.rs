@@ -223,6 +223,12 @@ fn layout_children_of(tree: &mut LayoutTree, id: LayoutId) {
     };
     let mut items: Vec<FlexItem> = Vec::with_capacity(flow.len());
     let mut margins_main: Vec<(i32, i32)> = Vec::with_capacity(flow.len());
+    // Zero-collapse watch (0240 follow-up #3): per child, the DECLARED
+    // fixed main-axis extent (explicit `Cells` basis, else explicit
+    // `Cells` size; 0 = not watched). An author-declared min — even
+    // min 0, the documented opt-out — unwatches; percent/intrinsic
+    // sizing is legitimately parent-relative and never watched.
+    let mut declared_fixed: Vec<i32> = Vec::with_capacity(flow.len());
     for &child in &flow {
         let cstyle = tree
             .nodes
@@ -246,6 +252,15 @@ fn layout_children_of(tree: &mut LayoutTree, id: LayoutId) {
                 cstyle.height,
             ),
         };
+        declared_fixed.push(match (min, cstyle.basis, main_dim) {
+            (Some(_), _, _) => 0, // explicit min = the author decided
+            // Mirror basis precedence: an explicit basis (even the
+            // deliberate `Cells(0)` of scroll containers) overrides
+            // the fixed size, so only a POSITIVE Cells basis watches.
+            (None, Dimension::Cells(n), _) => n.max(0),
+            (None, Dimension::Auto, Dimension::Cells(n)) => n.max(0),
+            _ => 0,
+        });
         // flex-basis > explicit main size > intrinsic content.
         let basis = resolve_dim(cstyle.basis, content_main)
             .or_else(|| resolve_dim(main_dim, content_main))
@@ -265,6 +280,21 @@ fn layout_children_of(tree: &mut LayoutTree, id: LayoutId) {
     let margins_total: i32 = margins_main.iter().map(|(a, b)| a + b).sum();
     let available_main = (content_main - gaps_total - margins_total).max(0);
     let sizes = resolve_main_sizes(&items, available_main);
+
+    // Debug diagnostic (0240 follow-up #3): a watched fixed-size child
+    // crushed to zero names itself once instead of silently vanishing
+    // (const-folded away in release builds).
+    if cfg!(debug_assertions) {
+        let axis = match style.direction {
+            Direction::Row => "width",
+            Direction::Column => "height",
+        };
+        for (i, &child) in flow.iter().enumerate() {
+            if declared_fixed[i] > 0 && sizes[i] == 0 {
+                tree.note_zero_collapse(child, declared_fixed[i], axis, content, i);
+            }
+        }
+    }
 
     // Leftover space feeds `justify` (only exists when nothing grew).
     let used: i32 = sizes.iter().sum();

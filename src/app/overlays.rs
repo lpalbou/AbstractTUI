@@ -228,6 +228,21 @@ impl Overlays {
         }
     }
 
+    /// Highest z among live layers (the root layer's 0 when nothing
+    /// else exists). THE additive engine delta backlog 0500 specifies
+    /// for anchored popups: a panel opened over any modal stack
+    /// allocates at `top_z() + 1`, so select-inside-modal-inside-modal
+    /// layers correctly where a static z constant cannot.
+    ///
+    /// Read-only. Returns 0 while the store is mid-phase (layer ops are
+    /// forbidden inside draw closures by draw purity anyway).
+    pub fn top_z(&self) -> i32 {
+        self.store
+            .try_borrow()
+            .map(|s| s.layers.iter().map(|l| l.z()).max().unwrap_or(0))
+            .unwrap_or(0)
+    }
+
     /// Register an image overlay: rendered through the gfx capability
     /// ladder each time it is dirty (or the frame damages its rect).
     /// Byte channels emit through presenter custody post-present; the
@@ -401,6 +416,27 @@ impl Overlays {
                 *on_outside = Some(f);
             }
         }
+    }
+
+    /// Drain zero-collapse diagnostics from every overlay tree (the
+    /// root tree is drained separately by the driver).
+    pub(crate) fn take_collapse_notices(&self) -> Vec<String> {
+        let trees: Vec<UiTree> = {
+            let store = self.store.borrow();
+            store
+                .meta
+                .iter()
+                .filter_map(|m| match &m.content {
+                    OverlayContent::Tree { tree, .. } => Some(tree.handle()),
+                    _ => None,
+                })
+                .collect()
+        };
+        let mut out = Vec::new();
+        for mut tree in trees {
+            out.extend(tree.take_collapse_notices());
+        }
+        out
     }
 
     /// Phase L for overlay trees.

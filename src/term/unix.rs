@@ -666,6 +666,25 @@ impl Terminal for UnixTerminal {
         Ok(())
     }
 
+    fn set_mouse_reporting(&mut self, on: bool) -> Result<()> {
+        // The entered options know which tracking mode is armed; emitting
+        // its exact disarm/arm pair keeps this verb drift-free with
+        // enter/leave (options.rs owns both byte pairs). Leave stays
+        // correct either way: it emits the disarm unconditionally, and a
+        // DECRST of an already-reset mode is a no-op at the terminal.
+        let Some(state) = &self.entered else {
+            return Err(Error::Term(
+                "set_mouse_reporting outside a session — enter() first".into(),
+            ));
+        };
+        let mode = state.opts.mouse;
+        self.write(if on {
+            mode.arm_bytes()
+        } else {
+            mode.disarm_bytes()
+        })
+    }
+
     fn cell_pixel_size(&mut self) -> Option<PixelSize> {
         // TIOCGWINSZ reports the WHOLE window in pixels; one cell is the
         // quotient. Many terminals report 0 pixels — that is "unknown",

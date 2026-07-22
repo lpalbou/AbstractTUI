@@ -56,7 +56,10 @@ let (tx, events, stats) = bounded_source::<String>(
 - `DropOldest` — ring: the newest tail survives (feeds, logs).
 - `DropNewest` — the head survives (capture the first N).
 - `OverflowPolicy::coalesce(fold)` — overflow merges into the newest
-  survivor (progress updates that supersede each other).
+  survivor (progress updates that supersede each other). A fold that
+  PANICS degrades labeled instead of poisoning the lane: the panic is
+  caught, the value it consumed counts as `dropped`, the event counts
+  as `fold_panics`, and later sends keep working.
 - **There is no `Block`.** Blocking a producer against the UI thread
   inverts liveness: the producer inherits every UI stall (a held
   scrollbar, a suspended terminal, a modal) as unbounded latency on its
@@ -65,14 +68,18 @@ let (tx, events, stats) = bounded_source::<String>(
   *reads* upstream (the transport pushes back); they never park on the
   UI.
 
-Honesty is part of the contract: every dropped or coalesced value is
-counted in `stats` (`IngestStats { delivered, dropped, coalesced }`),
-updated atomically with the window. **Render `dropped` when it is
-nonzero** — "1.2k shown · 34 dropped" is the labeled-degradation
-convention; silent loss is the failure mode this lane exists to
-prevent. Memory is bounded by construction (≤ 2×capacity across the
-transit buffer and the window) and a burst costs one wake, one posted
-drain, one frame — no matter how many values arrive.
+Honesty is part of the contract: every value lands in exactly one
+bucket of `stats` (`IngestStats { delivered, dropped, coalesced,
+fold_panics }` — the last counts events, its values are inside
+`dropped`), updated atomically with the window. **Render `dropped`
+(and `fold_panics`) when nonzero** — "1.2k shown · 34 dropped" is the
+labeled-degradation convention; silent loss is the failure mode this
+lane exists to prevent. `delivered + dropped + coalesced` always equals
+values sent; a `DropOldest` window aging out an already-shown item is
+retention churn, deliberately not re-counted as a drop. Memory is
+bounded by construction (≤ 2×capacity across the transit buffer and
+the window) and a burst costs one wake, one posted drain, one frame —
+no matter how many values arrive.
 
 Producer-side guidance: drain everything available per read and send
 per item into the bounded lane (it batches internally), or batch into
@@ -110,11 +117,21 @@ so no thread outlives the terminal session.
 
 ## Copy-paste starting point
 
+The rendering side pairs the bounded window with the `Feed` widget
+(keyed rich items, windowed paint) inside `Scroll` with the engine's
+follow-tail: the content extent is measured (no size hint), the offset
+sticks to the bottom until the user scrolls up, and setting the follow
+signal true jumps back to the latest. The window syncs into slot keys,
+so the Feed holds at most `capacity` items — bounded end to end. (When
+`FeedState::clear` lands, the sync body becomes clear-and-repush; slot
+keys are today's equivalent.)
+
 ```rust
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use abstracttui::prelude::*;
 use abstracttui::reactive::{bounded_source, spawn_worker, OverflowPolicy};
+use abstracttui::widgets::{Feed, FeedItem, FeedState};
 
 fn main() -> abstracttui::base::Result<()> {
     if !abstracttui::term::have_tty() {
@@ -127,16 +144,23 @@ fn main() -> abstracttui::base::Result<()> {
         let (tx, events, stats) =
             bounded_source::<String>(cx, 400, OverflowPolicy::DropOldest);
         sender = Some(tx);
+        let feed = FeedState::new(cx);
+        let feed_sync = feed.clone();
+        cx.effect_labeled("window-sync", move || {
+            events.with(|rows| {
+                for (i, line) in rows.iter().enumerate() {
+                    feed_sync.push(format!("slot-{i}"), FeedItem::text(line.clone()));
+                }
+            });
+        });
+        let follow = cx.signal(true); // read it for chrome; set true to jump
         Element::new()
             .style(LayoutStyle::column())
-            .child(dyn_view(LayoutStyle::default().grow(1.0), move || {
-                let rows = events.get();
-                let mut col = Element::new().style(LayoutStyle::column());
-                for line in rows.iter().rev().take(20).rev() {
-                    col = col.child(text(line.clone()));
-                }
-                col.build()
-            }))
+            .child(
+                Scroll::new(Feed::new(&feed).gap(0).view(cx))
+                    .follow_tail(follow)
+                    .view(cx),
+            )
             .child(dyn_view(LayoutStyle::line(1), move || {
                 let s = stats.get();
                 text(match s.dropped {
@@ -165,7 +189,8 @@ fn main() -> abstracttui::base::Result<()> {
 Swap the sleep for a real read loop and this is a networked app: the
 transport (HTTP poll, WebSocket, subprocess pipe) is your choice — the
 engine's job ends at the thread boundary, and this page is that
-boundary's contract.
+boundary's contract. The runnable version with bursty timing, pause,
+and an events/sec `interval` is [`examples/feed.rs`](../examples/feed.rs).
 
 ## Testing live-data apps
 

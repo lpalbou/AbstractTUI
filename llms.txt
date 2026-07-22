@@ -10,8 +10,11 @@
 > contrast-audited semantic design tokens, PNG/baseline-JPEG images drawn through the best
 > channel the terminal proves (kitty graphics, iTerm2, sixel, or unicode mosaic),
 > software-rasterized 3D from GLB files (textures, animation, skinning — no GPU),
-> cell-shader animation with tweens, easings, and timelines, an optional boot splash, and a
-> headless testing harness that drives the production pipeline without a pty. One crate,
+> cell-shader animation with tweens, easings, and timelines, streaming transcripts
+> (`Feed` + follow-tail scroll + a multiline composer with completion), a live-data lane
+> for background producers (bounded ingestion, honest drop counters), text selection with
+> OSC 52 clipboard copy, an optional boot splash, and a headless testing harness that
+> drives the production pipeline without a pty. One crate,
 > five small dependencies (unicode-width, unicode-segmentation, miniz_oxide, plus libc on
 > unix / windows-sys on Windows). MIT licensed.
 
@@ -45,6 +48,10 @@
   ladder → mosaic modes → tmux passthrough), the GLB 3D pipeline (supported subset, scene/
   camera/light, the Viewport3D widget, animation and skinning, textures and mips), the
   boot splash, honest limits, and the measured performance envelope.
+- [Live data](docs/live-data.md): Feeding the UI from background threads —
+  `channel_source`/`latest_source`/`bounded_source` (drop/coalesce policies, honest
+  `IngestStats`), the `interval` timer, waker dedup, the Feed + follow-tail rendering
+  pattern, and back-pressure honesty.
 - [FAQ](docs/faq.md): Real questions — design rationale, SSH, which terminals support
   images, wide-character widths, headless testing, embedding in an existing event loop,
   the near-zero dependency policy, theme readability, `NO_COLOR`/dumb terminals, Windows
@@ -58,7 +65,7 @@
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0 is the
   first public release.
-- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,240 tests) and the two
+- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,385 tests) and the two
   explicitly-run suites (live pty, perf budgets), golden snapshots, lint gates, the strict
   module layering rule, code conventions, and how to add a widget or a theme.
 - [Security policy](SECURITY.md): Private reporting (contact@abstractframework.ai); the
@@ -77,10 +84,11 @@
 - [src/lib.rs](src/lib.rs): Crate root with the layer map — `base`, `term`, `input`,
   `render`, `text`, `anim`, `reactive`, `layout`, `ui`, `widgets`, `gfx`, `three`,
   `theme`, `app`, `boot`, `testing`.
-- [examples/](examples/README.md): The catalog of the twelve runnable examples — `hello`,
+- [examples/](examples/README.md): The catalog of the fourteen runnable examples — `hello`,
   `dashboard`, `gallery`, `themes`, `widgets`, `effects`, `splash`, `viewer3d`, `images`,
-  `components`, `grid`, `capture` — each documented with keys and requirements; every one
-  exits cleanly without a tty, and `dashboard`/`viewer3d`/`images` take `--caps`.
+  `components`, `grid`, `feed`, `transcript`, `capture` — each documented with keys and
+  requirements; every one exits cleanly without a tty, and `dashboard`/`viewer3d`/`images`
+  take `--caps`.
 - [docs/captures/](docs/captures/): Deterministic text "screenshots" of the shipped
   examples (plain and style-annotated), plus `themes-table.md` — every token hex value of
   all 26 themes; regenerable with `cargo run --example capture`.

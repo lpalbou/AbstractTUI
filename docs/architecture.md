@@ -96,6 +96,13 @@ Draw closures are pure over data captured at view-build time; reading a
 tracked signal inside a draw closure is a debug-mode panic. This is what
 keeps the frame model (below) airtight: painting cannot create new damage.
 
+Background threads reach this world through the live-data lane
+(`channel_source`, `latest_source`, `bounded_source`, `interval`): producers
+post values, a waker coalesces any burst into one wakeup, and the bound
+signal is written on the UI thread at the next frame's update phase — the
+single-writer rule is preserved by construction. Overflow policies and drop
+counters keep back-pressure honest; see [Live data](live-data.md).
+
 ## Pillar 2: the compositor
 
 The `render` module owns everything between "widgets wrote cells" and "bytes

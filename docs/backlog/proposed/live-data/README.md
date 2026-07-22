@@ -1,7 +1,8 @@
 # Live-data / networking backlog track
 
 ## Status
-Mixed — three items committed under `docs/backlog/planned/live-data/`, four speculative items
+Mixed — the foundation (0010/0020/0030, plus 0070 promoted from here) is COMPLETED (build wave
+2026-07-21) and lives under `docs/backlog/completed/live-data/`; three speculative items remain
 here. Item numbers in this track use the global band **0010–0090** (gaps left for insertions);
 the app-widgets track occupies **0100+**.
 
@@ -32,7 +33,8 @@ with a small real app.
 - `0060_milestone_multi_room_watcher.md` — milestone: ~2-day read-only multi-room watcher over
   the a2a hub; the validation gate for the lane. **Proposed** (explicitly not-now).
 - `0070_interval_time_source.md` — recurring `interval` helper beside `reactive::after` (time as
-  the zeroth data source; the dashboard hand-rolls re-arming today). **Proposed** (small).
+  the zeroth data source). **Completed** (build wave 2026-07-21, promoted with the foundation;
+  moved to `../../completed/live-data/`).
 
 ## Reading order
 0010 → 0020 → 0030 (the committed foundation, in dependency order), then 0040 → 0050 → 0060

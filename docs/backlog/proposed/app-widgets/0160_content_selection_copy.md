@@ -7,6 +7,30 @@
 - Track: app-widgets
 - Completed: N/A
 
+## 2026-07-22 — screen-level v1 landed via 0270 (scope note)
+
+Backlog 0270 (first-app, now completed) shipped the SCREEN-LEVEL slice
+of this item's layer 3, taking the "screen-level layer" side of the open
+ruling for v1: an opt-in engine selection layer (`src/app/selection.rs`)
+— drag paints `selection_fg`/`selection_bg` over the composed frame as a
+damage-honest post-flatten patch, clamped to the pane under the drag
+anchor (`UiTree::pane_rect_at`: nearest clipping-or-padded ancestor's
+content box); release or Enter/`c`/Ctrl+C copies the rendered text over
+OSC 52 through presenter custody; wide glyphs never split, per-row
+trailing trim, `\n` row joins. Layer 1's clipboard verb also landed:
+`app::selection::copy_to_clipboard` queues app-held source text through
+the same custody path (0150's clipboard leg). What this item still owns:
+- **Layer 2 as a public API**: the row-flow extraction shipped
+  crate-internal (`app::selection::extract_text` over `Surface`); the
+  public rect→text API over the snapshot walk remains to be shaped.
+- **Logical widget-content selection** — the text↔cells mapping (copy
+  markdown SOURCE, unwrap soft-wrapped rows, per-widget `Selectable`),
+  which 0270 explicitly deferred here.
+- **The shared substrate question**: search-highlight and selection
+  want the same "recolor a region of the composed frame" machinery —
+  0270's post-flatten patch + pre-flatten repair-damage pattern is the
+  candidate to generalize when search lands.
+
 ## ADR status
 - Governing ADRs: None — this repo has no ADR system yet (see 0170).
   ADR impact: touches one recorded stance that must NOT change — OSC 52

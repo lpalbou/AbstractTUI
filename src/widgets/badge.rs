@@ -68,9 +68,12 @@ impl Badge {
         let width = label.chars().count() as i32 + 2;
 
         let layout = self.layout.unwrap_or_else(|| {
+            // shrink 0: a status chip never vanishes under overflow
+            // pressure (0240 #2).
             LayoutStyle::default()
                 .width(Dimension::Cells(width))
                 .height(Dimension::Cells(1))
+                .shrink(0.0)
         });
 
         Element::new().style(layout).draw(move |canvas, rect| {

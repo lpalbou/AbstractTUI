@@ -35,6 +35,7 @@
 //! that read the signal inside `Dyn` regions re-render fine-grained.
 
 pub mod actions;
+pub mod anchored;
 mod driver;
 mod driver_images;
 mod events;
@@ -42,6 +43,7 @@ pub mod keymap_help;
 mod notices;
 pub mod overlays;
 pub mod popups;
+pub mod selection;
 mod theme;
 mod viewport;
 
@@ -383,6 +385,14 @@ impl App {
             }
         };
         let _ = driver.finish(term); // restore even on the error path
+                                     // Zero-collapse diagnostics recorded during the run reach stderr
+                                     // only HERE — after the terminal is restored — so a live
+                                     // alternate screen is never corrupted by diagnostic lines
+                                     // (2026-07-22 dashboard incident). In-session visibility rides
+                                     // the startup-notices lane instead.
+        for note in driver.collapse_log() {
+            eprintln!("{note}");
+        }
         result
     }
 

@@ -39,7 +39,31 @@ pub struct LayoutTree {
     /// solve — the damage feed for the compositor (a moved sibling must
     /// repaint even though its own content never changed).
     pub(crate) geometry_damage: Vec<Rect>,
+    /// Zero-collapse diagnostics (0240 follow-up #3): debug builds
+    /// record when a child that DECLARED a fixed main-axis size is
+    /// crushed to zero by overflow pressure — the silent
+    /// invisible-controls class. Bounded; drained by
+    /// [`LayoutTree::take_collapse_notices`].
+    collapse_notices: Vec<String>,
+    /// Once-per-SITUATION reporting. Keyed on (parent content rect,
+    /// axis, declared size, child index) — NOT the generational node
+    /// key: `dyn` views mint fresh nodes every regeneration, and a
+    /// per-node key re-reported the same collapsed row on every data
+    /// tick (live dashboard incident, 2026-07-22). The same child slot
+    /// collapsing in the same geometry is one fact; a resize that
+    /// changes the parent rect is a new situation and reports again.
+    collapse_seen: std::collections::HashSet<(Rect, bool, i32, usize)>,
 }
+
+/// Keep the notice buffer bounded even if nobody drains it (a running
+/// app has no obligation to call take): oldest-kept, newest dropped.
+const COLLAPSE_NOTICE_CAP: usize = 32;
+
+/// Bound the dedup set itself (diagnostics must never become an
+/// unbounded accounting structure under pathological churn — e.g. an
+/// app animating its container sizes through thousands of rects).
+/// When full, new situations simply stop reporting.
+const COLLAPSE_SEEN_CAP: usize = 512;
 
 impl LayoutTree {
     pub fn new() -> Self {
@@ -146,6 +170,46 @@ impl LayoutTree {
     /// Drain the rects invalidated by geometry changes since last drain.
     pub fn take_geometry_damage(&mut self) -> Vec<Rect> {
         std::mem::take(&mut self.geometry_damage)
+    }
+
+    /// Record a zero-collapse (debug diagnostic, 0240 follow-up #3):
+    /// once per node, buffered (bounded) and echoed to stderr so the
+    /// "my button vanished" class names itself instead of costing a
+    /// debugging session. Called by the solver in debug builds only.
+    /// Record one zero-collapse fact. NEVER writes to stderr: a live
+    /// session owns the terminal (stderr shares it — raw lines would
+    /// corrupt the alternate screen; live incident 2026-07-22). The
+    /// driver forwards drained notices into the in-app notices lane
+    /// each frame, and `App::run` flushes anything recorded to stderr
+    /// AFTER the terminal is restored.
+    pub(crate) fn note_zero_collapse(
+        &mut self,
+        id: LayoutId,
+        declared: i32,
+        axis: &'static str,
+        parent_content: Rect,
+        child_index: usize,
+    ) {
+        let sig = (parent_content, axis == "width", declared, child_index);
+        if self.collapse_seen.len() >= COLLAPSE_SEEN_CAP || !self.collapse_seen.insert(sig) {
+            return;
+        }
+        let note = format!(
+            "layout: fixed-size child #{child_index} {id:?} ({declared} cells on the \
+             {axis} axis, parent content {parent_content:?}) collapsed to 0 under \
+             overflow pressure — give it shrink(0.0) or an explicit min, or absorb \
+             the overflow in a Scroll"
+        );
+        if self.collapse_notices.len() < COLLAPSE_NOTICE_CAP {
+            self.collapse_notices.push(note);
+        }
+    }
+
+    /// Drain the zero-collapse diagnostics recorded since last drain
+    /// (debug builds only populate them; release builds always return
+    /// empty). Each collapsed node reports once per tree lifetime.
+    pub fn take_collapse_notices(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.collapse_notices)
     }
 
     pub fn children(&self, id: LayoutId) -> &[LayoutId] {

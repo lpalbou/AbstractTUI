@@ -2,8 +2,8 @@
 //!
 //! Demonstrates: composed layout at density (header/sidebar/chart grid/
 //! log tail/sortable table), braille line charts + sparklines + ramped
-//! progress from the chart tokens, one-shot `reactive::after` timers
-//! driving a clock and deterministic data walks (damage economy: each
+//! progress from the chart tokens, `reactive::interval` timers driving
+//! a clock and deterministic data walks (damage economy: each
 //! panel is its own Dyn — watch the log tick without the chart
 //! repainting), Toast + focus-trapped Modal overlays, live theme cycling
 //! through the one theme signal, real focus traversal.
@@ -94,22 +94,13 @@ fn main() -> abstracttui::base::Result<()> {
         let viewport = use_viewport(cx);
         let help: Rc<RefCell<Option<Modal>>> = Rc::new(RefCell::new(None));
 
-        // Self-rescheduling one-shot timers: the loop sleeps between
-        // deadlines (zero-wakeup idle preserved — no spin thread).
-        fn tick_loop(tick: Signal<u64>) {
-            after(TICK, move || {
-                tick.update(|t| *t += 1);
-                tick_loop(tick);
-            });
-        }
-        fn clock_loop(clock: Signal<String>) {
-            after(Duration::from_secs(1), move || {
-                clock.set(clock_text());
-                clock_loop(clock);
-            });
-        }
-        tick_loop(tick);
-        clock_loop(clock);
+        // Recurring timers via `reactive::interval` (cancellation rides
+        // scope disposal; missed ticks coalesce instead of replaying
+        // after a suspend). The full live-data pattern — background
+        // producers feeding bounded ingestion into a Feed — lives in
+        // `examples/feed.rs` and `docs/live-data.md`.
+        interval(cx, TICK, move || tick.update(|t| *t += 1));
+        interval(cx, Duration::from_secs(1), move || clock.set(clock_text()));
 
         // Startup notices (REACT's reactive bridge): every notice —
         // including the ones the engine pushes AFTER mount (input-path
@@ -279,7 +270,7 @@ fn main() -> abstracttui::base::Result<()> {
 fn header(t: &TokenSet, theme_label: &'static str, clock: Signal<String>) -> View {
     let (surface, accent, text_c, muted) = (t.surface, t.accent, t.text, t.text_muted);
     Element::new()
-        .style(LayoutStyle::row().h(1).gap(1))
+        .style(LayoutStyle::row().h(1).shrink(0.0).gap(1))
         .draw(move |canvas, rect| {
             canvas.fill(rect, ' ', text_c, surface);
             let mut x = rect.x + 1;
@@ -409,7 +400,7 @@ fn traffic_panel(t: &TokenSet, tick: Signal<u64>) -> View {
 fn legend(t: &TokenSet) -> View {
     let (c0, c1, muted) = (t.chart(0), t.chart(1), t.text_muted);
     Element::new()
-        .style(LayoutStyle::default().h(1))
+        .style(LayoutStyle::default().h(1).shrink(0.0))
         .draw(move |canvas, rect| {
             let mut x = rect.x + 1;
             x += canvas.print(Point::new(x, rect.y), "── rx", c0, Rgba::TRANSPARENT);
@@ -444,7 +435,7 @@ fn load_panel(t: &TokenSet, tick: Signal<u64>) -> View {
                     .child(
                         Progress::new(cur)
                             .ramp(true)
-                            .layout(LayoutStyle::default().h(1))
+                            .layout(LayoutStyle::default().h(1).shrink(0.0))
                             .element(&tokens)
                             .build(),
                     )
@@ -452,7 +443,7 @@ fn load_panel(t: &TokenSet, tick: Signal<u64>) -> View {
                         Sparkline::new(hist)
                             .slot(slot + 2)
                             .range(0.0, 1.0)
-                            .layout(LayoutStyle::default().h(1))
+                            .layout(LayoutStyle::default().h(1).shrink(0.0))
                             .element(&tokens)
                             .build(),
                     );
@@ -468,7 +459,7 @@ fn metric_row(t: &TokenSet, name: &'static str, value: f32) -> View {
     let label = name.to_string();
     let pct = format!("{:>4.0}%", value * 100.0);
     Element::new()
-        .style(LayoutStyle::default().h(1))
+        .style(LayoutStyle::default().h(1).shrink(0.0))
         .draw(move |canvas, rect| {
             canvas.print(
                 Point::new(rect.x + 1, rect.y),
@@ -647,7 +638,7 @@ fn mark_panel(
 fn footer(t: &TokenSet) -> View {
     let tokens = *t;
     Element::new()
-        .style(LayoutStyle::default().h(1))
+        .style(LayoutStyle::default().h(1).shrink(0.0))
         .draw(move |canvas, rect| {
             common::key_legend(
                 canvas,

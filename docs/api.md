@@ -132,10 +132,12 @@ widgets take just `&TokenSet`, no `Scope`. The catalog:
 - **Block** — the bordered panel primitive: title, fill, focus ring, `BorderKind`.
 - **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`.
+- **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
 - **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`.
+- **Feed** — virtualized, append-only, keyed rich items (markdown, plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open markdown block; 10k items draw one screenful.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
-- **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling.
+- **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override), and `follow_tail` binds the pinned-to-bottom idiom.
 - **Checkbox** — `[x] label` bound to a `Signal<bool>`.
 - **RadioGroup** — one-of-N bound to a `Signal<usize>`; one tab stop, Up/Down move the selection.
 - **Progress** — bar with sub-cell precision; optional ok→warn→error ramp.
@@ -148,6 +150,147 @@ widgets take just `&TokenSet`, no `Scope`. The catalog:
 - **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals.
 - **MarkdownView / RichTextView / CodeView** — typeset markdown, wrapped styled spans, read-only highlighted code.
 - **Logo** — the AbstractTUI wordmark for headers, about screens, empty states.
+
+### Feed — streaming transcripts
+
+An app owns a cloneable `FeedState` handle and mutates it; the `Feed`
+widget windows over it. Items are keyed identities (`push` with a known
+key replaces); a streaming item rides `md::StreamSession`, so a token
+append costs one open block, never the document. `total_rows()` is the
+reactive content extent, and `clear()` rebuilds bounded windows:
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::widgets::{Feed, FeedItem, FeedState};
+
+fn transcript(cx: Scope) -> View {
+    let feed = FeedState::new(cx);
+    feed.push("q1", FeedItem::markdown("**you** — hello"));
+    feed.push_stream("a1"); // a live answer…
+    feed.stream_append("a1", "# Str"); // …fed token by token
+    feed.stream_append("a1", "eaming");
+
+    let follow = cx.signal(true); // render it: "following / scrolled"
+    Scroll::new(Feed::new(&feed).view(cx))
+        .follow_tail(follow)
+        .view(cx)
+}
+```
+
+### Scroll follow-tail
+
+`follow_tail(Signal<bool>)` packages the log/transcript idiom: while
+true the offset tracks the content bottom across appends and resizes;
+any user scroll above the bottom sets it false; reaching the bottom
+edge re-arms it. The signal is app-visible both ways — set it true for
+a "jump to latest" key. Without `content_size` the extent comes from
+the layout solver's measurement of the mounted content:
+
+```rust
+use abstracttui::prelude::*;
+
+fn log_pane(cx: Scope, content: View) -> View {
+    let pinned = cx.signal(true);
+    Scroll::new(content) // extent measured — no height bookkeeping
+        .follow_tail(pinned) // pinned until the user scrolls up
+        .view(cx)
+}
+```
+
+### Modal content that can overflow
+
+Put the overflow inside a `Scroll` and keep the fixed rows fixed — the
+defaults now do the bookkeeping: `Scroll`'s default layout is
+`grow(1.0).basis(Cells(0))` (it absorbs overflow instead of demanding
+its content size), one-row controls default `shrink(0.0)` (an
+overflowing sibling can never crush them to zero rows), and
+`Modal::open` floors declared fixed sizes. Opt out per row with an
+explicit `min_h(0)`; debug builds log any fixed-size child that still
+collapses:
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::widgets::Button;
+
+fn approval(cx: Scope, details: View) -> View {
+    Element::new()
+        .style(LayoutStyle::column().gap(1))
+        .child(text("Approve this tool call?")) // fixed row: stays
+        .child(Scroll::new(details).view(cx))   // absorbs the overflow
+        .child(Button::new("Approve").view(cx)) // never crushed to 0
+        .build()
+}
+```
+
+### TextArea — the multiline composer
+
+The chat/console input surface. `TextAreaState` (the FeedState pattern)
+owns the durable wire: the value signal, the caret byte, focus, the
+history store, programmatic edits, and `caret_cell()` — the caret's
+solved screen cell, which anchors completion dropdowns. The widget soft
+wraps at its width, grows with content inside `rows(min, max)` and then
+scrolls internally; Enter submits while Alt+Enter (and Shift+Enter where
+the kitty protocol reports it) inserts a newline — flip it with
+`SubmitPolicy::EnterInserts`. Up/Down navigate the buffer first and
+reach for history only at the edges; the in-progress draft survives a
+recall round trip. Pastes insert whole, newlines included — never a
+submit:
+
+```rust
+use abstracttui::prelude::*;
+
+fn composer(cx: Scope) -> View {
+    let state = TextAreaState::new(cx);
+    let st = state.clone();
+    TextArea::new()
+        .state(&state)
+        .placeholder("Message — Enter sends, Alt+Enter newline")
+        .rows(1, 4)
+        .on_submit(move |msg| {
+            st.push_history(msg); // Up recalls it later
+            st.clear();
+        })
+        .view(cx)
+}
+```
+
+### Completion dropdown (anchored panel)
+
+`app::anchored` ships the passive half of the anchored-popup substrate
+(backlog 0500) and the completion controller riding it (backlog 0120):
+`place_panel` places below-preferred, flips above when cramped, and
+clamps into the viewport; `AnchoredPanel` mounts the result as a
+NON-modal overlay above everything live (`Overlays::top_z() + 1`) that
+never takes focus — keys stay with the composer — and closes with its
+opener's scope. `Completion` registers trigger-character providers and
+wraps the composer view; while the dropdown is open, Down/Up move the
+highlight, Enter/Tab accept (the candidate's `insert` replaces the
+whole token), Esc dismisses, further typing refilters, and clicking a
+row accepts it:
+
+```rust
+use abstracttui::app::anchored::{Completion, CompletionCandidate};
+use abstracttui::prelude::*;
+
+fn composer_with_commands(cx: Scope, app: &App) -> View {
+    let state = TextAreaState::new(cx);
+    let composer = TextArea::new().state(&state).rows(1, 4).view(cx);
+    Completion::new()
+        .trigger('/', |query| {
+            ["help", "quit"]
+                .iter()
+                .filter(|c| c.starts_with(query))
+                .map(|c| CompletionCandidate::new(format!("/{c}"), format!("/{c} ")))
+                .collect()
+        })
+        .attach(cx, &app.overlays(), &state, composer)
+}
+```
+
+Providers run synchronously with the query typed after the trigger;
+an empty Vec closes the dropdown. The OWNED and TOOLTIP popup modes
+(the select/combobox family, hover tips) are future 0500 work on the
+same placement engine.
 
 ## app — the runtime
 
@@ -187,11 +330,79 @@ Around the core loop the module provides:
   while open, Tab cycles inside, state created in the modal's scope dies on
   close. **Toast** — top-right chips that slide in, park for their duration
   at zero frame cost, then slide out and remove their layer.
+- **AnchoredPanel** (`app::anchored`) — a passive anchored popup layer:
+  placed against an anchor rect (below-preferred, flip-above, viewport
+  clamp), stacked above everything live via `Overlays::top_z()`, never
+  focused (keys stay with the anchor's owner), closed by its opener's
+  scope death. `Completion` builds the caret-anchored completion
+  dropdown on top of it (see the widgets section).
 - **Hooks** — `use_theme(cx)` (the app-level theme signal), `use_viewport(cx)`
   (terminal size as a signal), `use_startup_notices(cx)` (labeled startup
   degradations as a reactive list).
 - **KeymapHelp** — a ready-made `?` help modal listing the shortcuts
   reachable from the current focus plus every registered global action.
+
+## app::selection — screen-text selection and clipboard copy
+
+Terminals in mouse-capture mode route drags to the application, so native
+text selection stops working in every mouse-enabled TUI. The engine ships
+the whole answer stack (see the
+[troubleshooting matrix](troubleshooting.md#i-cant-select-text-with-the-mouse)
+for the zero-code terminal bypasses). Three cloneable, thread-local
+handles, all in `app::selection` (functions re-exported in the prelude):
+
+```rust
+use abstracttui::prelude::*; // selection(), mouse_capture(), copy_to_clipboard()
+
+// Tier 3 — engine drag-select. Opt in once (or bind a key to toggle):
+selection().set_enabled(true);   // left-drag now paints a selection
+selection().is_active();         // a region is visible
+selection().clear();             // Esc and click do this too
+
+// Tier 2 — native selection mode: hand the pointer back to the terminal.
+mouse_capture().suspend();       // native drag-select works; no mouse events arrive
+mouse_capture().resume();        // re-arm the entered mouse mode (e.g. on next key)
+
+// The app-reachable clipboard verb (OSC 52 through presenter custody):
+copy_to_clipboard("exact source text");
+```
+
+While selection is enabled, the engine claims **left Down/Drag/Up only**:
+dragging paints the theme's `selection_fg`/`selection_bg` inks over the
+composed frame (damage-contract honest — only changed cells repaint), and
+releasing copies. While a selection is visible, Enter / `c` / Ctrl+C copy
+again and Esc or a click clears — Ctrl+C only quits when no selection is
+visible. Wheel scrolling, hover, and every other key route normally the
+whole time. Copies travel as OSC 52 through the presenter's byte custody;
+terminals that did not advertise the capability still get the bytes
+(harmless) plus a one-time labeled startup notice, and under tmux the
+sequence is deliberately not passthrough-wrapped (tmux consumes OSC 52
+natively — `set -g set-clipboard on`).
+
+Selection semantics, stated plainly:
+
+- **Screen text, not widget content.** What you copy is what the flattened
+  frame shows: wide glyphs (CJK, emoji) are never split, blank cells read
+  as spaces, trailing whitespace trims per row, rows join with `\n`.
+  Soft-wrapped lines copy as separate rows; scrolled-away content cannot
+  be selected. The logical text↔cells mapping is future work (backlog
+  0160), not this feature.
+- **Linear row flow, clamped to a pane.** The selection flows like a
+  terminal's own: anchor to right edge, full middle rows, left edge to
+  head. Both ends clamp to the pane under the drag *anchor* — the content
+  box of the nearest clipping or padded ancestor (a `Scroll` viewport, a
+  bordered `Block`), else the whole tree — so sibling panes and border
+  glyphs never leak into a copy.
+- **Zero idle cost.** With no active selection the render hook is two
+  empty checks; a parked selection renders no frames until something
+  changes.
+
+`Terminal::set_mouse_reporting(bool)` is the tier-2 verb underneath
+(implemented by both platform backends and `testing::CaptureTerm`;
+`Driver::set_mouse_reporting` is the immediate form for embedders). One
+platform note: job-control suspend (`Ctrl+Z`) re-enters with the original
+options, re-arming reporting — suspend again after resume if you keep it
+off.
 
 ## theme — design tokens
 
@@ -257,6 +468,28 @@ after installation; animated shaders damage only what their `changed_region`
 hint declares. For debugging: `render::snapshot(&surface)` prints a bordered
 character grid, `snapshot_styles` adds per-row style annotations, and
 `Compositor::set_debug_damage(true)` outlines every repaint region live.
+
+**`md::StreamSession`** is the incremental entry into the markdown
+pipeline (text arriving over time: model output, a growing log). Closed
+blocks freeze — parsed once, never revisited — and only the open tail
+re-parses per append, with any chunking of the same bytes yielding
+blocks identical to `md::parse` of the whole source. An unclosed fence
+reports as code from the moment its opening line arrives. `Feed`'s
+streaming items ride it; it is widget-agnostic:
+
+```rust
+use abstracttui::render::md::{self, MdStyles, StreamSession};
+
+let styles = MdStyles::default();
+let mut s = StreamSession::new(styles.clone());
+s.append("# Title\n\nStreaming **bo");
+s.append("ld** text.");
+assert_eq!(s.closed_blocks().len(), 1); // the heading sealed and froze
+assert_eq!(
+    s.finish(),
+    md::parse("# Title\n\nStreaming **bold** text.", &styles)
+);
+```
 
 ## gfx — images
 

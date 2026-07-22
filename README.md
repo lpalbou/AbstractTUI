@@ -38,10 +38,24 @@ through ordinary reactivity.*
 
 ## Highlights
 
-- **Widgets + layout** — buttons, text inputs, lists, sortable tables, tabs,
-  checkboxes, radio groups, scroll regions, panels, badges, progress bars,
-  spinners, modals, toasts — arranged by a flexbox-style solver (row/column,
-  `grow`, `gap`, padding) and a track-based grid (`fr`/cells/percent, spans).
+- **Widgets + layout** — buttons, text inputs, a multiline composer
+  (`TextArea` with history and completion dropdowns), lists, sortable tables,
+  tabs, checkboxes, radio groups, scroll regions, panels, badges, progress
+  bars, spinners, modals, toasts — arranged by a flexbox-style solver
+  (row/column, `grow`, `gap`, padding) and a track-based grid
+  (`fr`/cells/percent, spans).
+- **Transcripts and streams** — `Feed` renders append-only conversations and
+  logs with keyed rich blocks (markdown, code, custom draw) and streaming
+  markdown items that re-typeset only the open block per token;
+  `Scroll::follow_tail` pins to the bottom until the user scrolls and re-pins
+  at the edge.
+- **Live data** — feed the UI from background threads through
+  `channel_source` / `latest_source` / `bounded_source` (drop or coalesce
+  policies with honest drop counters), a cancellable `interval` timer, and
+  waker deduplication; an idle app still costs zero.
+- **Selection + clipboard** — drag to select rendered text (wide-glyph safe,
+  pane-clamped), copy via OSC 52; or suspend mouse capture for native
+  terminal selection.
 - **26 built-in themes** — catppuccin, rose-pine, tokyo-night, nord, one-dark,
   dracula, monokai, gruvbox, solarized, everforest and the Abstract originals —
   over 36 semantic design tokens, contrast-audited against WCAG floors, and
@@ -112,7 +126,7 @@ cd abstracttui
 cargo run --example dashboard
 ```
 
-Twelve runnable examples live in [examples/](examples/README.md), and every one
+Fourteen runnable examples live in [examples/](examples/README.md), and every one
 exits cleanly with a notice when no interactive terminal is present, so they are
 safe to run anywhere. Start with these five:
 
@@ -158,6 +172,7 @@ tests, not aspirations.
 - [Getting started](docs/getting-started.md) — install to first pixels, step by step.
 - [Architecture](docs/architecture.md) — signals, damage, the compositor, the render pipeline.
 - [API guide](docs/api.md) — the public surface, module by module.
+- [Live data](docs/live-data.md) — background threads into the UI, bounded and honest.
 - [FAQ](docs/faq.md) and [Troubleshooting](docs/troubleshooting.md).
 - [Examples catalog](examples/README.md) — what each demo proves and the keys it answers to.
 - API reference on [docs.rs](https://docs.rs/abstracttui).

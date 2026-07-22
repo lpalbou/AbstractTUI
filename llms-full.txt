@@ -10,8 +10,11 @@
 > contrast-audited semantic design tokens, PNG/baseline-JPEG images drawn through the best
 > channel the terminal proves (kitty graphics, iTerm2, sixel, or unicode mosaic),
 > software-rasterized 3D from GLB files (textures, animation, skinning — no GPU),
-> cell-shader animation with tweens, easings, and timelines, an optional boot splash, and a
-> headless testing harness that drives the production pipeline without a pty. One crate,
+> cell-shader animation with tweens, easings, and timelines, streaming transcripts
+> (`Feed` + follow-tail scroll + a multiline composer with completion), a live-data lane
+> for background producers (bounded ingestion, honest drop counters), text selection with
+> OSC 52 clipboard copy, an optional boot splash, and a headless testing harness that
+> drives the production pipeline without a pty. One crate,
 > five small dependencies (unicode-width, unicode-segmentation, miniz_oxide, plus libc on
 > unix / windows-sys on Windows). MIT licensed.
 
@@ -36,47 +39,50 @@ minimal SGR runs, synchronized output where the terminal supports it. The result
 an idle app emits zero bytes and allocates nothing, and a blinking cursor repaints
 one cell, not the screen.
 
-```text
- ▲ AbstractTUI  ops dashboard                                                          Dark (Abstract)  ·  12:34:56 UTC
- ┌ nav ────────┐  ┌ traffic — rx/tx (MB/s) ──────────────────────────────────────┐  ┌ load ─────────────────────────┐
- │  overview   │  │ ── rx   ── tx                                                │  │ mem                       54% │
- │  traffic    │  │100 │                                                      ⣀⢄⢀│  │████████████████▊              │
- │  sessions   │  │    │⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⣀⢄⡠⠔⠉⠊⠑⠊ ⠈⠁│  │⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒│
- │  logs       │  │    │⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠊⠉⠑⠒⠔⠒⠒⠤⠤⢄│  │ io                        45% │
- │  alerts     │  │0   │                                                         │  │█████████████▉                 │
- │  settings   │  │    └─────────────────────────────────────────────────────────│  │⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤│
- │             │  └──────────────────────────────────────────────────────────────┘  └───────────────────────────────┘
- │             │
- │             │  ┌ events ───────────────────────────┐  ┌ sessions — s toggles sort ────────────────────────────────┐
- │             │  │                                   │  │host         region   rx▼            tx            state   │
- │             │  │                                   │  │edge-2       eu-w     41.3 MB/s      20.8 MB/s     healthy │
- │             │  │                                   │  │core-a       us-e     41.1 MB/s      18.6 MB/s     syncing │
- │             │  │                                   │  │edge-1       eu-w     38.7 MB/s      7.2 MB/s      healthy │
- │             │  │                                   │  │edge-3       us-e     38.1 MB/s      23.6 MB/s     syncing │
- │             │  │                                   │  │cache-2      ap-s     25.2 MB/s      16.5 MB/s     healthy │
- │             │  │                                   │  │core-b       ap-s     22.8 MB/s      8.4 MB/s      syncing │
- │             │  │                                   │  │cache-1      eu-n     13.4 MB/s      19.9 MB/s     healthy │
- │             │  │ 00:00 info  session opened from … │  │                                                           │
- │             │  │ 00:00 ok    tls renewed for gate… │  │                                                           │
- │             │  │ 00:01 ok    backup verified       │  │                                                           │
- │             │  │ 00:01 info  session opened from … │  │                                                           │
- │             │  │ 00:02 info  session opened from … │  │                                                           │
- │             │  │ 00:02 warn  backpressure on shar… │  │                                                           │
- │             │  │ 00:03 ok    shard 2 caught up     │  │                                                           │
- └─────────────┘  └───────────────────────────────────┘  └───────────────────────────────────────────────────────────┘
+![The dashboard example: rx/tx line chart, load progress bars, a spinning 3D mark, colored event log and a sortable sessions table](docs/media/dashboard.gif)
 
- tab focus  alt+←→ panes  s sort  n toast  b mark  ? help  ctrl+t theme  q quit
-```
+*The `dashboard` example — live line charts, sub-cell progress bars, a
+software-rendered 3D mark, a scrolling event log, a sortable table, toasts and a
+modal, all animating while the rest of the screen stays still.*
 
-*The `dashboard` example at 120×35 (abridged; from `docs/captures/`, regenerable
-with `cargo run --example capture`).*
+### 3D in the terminal — a real GLB, rasterized to cells
+
+![The viewer3d example spinning a glTF helmet model, cycling half-block, quadrant, sextant and braille mosaic modes](docs/media/viewer3d.gif)
+
+*`cargo run --example viewer3d` turning [the standard damaged-helmet glTF
+model](https://github.com/KhronosGroup/glTF-Sample-Models) (15,452 triangles) —
+a hand-written perspective rasterizer with a z-buffer, textures and lighting,
+presented through half-block, quadrant, sextant and braille mosaics. No GPU, no
+external renderer.*
+
+### The design system on one screen — restyled under one keypress
+
+![The gallery example showing token swatches, widget states, charts, syntax-highlighted code and rich text, cycling through themes](docs/media/gallery.gif)
+
+*The `gallery` example — every token, widget state, chart, and text style on one
+board. Pressing a key swaps the theme signal and the whole screen re-renders
+through ordinary reactivity.*
 
 ## Highlights
 
-- **Widgets + layout** — buttons, text inputs, lists, sortable tables, tabs,
-  checkboxes, radio groups, scroll regions, panels, badges, progress bars,
-  spinners, modals, toasts — arranged by a flexbox-style solver (row/column,
-  `grow`, `gap`, padding) and a track-based grid (`fr`/cells/percent, spans).
+- **Widgets + layout** — buttons, text inputs, a multiline composer
+  (`TextArea` with history and completion dropdowns), lists, sortable tables,
+  tabs, checkboxes, radio groups, scroll regions, panels, badges, progress
+  bars, spinners, modals, toasts — arranged by a flexbox-style solver
+  (row/column, `grow`, `gap`, padding) and a track-based grid
+  (`fr`/cells/percent, spans).
+- **Transcripts and streams** — `Feed` renders append-only conversations and
+  logs with keyed rich blocks (markdown, code, custom draw) and streaming
+  markdown items that re-typeset only the open block per token;
+  `Scroll::follow_tail` pins to the bottom until the user scrolls and re-pins
+  at the edge.
+- **Live data** — feed the UI from background threads through
+  `channel_source` / `latest_source` / `bounded_source` (drop or coalesce
+  policies with honest drop counters), a cancellable `interval` timer, and
+  waker deduplication; an idle app still costs zero.
+- **Selection + clipboard** — drag to select rendered text (wide-glyph safe,
+  pane-clamped), copy via OSC 52; or suspend mouse capture for native
+  terminal selection.
 - **26 built-in themes** — catppuccin, rose-pine, tokyo-night, nord, one-dark,
   dracula, monokai, gruvbox, solarized, everforest and the Abstract originals —
   over 36 semantic design tokens, contrast-audited against WCAG floors, and
@@ -147,7 +153,7 @@ cd abstracttui
 cargo run --example dashboard
 ```
 
-Twelve runnable examples live in [examples/](examples/README.md), and every one
+Fourteen runnable examples live in [examples/](examples/README.md), and every one
 exits cleanly with a notice when no interactive terminal is present, so they are
 safe to run anywhere. Start with these five:
 
@@ -164,6 +170,10 @@ safe to run anywhere. Start with these five:
 `ABSTRACTTUI_THEME=rose-pine cargo run --example hello` themes any example from
 the environment; `--caps` on `dashboard`, `viewer3d`, and `images` prints the
 detected capability report and exits.
+
+The animations above are recorded straight from these examples with
+[`vhs`](https://github.com/charmbracelet/vhs); the tapes live in
+[`docs/media/`](docs/media/) and regenerate with `vhs docs/media/<name>.tape`.
 
 ## Platform support
 
@@ -189,6 +199,7 @@ tests, not aspirations.
 - [Getting started](docs/getting-started.md) — install to first pixels, step by step.
 - [Architecture](docs/architecture.md) — signals, damage, the compositor, the render pipeline.
 - [API guide](docs/api.md) — the public surface, module by module.
+- [Live data](docs/live-data.md) — background threads into the UI, bounded and honest.
 - [FAQ](docs/faq.md) and [Troubleshooting](docs/troubleshooting.md).
 - [Examples catalog](examples/README.md) — what each demo proves and the keys it answers to.
 - API reference on [docs.rs](https://docs.rs/abstracttui).
@@ -596,6 +607,13 @@ Draw closures are pure over data captured at view-build time; reading a
 tracked signal inside a draw closure is a debug-mode panic. This is what
 keeps the frame model (below) airtight: painting cannot create new damage.
 
+Background threads reach this world through the live-data lane
+(`channel_source`, `latest_source`, `bounded_source`, `interval`): producers
+post values, a waker coalesces any burst into one wakeup, and the bound
+signal is written on the UI thread at the next frame's update phase — the
+single-writer rule is preserved by construction. Overflow policies and drop
+counters keep back-pressure honest; see [Live data](live-data.md).
+
 ## Pillar 2: the compositor
 
 The `render` module owns everything between "widgets wrote cells" and "bytes
@@ -957,10 +975,12 @@ widgets take just `&TokenSet`, no `Scope`. The catalog:
 - **Block** — the bordered panel primitive: title, fill, focus ring, `BorderKind`.
 - **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`.
+- **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
 - **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`.
+- **Feed** — virtualized, append-only, keyed rich items (markdown, plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open markdown block; 10k items draw one screenful.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
-- **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling.
+- **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override), and `follow_tail` binds the pinned-to-bottom idiom.
 - **Checkbox** — `[x] label` bound to a `Signal<bool>`.
 - **RadioGroup** — one-of-N bound to a `Signal<usize>`; one tab stop, Up/Down move the selection.
 - **Progress** — bar with sub-cell precision; optional ok→warn→error ramp.
@@ -973,6 +993,147 @@ widgets take just `&TokenSet`, no `Scope`. The catalog:
 - **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals.
 - **MarkdownView / RichTextView / CodeView** — typeset markdown, wrapped styled spans, read-only highlighted code.
 - **Logo** — the AbstractTUI wordmark for headers, about screens, empty states.
+
+### Feed — streaming transcripts
+
+An app owns a cloneable `FeedState` handle and mutates it; the `Feed`
+widget windows over it. Items are keyed identities (`push` with a known
+key replaces); a streaming item rides `md::StreamSession`, so a token
+append costs one open block, never the document. `total_rows()` is the
+reactive content extent, and `clear()` rebuilds bounded windows:
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::widgets::{Feed, FeedItem, FeedState};
+
+fn transcript(cx: Scope) -> View {
+    let feed = FeedState::new(cx);
+    feed.push("q1", FeedItem::markdown("**you** — hello"));
+    feed.push_stream("a1"); // a live answer…
+    feed.stream_append("a1", "# Str"); // …fed token by token
+    feed.stream_append("a1", "eaming");
+
+    let follow = cx.signal(true); // render it: "following / scrolled"
+    Scroll::new(Feed::new(&feed).view(cx))
+        .follow_tail(follow)
+        .view(cx)
+}
+```
+
+### Scroll follow-tail
+
+`follow_tail(Signal<bool>)` packages the log/transcript idiom: while
+true the offset tracks the content bottom across appends and resizes;
+any user scroll above the bottom sets it false; reaching the bottom
+edge re-arms it. The signal is app-visible both ways — set it true for
+a "jump to latest" key. Without `content_size` the extent comes from
+the layout solver's measurement of the mounted content:
+
+```rust
+use abstracttui::prelude::*;
+
+fn log_pane(cx: Scope, content: View) -> View {
+    let pinned = cx.signal(true);
+    Scroll::new(content) // extent measured — no height bookkeeping
+        .follow_tail(pinned) // pinned until the user scrolls up
+        .view(cx)
+}
+```
+
+### Modal content that can overflow
+
+Put the overflow inside a `Scroll` and keep the fixed rows fixed — the
+defaults now do the bookkeeping: `Scroll`'s default layout is
+`grow(1.0).basis(Cells(0))` (it absorbs overflow instead of demanding
+its content size), one-row controls default `shrink(0.0)` (an
+overflowing sibling can never crush them to zero rows), and
+`Modal::open` floors declared fixed sizes. Opt out per row with an
+explicit `min_h(0)`; debug builds log any fixed-size child that still
+collapses:
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::widgets::Button;
+
+fn approval(cx: Scope, details: View) -> View {
+    Element::new()
+        .style(LayoutStyle::column().gap(1))
+        .child(text("Approve this tool call?")) // fixed row: stays
+        .child(Scroll::new(details).view(cx))   // absorbs the overflow
+        .child(Button::new("Approve").view(cx)) // never crushed to 0
+        .build()
+}
+```
+
+### TextArea — the multiline composer
+
+The chat/console input surface. `TextAreaState` (the FeedState pattern)
+owns the durable wire: the value signal, the caret byte, focus, the
+history store, programmatic edits, and `caret_cell()` — the caret's
+solved screen cell, which anchors completion dropdowns. The widget soft
+wraps at its width, grows with content inside `rows(min, max)` and then
+scrolls internally; Enter submits while Alt+Enter (and Shift+Enter where
+the kitty protocol reports it) inserts a newline — flip it with
+`SubmitPolicy::EnterInserts`. Up/Down navigate the buffer first and
+reach for history only at the edges; the in-progress draft survives a
+recall round trip. Pastes insert whole, newlines included — never a
+submit:
+
+```rust
+use abstracttui::prelude::*;
+
+fn composer(cx: Scope) -> View {
+    let state = TextAreaState::new(cx);
+    let st = state.clone();
+    TextArea::new()
+        .state(&state)
+        .placeholder("Message — Enter sends, Alt+Enter newline")
+        .rows(1, 4)
+        .on_submit(move |msg| {
+            st.push_history(msg); // Up recalls it later
+            st.clear();
+        })
+        .view(cx)
+}
+```
+
+### Completion dropdown (anchored panel)
+
+`app::anchored` ships the passive half of the anchored-popup substrate
+(backlog 0500) and the completion controller riding it (backlog 0120):
+`place_panel` places below-preferred, flips above when cramped, and
+clamps into the viewport; `AnchoredPanel` mounts the result as a
+NON-modal overlay above everything live (`Overlays::top_z() + 1`) that
+never takes focus — keys stay with the composer — and closes with its
+opener's scope. `Completion` registers trigger-character providers and
+wraps the composer view; while the dropdown is open, Down/Up move the
+highlight, Enter/Tab accept (the candidate's `insert` replaces the
+whole token), Esc dismisses, further typing refilters, and clicking a
+row accepts it:
+
+```rust
+use abstracttui::app::anchored::{Completion, CompletionCandidate};
+use abstracttui::prelude::*;
+
+fn composer_with_commands(cx: Scope, app: &App) -> View {
+    let state = TextAreaState::new(cx);
+    let composer = TextArea::new().state(&state).rows(1, 4).view(cx);
+    Completion::new()
+        .trigger('/', |query| {
+            ["help", "quit"]
+                .iter()
+                .filter(|c| c.starts_with(query))
+                .map(|c| CompletionCandidate::new(format!("/{c}"), format!("/{c} ")))
+                .collect()
+        })
+        .attach(cx, &app.overlays(), &state, composer)
+}
+```
+
+Providers run synchronously with the query typed after the trigger;
+an empty Vec closes the dropdown. The OWNED and TOOLTIP popup modes
+(the select/combobox family, hover tips) are future 0500 work on the
+same placement engine.
 
 ## app — the runtime
 
@@ -1012,11 +1173,79 @@ Around the core loop the module provides:
   while open, Tab cycles inside, state created in the modal's scope dies on
   close. **Toast** — top-right chips that slide in, park for their duration
   at zero frame cost, then slide out and remove their layer.
+- **AnchoredPanel** (`app::anchored`) — a passive anchored popup layer:
+  placed against an anchor rect (below-preferred, flip-above, viewport
+  clamp), stacked above everything live via `Overlays::top_z()`, never
+  focused (keys stay with the anchor's owner), closed by its opener's
+  scope death. `Completion` builds the caret-anchored completion
+  dropdown on top of it (see the widgets section).
 - **Hooks** — `use_theme(cx)` (the app-level theme signal), `use_viewport(cx)`
   (terminal size as a signal), `use_startup_notices(cx)` (labeled startup
   degradations as a reactive list).
 - **KeymapHelp** — a ready-made `?` help modal listing the shortcuts
   reachable from the current focus plus every registered global action.
+
+## app::selection — screen-text selection and clipboard copy
+
+Terminals in mouse-capture mode route drags to the application, so native
+text selection stops working in every mouse-enabled TUI. The engine ships
+the whole answer stack (see the
+[troubleshooting matrix](troubleshooting.md#i-cant-select-text-with-the-mouse)
+for the zero-code terminal bypasses). Three cloneable, thread-local
+handles, all in `app::selection` (functions re-exported in the prelude):
+
+```rust
+use abstracttui::prelude::*; // selection(), mouse_capture(), copy_to_clipboard()
+
+// Tier 3 — engine drag-select. Opt in once (or bind a key to toggle):
+selection().set_enabled(true);   // left-drag now paints a selection
+selection().is_active();         // a region is visible
+selection().clear();             // Esc and click do this too
+
+// Tier 2 — native selection mode: hand the pointer back to the terminal.
+mouse_capture().suspend();       // native drag-select works; no mouse events arrive
+mouse_capture().resume();        // re-arm the entered mouse mode (e.g. on next key)
+
+// The app-reachable clipboard verb (OSC 52 through presenter custody):
+copy_to_clipboard("exact source text");
+```
+
+While selection is enabled, the engine claims **left Down/Drag/Up only**:
+dragging paints the theme's `selection_fg`/`selection_bg` inks over the
+composed frame (damage-contract honest — only changed cells repaint), and
+releasing copies. While a selection is visible, Enter / `c` / Ctrl+C copy
+again and Esc or a click clears — Ctrl+C only quits when no selection is
+visible. Wheel scrolling, hover, and every other key route normally the
+whole time. Copies travel as OSC 52 through the presenter's byte custody;
+terminals that did not advertise the capability still get the bytes
+(harmless) plus a one-time labeled startup notice, and under tmux the
+sequence is deliberately not passthrough-wrapped (tmux consumes OSC 52
+natively — `set -g set-clipboard on`).
+
+Selection semantics, stated plainly:
+
+- **Screen text, not widget content.** What you copy is what the flattened
+  frame shows: wide glyphs (CJK, emoji) are never split, blank cells read
+  as spaces, trailing whitespace trims per row, rows join with `\n`.
+  Soft-wrapped lines copy as separate rows; scrolled-away content cannot
+  be selected. The logical text↔cells mapping is future work (backlog
+  0160), not this feature.
+- **Linear row flow, clamped to a pane.** The selection flows like a
+  terminal's own: anchor to right edge, full middle rows, left edge to
+  head. Both ends clamp to the pane under the drag *anchor* — the content
+  box of the nearest clipping or padded ancestor (a `Scroll` viewport, a
+  bordered `Block`), else the whole tree — so sibling panes and border
+  glyphs never leak into a copy.
+- **Zero idle cost.** With no active selection the render hook is two
+  empty checks; a parked selection renders no frames until something
+  changes.
+
+`Terminal::set_mouse_reporting(bool)` is the tier-2 verb underneath
+(implemented by both platform backends and `testing::CaptureTerm`;
+`Driver::set_mouse_reporting` is the immediate form for embedders). One
+platform note: job-control suspend (`Ctrl+Z`) re-enters with the original
+options, re-arming reporting — suspend again after resume if you keep it
+off.
 
 ## theme — design tokens
 
@@ -1082,6 +1311,28 @@ after installation; animated shaders damage only what their `changed_region`
 hint declares. For debugging: `render::snapshot(&surface)` prints a bordered
 character grid, `snapshot_styles` adds per-row style annotations, and
 `Compositor::set_debug_damage(true)` outlines every repaint region live.
+
+**`md::StreamSession`** is the incremental entry into the markdown
+pipeline (text arriving over time: model output, a growing log). Closed
+blocks freeze — parsed once, never revisited — and only the open tail
+re-parses per append, with any chunking of the same bytes yielding
+blocks identical to `md::parse` of the whole source. An unclosed fence
+reports as code from the moment its opening line arrives. `Feed`'s
+streaming items ride it; it is widget-agnostic:
+
+```rust
+use abstracttui::render::md::{self, MdStyles, StreamSession};
+
+let styles = MdStyles::default();
+let mut s = StreamSession::new(styles.clone());
+s.append("# Title\n\nStreaming **bo");
+s.append("ld** text.");
+assert_eq!(s.closed_blocks().len(), 1); // the heading sealed and froze
+assert_eq!(
+    s.finish(),
+    md::parse("# Title\n\nStreaming **bold** text.", &styles)
+);
+```
 
 ## gfx — images
 
@@ -1829,6 +2080,211 @@ cargo test --release -- --ignored perf_mosaic_200x60 --nocapture
 ```
 
 
+===== FILE: docs/live-data.md =====
+
+# Live data: background sources into the UI
+
+How a networked, long-lived app gets data from a background thread into
+signals — the ownership rule, the named bindings, bounded back-pressure,
+and the recurring time source. The runnable companion is
+[`examples/feed.rs`](../examples/feed.rs).
+
+## The ownership rule (one sentence)
+
+The reactive graph is single-threaded: background threads never touch
+signals — the only sanctioned crossing is a closure posted to the UI
+thread, and writing a signal from the wrong thread is a **named panic**
+(it tells you to use this page's pattern), never silent aliasing.
+
+Under the hood that crossing is `reactive::WakeHandle::post(f)`: the
+closure crosses the thread boundary, wakes the event loop, and runs in
+the next frame's phase U with full runtime access. Two guarantees come
+with it:
+
+- **Ordered delivery** — one producer's posts apply in emit order
+  (FIFO; cross-producer order is lock-acquisition order).
+- **One frame per burst** — any number of posts between two frames
+  coalesce into one wake and one repaint; a post landing mid-frame
+  applies in the next frame, exactly once.
+
+And one cost rule: while a source is quiet, the app is byte-for-byte
+idle — no polling, no timers, the loop parks in a blocking read.
+
+## The bindings
+
+You rarely post by hand. Three named helpers in `reactive::` cover the
+shapes (all senders are `Clone + Send`; all signals die with the scope
+that created them, after which senders turn **inert** — sends apply
+nothing, count on `dead_sends()`, and are never unsafe):
+
+| helper | signal shape | delivery | use for |
+| --- | --- | --- | --- |
+| `channel_source(cx)` | `Signal<Vec<T>>` | every value, in order, unbounded | low-rate event streams |
+| `latest_source(cx, initial)` | `Signal<T>` | newest value; intermediates coalesce at the source | progress, telemetry, presence |
+| `bounded_source(cx, capacity, policy)` | `Signal<Vec<T>>` window + `Signal<IngestStats>` | at most `capacity` retained; overflow per policy, counted | anything that can flood |
+
+## Bounded ingestion and back-pressure honesty
+
+`WakeHandle::post` is the **control lane**: unbounded by contract,
+correct for low-rate messages. A flooding producer (chat hub, tool
+output, tail -f) needs the **data lane**:
+
+```rust
+let (tx, events, stats) = bounded_source::<String>(
+    cx,
+    400,                        // the retained window, and the bound
+    OverflowPolicy::DropOldest, // what overflow MEANS is the app's call
+);
+```
+
+- `DropOldest` — ring: the newest tail survives (feeds, logs).
+- `DropNewest` — the head survives (capture the first N).
+- `OverflowPolicy::coalesce(fold)` — overflow merges into the newest
+  survivor (progress updates that supersede each other). A fold that
+  PANICS degrades labeled instead of poisoning the lane: the panic is
+  caught, the value it consumed counts as `dropped`, the event counts
+  as `fold_panics`, and later sends keep working.
+- **There is no `Block`.** Blocking a producer against the UI thread
+  inverts liveness: the producer inherits every UI stall (a held
+  scrollbar, a suspended terminal, a modal) as unbounded latency on its
+  own sockets and locks, and can no longer answer the cancellation the
+  UI is about to send it. Producers that must not lose data pause their
+  *reads* upstream (the transport pushes back); they never park on the
+  UI.
+
+Honesty is part of the contract: every value lands in exactly one
+bucket of `stats` (`IngestStats { delivered, dropped, coalesced,
+fold_panics }` — the last counts events, its values are inside
+`dropped`), updated atomically with the window. **Render `dropped`
+(and `fold_panics`) when nonzero** — "1.2k shown · 34 dropped" is the
+labeled-degradation convention; silent loss is the failure mode this
+lane exists to prevent. `delivered + dropped + coalesced` always equals
+values sent; a `DropOldest` window aging out an already-shown item is
+retention churn, deliberately not re-counted as a drop. Memory is
+bounded by construction (≤ 2×capacity across the transit buffer and
+the window) and a burst costs one wake, one posted drain, one frame —
+no matter how many values arrive.
+
+Producer-side guidance: drain everything available per read and send
+per item into the bounded lane (it batches internally), or batch into
+few `post` closures on the raw lane. One closure per burst is the
+intended cadence for high-rate sources.
+
+## The recurring time source
+
+Time is the zeroth data source. `reactive::interval` is the engine-owned
+version of the self-rescheduling `after(..)` recursion, with the
+cancellation story the recursion never has:
+
+```rust
+let handle = interval(cx, Duration::from_secs(1), move || {
+    now.set(clock_text()); // runs on the UI thread, phase U
+});
+// handle.cancel() stops it early; scope disposal cancels it anyway —
+// a closed pane's poller cannot keep ticking by accident.
+```
+
+Fixed-delay drift policy: the next deadline is *fire time + period*.
+After a suspend of N periods it fires **once** and resumes cadence —
+missed ticks coalesce, there are no catch-up storms. Between fires an
+armed interval costs zero wakeups (the loop sleeps until the deadline);
+timers never frame-pace.
+
+## Worker lifecycle
+
+Spawn producers with `reactive::spawn_worker(label, f)`: a worker
+**panic** is posted back and surfaces as a labeled app error (`Driver`
+turns it into `Err`), instead of a thread dying silently while the feed
+just... stops. A clean return is not an error. Give workers a stop flag
+and join them after `App::run` returns (the feed example's teardown),
+so no thread outlives the terminal session.
+
+## Copy-paste starting point
+
+The rendering side pairs the bounded window with the `Feed` widget
+(keyed rich items, windowed paint) inside `Scroll` with the engine's
+follow-tail: the content extent is measured (no size hint), the offset
+sticks to the bottom until the user scrolls up, and setting the follow
+signal true jumps back to the latest. The window syncs into slot keys,
+so the Feed holds at most `capacity` items — bounded end to end. (When
+`FeedState::clear` lands, the sync body becomes clear-and-repush; slot
+keys are today's equivalent.)
+
+```rust
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use abstracttui::prelude::*;
+use abstracttui::reactive::{bounded_source, spawn_worker, OverflowPolicy};
+use abstracttui::widgets::{Feed, FeedItem, FeedState};
+
+fn main() -> abstracttui::base::Result<()> {
+    if !abstracttui::term::have_tty() {
+        return Ok(());
+    }
+    let stop = Arc::new(AtomicBool::new(false));
+    let mut app = App::new(Size::new(80, 24));
+    let mut sender = None;
+    app.mount(|cx| {
+        let (tx, events, stats) =
+            bounded_source::<String>(cx, 400, OverflowPolicy::DropOldest);
+        sender = Some(tx);
+        let feed = FeedState::new(cx);
+        let feed_sync = feed.clone();
+        cx.effect_labeled("window-sync", move || {
+            events.with(|rows| {
+                for (i, line) in rows.iter().enumerate() {
+                    feed_sync.push(format!("slot-{i}"), FeedItem::text(line.clone()));
+                }
+            });
+        });
+        let follow = cx.signal(true); // read it for chrome; set true to jump
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(
+                Scroll::new(Feed::new(&feed).gap(0).view(cx))
+                    .follow_tail(follow)
+                    .view(cx),
+            )
+            .child(dyn_view(LayoutStyle::line(1), move || {
+                let s = stats.get();
+                text(match s.dropped {
+                    0 => format!("{} events", s.delivered),
+                    d => format!("{} events · {d} dropped", s.delivered),
+                })
+            }))
+            .build()
+    })?;
+    let tx = sender.take().expect("mounted");
+    let stop_w = stop.clone();
+    let worker = spawn_worker("my-source", move || {
+        while !stop_w.load(Ordering::Relaxed) {
+            // read your socket/process/channel here, then:
+            tx.send("hello from the background".to_string());
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+    });
+    let result = app.run();
+    stop.store(true, Ordering::Relaxed);
+    worker.join().ok();
+    result
+}
+```
+
+Swap the sleep for a real read loop and this is a networked app: the
+transport (HTTP poll, WebSocket, subprocess pipe) is your choice — the
+engine's job ends at the thread boundary, and this page is that
+boundary's contract. The runnable version with bursty timing, pause,
+and an events/sec `interval` is [`examples/feed.rs`](../examples/feed.rs).
+
+## Testing live-data apps
+
+The headless harness works unchanged: drive `Driver::turn` against
+`testing::CaptureTerm`, send from a joined thread between turns, and
+assert on the rendered screen — one frame per burst, zero bytes while
+quiet. `tests/wave_livedata.rs` pins exactly those claims and is a
+gallery of the shapes.
+
+
 ===== FILE: docs/faq.md =====
 
 # FAQ
@@ -1993,6 +2449,13 @@ a data-exfiltration vector. Paste reaches your app exclusively through
 bracketed paste, which is fuzz-hardened: multi-megabyte pastes stream in
 bounded chunks, byte-exactly, with embedded escape sequences neutralized
 as content.
+
+Writing is easy to reach: `copy_to_clipboard(text)` from any handler, or
+enable the engine's drag-select (`selection()`) so users copy what they
+see — both in the
+[api.md selection section](api.md#appselection--screen-text-selection-and-clipboard-copy).
+If a copy never arrives, see
+[troubleshooting](troubleshooting.md#the-engines-copy-doesnt-reach-my-clipboard).
 
 ## Why doesn't Ctrl+Enter (or Shift+Enter) do anything?
 
@@ -2169,6 +2632,65 @@ grid of every TUI. Keep the terminal's default width configuration, and
 prefer unambiguous glyphs (plain ASCII, box drawing, block elements) in
 structural chrome.
 
+## I can't select text with the mouse
+
+**Cause**: mouse capture. The engine enables SGR mouse reporting for
+wheel scrolling and click routing, and a terminal in mouse-capture mode
+sends drags to the *application* instead of performing its own text
+selection. Every mouse-capturing TUI behaves this way — it is the
+protocol, not a bug.
+
+**Fix**: three answers, cheapest first.
+
+1. **Hold the bypass modifier your terminal already ships.** Every major
+   emulator can bypass mouse capture for one drag:
+
+   | Terminal            | Bypass gesture                                  |
+   |---------------------|-------------------------------------------------|
+   | iTerm2              | Option+drag (also Cmd if configured)            |
+   | macOS Terminal.app  | Fn+drag (Option+drag selects rectangles)        |
+   | kitty               | Shift+drag                                      |
+   | WezTerm             | Shift+drag                                      |
+   | GNOME Terminal/VTE (incl. Tilix, xfce4-terminal) | Shift+drag         |
+   | Alacritty           | Shift+drag                                      |
+   | Windows Terminal    | Shift+drag                                      |
+   | tmux (inside any of the above) | the same modifier, per the OUTER terminal |
+
+   This selects raw screen cells — borders, gutters, and pane seams
+   included — which is why the engine also offers the next two.
+
+2. **A "native selection mode" keybinding** (engine tier 2): the app
+   calls `app::selection::mouse_capture().suspend()` — mouse reporting
+   turns off, the terminal's own selection (and clipboard) works at full
+   native quality, and the app resumes with `.resume()` on its next
+   keypress. See the [api.md selection section](api.md#appselection--screen-text-selection-and-clipboard-copy).
+
+3. **Engine drag-select with OSC 52 copy** (tier 3): the app enables
+   `app::selection::selection()`, and dragging paints a real selection
+   highlight clamped to the pane under the anchor; releasing (or
+   `c`/Enter/Ctrl+C) copies the selected screen text to the system
+   clipboard through OSC 52. `cargo run --example feed` demonstrates it.
+
+## The engine's copy doesn't reach my clipboard
+
+**Cause**: OSC 52 is a write-only, fire-and-forget escape — the terminal
+either applies it or silently ignores it, and there is no reply to check.
+Common blockers: the terminal does not support OSC 52 (the engine emits
+anyway — harmless — and pushes a one-time labeled startup notice when the
+capability was not advertised); tmux is in the middle (it consumes OSC 52
+itself — `set -g set-clipboard on` in `~/.tmux.conf` lets it forward the
+copy; the engine follows its verb policy and does not passthrough-wrap
+OSC 52, because tmux handles the sequence natively); or a security
+setting (some terminals gate clipboard writes behind a prompt or a
+setting, e.g. `clipboard_control` in kitty).
+
+**Fix**: check the startup notices first, then your multiplexer's
+`set-clipboard`, then the terminal's clipboard permission setting. Size
+is rarely the issue: screen selections are a few kilobytes and every
+known OSC 52 cap (tmux's historical ~74KB, kitty's default 8MB) sits far
+above them. As a last resort the modifier-bypass matrix above always
+works — it never involves the application.
+
 ## Tests hang forever
 
 **Cause**: the app was spawned in a harness with piped stdin that never
@@ -2184,11 +2706,13 @@ that exercises the app loop is written that way, and it needs no tty, no
 timeouts, and no sleeps.
 
 
-===== Package facts =====
+===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.1.0 (Rust, edition 2021). First public release: 2026-07-21.
+- Crate: `abstracttui` 0.2.0 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); 0.2.0 released 2026-07-22.
 - Description: a reactive, compositor-grade terminal UI engine — fine-grained signals,
-  layered rendering with damage tracking, images (kitty/iTerm2/sixel/mosaic),
+  layered rendering with damage tracking, streaming transcripts and live-data ingestion,
+  text selection with OSC 52 copy, images (kitty/iTerm2/sixel/mosaic),
   software-rasterized 3D (GLB), themes and animation.
 - License: MIT.
 - Repository / homepage: https://github.com/lpalbou/abstracttui
@@ -2200,7 +2724,7 @@ timeouts, and no sleeps.
   - `libc` 0.2 — Unix terminal FFI (unix targets only)
   - `windows-sys` 0.60 — Windows console FFI (windows targets only)
 - Test invocation (from CONTRIBUTING.md):
-  - `cargo test` — the whole suite (~1,240 tests: unit tests, integration suites under
+  - `cargo test` — the whole suite (~1,385 tests: unit tests, integration suites under
     `tests/`, and doctests).
   - `cargo test --test live_smoke -- --ignored --test-threads=1` — live pty smoke tests
     (spawn a real terminal session; run serially).

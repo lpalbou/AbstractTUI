@@ -93,9 +93,12 @@ impl Spinner {
         let width = 1 + label.as_ref().map_or(0, |l| l.chars().count() as i32 + 1);
 
         let layout = self.layout.unwrap_or_else(|| {
+            // shrink 0: the activity glyph never vanishes under
+            // overflow pressure (0240 #2).
             LayoutStyle::default()
                 .width(Dimension::Cells(width))
                 .height(Dimension::Cells(1))
+                .shrink(0.0)
         });
 
         Element::new().style(layout).draw(move |canvas, rect| {

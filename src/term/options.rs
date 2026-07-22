@@ -23,6 +23,29 @@ pub enum MouseMode {
     AnyMotion,
 }
 
+impl MouseMode {
+    /// Bytes arming this mode's tracking (SGR encoding rides along).
+    /// Shared by `EnterOptions::enter_bytes` and the runtime
+    /// suspend/resume verb (`Terminal::set_mouse_reporting`) so the
+    /// arm/disarm pairs can never drift apart.
+    pub(crate) const fn arm_bytes(self) -> &'static [u8] {
+        match self {
+            MouseMode::Off => b"",
+            MouseMode::ButtonDrag => b"\x1b[?1002h\x1b[?1006h",
+            MouseMode::AnyMotion => b"\x1b[?1003h\x1b[?1006h",
+        }
+    }
+
+    /// Bytes disarming this mode, exact reverse order of `arm_bytes`.
+    pub(crate) const fn disarm_bytes(self) -> &'static [u8] {
+        match self {
+            MouseMode::Off => b"",
+            MouseMode::ButtonDrag => b"\x1b[?1006l\x1b[?1002l",
+            MouseMode::AnyMotion => b"\x1b[?1006l\x1b[?1003l",
+        }
+    }
+}
+
 /// Kitty keyboard protocol progressive-enhancement flags
 /// (<https://sw.kovidgoyal.net/kitty/keyboard-protocol/>).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
@@ -103,11 +126,7 @@ impl EnterOptions {
         if self.hide_cursor {
             b.extend_from_slice(b"\x1b[?25l");
         }
-        match self.mouse {
-            MouseMode::Off => {}
-            MouseMode::ButtonDrag => b.extend_from_slice(b"\x1b[?1002h\x1b[?1006h"),
-            MouseMode::AnyMotion => b.extend_from_slice(b"\x1b[?1003h\x1b[?1006h"),
-        }
+        b.extend_from_slice(self.mouse.arm_bytes());
         if self.bracketed_paste {
             b.extend_from_slice(b"\x1b[?2004h");
         }
@@ -136,11 +155,7 @@ impl EnterOptions {
         if self.bracketed_paste {
             b.extend_from_slice(b"\x1b[?2004l");
         }
-        match self.mouse {
-            MouseMode::Off => {}
-            MouseMode::ButtonDrag => b.extend_from_slice(b"\x1b[?1006l\x1b[?1002l"),
-            MouseMode::AnyMotion => b.extend_from_slice(b"\x1b[?1006l\x1b[?1003l"),
-        }
+        b.extend_from_slice(self.mouse.disarm_bytes());
         // Defensive: a crashed frame may have left synchronized output open
         // or attributes set; both resets are no-ops otherwise.
         b.extend_from_slice(b"\x1b[?2026l\x1b[0m");

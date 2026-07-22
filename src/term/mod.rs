@@ -212,6 +212,30 @@ pub trait Terminal {
         self.write(&verbs::clipboard_copy_bytes(text))
     }
 
+    /// Suspend (`false`) or re-arm (`true`) the mouse reporting this
+    /// session entered with — the runtime "native selection mode" verb
+    /// (backlog 0270 tier 2): an app suspends capture, the user
+    /// drag-selects with the terminal's own machinery (full native
+    /// quality, native clipboard), and the app resumes on its next
+    /// keypress. While suspended NO mouse events arrive — the terminal
+    /// owns the pointer. Sessions entered with `MouseMode::Off` no-op.
+    /// Idempotent at the wire (DECSET/DECRST of an already-set mode is
+    /// harmless), and `leave` still restores unconditionally. One
+    /// interaction to know: job-control [`Terminal::suspend`] re-enters
+    /// with the original options, re-arming reporting — suspend again
+    /// after resume if you keep it off. The default is an honest refusal
+    /// for scripted terminals that do not track a session posture; both
+    /// platform backends and `testing::CaptureTerm` implement it.
+    fn set_mouse_reporting(&mut self, on: bool) -> Result<()> {
+        let _ = on;
+        Err(Error::Unsupported(
+            "set_mouse_reporting needs a terminal that tracks its entered mouse \
+             mode (the platform backends and testing::CaptureTerm do; this \
+             scripted terminal does not)"
+                .into(),
+        ))
+    }
+
     /// Toggle SGR-Pixels mouse reporting (DEC 1016) mid-session — pixel
     /// coordinates for smooth drags over images. Contract: gate on
     /// `Capabilities::sgr_pixel_mouse` AND a known cell size, and switch

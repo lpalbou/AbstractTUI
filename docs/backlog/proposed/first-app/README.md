@@ -19,3 +19,9 @@ Completed (moved to `../../completed/first-app/`, 2026-07-21 wave cycle 1):
 | 0220 | `autofocus` inside a dyn_view regeneration panics the reactive runtime | bug |
 | 0230 | Modal content shortcuts are dead until focus enters the modal tree | bug |
 | 0240 | Overflowing modal content silently shrinks fixed rows to zero | footgun/docs |
+
+Completed 2026-07-22:
+
+| ID | Title | Class |
+| --- | --- | --- |
+| 0270 | Text selection + copy from rendered screens (mouse capture blocks native selection) | feature |

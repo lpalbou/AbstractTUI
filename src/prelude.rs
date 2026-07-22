@@ -11,7 +11,10 @@
 
 pub use crate::base::{Point, Rect, Rgba, Size};
 
-pub use crate::reactive::{batch, untrack, Memo, Scope, Signal};
+pub use crate::reactive::{
+    batch, bounded_source, channel_source, interval, latest_source, untrack, IngestStats,
+    IntervalHandle, Memo, OverflowPolicy, Scope, Signal, SourceSender, WakeHandle,
+};
 
 pub use crate::layout::{
     Align, Dimension, Direction, Display, Edges, Inset, Justify, LayoutStyle, Overflow, Track,
@@ -38,3 +41,9 @@ pub use crate::app::{
 };
 
 pub use crate::anim::{Easing, Timeline, Transition, Tween};
+
+pub use crate::app::selection::{copy_to_clipboard, mouse_capture, selection};
+pub use crate::{
+    app::anchored::{AnchoredPanel, Completion, CompletionCandidate},
+    widgets::{TextArea, TextAreaState},
+};

@@ -63,19 +63,25 @@ dashboard toward the real live-data pattern (`examples/feed.rs` /
 
 ## CHANGELOG.md
 
-Proposed entry (I do not own the file; wording ready to paste):
+Proposed entry (I do not own the file; wording ready to paste; updated
+cycle 2 for the fold firewall + the Feed example switch):
 
 ```md
 - reactive: async source→signal bindings (`channel_source`,
   `latest_source`), bounded coalescing ingestion (`bounded_source` with
-  `DropOldest`/`DropNewest`/`Coalesce` and an honest drop-count signal),
-  cancellable `interval` timer, and waker dedup (one wake per burst).
-  New example `examples/feed.rs` + guide `docs/live-data.md`.
+  `DropOldest`/`DropNewest`/`Coalesce`, an honest stats signal incl.
+  drop + fold-panic counters — a panicking coalesce fold degrades
+  labeled instead of poisoning the lane), cancellable `interval` timer,
+  and waker dedup (one wake per burst). New example `examples/feed.rs`
+  (renders through `widgets::Feed`) + guide `docs/live-data.md`.
 ```
 
-## docs/backlog/planned/live-data/*
+## Backlog state (updated cycle 2)
 
-0010/0020/0030 are done except the cross-path checkboxes above; 0070
-(proposed band) is implemented except dashboard adoption. I did not
-edit the backlog files (not my paths) — checklist state is recorded in
-`reviews/wave/livedata-cycle1.md`.
+CLOSED BY LIVEDATA: 0010/0020/0030/0070 carry `## Completion report`
+sections and were MOVED to `docs/backlog/completed/live-data/`
+(2026-07-21); the two track READMEs were updated to match. Remaining
+integrator surface is exactly the file list above (prelude, SUMMARY,
+examples/README, dashboard migration + header pointer, api/architecture
+cross-links, CHANGELOG) — all one-liners except the dashboard
+migration, which is written out verbatim in this note.

@@ -2,8 +2,8 @@
 
 ## Metadata
 - Created: 2026-07-21
-- Status: Planned
-- Completed: N/A
+- Status: Completed (build wave, LIVEDATA seat, cycles 1-2)
+- Completed: 2026-07-21
 
 ## ADR status
 - Governing ADRs: None (this repository has no ADR system yet). ADR impact: None — this names
@@ -92,3 +92,36 @@ to write their first networked app.
 - [ ] Ordering + ownership contract text on helper and `WakeHandle::post`
 - [ ] Prelude re-export (`WakeHandle` + helper)
 - [ ] Unit + integration + doctest coverage
+
+## Completion report
+- Final path: docs/backlog/completed/live-data/0010_async_source_signal_binding.md
+- Date: 2026-07-21
+- Shipped API (`src/reactive/source.rs`):
+  `channel_source(cx) -> (SourceSender<T>, Signal<Vec<T>>)` (append
+  buffer: every value, per-sender order) and
+  `latest_source(cx, initial) -> (SourceSender<T>, Signal<T>)`
+  (newest wins, coalesces at source, one posted apply per drain cycle).
+  `SourceSender<T>` is `Clone + Send`, never blocks/fails, and is
+  INERT + COUNTED (`dead_sends()`) after the owning scope's disposal.
+  Contract text (ownership rule, ordered delivery, one-frame-per-burst,
+  control-vs-data lane) landed on `WakeHandle::post` and both helpers;
+  running doctests on both.
+- Deliberate drift from the item's indicative shape: the sender-shaped
+  API replaced `source(cx, label, |emit| ...)` — strictly more general
+  (N producers, foreign threads); worker composition via `spawn_worker`
+  is the documented and example shape. Prelude re-export is filed to
+  the integrator (`reviews/wave/livedata-to-integrator.md`) — the file
+  is outside the LIVEDATA seat's paths.
+- Tests: `reactive::source::tests::{channel_delivers_every_value_in_send_order,
+  channel_preserves_per_sender_order_across_concurrent_senders,
+  latest_coalesces_bursts_to_the_newest_value,
+  latest_reschedules_after_each_drain,
+  sends_after_scope_disposal_are_inert_and_counted,
+  latest_sends_after_disposal_are_inert_and_counted_once_per_cycle}`;
+  integration `tests/wave_livedata.rs::{concurrent_senders_each_keep_emit_order,
+  sender_outliving_its_scope_is_inert_and_counted,
+  feed_burst_renders_one_frame_and_quiet_source_is_byte_free,
+  worker_quits_cleanly_without_surfacing_a_failure}`.
+- Measured: burst of 500 posts = 1 waker invocation (see 0020's dedup);
+  burst renders exactly one frame; 16 idle turns with a live-but-quiet
+  sender emit 0 bytes, 0 flushes (asserted through Driver+CaptureTerm).

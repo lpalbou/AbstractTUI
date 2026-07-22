@@ -142,6 +142,65 @@ grid of every TUI. Keep the terminal's default width configuration, and
 prefer unambiguous glyphs (plain ASCII, box drawing, block elements) in
 structural chrome.
 
+## I can't select text with the mouse
+
+**Cause**: mouse capture. The engine enables SGR mouse reporting for
+wheel scrolling and click routing, and a terminal in mouse-capture mode
+sends drags to the *application* instead of performing its own text
+selection. Every mouse-capturing TUI behaves this way — it is the
+protocol, not a bug.
+
+**Fix**: three answers, cheapest first.
+
+1. **Hold the bypass modifier your terminal already ships.** Every major
+   emulator can bypass mouse capture for one drag:
+
+   | Terminal            | Bypass gesture                                  |
+   |---------------------|-------------------------------------------------|
+   | iTerm2              | Option+drag (also Cmd if configured)            |
+   | macOS Terminal.app  | Fn+drag (Option+drag selects rectangles)        |
+   | kitty               | Shift+drag                                      |
+   | WezTerm             | Shift+drag                                      |
+   | GNOME Terminal/VTE (incl. Tilix, xfce4-terminal) | Shift+drag         |
+   | Alacritty           | Shift+drag                                      |
+   | Windows Terminal    | Shift+drag                                      |
+   | tmux (inside any of the above) | the same modifier, per the OUTER terminal |
+
+   This selects raw screen cells — borders, gutters, and pane seams
+   included — which is why the engine also offers the next two.
+
+2. **A "native selection mode" keybinding** (engine tier 2): the app
+   calls `app::selection::mouse_capture().suspend()` — mouse reporting
+   turns off, the terminal's own selection (and clipboard) works at full
+   native quality, and the app resumes with `.resume()` on its next
+   keypress. See the [api.md selection section](api.md#appselection--screen-text-selection-and-clipboard-copy).
+
+3. **Engine drag-select with OSC 52 copy** (tier 3): the app enables
+   `app::selection::selection()`, and dragging paints a real selection
+   highlight clamped to the pane under the anchor; releasing (or
+   `c`/Enter/Ctrl+C) copies the selected screen text to the system
+   clipboard through OSC 52. `cargo run --example feed` demonstrates it.
+
+## The engine's copy doesn't reach my clipboard
+
+**Cause**: OSC 52 is a write-only, fire-and-forget escape — the terminal
+either applies it or silently ignores it, and there is no reply to check.
+Common blockers: the terminal does not support OSC 52 (the engine emits
+anyway — harmless — and pushes a one-time labeled startup notice when the
+capability was not advertised); tmux is in the middle (it consumes OSC 52
+itself — `set -g set-clipboard on` in `~/.tmux.conf` lets it forward the
+copy; the engine follows its verb policy and does not passthrough-wrap
+OSC 52, because tmux handles the sequence natively); or a security
+setting (some terminals gate clipboard writes behind a prompt or a
+setting, e.g. `clipboard_control` in kitty).
+
+**Fix**: check the startup notices first, then your multiplexer's
+`set-clipboard`, then the terminal's clipboard permission setting. Size
+is rarely the issue: screen selections are a few kilobytes and every
+known OSC 52 cap (tmux's historical ~74KB, kitty's default 8MB) sits far
+above them. As a last resort the modifier-bypass matrix above always
+works — it never involves the application.
+
 ## Tests hang forever
 
 **Cause**: the app was spawned in a harness with piped stdin that never

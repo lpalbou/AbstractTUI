@@ -26,11 +26,12 @@ use crate::theme::TokenSet;
 use crate::ui::{dyn_view, Element, EventCtx, Key, Mods, Phase, UiEvent};
 
 /// Boxed text callback (`on_change`/`on_submit` builder slots).
-type BoxedTextFn = Box<dyn FnMut(&str)>;
+pub(crate) type BoxedTextFn = Box<dyn FnMut(&str)>;
 /// The same callback SHARED between the key handler and Enter
 /// submission (RT4-2 hygiene aliases; HRTB over the borrowed argument
-/// comes from the inner `dyn FnMut(&str)`).
-type TextCallback = Rc<RefCell<Option<BoxedTextFn>>>;
+/// comes from the inner `dyn FnMut(&str)`). `pub(crate)`: `TextArea`
+/// reuses the alias + `notify` for the same borrow discipline.
+pub(crate) type TextCallback = Rc<RefCell<Option<BoxedTextFn>>>;
 
 pub struct TextInput {
     value: Option<Signal<String>>,
@@ -54,13 +55,17 @@ struct Caret {
 /// Cluster geometry of a string, computed once per edit/draw from
 /// `text::segments` (THE cluster/width authority): byte boundaries
 /// (`len+1` entries) and per-cluster display widths.
-struct ClusterMap {
+///
+/// `pub(crate)`: `TextArea` (textarea.rs) reuses this map per visual
+/// row — one cluster-math authority for both editors (backlog 0120's
+/// "reuse, not re-derive" requirement).
+pub(crate) struct ClusterMap {
     bounds: Vec<usize>,
     widths: Vec<i32>,
 }
 
 impl ClusterMap {
-    fn of(text: &str) -> ClusterMap {
+    pub(crate) fn of(text: &str) -> ClusterMap {
         let mut bounds = Vec::new();
         let mut widths = Vec::new();
         for seg in crate::text::segments(text) {
@@ -72,17 +77,17 @@ impl ClusterMap {
     }
 
     /// Cluster count.
-    fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.widths.len()
     }
 
     /// Byte offset of cluster index `idx` (== text.len() at the end).
-    fn byte(&self, idx: usize) -> usize {
+    pub(crate) fn byte(&self, idx: usize) -> usize {
         self.bounds[idx.min(self.len())]
     }
 
     /// Display column where cluster `idx` starts.
-    fn col(&self, idx: usize) -> i32 {
+    pub(crate) fn col(&self, idx: usize) -> i32 {
         self.widths[..idx.min(self.len())].iter().sum()
     }
 
@@ -90,7 +95,7 @@ impl ClusterMap {
     /// the byte lands MID-cluster (an inserted scalar merged into its
     /// neighbor — ZWJ, combining mark), the cursor snaps past the whole
     /// merged cluster: positions are cluster boundaries, never interiors.
-    fn cluster_after(&self, byte_end: usize) -> usize {
+    pub(crate) fn cluster_after(&self, byte_end: usize) -> usize {
         self.bounds.partition_point(|&b| b < byte_end)
     }
 }
@@ -168,9 +173,14 @@ impl TextInput {
         let on_change: TextCallback = Rc::new(RefCell::new(self.on_change));
         let on_submit: TextCallback = Rc::new(RefCell::new(self.on_submit));
 
-        let layout = self
-            .layout
-            .unwrap_or_else(|| LayoutStyle::default().height(Dimension::Cells(1)).grow(1.0));
+        // shrink 0: the input's one row never vanishes under column
+        // overflow (0240 #2); width stays flexible through grow.
+        let layout = self.layout.unwrap_or_else(|| {
+            LayoutStyle::default()
+                .height(Dimension::Cells(1))
+                .grow(1.0)
+                .shrink(0.0)
+        });
 
         let handler = {
             let on_change = on_change.clone();
@@ -298,7 +308,7 @@ impl Default for TextInput {
 /// borrow, so a handler that writes the same signal (clear-on-submit,
 /// input masks) would hit "RefCell already borrowed". Found by the
 /// cycle-7 sixty-line-app proof; a String clone is the honest price.
-fn notify(cb: &TextCallback, value: Signal<String>) {
+pub(crate) fn notify(cb: &TextCallback, value: Signal<String>) {
     let snapshot = value.get_untracked();
     if let Some(f) = cb.borrow_mut().as_mut() {
         f(&snapshot);
@@ -359,7 +369,8 @@ fn insert_text(s: &str, value: Signal<String>, caret: Signal<Caret>, width: i32)
 
 /// Word-ness of the cluster starting at byte `at` (first scalar decides —
 /// a ZWJ family is "not word", which groups emoji runs like separators).
-fn cluster_is_word(text: &str, at: usize) -> bool {
+/// `pub(crate)`: shared with `TextArea` (one word-jump policy).
+pub(crate) fn cluster_is_word(text: &str, at: usize) -> bool {
     text[at..]
         .chars()
         .next()
@@ -367,8 +378,8 @@ fn cluster_is_word(text: &str, at: usize) -> bool {
 }
 
 /// Next word boundary in CLUSTER indices (alt+arrows): skip separators,
-/// then a word run.
-fn word_step(text: &str, map: &ClusterMap, from: usize, dir: i32) -> usize {
+/// then a word run. `pub(crate)`: shared with `TextArea`.
+pub(crate) fn word_step(text: &str, map: &ClusterMap, from: usize, dir: i32) -> usize {
     let n = map.len();
     let is_word = |i: usize| cluster_is_word(text, map.byte(i));
     if dir > 0 {

@@ -405,6 +405,89 @@ mod tests {
         assert_eq!(tree.rect(stretched), Rect::new(2, 2, 16, 6));
     }
 
+    /// 0240 follow-up #3: a DECLARED fixed-size child crushed to zero
+    /// by overflow pressure names itself (debug builds); the documented
+    /// opt-out (any explicit min, incl. min 0) and shrink(0.0) stay
+    /// silent. Debug-gated: release builds record nothing by design.
+    #[cfg(debug_assertions)]
+    #[test]
+    fn zero_collapse_emits_a_debug_notice_once_with_opt_outs() {
+        // 600-cell child + two one-row children in a 6-row column: the
+        // fixed rows lose their single cell (weights 600:1:1).
+        let (mut tree, root, ids) = tree_with(
+            &[
+                Style::default().h(600),
+                Style::default().h(1),
+                Style::default().h(1).min_h(0), // author opt-out
+            ],
+            Style::column().h(6),
+        );
+        solve(&mut tree, root, Rect::new(0, 0, 10, 6));
+        assert_eq!(tree.rect(ids[1]).h, 0, "the watched row was crushed");
+        let notices = tree.take_collapse_notices();
+        assert_eq!(
+            notices.len(),
+            1,
+            "opted-out row must stay silent: {notices:?}"
+        );
+        assert!(
+            notices[0].contains("1 cells") && notices[0].contains("height"),
+            "notice names the declared size and axis: {}",
+            notices[0]
+        );
+        // Once per node: a re-solve does not repeat the report.
+        solve(&mut tree, root, Rect::new(0, 0, 10, 6));
+        assert!(tree.take_collapse_notices().is_empty(), "reported once");
+
+        // shrink(0.0) children hold their extent: nothing to report.
+        let (mut t2, r2, i2) = tree_with(
+            &[Style::default().h(600), Style::default().h(1).shrink(0.0)],
+            Style::column().h(6),
+        );
+        solve(&mut t2, r2, Rect::new(0, 0, 10, 6));
+        assert_eq!(t2.rect(i2[1]).h, 1, "shrink 0 holds the row");
+        assert!(t2.take_collapse_notices().is_empty());
+    }
+
+    /// 2026-07-22 dashboard incident: `dyn` views mint FRESH layout
+    /// nodes every regeneration, so per-node dedup re-reported the same
+    /// collapsed row on every data tick (notice spam). Dedup keys on
+    /// the SITUATION (parent rect, axis, declared, child index) — a
+    /// rebuilt child in the same geometry stays silent; a resize is a
+    /// new situation and reports again.
+    #[cfg(debug_assertions)]
+    #[test]
+    fn zero_collapse_dedup_survives_dyn_regeneration() {
+        let styles = [Style::default().h(600), Style::default().h(1)];
+        let (mut tree, root, ids) = tree_with(&styles, Style::column().h(6));
+        solve(&mut tree, root, Rect::new(0, 0, 10, 6));
+        assert_eq!(tree.take_collapse_notices().len(), 1, "first report");
+
+        // Simulate a dyn regeneration: remove and re-add the children
+        // (fresh generational keys), identical styles and geometry.
+        for id in &ids {
+            tree.remove(*id);
+        }
+        let _new_ids: Vec<LayoutId> = styles
+            .iter()
+            .map(|s| {
+                let id = tree.add(s.clone());
+                tree.add_child(root, id);
+                id
+            })
+            .collect();
+        solve(&mut tree, root, Rect::new(0, 0, 10, 6));
+        assert!(
+            tree.take_collapse_notices().is_empty(),
+            "same situation with fresh node keys must not re-report"
+        );
+
+        // A resize IS a new situation: the report fires once more.
+        solve(&mut tree, root, Rect::new(0, 0, 12, 7));
+        let after_resize = tree.take_collapse_notices();
+        assert_eq!(after_resize.len(), 1, "resize reports the new geometry");
+    }
+
     #[test]
     fn measure_query_answers_without_assigning_rects() {
         // The 0130 size query: a column of measured leaves answers its

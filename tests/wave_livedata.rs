@@ -12,9 +12,12 @@
 //!   dedup) and ONE frame (damage contract §2);
 //! - zero-idle-cost with a live-but-quiet source (adv_app:55 shape);
 //! - interval missed-tick coalescing + cancellation, through the
-//!   driver's injected clock;
-//! - a 100k-post flood: bounded memory, exact drop accounting,
-//!   measured throughput (printed; loose sanity floor for CI).
+//!   driver's injected clock.
+//!
+//! The MEASURED half (100k flood throughput + the 60-virtual-second
+//! endurance soak with its counting allocator) lives in
+//! tests/wave_livedata_soak.rs — a separate binary so the allocator
+//! never taxes these functional pins.
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier};
@@ -149,7 +152,8 @@ fn each_policy_accounts_exactly() {
             IngestStats {
                 delivered: 4,
                 dropped: 6,
-                coalesced: 0
+                coalesced: 0,
+                fold_panics: 0
             }
         );
 
@@ -163,7 +167,8 @@ fn each_policy_accounts_exactly() {
             IngestStats {
                 delivered: 4,
                 dropped: 6,
-                coalesced: 0
+                coalesced: 0,
+                fold_panics: 0
             }
         );
 
@@ -181,7 +186,8 @@ fn each_policy_accounts_exactly() {
             IngestStats {
                 delivered: 4,
                 dropped: 0,
-                coalesced: 6
+                coalesced: 6,
+                fold_panics: 0
             }
         );
     });
@@ -442,72 +448,6 @@ fn interval_rearm_uses_the_fire_clock_not_wall_time() {
         assert_eq!(run_due_timers(hour + Duration::from_millis(50)), 0);
         assert_eq!(run_due_timers(hour + Duration::from_millis(110)), 1);
         assert_eq!(fires.get(), 3);
-    });
-    root.dispose();
-}
-
-// ---------------------------------------------------------------------------
-// Flood: 100k posts, bounded memory, exact accounting, throughput.
-// ---------------------------------------------------------------------------
-
-#[test]
-fn flood_100k_posts_stays_bounded_with_exact_accounting() {
-    const THREADS: usize = 4;
-    const PER_THREAD: usize = 25_000;
-    const CAPACITY: usize = 1024;
-    let (root, ()) = create_root(|cx| {
-        let (tx, events, stats) = bounded_source::<u64>(cx, CAPACITY, OverflowPolicy::DropOldest);
-        let barrier = Arc::new(Barrier::new(THREADS));
-        let started = Instant::now();
-        let handles: Vec<_> = (0..THREADS)
-            .map(|t| {
-                let tx = tx.clone();
-                let barrier = barrier.clone();
-                std::thread::spawn(move || {
-                    barrier.wait();
-                    for n in 0..PER_THREAD {
-                        tx.send((t * PER_THREAD + n) as u64);
-                    }
-                })
-            })
-            .collect();
-        for h in handles {
-            h.join().expect("flood thread");
-        }
-        let send_elapsed = started.elapsed();
-
-        let drained = Instant::now();
-        assert_eq!(drain_posted(), 1, "one drain job for a 100k flood");
-        let drain_elapsed = drained.elapsed();
-
-        let total = (THREADS * PER_THREAD) as u64;
-        let s = stats.get_untracked();
-        assert_eq!(
-            events.with_untracked(|v| v.len()),
-            CAPACITY,
-            "memory bounded"
-        );
-        assert_eq!(s.delivered, CAPACITY as u64, "window admissions exact");
-        assert_eq!(s.dropped, total - CAPACITY as u64, "drop count exact");
-        assert_eq!(
-            s.delivered + s.dropped + s.coalesced,
-            total,
-            "no value unaccounted"
-        );
-
-        let throughput = total as f64 / send_elapsed.as_secs_f64();
-        println!(
-            "flood: {total} posts from {THREADS} threads in {send_elapsed:?} \
-             ({throughput:.0}/s), drain {drain_elapsed:?}, window {CAPACITY}, \
-             dropped {} (counted, labeled)",
-            s.dropped
-        );
-        // Loose sanity floor only — CI boxes vary wildly; the regression
-        // this guards is catastrophic (per-send syscalls, lock storms).
-        assert!(
-            throughput > 50_000.0,
-            "flood throughput collapsed: {throughput:.0}/s"
-        );
     });
     root.dispose();
 }

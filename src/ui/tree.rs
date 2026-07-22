@@ -352,6 +352,14 @@ impl UiTree {
     /// container instead of the screen. Cheap when clean.
     ///
     /// Also the delivery point for autofocus nodes mounted inside `Dyn`
+    /// Drain the layout solver's zero-collapse diagnostics (debug
+    /// builds; empty in release). The driver forwards these into the
+    /// startup-notices lane each frame — the solver itself never
+    /// touches stderr while a session may own the terminal.
+    pub(crate) fn take_collapse_notices(&mut self) -> Vec<String> {
+        self.core.borrow_mut().layout.take_collapse_notices()
+    }
+
     /// effect runs: layout is called outside every computation (frame
     /// phase L, dispatch entry, draw), so the parked focus request can
     /// run its FocusIn handlers — and any re-render those trigger folds
@@ -462,6 +470,56 @@ impl UiTree {
             }
             return Some(current);
         }
+    }
+
+    /// The PANE rect at `p` for screen-space selection (backlog 0270):
+    /// the content box of the deepest clipping-or-padded ancestor on the
+    /// hit path whose content box contains `p` — a `Scroll` viewport, a
+    /// bordered `Block` (borders ride the padding floor), an inset panel
+    /// — else the root's rect (a tree without panes is one pane). `None`
+    /// when `p` misses the tree. Content boxes exclude the padding
+    /// gutter, so borders never count as selectable pane content.
+    /// Read-only; screen coordinates; same descent as [`Self::hit_test`].
+    pub fn pane_rect_at(&self, p: Point) -> Option<Rect> {
+        let core = self.core.borrow();
+        let root = core.root?;
+        let rinst = core.insts.get(root.0)?;
+        let root_rect = core.layout.rect(rinst.layout);
+        if !root_rect.contains(p) {
+            return None;
+        }
+        let mut pane: Option<Rect> = None;
+        let mut current = root;
+        while let Some(inst) = core.insts.get(current.0) {
+            if let Some(style) = core.layout.style(inst.layout) {
+                if style.clips_children() || style.padding != crate::layout::Edges::ZERO {
+                    let rect = core.layout.rect(inst.layout);
+                    let content = Rect::new(
+                        rect.x + style.padding.left,
+                        rect.y + style.padding.top,
+                        (rect.w - style.padding.horizontal()).max(0),
+                        (rect.h - style.padding.vertical()).max(0),
+                    );
+                    if content.contains(p) {
+                        pane = Some(content);
+                    } else if style.clips_children() {
+                        break; // gutter/clipped edge: hit_test stops here too
+                    }
+                }
+            }
+            // Descend to the child under `p` (later siblings win, like
+            // hit_test); a leaf ends the walk.
+            let next = inst.children.iter().rev().copied().find(|child| {
+                core.insts
+                    .get(child.0)
+                    .is_some_and(|ci| core.layout.rect(ci.layout).contains(p))
+            });
+            match next {
+                Some(child) => current = child,
+                None => break,
+            }
+        }
+        Some(pane.unwrap_or(root_rect))
     }
 
     /// True while the pointer is anywhere inside `id`'s subtree.

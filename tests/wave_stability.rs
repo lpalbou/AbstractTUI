@@ -369,3 +369,78 @@ fn capabilities_construct_via_with_and_grow_without_breakage() {
     let from_env = Capabilities::detect_env_with(&|_| None);
     assert!(from_env.dumb, "empty environment is honestly dumb");
 }
+
+// ---------------------------------------------------------------------
+// 2026-07-22 dashboard incident — zero-collapse diagnostics must reach
+// the in-app notices lane, never stderr mid-session (stderr shares the
+// terminal with the alternate screen and corrupts the live frame), and
+// must not spam under dyn regeneration (covered at the layout layer by
+// `zero_collapse_dedup_survives_dyn_regeneration`).
+// ---------------------------------------------------------------------
+
+/// A column that crushes a declared 1-row child produces exactly one
+/// startup notice, delivered through the notices signal at the next
+/// phase U — the surface an app can actually render.
+#[cfg(debug_assertions)]
+#[test]
+fn zero_collapse_notice_reaches_the_notices_lane() {
+    use abstracttui::app::use_startup_notices;
+
+    create_root(|_| {
+        let size = Size::new(20, 6);
+        let mut app = App::new(size);
+        type NoticeSignal = abstracttui::reactive::Signal<Vec<String>>;
+        let lane: Rc<RefCell<Option<NoticeSignal>>> = Rc::new(RefCell::new(None));
+        let lane_in = lane.clone();
+        app.mount(move |cx| {
+            *lane_in.borrow_mut() = Some(use_startup_notices(cx));
+            Element::new()
+                .style(LayoutStyle::column())
+                .child(
+                    Element::new()
+                        .style(LayoutStyle::default().h(600))
+                        .child(text("filler"))
+                        .build(),
+                )
+                .child(
+                    Element::new()
+                        .style(LayoutStyle::default().h(1))
+                        .child(text("status row"))
+                        .build(),
+                )
+                .build()
+        })
+        .expect("mount");
+
+        let mut term = CaptureTerm::new(size);
+        let mut driver = Driver::new(&mut app, &mut term, test_config()).expect("driver");
+        // Turn 1 renders (phase L records the collapse); turn 2's phase U
+        // forwards it into the notices lane.
+        driver.turn(&mut app, &mut term).expect("turn 1");
+        driver.turn(&mut app, &mut term).expect("turn 2");
+        flush_effects();
+
+        let signal = lane.borrow().expect("notices signal captured");
+        let notes = signal.get();
+        let collapse: Vec<&String> = notes
+            .iter()
+            .filter(|n| n.contains("collapsed to 0"))
+            .collect();
+        assert_eq!(
+            collapse.len(),
+            1,
+            "exactly one collapse notice in the lane: {notes:?}"
+        );
+        // More turns must not repeat it (same situation, dedup holds).
+        driver.turn(&mut app, &mut term).expect("turn 3");
+        driver.turn(&mut app, &mut term).expect("turn 4");
+        flush_effects();
+        let notes2 = signal.get();
+        let collapse2: Vec<&String> = notes2
+            .iter()
+            .filter(|n| n.contains("collapsed to 0"))
+            .collect();
+        assert_eq!(collapse2.len(), 1, "no re-report across turns: {notes2:?}");
+        app.shutdown();
+    });
+}

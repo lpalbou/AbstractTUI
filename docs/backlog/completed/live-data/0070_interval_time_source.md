@@ -2,10 +2,11 @@
 
 ## Metadata
 - Created: 2026-07-21
-- Status: Proposed (small; promote with the live-data foundation or the
-  first consumer that hand-rolls re-arming)
+- Status: Completed (build wave, LIVEDATA seat, cycles 1-2 — promoted
+  and executed with the live-data foundation; dashboard adoption filed
+  to the integrator, see the completion report)
 - Track: live-data
-- Completed: N/A
+- Completed: 2026-07-21
 
 ## ADR status
 - Governing ADRs: None — this repo has no ADR system yet (see 0170).
@@ -99,3 +100,38 @@ ever writes a self-rescheduling recursion or a cancellation flag again.
 - [ ] Contract text (no frame pacing; zero wakeups between fires)
 - [ ] Dashboard `tick_loop`/`clock_loop` adoption
 - [ ] Injected-clock + cancellation + idle tests
+
+## Completion report
+- Final path: docs/backlog/completed/live-data/0070_interval_time_source.md
+- Date: 2026-07-21
+- Shipped API (`src/reactive/interval.rs`):
+  `interval(cx, period, f) -> IntervalHandle` over the existing timer
+  heap (one pending one-shot, re-armed after each fire; timers never
+  frame-pace; zero wakeups between fires). Internals: timer entries
+  gained cancellation ids (`runtime.rs` TimerEntry) and the fire pass
+  publishes its clock (`timer_now`), so re-arms ride the LOOP's
+  injected clock deterministically. `after` is byte-compatible.
+- Design rulings the item left open, resolved: drift policy =
+  FIXED-DELAY (next = fire time + period; a suspend of N periods fires
+  ONCE — missed ticks coalesce, no catch-up storms; documented in the
+  rustdoc contract). Handle semantics = drop does NOT cancel; explicit
+  `cancel()` (idempotent, callable from inside `f`) and scope disposal
+  do — the dead-pane leak is impossible either way, and cancel
+  physically removes the heap entry so a cancelled interval never
+  bounds the idle sleep. Signature gained `cx` for the disposal tie.
+- Deliberate drift: dashboard `tick_loop`/`clock_loop` adoption is
+  filed to the integrator (examples/dashboard is outside the LIVEDATA
+  seat's paths; the migration is mechanical and written out in
+  reviews/wave/livedata-to-integrator.md). Proof-of-consumption lives
+  in examples/feed.rs (events/sec sampler) and the tests below.
+- Tests: `reactive::interval::tests::{fires_once_per_elapsed_period_with_steady_clock,
+  missed_ticks_coalesce_into_one_fire,
+  cancel_between_fires_removes_the_pending_timer_entirely,
+  cancel_from_inside_the_callback_stops_the_rearm,
+  scope_disposal_cancels_the_interval, dropping_the_handle_does_not_cancel,
+  zero_period_panics_loudly}` + doctest; integration
+  `tests/wave_livedata.rs::{interval_ticks_render_and_missed_ticks_coalesce_through_the_driver,
+  interval_rearm_uses_the_fire_clock_not_wall_time}` and the endurance
+  soak (`tests/wave_livedata_soak.rs`) (the soak
+  pins 60 fires across 60 virtual seconds on the driver's injected
+  clock, with armed-but-not-due turns emitting zero bytes).

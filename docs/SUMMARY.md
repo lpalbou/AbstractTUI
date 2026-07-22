@@ -6,5 +6,6 @@
 - [API Guide](api.md)
 - [Theming](theming.md)
 - [Graphics and 3D](graphics-and-3d.md)
+- [Live Data](live-data.md)
 - [FAQ](faq.md)
 - [Troubleshooting](troubleshooting.md)

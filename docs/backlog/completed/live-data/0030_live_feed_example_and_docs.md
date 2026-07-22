@@ -2,8 +2,9 @@
 
 ## Metadata
 - Created: 2026-07-21
-- Status: Planned
-- Completed: N/A
+- Status: Completed (build wave, LIVEDATA seat, cycles 1-2; cross-file
+  wirings filed to the integrator — see the completion report)
+- Completed: 2026-07-21
 
 ## ADR status
 - Governing ADRs: None (this repository has no ADR system yet). ADR impact: None.
@@ -78,3 +79,35 @@ a test that exercises the example's shape, not just the primitives.
 - [ ] `docs/live-data.md` + SUMMARY/api/architecture cross-links
 - [ ] Headless pinning test (burst/idle/teardown)
 - [ ] examples/README.md entry; dashboard header pointer
+
+## Completion report
+- Final path: docs/backlog/completed/live-data/0030_live_feed_example_and_docs.md
+- Date: 2026-07-21
+- Shipped: `examples/feed.rs` — bursty worker (xorshift bursts 3-34 +
+  150-950 ms gaps) → `bounded_source(400, DropOldest)` → slot-keyed
+  sync into `widgets::Feed` (cycle-2 switch; the cycle-1 hand-rolled
+  List/Scroll follow-tail effects were DELETED), markdown alert items,
+  events/sec via `reactive::interval`, honest dropped counter, pause
+  (true idle), clean worker join on quit, headless exit-0 guard
+  (verified). `docs/live-data.md` — ownership rule, bindings table,
+  policies + why-no-Block, back-pressure honesty (fold_panics
+  included), worker lifecycle, compile-checked Feed-based copy-paste
+  snippet (verified against the built rlib), testing section; linked
+  from docs/README.md.
+- Follow story: the example uses the ENGINE's `Scroll::follow_tail`
+  over the measured content extent (CONTENT's 0130, landed the same
+  cycle; the interim content_size + End-to-tail shape was replaced
+  same-cycle). One remaining interim: the slot-keyed window sync
+  becomes `FeedState::clear()` + re-push when clear() lands (marked in
+  the example header; tracked in reviews/wave/livedata-cycle2.md).
+- Cross-file checkboxes filed to the integrator
+  (reviews/wave/livedata-to-integrator.md): docs/SUMMARY.md entry,
+  examples/README.md entry, dashboard header pointer, api/architecture
+  cross-links.
+- Pinning tests: `tests/wave_livedata.rs::{
+  feed_burst_renders_one_frame_and_quiet_source_is_byte_free,
+  worker_quits_cleanly_without_surfacing_a_failure}` and
+  `tests/wave_livedata_soak.rs::soak_60_virtual_seconds_bursty_producer_through_feed` — burst → one
+  frame, idle turns 0 bytes/0 flushes, clean teardown, 60-virtual-
+  second endurance with allocation + live-node plateaus and exact
+  stats, all through Driver + CaptureTerm.

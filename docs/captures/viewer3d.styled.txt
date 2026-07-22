@@ -10,21 +10,21 @@ size=100x30 cursor=0,29 modes=[7,25,1049]
   8| │                                               ▀▀▀▀▀▀▀▀                                         │ |
   9| │                                           ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                                      │ |
  10| │                                         ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                                     │ |
- 11| │                                        ▀▀▀▀ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                                    │ |
- 12| │                                       ▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀▀▀                                     │ |
- 13| │                                      ▀▀▀▀▀▀▀ ▀▀▀▀▀▀▀▀▀▀▀▀▀                                     │ |
- 14| │                                      ▀▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀                                        │ |
- 15| │                                      ▀▀▀▀▀▀▀ ▀▀▀▀▀▀▀▀▀▀▀▀                                      │ |
+ 11| │                                        ▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                                    │ |
+ 12| │                                       ▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀▀▀▀                                    │ |
+ 13| │                                      ▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀▀▀                                     │ |
+ 14| │                                      ▀▀▀▀▀▀▀▀▀▀▀   ▀▀▀▀                                        │ |
+ 15| │                                       ▀▀▀▀▀ ▀▀▀ ▀ ▀▀▀▀▀▀                                       │ |
  16| │                                      ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀ ▀▀                                      │ |
- 17| │                                     ▀▀▀▀▀▀▀▀▀ ▀▀▀▀▀▀▀▀▀▀▀                                      │ |
- 18| │                                        ▀▀ ▀▀▀▀▀▀ ▀▀▀▀▀▀                                        │ |
+ 17| │                                     ▀▀▀▀ ▀▀▀▀ ▀▀▀▀▀▀▀▀▀▀                                       │ |
+ 18| │                                        ▀  ▀▀▀▀▀▀▀▀▀▀▀▀▀                                        │ |
  19| │                                                                                                │ |
  20| │                                                                                                │ |
  21| │                                                                                                │ |
  22| │                                                                                                │ |
  23| │                                                                                                │ |
  24| │                                                                                                │ |
- 25| │ halfblock  ·  29 fps  ·  zoom 1.00x  ·  light 52°  ·  spinning                                 │ |
+ 25| │ halfblock  ·  30 fps  ·  zoom 1.00x  ·  light 52°  ·  spinning                                 │ |
  26| └────────────────────────────────────────────────────────────────────────────────────────────────┘ |
  27| drag orbit · wheel zoom · space spin · 1-4 mode · l/L light · r reset · t theme · q quit           |
  28|                                                                                                    |
@@ -71,258 +71,252 @@ styles:
   8:2..49 fg=#1a1a2e bg=#1a1a2e
   8:49..50 fg=#1a1a2e bg=#8fa1a4
   8:50..51 fg=#1a1a2e bg=#81a1a7
-  8:51..52 fg=#1a1a2e bg=#82a2a9
-  8:52..53 fg=#1a1a2e bg=#809fa6
-  8:53..54 fg=#1a1a2e bg=#677774
-  8:54..55 fg=#1a1a2e bg=#b8bbba
-  8:55..56 fg=#1a1a2e bg=#242623
-  8:56..57 fg=#1a1a2e bg=#383525
+  8:51..52 fg=#1a1a2e bg=#82a1a8
+  8:52..53 fg=#1a1a2e bg=#7e9ca2
+  8:53..54 fg=#1a1a2e bg=#647371
+  8:54..55 fg=#1a1a2e bg=#949c9c
+  8:55..56 fg=#1a1a2e bg=#24241f
+  8:56..57 fg=#1a1a2e bg=#3f3d31
   8:57..98 fg=#1a1a2e bg=#1a1a2e
   8:98..99 fg=#3c3c4d bg=#1a1a2e
   8:99..100 fg=#eeeeee bg=#1a1a2e
   9:0..1 fg=#eeeeee bg=#1a1a2e
   9:1..2 fg=#3c3c4d bg=#1a1a2e
   9:2..45 fg=#1a1a2e bg=#1a1a2e
-  9:45..46 fg=#1a1a2e bg=#87a2a8
-  9:46..47 fg=#1a1a2e bg=#87a7ad
-  9:47..48 fg=#8aa5ac bg=#87a8af
-  9:48..49 fg=#87a7ae bg=#89a9b2
-  9:49..50 fg=#87a7af bg=#8aaab2
-  9:50..51 fg=#87a7ae bg=#87a8af
-  9:51..52 fg=#84a3ab bg=#7c989e
-  9:52..53 fg=#81a0a6 bg=#ada38f
-  9:53..54 fg=#c5b79a bg=#1c1910
-  9:54..55 fg=#dcd7cf bg=#d6e2e6
-  9:55..56 fg=#222220 bg=#f2ffff
-  9:56..57 fg=#c0cacf bg=#dbe8ed
-  9:57..58 fg=#e6f3f8 bg=#e9f7fc
-  9:58..59 fg=#c6d0d1 bg=#e5f2f7
-  9:59..60 fg=#1a1a2e bg=#d7e3e8
+  9:45..46 fg=#1a1a2e bg=#8aa2a6
+  9:46..47 fg=#1a1a2e bg=#87a7ac
+  9:47..48 fg=#86a6ae bg=#88a9b0
+  9:48..49 fg=#87a7ae bg=#89a9b1
+  9:49..50 fg=#87a7af bg=#89a9b2
+  9:50..51 fg=#87a6ae bg=#86a6ad
+  9:51..52 fg=#83a1a9 bg=#738c91
+  9:52..53 fg=#7d9ba1 bg=#c3b59a
+  9:53..54 fg=#cabda7 bg=#1c1b14
+  9:54..55 fg=#e0dcd4 bg=#d7e4e8
+  9:55..56 fg=#11100a bg=#f0fdff
+  9:56..57 fg=#bcc6ca bg=#ecfaff
+  9:57..58 fg=#e0edf2 bg=#edfaff
+  9:58..59 fg=#bcc5c5 bg=#e4f1f6
+  9:59..60 fg=#1a1a2e bg=#d6e2e7
   9:60..98 fg=#1a1a2e bg=#1a1a2e
   9:98..99 fg=#3c3c4d bg=#1a1a2e
   9:99..100 fg=#eeeeee bg=#1a1a2e
   10:0..1 fg=#eeeeee bg=#1a1a2e
   10:1..2 fg=#3c3c4d bg=#1a1a2e
   10:2..43 fg=#1a1a2e bg=#1a1a2e
-  10:43..44 fg=#1a1a2e bg=#94a6aa
-  10:44..45 fg=#98a6a4 bg=#88aab0
-  10:45..46 fg=#89aab1 bg=#87a8ae
-  10:46..47 fg=#88a9b0 bg=#84a5aa
-  10:47..48 fg=#87a9b0 bg=#fffdff
-  10:48..49 fg=#83a3a8 bg=#f6dfe4
-  10:49..50 fg=#799498 bg=#453f37
-  10:50..51 fg=#6e8386 bg=#fcffff
-  10:51..52 fg=#434544 bg=#fbffff
-  10:52..53 fg=#e8f6fa bg=#f8ffff
-  10:53..54 fg=#f3ffff bg=#eff9fc
-  10:54..55 fg=#f5ffff bg=#e0d3ca
-  10:55..56 fg=#ebf7fd bg=#534b36
-  10:56..57 fg=#e7f5f9 bg=#f8f8ff
-  10:57..58 fg=#ffffff bg=#d6e0e6
-  10:58..59 fg=#d7e3e8 bg=#c6d0d6
-  10:59..60 fg=#d6e2e8 bg=#b9babf
-  10:60..61 fg=#cfdbe0 bg=#8b8b8b
+  10:43..44 fg=#1a1a2e bg=#91a4a7
+  10:44..45 fg=#95a6a7 bg=#88aab0
+  10:45..46 fg=#89aab1 bg=#86a7ad
+  10:46..47 fg=#87a7ad bg=#7b979b
+  10:47..48 fg=#86a7ac bg=#ffffff
+  10:48..49 fg=#7d999e bg=#d2bbbb
+  10:49..50 fg=#768e92 bg=#f1f6fb
+  10:50..51 fg=#657577 bg=#fcffff
+  10:51..52 fg=#5b605f bg=#f9ffff
+  10:52..53 fg=#f0feff bg=#f6ffff
+  10:53..54 fg=#f3ffff bg=#e9eae8
+  10:54..55 fg=#f3ffff bg=#e4e9ea
+  10:55..56 fg=#eefbff bg=#4a432d
+  10:56..57 fg=#e4f1f7 bg=#eaeaf3
+  10:57..58 fg=#ffffff bg=#d0dbe1
+  10:58..59 fg=#dae7ec bg=#c3cdd3
+  10:59..60 fg=#d5e1e6 bg=#b3b4b8
+  10:60..61 fg=#bec7c7 bg=#8a8a8a
   10:61..98 fg=#1a1a2e bg=#1a1a2e
   10:98..99 fg=#3c3c4d bg=#1a1a2e
   10:99..100 fg=#eeeeee bg=#1a1a2e
   11:0..1 fg=#eeeeee bg=#1a1a2e
   11:1..2 fg=#3c3c4d bg=#1a1a2e
   11:2..42 fg=#1a1a2e bg=#1a1a2e
-  11:42..43 fg=#1a1a2e bg=#88a8b1
-  11:43..44 fg=#88a9b1 bg=#87a8b0
-  11:44..45 fg=#86a7ae bg=#ffffff
-  11:45..46 fg=#738b8d bg=#ffffff
-  11:46..47 fg=#ffffff bg=#ffffff
-  11:47..48 fg=#dce4e7 bg=#ffffff
-  11:48..49 fg=#c8c4c4 bg=#bbbdbc
-  11:49..50 fg=#bebec0 bg=#9f9f9f
-  11:50..51 fg=#d0d8dc bg=#a7acad
-  11:51..52 fg=#e1eef4 bg=#c7d1d5
-  11:52..53 fg=#d6e1e5 bg=#ccd5da
-  11:53..54 fg=#dee8ed bg=#d3dee3
-  11:54..55 fg=#dbe2e4 bg=#fbfbff
-  11:55..56 fg=#d9e4e9 bg=#999895
-  11:56..57 fg=#dce8ee bg=#939393
-  11:57..58 fg=#a6a7a8 bg=#8e8e8e
-  11:58..59 fg=#939393 bg=#848484
-  11:59..60 fg=#8b8b8b bg=#868c8e
-  11:60..61 fg=#898c8c bg=#a2a19f
-  11:61..62 fg=#888b8b bg=#1a1a2e
+  11:42..43 fg=#1a1a2e bg=#88a8b0
+  11:43..44 fg=#88a8b1 bg=#839fa5
+  11:44..45 fg=#81a1a7 bg=#ffffff
+  11:45..47 fg=#ffffff bg=#ffffff
+  11:47..48 fg=#d9dbdd bg=#4e453d
+  11:48..49 fg=#c0bfc0 bg=#adadad
+  11:49..50 fg=#bcbec0 bg=#9b9d9e
+  11:50..51 fg=#dce7ec bg=#c0c8cb
+  11:51..52 fg=#d8e3e8 bg=#cad4d8
+  11:52..53 fg=#d7e2e7 bg=#d0dadf
+  11:53..54 fg=#dee4e6 bg=#f2eeed
+  11:54..55 fg=#dbe3e7 bg=#3e372f
+  11:55..56 fg=#dae5ea bg=#93928f
+  11:56..57 fg=#dce7ee bg=#939393
+  11:57..58 fg=#3f3730 bg=#8a8a8a
+  11:58..59 fg=#929292 bg=#868686
+  11:59..60 fg=#898989 bg=#8a8e90
+  11:60..61 fg=#898989 bg=#787778
+  11:61..62 fg=#868888 bg=#d7e3e9
   11:62..98 fg=#1a1a2e bg=#1a1a2e
   11:98..99 fg=#3c3c4d bg=#1a1a2e
   11:99..100 fg=#eeeeee bg=#1a1a2e
   12:0..1 fg=#eeeeee bg=#1a1a2e
   12:1..2 fg=#3c3c4d bg=#1a1a2e
   12:2..41 fg=#1a1a2e bg=#1a1a2e
-  12:41..42 fg=#8aa9b1 bg=#8ea7ae
-  12:42..43 fg=#84a3ab bg=#849ea5
-  12:43..44 fg=#7c99a0 bg=#87a7af
-  12:44..45 fg=#706e6d bg=#5e7379
-  12:45..46 fg=#3e3a39 bg=#e5e4ed
+  12:41..42 fg=#8ca9b0 bg=#84a0a8
+  12:42..43 fg=#84a0a7 bg=#87a4ac
+  12:43..44 fg=#58696e bg=#86a5ab
+  12:44..45 fg=#ffffff bg=#5a6e75
+  12:45..46 fg=#ffffff bg=#201d1c
   12:46..48 fg=#ffffff bg=#ffffff
-  12:48..49 fg=#969c9c bg=#6a6866
-  12:49..50 fg=#9ea2a2 bg=#bbc5c8
-  12:50..51 fg=#c8c8ce bg=#ffffff
-  12:51..52 fg=#c3c3cb bg=#ffffff
-  12:52..53 fg=#818182 bg=#ecedf3
-  12:53..54 fg=#a1a1a2 bg=#777778
-  12:54..55 fg=#939494 bg=#c1ccd1
-  12:55..56 fg=#929696 bg=#c8d4d9
-  12:56..57 fg=#8f9798 bg=#d7e3e9
-  12:57..58 fg=#919297 bg=#cfdae0
-  12:58..59 fg=#6c7173 bg=#9aa2a5
-  12:59..60 fg=#bfccd1 bg=#c8d2d7
-  12:60..61 fg=#c9d4d9 bg=#bdc7cb
-  12:61..98 fg=#1a1a2e bg=#1a1a2e
+  12:48..49 fg=#9b9e9e bg=#bbc3c5
+  12:49..50 fg=#adb4b7 bg=#48473a
+  12:50..51 fg=#c8c8cf bg=#ffffff
+  12:51..52 fg=#fdffff bg=#ffffff
+  12:52..53 fg=#ababad bg=#989d9f
+  12:53..54 fg=#9c9c9c bg=#99999d
+  12:54..55 fg=#949494 bg=#c8d4d9
+  12:55..56 fg=#909495 bg=#cfdbe1
+  12:56..57 fg=#8d9597 bg=#d9e6eb
+  12:57..58 fg=#272123 bg=#a8b0b2
+  12:58..59 fg=#a0a9ae bg=#bcc5ca
+  12:59..60 fg=#c5d1d7 bg=#c8d2d7
+  12:60..61 fg=#c9d4da bg=#c2ccd1
+  12:61..62 fg=#ced9de bg=#1a1a2e
+  12:62..98 fg=#1a1a2e bg=#1a1a2e
   12:98..99 fg=#3c3c4d bg=#1a1a2e
   12:99..100 fg=#eeeeee bg=#1a1a2e
   13:0..1 fg=#eeeeee bg=#1a1a2e
   13:1..2 fg=#3c3c4d bg=#1a1a2e
   13:2..40 fg=#1a1a2e bg=#1a1a2e
-  13:40..41 fg=#5a6567 bg=#778d95
-  13:41..42 fg=#89a9b2 bg=#8bacb4
-  13:42..43 fg=#8bacb4 bg=#8babb3
-  13:43..44 fg=#979fa1 bg=#8aaab2
-  13:44..45 fg=#889b9f bg=#85a4ab
-  13:45..46 fg=#fafaff bg=#688287
-  13:46..47 fg=#4b4b49 bg=#4f4c4b
-  13:47..48 fg=#ffffff bg=#ffffff
-  13:48..49 fg=#5e5b59 bg=#f3f4fa
-  13:49..50 fg=#d1dadf bg=#d5e0e5
-  13:50..51 fg=#b6c2c8 bg=#cfdce1
-  13:51..52 fg=#d2dee4 bg=#c8d2d7
-  13:52..53 fg=#b0b9bd bg=#6f6f6f
-  13:53..54 fg=#b6c0c4 bg=#81817f
-  13:54..55 fg=#666665 bg=#9f9d94
-  13:55..56 fg=#7d7d7b bg=#ffffff
-  13:56..57 fg=#d0dbe0 bg=#f3f4f9
-  13:57..58 fg=#bec9ce bg=#dfe0e5
-  13:58..59 fg=#c6d0d6 bg=#c5cfd5
-  13:59..60 fg=#cedadf bg=#939b9f
-  13:60..61 fg=#5c5a57 bg=#1a1a2e
+  13:40..41 fg=#77939b bg=#809ba3
+  13:41..42 fg=#8aabb3 bg=#8bacb4
+  13:42..43 fg=#8da8af bg=#8babb3
+  13:43..44 fg=#ac8980 bg=#8aa8b0
+  13:44..45 fg=#7a9399 bg=#7f9fa5
+  13:45..46 fg=#818082 bg=#ffffff
+  13:46..48 fg=#ffffff bg=#ffffff
+  13:48..49 fg=#dce7ed bg=#d7e1e6
+  13:49..50 fg=#b8c2c7 bg=#cdd9de
+  13:50..51 fg=#d4e0e5 bg=#dae6ec
+  13:51..52 fg=#c4ced4 bg=#93989a
+  13:52..53 fg=#b7c1c6 bg=#797979
+  13:53..54 fg=#bac3c8 bg=#8b8b89
+  13:54..55 fg=#777775 bg=#9e9a89
+  13:55..56 fg=#747473 bg=#f6f6fb
+  13:56..57 fg=#ced9df bg=#e1e2e6
+  13:57..58 fg=#cbd6dc bg=#c9c9ce
+  13:58..59 fg=#d7e4e9 bg=#ccd8dd
+  13:59..60 fg=#cbd7dc bg=#c1ccd2
+  13:60..61 fg=#5a5958 bg=#1a1a2e
   13:61..98 fg=#1a1a2e bg=#1a1a2e
   13:98..99 fg=#3c3c4d bg=#1a1a2e
   13:99..100 fg=#eeeeee bg=#1a1a2e
   14:0..1 fg=#eeeeee bg=#1a1a2e
   14:1..2 fg=#3c3c4d bg=#1a1a2e
   14:2..40 fg=#1a1a2e bg=#1a1a2e
-  14:40..41 fg=#849fa7 bg=#7c99a0
-  14:41..42 fg=#8bacb4 bg=#88a7b0
-  14:42..43 fg=#8aabb3 bg=#88a7b0
-  14:43..44 fg=#88a8b0 bg=#a5b091
-  14:44..45 fg=#7e9a9d bg=#797878
-  14:45..46 fg=#798378 bg=#c3c4c9
-  14:46..47 fg=#676768 bg=#d9ca9d
-  14:47..48 fg=#ffffff bg=#b1b9bb
-  14:48..49 fg=#a0abae bg=#9b9e9e
-  14:49..50 fg=#919ba0 bg=#a9abae
-  14:50..51 fg=#899194 bg=#929293
-  14:51..52 fg=#929393 bg=#949494
-  14:52..54 fg=#ffffff bg=#ffffff
-  14:54..55 fg=#ffffff bg=#a4a4a3
-  14:55..56 fg=#ffffff bg=#a7a8a8
-  14:56..57 fg=#636363 bg=#8f9090
-  14:57..58 fg=#ffffff bg=#878786
+  14:40..41 fg=#84a1a9 bg=#809ba3
+  14:41..42 fg=#8aabb3 bg=#87a7af
+  14:42..43 fg=#89a9b2 bg=#adb499
+  14:43..44 fg=#87a6ae bg=#b1b38d
+  14:44..45 fg=#758a84 bg=#96958f
+  14:45..46 fg=#7a7a79 bg=#ddcda0
+  14:46..47 fg=#ffffff bg=#a7a397
+  14:47..48 fg=#ffffff bg=#aeb5b8
+  14:48..49 fg=#8d989d bg=#9ea0a3
+  14:49..50 fg=#b7c0c4 bg=#b7b9bd
+  14:50..51 fg=#a5afb3 bg=#8b8d8f
+  14:51..54 fg=#ffffff bg=#ffffff
+  14:54..55 fg=#ffffff bg=#a5a5a5
+  14:55..56 fg=#ffffff bg=#a1a2a1
+  14:56..57 fg=#f0f0f6 bg=#888887
+  14:57..58 fg=#ffffff bg=#8e8c85
   14:58..98 fg=#1a1a2e bg=#1a1a2e
   14:98..99 fg=#3c3c4d bg=#1a1a2e
   14:99..100 fg=#eeeeee bg=#1a1a2e
   15:0..1 fg=#eeeeee bg=#1a1a2e
   15:1..2 fg=#3c3c4d bg=#1a1a2e
-  15:2..40 fg=#1a1a2e bg=#1a1a2e
-  15:40..41 fg=#808082 bg=#1a1a2e
-  15:41..42 fg=#9aac9f bg=#baad6c
-  15:42..43 fg=#787879 bg=#3d4a4f
-  15:43..44 fg=#2d3c44 bg=#494f44
-  15:44..45 fg=#5f5c40 bg=#cecfd5
-  15:45..46 fg=#d8ccaf bg=#efefdc
-  15:46..47 fg=#555c5f bg=#27333a
-  15:47..48 fg=#ffffff bg=#ffffff
-  15:48..49 fg=#3c434a bg=#8d8158
-  15:49..50 fg=#dae4ea bg=#dde9ef
-  15:50..51 fg=#979598 bg=#ffffff
-  15:51..52 fg=#c1c1c9 bg=#86868b
-  15:52..53 fg=#ffffff bg=#484a4e
-  15:53..54 fg=#ffffff bg=#b8bcbd
-  15:54..55 fg=#999999 bg=#989898
-  15:55..56 fg=#ffffff bg=#c69d38
-  15:56..57 fg=#949494 bg=#959595
-  15:57..58 fg=#898a8b bg=#798082
-  15:58..59 fg=#15130c bg=#12100a
-  15:59..60 fg=#1a1a2e bg=#161510
-  15:60..98 fg=#1a1a2e bg=#1a1a2e
+  15:2..41 fg=#1a1a2e bg=#1a1a2e
+  15:41..42 fg=#a9b195 bg=#5b5a5b
+  15:42..43 fg=#575e62 bg=#404b4c
+  15:43..44 fg=#303e42 bg=#595b42
+  15:44..45 fg=#cccdd1 bg=#837d69
+  15:45..46 fg=#f8df9d bg=#c0b9a0
+  15:46..47 fg=#ffffff bg=#ffffff
+  15:47..48 fg=#ffffff bg=#374046
+  15:48..49 fg=#e4eff5 bg=#effdff
+  15:49..50 fg=#b9bec0 bg=#afb6bb
+  15:50..51 fg=#ffffff bg=#ffffff
+  15:51..52 fg=#515153 bg=#5c6669
+  15:52..53 fg=#ffffff bg=#ffffff
+  15:53..54 fg=#979797 bg=#9a9a9a
+  15:54..55 fg=#ffffff bg=#7f7f7f
+  15:55..56 fg=#ffffff bg=#d4a939
+  15:56..57 fg=#868686 bg=#868888
+  15:57..58 fg=#7a7a7a bg=#1a1a2e
+  15:58..59 fg=#110f09 bg=#17140d
+  15:59..98 fg=#1a1a2e bg=#1a1a2e
   15:98..99 fg=#3c3c4d bg=#1a1a2e
   15:99..100 fg=#eeeeee bg=#1a1a2e
   16:0..1 fg=#eeeeee bg=#1a1a2e
   16:1..2 fg=#3c3c4d bg=#1a1a2e
   16:2..40 fg=#1a1a2e bg=#1a1a2e
-  16:40..41 fg=#bcbcbc bg=#c4c4c4
-  16:41..42 fg=#7a7a7a bg=#adacab
-  16:42..43 fg=#30393f bg=#afabb3
-  16:43..44 fg=#4d4f3d bg=#b1aa8e
-  16:44..45 fg=#a1a2a5 bg=#a19d92
-  16:45..46 fg=#ecfaff bg=#d8e3e8
-  16:46..47 fg=#24323c bg=#24333c
-  16:47..48 fg=#303b43 bg=#746f61
-  16:48..49 fg=#effbff bg=#e4f2f7
-  16:49..50 fg=#cfd8dd bg=#ffffff
-  16:50..51 fg=#ffffff bg=#706f70
-  16:51..52 fg=#636d70 bg=#939393
-  16:52..53 fg=#989898 bg=#ffffff
-  16:53..54 fg=#929292 bg=#e6e6ed
-  16:54..55 fg=#8f8f8f bg=#1a1a2e
-  16:55..56 fg=#828280 bg=#14130d
-  16:56..57 fg=#838281 bg=#13110c
+  16:40..41 fg=#bababa bg=#b5b5b5
+  16:41..42 fg=#777777 bg=#aeadad
+  16:42..43 fg=#31373a bg=#9a979e
+  16:43..44 fg=#56543b bg=#a49d84
+  16:44..45 fg=#cbd4d8 bg=#89898a
+  16:45..46 fg=#24353f bg=#50585d
+  16:46..47 fg=#23313b bg=#2a363e
+  16:47..48 fg=#908358 bg=#e7f4fa
+  16:48..49 fg=#e4eff5 bg=#ffffff
+  16:49..50 fg=#ffffff bg=#e9e9f0
+  16:50..51 fg=#717074 bg=#8d8771
+  16:51..52 fg=#636a70 bg=#86888a
+  16:52..53 fg=#76787a bg=#f0f0f9
+  16:53..54 fg=#959595 bg=#1a1a2e
+  16:54..55 fg=#ffffff bg=#838383
+  16:55..56 fg=#9d8349 bg=#14140f
+  16:56..57 fg=#cad1d6 bg=#1a1a2e
   16:57..58 fg=#1a1a2e bg=#1a1a2e
-  16:58..59 fg=#13110c bg=#14120c
-  16:59..60 fg=#12110c bg=#13120d
+  16:58..59 fg=#1b1811 bg=#12100a
+  16:59..60 fg=#13110d bg=#110f0a
   16:60..98 fg=#1a1a2e bg=#1a1a2e
   16:98..99 fg=#3c3c4d bg=#1a1a2e
   16:99..100 fg=#eeeeee bg=#1a1a2e
   17:0..1 fg=#eeeeee bg=#1a1a2e
   17:1..2 fg=#3c3c4d bg=#1a1a2e
   17:2..39 fg=#1a1a2e bg=#1a1a2e
-  17:39..40 fg=#e7cf80 bg=#aa9e70
-  17:40..41 fg=#b3b3b3 bg=#a6b6ba
-  17:41..42 fg=#b0b0af bg=#9d9e9f
-  17:42..43 fg=#bfbec6 bg=#aaaaaa
-  17:43..44 fg=#f1f2f9 bg=#ffffff
-  17:44..45 fg=#ced6db bg=#ffffff
-  17:45..46 fg=#c9d2d7 bg=#ffffff
-  17:46..47 fg=#bcc5c9 bg=#ffffff
-  17:47..48 fg=#a9b3b7 bg=#f9f9ff
+  17:39..40 fg=#e7ce77 bg=#1a1a2e
+  17:40..41 fg=#b3b3b3 bg=#9fafb4
+  17:41..42 fg=#b0b0ae bg=#1a1a2e
+  17:42..43 fg=#979797 bg=#838383
+  17:43..44 fg=#ffffff bg=#ffffff
+  17:44..45 fg=#ebebf2 bg=#ffffff
+  17:45..46 fg=#c2cbcf bg=#ffffff
+  17:46..47 fg=#a6adb0 bg=#ffffff
+  17:47..48 fg=#fdfdff bg=#ffffff
   17:48..49 fg=#ffffff bg=#ffffff
-  17:49..50 fg=#6e7175 bg=#ffffff
-  17:50..51 fg=#939697 bg=#ffffff
-  17:51..52 fg=#ffffff bg=#928f89
-  17:52..53 fg=#f5f5f9 bg=#1a1a2e
-  17:53..54 fg=#120f0b bg=#191712
-  17:54..55 fg=#1f1c16 bg=#16150f
-  17:55..56 fg=#1a1a2e bg=#25221c
-  17:56..57 fg=#100e09 bg=#201c15
-  17:57..58 fg=#1a1a2e bg=#2f2a21
-  17:58..59 fg=#211c14 bg=#19160f
-  17:59..60 fg=#15130e bg=#1a1a2e
-  17:60..98 fg=#1a1a2e bg=#1a1a2e
+  17:49..50 fg=#7e7f80 bg=#ffffff
+  17:50..51 fg=#ffffff bg=#898374
+  17:51..52 fg=#ffffff bg=#717071
+  17:52..53 fg=#18160f bg=#191814
+  17:53..54 fg=#17140e bg=#110e09
+  17:54..55 fg=#1a1a2e bg=#211e18
+  17:55..56 fg=#17140d bg=#221e17
+  17:56..57 fg=#1a1a2e bg=#1d1a13
+  17:57..58 fg=#1a1a2e bg=#2b241c
+  17:58..59 fg=#29221a bg=#15120c
+  17:59..98 fg=#1a1a2e bg=#1a1a2e
   17:98..99 fg=#3c3c4d bg=#1a1a2e
   17:99..100 fg=#eeeeee bg=#1a1a2e
   18:0..1 fg=#eeeeee bg=#1a1a2e
   18:1..2 fg=#3c3c4d bg=#1a1a2e
   18:2..42 fg=#1a1a2e bg=#1a1a2e
-  18:42..43 fg=#8a8a8a bg=#1a1a2e
-  18:43..44 fg=#939393 bg=#1a1a2e
-  18:44..45 fg=#1a1a2e bg=#1a1a2e
+  18:42..43 fg=#8b8b8b bg=#1a1a2e
+  18:43..45 fg=#1a1a2e bg=#1a1a2e
   18:45..47 fg=#ffffff bg=#1a1a2e
-  18:47..48 fg=#ffffff bg=#b7ab7f
-  18:48..49 fg=#ffffff bg=#1a1a2e
-  18:49..50 fg=#c5ab54 bg=#1a1a2e
-  18:50..51 fg=#87743f bg=#1a1a2e
-  18:51..52 fg=#1a1a2e bg=#1a1a2e
-  18:52..53 fg=#0d0d08 bg=#12110b
-  18:53..54 fg=#1a1a2e bg=#13130f
-  18:54..55 fg=#1a1a2e bg=#0d0c08
-  18:55..56 fg=#1b1812 bg=#13100a
-  18:56..57 fg=#10100a bg=#1a1a2e
-  18:57..58 fg=#1d1812 bg=#1a1a2e
+  18:47..48 fg=#ffffff bg=#9a8e64
+  18:48..49 fg=#c2b079 bg=#1a1a2e
+  18:49..50 fg=#bfa553 bg=#1a1a2e
+  18:50..51 fg=#5c5c5c bg=#1a1a2e
+  18:51..52 fg=#13110c bg=#1a1a2e
+  18:52..53 fg=#0c0c08 bg=#191611
+  18:53..54 fg=#1a1a2e bg=#13110c
+  18:54..55 fg=#1a1a2e bg=#0d0b06
+  18:55..56 fg=#1a1a16 bg=#0f0e09
+  18:56..57 fg=#17150f bg=#1a1a2e
+  18:57..58 fg=#1e1a13 bg=#1a1a2e
   18:58..98 fg=#1a1a2e bg=#1a1a2e
   18:98..99 fg=#3c3c4d bg=#1a1a2e
   18:99..100 fg=#eeeeee bg=#1a1a2e

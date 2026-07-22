@@ -147,8 +147,14 @@ impl Tabs {
         let bar_spans = spans;
         let access_titles = titles.clone();
         // Two rows: titles, then the cell-drawn underline strip.
+        // shrink 0: the bar is the widget's control surface — a tight
+        // box crushes the PANEL, never the tabs (0240 #2).
         let bar = Element::new()
-            .style(LayoutStyle::default().height(Dimension::Cells(2)))
+            .style(
+                LayoutStyle::default()
+                    .height(Dimension::Cells(2))
+                    .shrink(0.0),
+            )
             .role(crate::ui::Role::Tabs)
             .access_value(move || {
                 access_titles

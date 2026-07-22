@@ -68,7 +68,9 @@ impl Separator {
         let label = self.label;
 
         let layout = self.layout.unwrap_or_else(|| {
-            let mut s = LayoutStyle::default();
+            // shrink 0: the rule's single row/column never vanishes
+            // under overflow pressure (0240 #2).
+            let mut s = LayoutStyle::default().shrink(0.0);
             match orientation {
                 Orientation::Horizontal => {
                     s.height = Dimension::Cells(1);

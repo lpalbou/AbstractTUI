@@ -77,9 +77,14 @@ impl Progress {
         let track = t.surface_raised;
         let fraction = self.fraction;
 
-        let layout = self
-            .layout
-            .unwrap_or_else(|| LayoutStyle::default().height(Dimension::Cells(1)).grow(1.0));
+        // shrink 0: the bar's one row never vanishes under column
+        // overflow (0240 #2); width stays flexible through grow.
+        let layout = self.layout.unwrap_or_else(|| {
+            LayoutStyle::default()
+                .height(Dimension::Cells(1))
+                .grow(1.0)
+                .shrink(0.0)
+        });
 
         Element::new().style(layout).draw(move |canvas, rect| {
             if rect.w <= 0 || rect.h <= 0 {

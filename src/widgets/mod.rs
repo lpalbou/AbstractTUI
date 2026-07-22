@@ -37,6 +37,7 @@ pub mod separator;
 pub mod spinner;
 pub mod table;
 pub mod tabs;
+pub mod textarea;
 pub mod viewport3d;
 
 /// Re-exported beside [`Image`] (RT8-4): the pixel type
@@ -64,6 +65,7 @@ pub use separator::Separator;
 pub use spinner::{Spinner, SpinnerKind};
 pub use table::{ColWidth, Column, Table};
 pub use tabs::Tabs;
+pub use textarea::{SubmitPolicy, TextArea, TextAreaState};
 pub use viewport3d::Viewport3D;
 
 /// Shared callback-slot shape for interactive widgets: the builder's
@@ -116,9 +118,11 @@ mod lint_tests {
     /// RT1-9b made executable: widget sources carry no hex color literals
     /// and no raw color arithmetic. Tokens in, resolved Rgba captured,
     /// nothing invented. (`include_str!` pins the exact shipped sources —
-    /// a new widget file must be added here, which the count check below
-    /// enforces against the module declarations above.)
-    const SOURCES: [(&str, &str); 23] = [
+    /// every `pub mod` file must be listed, which the membership check
+    /// below enforces against the module declarations above; private
+    /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
+    /// discipline — join the list by hand, they are widget source too.)
+    const SOURCES: [(&str, &str); 26] = [
         ("mod.rs", include_str!("mod.rs")),
         ("badge.rs", include_str!("badge.rs")),
         ("block.rs", include_str!("block.rs")),
@@ -127,6 +131,7 @@ mod lint_tests {
         ("checkbox.rs", include_str!("checkbox.rs")),
         ("code.rs", include_str!("code.rs")),
         ("feed.rs", include_str!("feed.rs")),
+        ("feed_typeset.rs", include_str!("feed_typeset.rs")),
         ("grid.rs", include_str!("grid.rs")),
         ("image.rs", include_str!("image.rs")),
         ("input.rs", include_str!("input.rs")),
@@ -141,6 +146,8 @@ mod lint_tests {
         ("spinner.rs", include_str!("spinner.rs")),
         ("table.rs", include_str!("table.rs")),
         ("tabs.rs", include_str!("tabs.rs")),
+        ("textarea.rs", include_str!("textarea.rs")),
+        ("textarea_model.rs", include_str!("textarea_model.rs")),
         ("viewport3d.rs", include_str!("viewport3d.rs")),
     ];
 
@@ -167,12 +174,23 @@ mod lint_tests {
 
     #[test]
     fn every_widget_module_is_linted() {
+        // Membership, not arithmetic: every `pub mod x;` above must have
+        // "x.rs" in SOURCES (a count proxy broke the moment a private
+        // shipped sibling joined the list).
         let this = include_str!("mod.rs");
-        let declared = this.matches("\npub mod ").count();
-        assert_eq!(
-            declared,
-            SOURCES.len() - 1,
-            "a widget module was added without joining the lint list"
-        );
+        for line in this.lines() {
+            let Some(name) = line
+                .trim()
+                .strip_prefix("pub mod ")
+                .and_then(|rest| rest.strip_suffix(';'))
+            else {
+                continue;
+            };
+            let file = format!("{name}.rs");
+            assert!(
+                SOURCES.iter().any(|(listed, _)| *listed == file),
+                "widget module {file} was added without joining the lint list"
+            );
+        }
     }
 }

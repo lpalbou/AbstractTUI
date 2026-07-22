@@ -504,6 +504,24 @@ impl Terminal for WindowsTerminal {
         Ok(())
     }
 
+    fn set_mouse_reporting(&mut self, on: bool) -> Result<()> {
+        // The console-mode equivalent IS the VT wire: this backend runs
+        // with ENABLE_VIRTUAL_TERMINAL_INPUT, so Windows Terminal/ConPTY
+        // honor the same DECSET/DECRST pairs the unix backend emits
+        // (options.rs owns both, drift-free with enter/leave).
+        let Some(saved) = &self.saved else {
+            return Err(Error::Term(
+                "set_mouse_reporting outside a session — enter() first".into(),
+            ));
+        };
+        let mode = saved.opts.mouse;
+        self.write(if on {
+            mode.arm_bytes()
+        } else {
+            mode.disarm_bytes()
+        })
+    }
+
     // `cell_pixel_size` stays the default `None`: the console API exposes
     // font geometry only for the legacy raster path (GetCurrentConsoleFont
     // is unreliable under ConPTY); the wire probe's `CSI 16 t` is the

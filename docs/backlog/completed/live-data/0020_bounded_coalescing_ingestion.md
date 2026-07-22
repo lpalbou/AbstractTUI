@@ -2,8 +2,8 @@
 
 ## Metadata
 - Created: 2026-07-21
-- Status: Planned
-- Completed: N/A
+- Status: Completed (build wave, LIVEDATA seat, cycles 1-2)
+- Completed: 2026-07-21
 
 ## ADR status
 - Governing ADRs: None (this repository has no ADR system yet). ADR impact: None — engine
@@ -91,3 +91,41 @@ control lane — batch or use the bounded helper for data") is written where cal
 - [ ] Dropped-count signal + labeled-degradation guidance
 - [ ] Contract text on `WakeHandle::post` (control lane vs data lane)
 - [ ] Flood/coalesce/ordering/integration tests
+
+## Completion report
+- Final path: docs/backlog/completed/live-data/0020_bounded_coalescing_ingestion.md
+- Date: 2026-07-21
+- Shipped API (`src/reactive/ingest.rs`):
+  `bounded_source(cx, capacity, policy) -> (BoundedSender<T>,
+  Signal<Vec<T>>, Signal<IngestStats>)`; `OverflowPolicy::{DropOldest,
+  DropNewest, Coalesce(CoalesceFn<T>)}` (+ `coalesce(f)` sugar);
+  `IngestStats { delivered, dropped, coalesced, fold_panics }` with the
+  exactness invariant delivered+dropped+coalesced = sent. Capacity
+  bounds transit AND the retained window (≤ 2×capacity total). Engine
+  micro-fix landed as specified: `RemoteShared::notify` waker dedup via
+  `swap` (scheduler.rs), plus control-lane/data-lane contract text on
+  `WakeHandle::post`.
+- Deliberate drift: `Block` is NOT offered (wave ruling) — a producer
+  parked on the UI thread inherits every UI stall as priority inversion
+  with a cancellation deadlock surface; `DropNewest` ships instead and
+  the refusal rationale is documented on the enum and in
+  docs/live-data.md. Producers that must not lose data pause their
+  READS upstream.
+- Cycle-2 hardening: a panicking `Coalesce` fold no longer poisons the
+  transit mutex — caught at both fold sites (producer transit, UI
+  window), value counted `dropped`, event counted `fold_panics`
+  (labeled degradation; render it like `dropped`).
+- Tests: `reactive::ingest::tests::*` (per-policy exactness,
+  one-drain-per-burst, bounded+counted disposal, zero-capacity panic,
+  transit/window fold-panic firewall);
+  `reactive::scheduler::tests::waker_invoked_once_per_drain_cycle`;
+  integration `tests/wave_livedata.rs::{each_policy_accounts_exactly,
+  burst_costs_one_wake_and_one_drain}` and `tests/wave_livedata_soak.rs::{
+  flood_100k_posts_stays_bounded_with_exact_accounting,
+  soak_60_virtual_seconds_bursty_producer_through_feed}`.
+- Measured (release, cycle 2): 100k posts from 4 threads in 5.71 ms
+  (≈17.5M sends/s), single drain 45 µs, window exactly 1024, dropped
+  exactly 98,976 (counted); wake dedup 500 posts → 1 waker call;
+  bounded lane 1000 sends → 1 posted drain job. 60-virtual-second soak:
+  allocation plateau flat (7,028 allocs/cycle early AND late), live
+  nodes constant, accounting exact (19,500 + 7,500 = 27,000).

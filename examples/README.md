@@ -23,6 +23,8 @@ capability report and exit — the diagnostic surface, no tty needed.
 | `images.rs` | REAL — four mosaic families side by side, dither, protocol placement |
 | `components.rs` | REAL — the shareable-component reference (props/children/events) |
 | `grid.rs` | REAL — track-grid reflow: fr/cells/percent tracks + spans |
+| `feed.rs` | REAL — live background data: bursty worker → bounded ingestion → Feed with follow-tail; drop counter, events/sec, zero-idle proof |
+| `transcript.rs` | REAL — streaming conversation: markdown answers typeset live block-by-block, code tint, follow-tail break/re-pin, 10k stress |
 | `capture.rs` | TOOL — deterministic screenshot pipeline into `docs/captures/` |
 | `common/` | shared helpers (small-terminal guard, key legend) — not a target |
 

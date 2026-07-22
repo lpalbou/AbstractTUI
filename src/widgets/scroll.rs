@@ -8,33 +8,62 @@
 //! `clip_overflow`; scrolled-away children are neither painted nor
 //! hit-testable (tree-level guarantees).
 //!
-//! v1 HONESTY: the content extent comes from `content_size(w, h)` — an
-//! explicit hint, because handlers have no layout-query surface yet.
-//! When one lands, the hint becomes optional and defaults to measured
-//! content (request filed).
+//! ## Content extent: measured by default, hint optional (0130)
+//!
+//! Without a hint the content wrapper's scroll axis is `Auto`, so the
+//! layout solver answers its intrinsic size on every solve — the size
+//! query the module's v1 honesty note used to file as a request.
+//! Content that carries an intrinsic height answers exactly: text
+//! leaves (wrap-aware measurement at the viewport width), element trees
+//! of them, and widgets with an explicit reactive extent ([`Feed`]'s
+//! content-sized mode answers O(1) through its `total_rows` height
+//! style — the transcript recipe). A widget that only paints into its
+//! rect (a bare `MarkdownView`) has no intrinsic height; wrap it in a
+//! one-item [`Feed`] or keep the explicit hint (`MarkdownView::rows` is
+//! its exact fold). `content_size(w, h)` remains as the override — when
+//! given it WINS and nothing is measured.
+//!
+//! ## Follow-tail (0130)
+//!
+//! [`Scroll::follow_tail`] binds the transcript idiom to an app-visible
+//! signal: while true, the offset tracks the content's bottom edge
+//! across appends AND resizes; any user scroll (wheel, keys, thumb
+//! drag) landing above the bottom sets it false; scrolling back to the
+//! bottom edge re-arms it. The app may force it true ("jump to latest")
+//! and render it ("following / scrolled"). Vertical axis only.
 //!
 //! Wheel scrolls vertically (horizontal wheel scrolls x); arrows/PgUp/
 //! PgDn/Home/End work while focused; the scrollbar thumb drags with
 //! pointer capture (mouse-down auto-captures, so drags keep steering the
 //! thumb after the pointer leaves it).
 //!
-//! OWNER: REACT.
+//! [`Feed`]: super::Feed
+//!
+//! OWNER: REACT (follow-tail + measured extent: CONTENT, app-widgets wave).
+
+use std::cell::Cell;
+use std::rc::Rc;
 
 use crate::base::Rect;
 use crate::layout::{Dimension, Inset, Position, Style as LayoutStyle};
 use crate::reactive::{Scope, Signal};
 use crate::theme::TokenSet;
-use crate::ui::{dyn_view, Element, EventCtx, Key, MouseButton, MouseKind, Phase, UiEvent, View};
+use crate::ui::{
+    dyn_view, Element, EventCtx, Key, MouseButton, MouseKind, Phase, StyledCanvas, UiEvent, View,
+};
 
 use super::list::draw_scrollbar;
 
 pub struct Scroll {
     content: View,
-    content_size: (i32, i32),
+    /// `Some` = explicit extent hint (wins, nothing measured);
+    /// `None` = measured from the mounted content (default).
+    content_size: Option<(i32, i32)>,
     vertical: bool,
     horizontal: bool,
     offset_y: Option<Signal<i32>>,
     offset_x: Option<Signal<i32>>,
+    follow: Option<Signal<bool>>,
     layout: Option<LayoutStyle>,
 }
 
@@ -42,18 +71,21 @@ impl Scroll {
     pub fn new(content: View) -> Scroll {
         Scroll {
             content,
-            content_size: (0, 0),
+            content_size: None,
             vertical: true,
             horizontal: false,
             offset_y: None,
             offset_x: None,
+            follow: None,
             layout: None,
         }
     }
 
-    /// The content's full extent in cells (see module honesty note).
+    /// Explicit content extent in cells. Optional since 0130: without it
+    /// the extent is MEASURED from the mounted content (see the module
+    /// docs for what answers exactly); with it, the hint wins verbatim.
     pub fn content_size(mut self, w: i32, h: i32) -> Scroll {
-        self.content_size = (w, h);
+        self.content_size = Some((w, h));
         self
     }
 
@@ -71,6 +103,17 @@ impl Scroll {
 
     pub fn offset_x(mut self, sig: Signal<i32>) -> Scroll {
         self.offset_x = Some(sig);
+        self
+    }
+
+    /// Bind the follow-tail policy (0130): while `sig` is true the
+    /// offset stays pinned to the content bottom across appends and
+    /// resizes; a user scroll above the bottom sets it false; reaching
+    /// the bottom again (wheel, End, thumb) re-arms it. The signal is
+    /// app-visible both ways — read it for "following / scrolled"
+    /// chrome, set it true to jump to the latest. Vertical only.
+    pub fn follow_tail(mut self, sig: Signal<bool>) -> Scroll {
+        self.follow = Some(sig);
         self
     }
 
@@ -94,33 +137,91 @@ impl Scroll {
         let thumb = t.text_muted;
         let ground = t.surface;
 
-        let (content_w, content_h) = self.content_size;
+        let hint = self.content_size;
+        // The reactive content extent: the hint verbatim, or the solved
+        // size of the content wrapper read back by the probe below.
+        let extent: Signal<(i32, i32)> = cx.signal(hint.unwrap_or((0, 0)));
+        // Viewport box — reactive only for the follow-tail pin (resize
+        // re-pins); gestures read their own rect from the event ctx.
+        let view_box: Signal<(i32, i32)> = cx.signal((0, 0));
         let ox = self.offset_x.unwrap_or_else(|| cx.signal(0i32));
         let oy = self.offset_y.unwrap_or_else(|| cx.signal(0i32));
+        let follow = self.follow;
         let (vertical, horizontal) = (self.vertical, self.horizontal);
-        let layout = self
-            .layout
-            .unwrap_or_else(|| LayoutStyle::default().grow(1.0));
+        let layout = self.layout.unwrap_or_else(|| {
+            // basis 0 beside grow: inside a flex parent the scroll takes
+            // LEFTOVER space instead of demanding its content-derived
+            // basis — a long transcript can no longer starve fixed
+            // sibling rows to zero (the 0240 modal-overflow class;
+            // follow-up #1 from its completion report).
+            LayoutStyle::default().grow(1.0).basis(Dimension::Cells(0))
+        });
 
         // The mounted-once content wrapper: negative insets = scrolling.
-        // Explicit size so absolute layout never consults intrinsics for
-        // huge content.
-        let wrapper = Element::new()
-            .style_signal(move || LayoutStyle {
-                position: Position::Absolute,
-                inset: Inset {
+        // Hint mode: explicit size, so absolute layout never consults
+        // intrinsics for huge content. Measured mode: the scroll axis
+        // stays Auto and the SOLVER answers it per solve (the 0130 size
+        // query — `place_absolute` measures intrinsics for Auto axes);
+        // the cross axis fills the viewport.
+        //
+        // While FOLLOWING with a scrolled pane, the wrapper anchors its
+        // BOTTOM inset to the viewport instead of top-offsetting: the
+        // solver keeps the tail glued through appends, shrinks and
+        // resizes with ZERO extent knowledge (pixel-exact the same
+        // frame), and the wrapper can never scroll out of the clip —
+        // which would starve the size probe (a rebuilt/shrunken feed
+        // used to deadlock exactly there). The offset signal is synced
+        // by the pin effect a turn later for scrollbar/gesture
+        // coherence.
+        let wrapper_style = move || {
+            let (w, h) = match hint {
+                Some((w, h)) => (Dimension::Cells(w.max(1)), Dimension::Cells(h.max(1))),
+                None => (
+                    if horizontal {
+                        Dimension::Auto
+                    } else {
+                        Dimension::Percent(1.0)
+                    },
+                    if vertical {
+                        Dimension::Auto
+                    } else {
+                        Dimension::Percent(1.0)
+                    },
+                ),
+            };
+            let tail_pinned = vertical && follow.map(|f| f.get()).unwrap_or(false) && oy.get() > 0;
+            let inset = if tail_pinned {
+                Inset {
+                    left: Some(-ox.get()),
+                    top: None,
+                    right: None,
+                    bottom: Some(0),
+                }
+            } else {
+                Inset {
                     left: Some(-ox.get()),
                     top: Some(-oy.get()),
                     right: None,
                     bottom: None,
-                },
-                width: Dimension::Cells(content_w.max(1)),
-                height: Dimension::Cells(content_h.max(1)),
+                }
+            };
+            LayoutStyle {
+                position: Position::Absolute,
+                inset,
+                width: w,
+                height: h,
                 ..LayoutStyle::default()
-            })
-            .child(self.content);
+            }
+        };
+        let mut wrapper = Element::new().style_signal(wrapper_style);
+        if hint.is_none() {
+            // Measured mode: read the solver's answer back into the
+            // extent signal (clamps, thumb, follow pin).
+            wrapper = wrapper.draw(size_probe(extent));
+        }
+        let wrapper = wrapper.child(self.content);
 
-        let viewport = Element::new()
+        let mut viewport = Element::new()
             .style(
                 LayoutStyle::default()
                     .grow(1.0)
@@ -131,13 +232,48 @@ impl Scroll {
             )
             .role(crate::ui::Role::ScrollArea)
             .child(wrapper.build());
+        if follow.is_some() {
+            viewport = viewport.draw(size_probe(view_box));
+        }
+
+        // Follow-tail pin: while following, the offset tracks the
+        // content bottom across appends (extent growth) and resizes
+        // (view_box). The effect writes a signal it never reads — no
+        // cycle — and only GESTURES write `follow` from geometry, so a
+        // programmatic offset write never disengages the user.
+        if let Some(f) = follow {
+            cx.effect(move || {
+                if !f.get() {
+                    return; // extent/view re-track when re-armed
+                }
+                let content_h = extent.get().1;
+                let view_h = view_box.get().1;
+                if view_h > 0 {
+                    let pinned = (content_h - view_h).max(0);
+                    if oy.try_get_untracked() != Some(pinned) {
+                        oy.set(pinned);
+                    }
+                }
+            });
+        }
+
+        // After a user gesture: landing on the bottom edge re-arms the
+        // follow, landing above it releases it (0130 semantics).
+        let derive_follow = move |view_h: i32| {
+            if let Some(f) = follow {
+                let max_off = (extent.get_untracked().1 - view_h).max(0);
+                f.set_if_changed(oy.get_untracked() >= max_off);
+            }
+        };
 
         let scroll_by = move |dx: i32, dy: i32, view: Rect| {
+            let (content_w, content_h) = extent.get_untracked();
             if horizontal && dx != 0 {
                 ox.update(|o| *o = (*o + dx).clamp(0, (content_w - view.w).max(0)));
             }
             if vertical && dy != 0 {
                 oy.update(|o| *o = (*o + dy).clamp(0, (content_h - view.h).max(0)));
+                derive_follow(view.h);
             }
         };
 
@@ -158,6 +294,7 @@ impl Scroll {
                     }
                 }
                 UiEvent::Key(k) => {
+                    let content_h = extent.get_untracked().1;
                     let (dx, dy) = match k.key {
                         Key::Up => (0, -1),
                         Key::Down => (0, 1),
@@ -176,15 +313,16 @@ impl Scroll {
             }
         };
 
-        // Scrollbar: its own Dyn column so offset changes damage exactly
-        // this strip; drag maps pointer y to offset with capture keeping
-        // the drag alive outside the strip.
+        // Scrollbar: its own Dyn column so offset/extent changes damage
+        // exactly this strip; drag maps pointer y to offset with capture
+        // keeping the drag alive outside the strip.
         let bar = dyn_view(
             LayoutStyle::default()
                 .width(Dimension::Cells(1))
                 .height(Dimension::Percent(1.0)),
             move || {
                 let offset = oy.get();
+                let content_h = extent.get().1; // tracked: thumb resizes with growth
                 Element::new()
                     .style(
                         LayoutStyle::default()
@@ -204,6 +342,7 @@ impl Scroll {
                                 let frac = (m.pos.y - bar.y).clamp(0, usable);
                                 let max_off = (content_h - bar.h).max(0);
                                 oy.set((frac * max_off) / usable);
+                                derive_follow(bar.h);
                                 ctx.stop_propagation();
                             }
                         }
@@ -230,158 +369,36 @@ impl Scroll {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::base::Size;
-    use crate::layout::Style as LayoutStyle;
-    use crate::theme::default_theme;
-    use crate::ui::{text, Element, Key, MouseButton, MouseKind};
-    use crate::widgets::itest_util::{key, mount_widget, mouse, render};
-    use std::cell::RefCell;
-    use std::rc::Rc;
-
-    /// 1-column-wide content: 20 numbered rows.
-    fn tall_content() -> (View, i32) {
-        let mut col = Element::new().style(LayoutStyle::column());
-        for i in 0..20 {
-            col = col.child(text(format!("row {i}")));
+/// Solved-size readback (the 0130 measured-extent seam, RT1-2 lawful):
+/// the draw closure records its rect's size into a plain cell; when it
+/// changed, ONE latched `after(0)` publishes the latest value to `sig`
+/// next turn — paint itself never writes signals (the Feed width-fixup
+/// pattern). Steady frames record an unchanged size and schedule
+/// nothing, so an idle scroll costs zero timers.
+fn size_probe(sig: Signal<(i32, i32)>) -> impl FnMut(&mut dyn StyledCanvas, Rect) {
+    let seen: Rc<Cell<(i32, i32)>> = Rc::new(Cell::new((-1, -1)));
+    let pending: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+    move |_canvas, rect| {
+        let size = (rect.w, rect.h);
+        if seen.get() == size {
+            return;
         }
-        (col.build(), 20)
-    }
-
-    #[test]
-    fn wheel_and_keys_scroll_and_clip() {
-        let t = &default_theme().tokens;
-        let size = Size::new(12, 4);
-        let (content, h) = tall_content();
-        let (_root, mut tree) = mount_widget(size, |cx| {
-            Scroll::new(content)
-                .content_size(10, h)
-                .element(cx, t)
-                .build()
+        seen.set(size);
+        if pending.replace(true) {
+            return; // one deferred publish at a time; it reads `seen` late
+        }
+        let (seen, pending) = (seen.clone(), pending.clone());
+        crate::reactive::after(std::time::Duration::ZERO, move || {
+            pending.set(false);
+            // A disposed UI scope leaves the signal dead: stay inert
+            // (an outliving timer must never panic the app).
+            if sig.try_get_untracked().is_some() {
+                sig.set_if_changed(seen.get());
+            }
         });
-        let canvas = render(&mut tree, size);
-        assert!(canvas.row_text(0).starts_with("row 0"));
-        assert!(!canvas.row_text(3).contains("row 7"), "clipped to viewport");
-        mouse(&mut tree, MouseKind::ScrollDown, 2, 1); // +3
-        let canvas = render(&mut tree, size);
-        assert!(
-            canvas.row_text(0).starts_with("row 3"),
-            "{:?}",
-            canvas.row_text(0)
-        );
-        key(&mut tree, Key::Tab);
-        key(&mut tree, Key::Down); // +1
-        let canvas = render(&mut tree, size);
-        assert!(canvas.row_text(0).starts_with("row 4"));
-        key(&mut tree, Key::End);
-        let canvas = render(&mut tree, size);
-        assert!(
-            canvas.row_text(3).starts_with("row 19"),
-            "clamped to bottom"
-        );
-    }
-
-    #[test]
-    fn scrolled_away_content_is_not_hit_testable() {
-        let t = &default_theme().tokens;
-        let size = Size::new(12, 4);
-        let (content, h) = tall_content();
-        let (_root, mut tree) = mount_widget(size, |cx| {
-            Scroll::new(content)
-                .content_size(10, h)
-                .element(cx, t)
-                .build()
-        });
-        mouse(&mut tree, MouseKind::ScrollDown, 2, 1);
-        tree.layout();
-        // "row 0"'s text instance now sits ABOVE the viewport (negative
-        // y). A hit at (2, 0) must resolve inside the visible content,
-        // never to a node whose solved rect is scrolled out.
-        let hit = tree.hit_test(crate::base::Point::new(2, 0)).expect("hit");
-        let r = tree.rect_of(hit);
-        assert!(r.y >= 0, "hit a scrolled-away instance at {r:?}");
-    }
-
-    #[test]
-    fn nested_scrolls_route_the_wheel_to_the_nearest() {
-        // RT3-4's shape: an inner scroll inside an outer scroll's content.
-        // A wheel over the inner must move ONLY the inner offset.
-        let t = &default_theme().tokens;
-        let size = Size::new(40, 14);
-        type OffsetPair = (crate::reactive::Signal<i32>, crate::reactive::Signal<i32>);
-        let holders: Rc<RefCell<Option<OffsetPair>>> = Rc::new(RefCell::new(None));
-        let h2 = holders.clone();
-        let (_root, mut tree) = mount_widget(size, move |cx| {
-            let outer_y = cx.signal(0i32);
-            let inner_y = cx.signal(0i32);
-            *h2.borrow_mut() = Some((outer_y, inner_y));
-            let (inner_content, _) = tall_content();
-            let inner = Scroll::new(inner_content)
-                .content_size(30, 50)
-                .offset_y(inner_y)
-                .layout(
-                    LayoutStyle::default()
-                        .width(crate::layout::Dimension::Cells(34))
-                        .height(crate::layout::Dimension::Cells(6)),
-                )
-                .element(cx, t)
-                .build();
-            let (outer_rows, _) = tall_content();
-            let content = Element::new()
-                .style(LayoutStyle::column())
-                .child(inner)
-                .child(outer_rows)
-                .build();
-            Scroll::new(content)
-                .content_size(36, 100)
-                .offset_y(outer_y)
-                .layout(LayoutStyle::default().grow(1.0))
-                .element(cx, t)
-                .build()
-        });
-        tree.layout();
-        let (outer_y, inner_y) = holders.borrow().expect("signals");
-        mouse(&mut tree, MouseKind::Move, 5, 2);
-        mouse(&mut tree, MouseKind::ScrollDown, 5, 2);
-        assert!(
-            inner_y.get_untracked() > 0,
-            "inner consumes: {}",
-            inner_y.get_untracked()
-        );
-        assert_eq!(outer_y.get_untracked(), 0, "outer must not double-scroll");
-        // Below the inner widget: the outer takes it.
-        let inner_before = inner_y.get_untracked();
-        mouse(&mut tree, MouseKind::Move, 5, 12);
-        mouse(&mut tree, MouseKind::ScrollDown, 5, 12);
-        assert!(
-            outer_y.get_untracked() > 0,
-            "outer takes the wheel outside inner"
-        );
-        assert_eq!(inner_y.get_untracked(), inner_before);
-    }
-
-    #[test]
-    fn scrollbar_drag_jumps_the_offset() {
-        let t = &default_theme().tokens;
-        let size = Size::new(12, 4);
-        let (content, h) = tall_content();
-        let (_root, mut tree) = mount_widget(size, |cx| {
-            Scroll::new(content)
-                .content_size(10, h)
-                .element(cx, t)
-                .build()
-        });
-        // The bar is the last column; drag the thumb to the bottom.
-        mouse(&mut tree, MouseKind::Down(MouseButton::Left), 11, 0);
-        mouse(&mut tree, MouseKind::Drag(MouseButton::Left), 11, 3);
-        mouse(&mut tree, MouseKind::Up(MouseButton::Left), 11, 3);
-        let canvas = render(&mut tree, size);
-        assert!(
-            canvas.row_text(0).starts_with("row 16"),
-            "drag to bottom = max offset: {:?}",
-            canvas.row_text(0)
-        );
     }
 }
+
+#[cfg(test)]
+#[path = "scroll_tests.rs"]
+mod tests;

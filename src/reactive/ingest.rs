@@ -66,6 +66,18 @@ pub enum OverflowPolicy<T> {
     /// count as `coalesced`, never `dropped`. The fold runs on the
     /// PRODUCER thread for transit overflow (keep it cheap and
     /// panic-free) and on the UI thread for window overflow.
+    ///
+    /// **A panicking fold degrades, labeled — it never poisons.** The
+    /// fold owns the incoming value, so a panic destroys that value
+    /// mid-merge; the panic is caught at the call site (the buffer
+    /// mutex stays healthy, later sends keep working), the lost value
+    /// counts as `dropped`, the event counts as
+    /// [`IngestStats::fold_panics`], and the merge target keeps
+    /// whatever state the fold left it in (it was half-merged by USER
+    /// code; synthesizing a clean state would be dishonest). True
+    /// "retry as DropOldest" is impossible without `T: Clone` — the
+    /// value is already gone. Render `fold_panics` like `dropped`:
+    /// nonzero means your fold has a bug.
     Coalesce(CoalesceFn<T>),
 }
 
@@ -99,7 +111,9 @@ impl<T> std::fmt::Debug for OverflowPolicy<T> {
 /// Cumulative ingestion accounting, surfaced as `Signal<IngestStats>`
 /// and updated on the UI thread, atomically with the window, at every
 /// drain. Invariant (while the scope lives): every sent value lands in
-/// exactly one bucket — `delivered + dropped + coalesced` = values sent.
+/// exactly one VALUE bucket — `delivered + dropped + coalesced` =
+/// values sent (`fold_panics` counts EVENTS, not values: a panicked
+/// fold's value is already inside `dropped`).
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct IngestStats {
     /// Values ADMITTED to the retained window — they became readable by
@@ -115,6 +129,12 @@ pub struct IngestStats {
     /// Values merged into a survivor by [`OverflowPolicy::Coalesce`] —
     /// represented, not lost.
     pub coalesced: u64,
+    /// Times a `Coalesce` fold PANICKED (labeled degradation, cycle-2
+    /// hardening): the panic was caught (no mutex poison, later sends
+    /// unaffected), the incoming value was lost mid-merge (counted in
+    /// `dropped`), the merge target keeps the fold's partial state.
+    /// Nonzero = the app's fold function has a bug; render it.
+    pub fold_panics: u64,
 }
 
 struct BoundedShared<T> {
@@ -128,6 +148,7 @@ struct BoundedShared<T> {
     /// signal by the next drain.
     dropped: AtomicU64,
     coalesced: AtomicU64,
+    fold_panics: AtomicU64,
     /// Values that reached a drain after the scope died (inert).
     dead_sends: AtomicU64,
     events: Signal<Vec<T>>,
@@ -150,10 +171,23 @@ impl<T> Clone for BoundedSender<T> {
     }
 }
 
+/// Run one coalesce fold with the panic firewall: a panicking USER fold
+/// must not unwind through our mutex guard (poison would kill every
+/// later send with an opaque lock panic — the exact failure this
+/// degrades away from). On panic the incoming value is gone (the fold
+/// owned it), `target` keeps the fold's partial state, and the caller
+/// counts one dropped value + one fold_panics event. `AssertUnwindSafe`
+/// is sound here: `target` is user data we hand back to user code
+/// either way, and OUR invariants (deque structure, counters) are
+/// maintained entirely outside the closure.
+fn run_fold<T>(fold: &CoalesceFn<T>, target: &mut T, value: T) -> bool {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| fold(target, value))).is_ok()
+}
+
 /// Push `value` onto the TRANSIT deque under `policy`/`capacity`; count
-/// into `dropped`/`coalesced`. A transit eviction is a real loss (the
-/// evicted value was never observable by the UI), so every overflow
-/// here is counted.
+/// into `dropped`/`coalesced`/`fold_panics`. A transit eviction is a
+/// real loss (the evicted value was never observable by the UI), so
+/// every overflow here is counted.
 fn admit_transit<T>(
     buf: &mut VecDeque<T>,
     value: T,
@@ -161,6 +195,7 @@ fn admit_transit<T>(
     policy: &OverflowPolicy<T>,
     dropped: &mut u64,
     coalesced: &mut u64,
+    fold_panics: &mut u64,
 ) {
     if buf.len() < capacity {
         buf.push_back(value);
@@ -177,8 +212,12 @@ fn admit_transit<T>(
         }
         OverflowPolicy::Coalesce(fold) => {
             let newest = buf.back_mut().expect("capacity >= 1: full is non-empty");
-            fold(newest, value);
-            *coalesced += 1;
+            if run_fold(fold, newest, value) {
+                *coalesced += 1;
+            } else {
+                *dropped += 1; // the value died inside the fold
+                *fold_panics += 1;
+            }
         }
     }
 }
@@ -191,7 +230,7 @@ impl<T: Send + 'static> BoundedSender<T> {
         let shared = &self.shared;
         {
             let mut queue = shared.queue.lock().expect("bounded-source queue");
-            let (mut d, mut c) = (0u64, 0u64);
+            let (mut d, mut c, mut p) = (0u64, 0u64, 0u64);
             admit_transit(
                 &mut queue,
                 value,
@@ -199,12 +238,16 @@ impl<T: Send + 'static> BoundedSender<T> {
                 &shared.policy,
                 &mut d,
                 &mut c,
+                &mut p,
             );
             if d > 0 {
                 shared.dropped.fetch_add(d, Ordering::Relaxed);
             }
             if c > 0 {
                 shared.coalesced.fetch_add(c, Ordering::Relaxed);
+            }
+            if p > 0 {
+                shared.fold_panics.fetch_add(p, Ordering::Relaxed);
             }
         } // lock released BEFORE posting: the drain also takes it
         if !shared.drain_scheduled.swap(true, Ordering::AcqRel) {
@@ -242,7 +285,7 @@ fn drain<T: 'static>(shared: &Arc<BoundedShared<T>>) {
             .fetch_add(batch.len() as u64, Ordering::Relaxed);
         return;
     }
-    let (mut delivered, mut dropped, mut coalesced) = (0u64, 0u64, 0u64);
+    let (mut delivered, mut dropped, mut coalesced, mut fold_panics) = (0u64, 0u64, 0u64, 0u64);
     super::runtime::batch(|| {
         shared.events.update(|vec| {
             let cap = shared.capacity;
@@ -275,9 +318,11 @@ fn drain<T: 'static>(shared: &Arc<BoundedShared<T>>) {
                         if vec.len() < cap {
                             vec.push(value);
                             delivered += 1;
-                        } else {
-                            fold(vec.last_mut().expect("cap >= 1"), value);
+                        } else if run_fold(fold, vec.last_mut().expect("cap >= 1"), value) {
                             coalesced += 1;
+                        } else {
+                            dropped += 1; // the value died inside the fold
+                            fold_panics += 1;
                         }
                     }
                 }
@@ -287,11 +332,13 @@ fn drain<T: 'static>(shared: &Arc<BoundedShared<T>>) {
         // publication so the UI reads ONE consistent stats value.
         dropped += shared.dropped.swap(0, Ordering::Relaxed);
         coalesced += shared.coalesced.swap(0, Ordering::Relaxed);
+        fold_panics += shared.fold_panics.swap(0, Ordering::Relaxed);
         if shared.stats.is_alive() {
             shared.stats.update(|s| {
                 s.delivered += delivered;
                 s.dropped += dropped;
                 s.coalesced += coalesced;
+                s.fold_panics += fold_panics;
             });
         }
     });
@@ -343,6 +390,7 @@ pub fn bounded_source<T: Send + 'static>(
             drain_scheduled: AtomicBool::new(false),
             dropped: AtomicU64::new(0),
             coalesced: AtomicU64::new(0),
+            fold_panics: AtomicU64::new(0),
             dead_sends: AtomicU64::new(0),
             events,
             stats,
@@ -352,138 +400,5 @@ pub fn bounded_source<T: Send + 'static>(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::reactive::{create_root, drain_posted};
-
-    #[test]
-    fn under_capacity_everything_delivers_in_order() {
-        let (root, ()) = create_root(|cx| {
-            let (tx, events, stats) = bounded_source(cx, 100, OverflowPolicy::DropOldest);
-            std::thread::spawn(move || {
-                for n in 0..50u32 {
-                    tx.send(n);
-                }
-            })
-            .join()
-            .expect("producer");
-            drain_posted();
-            assert_eq!(events.get_untracked(), (0..50).collect::<Vec<_>>());
-            assert_eq!(
-                stats.get_untracked(),
-                IngestStats {
-                    delivered: 50,
-                    dropped: 0,
-                    coalesced: 0
-                }
-            );
-        });
-        root.dispose();
-    }
-
-    #[test]
-    fn drop_oldest_keeps_the_newest_tail_and_counts_exactly() {
-        let (root, ()) = create_root(|cx| {
-            let (tx, events, stats) = bounded_source(cx, 8, OverflowPolicy::DropOldest);
-            for n in 0..20u32 {
-                tx.send(n);
-            }
-            drain_posted();
-            assert_eq!(events.get_untracked(), (12..20).collect::<Vec<_>>());
-            let s = stats.get_untracked();
-            assert_eq!(s.dropped, 12, "every eviction counted");
-            assert_eq!(s.delivered + s.dropped, 20, "accounting is total");
-        });
-        root.dispose();
-    }
-
-    #[test]
-    fn drop_newest_keeps_the_head_and_counts_refusals() {
-        let (root, ()) = create_root(|cx| {
-            let (tx, events, stats) = bounded_source(cx, 8, OverflowPolicy::DropNewest);
-            for n in 0..20u32 {
-                tx.send(n);
-            }
-            drain_posted();
-            assert_eq!(events.get_untracked(), (0..8).collect::<Vec<_>>());
-            let s = stats.get_untracked();
-            assert_eq!(s.delivered, 8);
-            assert_eq!(s.dropped, 12);
-        });
-        root.dispose();
-    }
-
-    #[test]
-    fn coalesce_merges_overflow_and_final_state_is_last_writer() {
-        let (root, ()) = create_root(|cx| {
-            let (tx, events, stats) = bounded_source(
-                cx,
-                4,
-                OverflowPolicy::coalesce(|kept: &mut u32, new| {
-                    *kept = new; // supersede: last writer wins
-                }),
-            );
-            for n in 0..12u32 {
-                tx.send(n);
-            }
-            drain_posted();
-            // First three admitted untouched; the fourth slot absorbed
-            // every later value, ending at the last writer.
-            assert_eq!(events.get_untracked(), vec![0, 1, 2, 11]);
-            let s = stats.get_untracked();
-            assert_eq!(s.coalesced, 8, "merged values are counted, not lost");
-            assert_eq!(s.dropped, 0, "coalesce never drops");
-            assert_eq!(s.delivered, 4);
-        });
-        root.dispose();
-    }
-
-    #[test]
-    fn burst_schedules_exactly_one_drain_closure() {
-        let (root, ()) = create_root(|cx| {
-            let (tx, events, _) = bounded_source(cx, 1024, OverflowPolicy::DropOldest);
-            std::thread::spawn(move || {
-                for n in 0..1000u32 {
-                    tx.send(n);
-                }
-            })
-            .join()
-            .expect("producer");
-            assert_eq!(drain_posted(), 1, "one posted job for the whole burst");
-            assert_eq!(events.with_untracked(|v| v.len()), 1000);
-        });
-        root.dispose();
-    }
-
-    #[test]
-    fn sends_after_disposal_are_inert_bounded_and_counted() {
-        let mut handles = None;
-        let (root, ()) = create_root(|cx| {
-            let child = cx.child();
-            let (tx, events, stats) = bounded_source(child, 4, OverflowPolicy::DropOldest);
-            child.dispose();
-            handles = Some((tx, events, stats));
-        });
-        let (tx, events, stats) = handles.expect("handles");
-        for n in 0..100u32 {
-            tx.send(n); // transit stays bounded at capacity 4
-        }
-        drain_posted();
-        assert!(!events.is_alive());
-        assert!(!stats.is_alive());
-        assert_eq!(
-            tx.dead_sends(),
-            4,
-            "the bounded batch that reached the drain"
-        );
-        root.dispose();
-    }
-
-    #[test]
-    #[should_panic(expected = "capacity must be >= 1")]
-    fn zero_capacity_panics_loudly() {
-        let (_root, ()) = create_root(|cx| {
-            let _ = bounded_source::<u32>(cx, 0, OverflowPolicy::DropOldest);
-        });
-    }
-}
+#[path = "ingest_tests.rs"]
+mod tests;

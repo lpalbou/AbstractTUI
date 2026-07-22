@@ -1,10 +1,10 @@
-# 0110 — Streaming markdown session (open-tail re-parse only)
+# Completed: 0110 — Streaming markdown session (open-tail re-parse only)
 
 ## Metadata
 - Created: 2026-07-21
-- Status: Planned
+- Status: Completed (app-widgets wave, CONTENT seat — cycle 1)
 - Track: app-widgets
-- Completed: N/A
+- Completed: 2026-07-21
 
 ## ADR status
 - Governing ADRs: None — no ADR system in this repo yet (see 0170).
@@ -93,8 +93,49 @@ and any future streaming surface ride one tested implementation.
   not re-parse them (counting parse work or via the alloc budget).
 
 ## Progress checklist
-- [ ] StreamSession with closed/open block split
-- [ ] Equivalence-with-parse property test (chunking-invariant)
-- [ ] Mid-fence open-block semantics + finish()
-- [ ] 0100 tail-item integration seam
-- [ ] Perf/alloc pin for closed-block freezing
+- [x] StreamSession with closed/open block split
+- [x] Equivalence-with-parse property test (chunking-invariant)
+- [x] Mid-fence open-block semantics + finish()
+- [x] 0100 tail-item integration seam
+- [x] Perf/alloc pin for closed-block freezing
+
+## Completion report
+- Final path: docs/backlog/completed/app-widgets/0110_streaming_markdown_session.md
+- Date: 2026-07-21
+- Shipped: `render::md::StreamSession` (src/render/md_stream.rs, tests
+  in md_stream_tests.rs; design record in reviews/wave/content-cycle1.md).
+  A child module of `md` reusing the batch parser's own private line
+  classifiers, so block-boundary rules cannot drift. Each append seals
+  the longest provably-final prefix (safe cut = line start outside any
+  open fence that cannot soft-join a paragraph; the incomplete final
+  line is classified WORST-CASE — a `---` fragment never seals, a
+  committed ` ``` `/`>`/`# `/`- `/`1. ` prefix seals immediately) and
+  re-parses only the open tail. Surface: `append`, `finish`
+  (EOF-closes fences, idempotent), `closed_blocks` (frozen,
+  index-stable), `closed_revision` (the 0100 typeset-once seam),
+  `open_blocks`, and the honest cost meters `open_len` /
+  `bytes_reparsed_total`.
+- Tests (src/render/md_stream_tests.rs):
+  `any_chunking_equals_batch_parse` (39-doc corpus × 7 chunkings),
+  `randomized_documents_hold_the_equivalence` (200 random documents
+  from boundary-hostile fragments),
+  `open_fence_reports_as_code_before_the_close`,
+  `rule_shaped_fragment_does_not_seal_the_paragraph`,
+  `committed_fragments_seal_the_preceding_paragraph`,
+  `closed_blocks_only_append_and_revision_tracks_growth`,
+  `appends_behind_closed_content_cost_only_the_open_block` (byte-meter
+  cost pin: 50 tail tokens behind 1,000 closed lines re-parse only the
+  open region), `finish_is_idempotent_and_eof_closes_fences` + empty
+  edges. Through the widget stack: feed_tests
+  `streamed_item_matches_static_item_pixels` (pixel parity with a
+  static render) and wave_content
+  `tail_tokens_behind_closed_blocks_typeset_only_the_open_block`
+  (60 tokens behind 40 closed blocks re-typeset exactly 60 blocks,
+  driven through the real frame loop).
+- Cost pin form: work counters (`bytes_reparsed_total` at the session,
+  `blocks_typeset_total` at the feed) instead of allocator counting —
+  the same freeze assertion, deterministic under test parallelism.
+- One precision vs the item text (recorded in cycle 1): the open
+  region is USUALLY one block but can transiently parse to more
+  between an append and its seal — never observable as wrong output;
+  `open_blocks()` returns a slice for exactly this reason.

@@ -6,6 +6,20 @@
 - Track: app-widgets
 - Completed: N/A
 
+## 2026-07-22 — clipboard leg landed via 0270
+
+`app::selection::copy_to_clipboard(text)` (prelude-exported) now gives
+component code the clipboard verb: texts queue on the app-thread
+selection store, the driver drains them each turn and emits OSC 52
+through `Presenter::external_write` custody (cell runs first, one flush
+— the §6 rule this item is bound by), with the empty-payload refusal
+(empty OSC 52 CLEARS the clipboard) and a one-time labeled notice when
+`Capabilities::osc52_copy` was not advertised. The same drain also
+carries the tier-2 `mouse_capture()` requests — a working precedent for
+this item's verb-queue shape. Remaining scope here: notify / bell /
+set_title (and their capability gates), which still have no
+component-reachable path.
+
 ## ADR status
 - Governing ADRs: None — no ADR system in this repo yet (see 0170).
   ADR impact: None expected; the change must preserve the damage

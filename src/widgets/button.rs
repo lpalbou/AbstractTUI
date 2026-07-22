@@ -135,9 +135,13 @@ impl Button {
         let disabled = self.disabled;
         let width = crate::text::width(&label) + 2; // 1-cell pad each side
         let layout = self.layout.unwrap_or_else(|| {
+            // shrink 0: a default-styled control never yields its one
+            // row/column to overflow pressure (0240 follow-up #2 — an
+            // overflowing sibling used to crush buttons to zero rows).
             LayoutStyle::default()
                 .width(Dimension::Cells(width))
                 .height(Dimension::Cells(1))
+                .shrink(0.0)
         });
 
         let hovered = cx.signal(false);

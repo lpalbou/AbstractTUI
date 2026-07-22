@@ -36,7 +36,8 @@ use crate::theme::TokenId;
 use crate::ui::SurfaceCanvas;
 
 use super::events::{convert_event, is_default_quit};
-use super::overlays::Overlays;
+use super::overlays::{Overlays, ROOT_LAYER_ID};
+use super::selection::{selection_pane, MouseCapture, Selection, SelectionAct};
 use super::theme::current_theme;
 use super::App;
 
@@ -127,6 +128,26 @@ pub struct Driver {
     now_fn: Option<Rc<dyn Fn() -> std::time::Instant>>,
     out: Vec<u8>,
     scratch_damage: Vec<Rect>,
+    /// Screen-text selection layer (0270 tier 3) — the same app-thread
+    /// state `app::selection::selection()` hands components.
+    selection: Selection,
+    /// Tier-2 mouse-reporting suspend requests, drained per turn.
+    mouse_capture: MouseCapture,
+    /// OSC 52 payloads awaiting presenter-custody emission (§6): cell
+    /// runs first, then protocol payloads, one flush.
+    pending_clipboard: Vec<Vec<u8>>,
+    /// One-time labeled notice latch: OSC 52 copy on an unadvertising
+    /// terminal (fire-and-forget — "may be ignored" is the honest claim).
+    osc52_noticed: bool,
+    /// Zero-collapse diagnostics drained from the trees during phase L/D
+    /// of the PREVIOUS frame, forwarded into the notices lane at the next
+    /// phase U (signal writes belong to phase U, never the draw phases).
+    collapse_pending: Vec<String>,
+    /// Everything forwarded this run (bounded like the tree buffer) —
+    /// flushed to stderr by `App::run` AFTER the terminal is restored,
+    /// so headless/exit visibility survives without corrupting a live
+    /// alternate screen.
+    collapse_log: Vec<String>,
 }
 
 impl Driver {
@@ -175,6 +196,11 @@ impl Driver {
         let blank = Cell::EMPTY;
         let overlays = app.overlays();
         overlays.ensure_root(size);
+        // A fresh session starts with no visible selection (the previous
+        // driver's screen-space region is meaningless on a new frame);
+        // the app's select-mode choice survives.
+        let selection = super::selection::selection();
+        selection.reset_session();
         Ok(Driver {
             reader: EventReader::new(),
             present_caps: present_caps_from(&caps),
@@ -195,7 +221,19 @@ impl Driver {
             now_fn: None,
             out: Vec::new(),
             scratch_damage: Vec::new(),
+            selection,
+            mouse_capture: super::selection::mouse_capture(),
+            pending_clipboard: Vec::new(),
+            osc52_noticed: false,
+            collapse_pending: Vec::new(),
+            collapse_log: Vec::new(),
         })
+    }
+
+    /// The zero-collapse diagnostics forwarded during this run (debug
+    /// builds). `App::run` prints them to stderr after teardown.
+    pub(crate) fn collapse_log(&self) -> &[String] {
+        &self.collapse_log
     }
 
     /// Inject the frame-loop clock (animations, one-shot timers, probe
@@ -296,6 +334,30 @@ impl Driver {
             });
         }
 
+        // ---- engine verb drains (still phase U) ------------------------
+        // App-queued clipboard writes (`app::selection::copy_to_clipboard`)
+        // become custody-emitted OSC 52 payloads on this frame.
+        for text in self.selection.take_pending_copies() {
+            self.queue_clipboard_text(app, &text);
+        }
+        // Tier-2 mouse-reporting flip (latest request wins). Refusal is a
+        // labeled degradation, never a dead loop: scripted terminals
+        // without session tracking honestly decline the verb.
+        if let Some(on) = self.mouse_capture.take_request() {
+            if let Err(e) = term.set_mouse_reporting(on).and_then(|()| term.flush()) {
+                app.push_startup_notice(format!("mouse capture: suspend verb unavailable ({e})"));
+            }
+        }
+        // Zero-collapse diagnostics drained from last frame's solve reach
+        // the app here (phase U owns signal writes). The notices lane is
+        // the in-session surface; stderr waits until teardown.
+        for note in self.collapse_pending.drain(..) {
+            if self.collapse_log.len() < 64 {
+                self.collapse_log.push(note.clone());
+            }
+            app.push_startup_notice(note);
+        }
+
         // ---- frame decision: damage set seals HERE (epoch rule §2) -----
         let frame_requested = take_frame_request();
         let wants_frame = frame_requested
@@ -336,6 +398,13 @@ impl Driver {
         // ---- phase L: layout (folds geometry damage into the ui set) ---
         app.tree().layout();
         self.overlays.layout_all();
+        // Collect this frame's zero-collapse diagnostics (debug builds;
+        // both drains are empty-vec no-ops in release). Forwarded at the
+        // NEXT phase U — draw phases never write signals.
+        self.collapse_pending
+            .extend(app.tree().take_collapse_notices());
+        self.collapse_pending
+            .extend(self.overlays.take_collapse_notices());
 
         // ---- phase D: clear + redraw damaged regions (root layer) ------
         // The root surface is STOLEN from the store while user draw code
@@ -362,6 +431,21 @@ impl Driver {
         self.restore_root_surface(root_surface);
         self.overlays.draw_all();
 
+        // ---- selection pre-flatten damage (0270 tier 3) -----------------
+        // When the selection region changed, its OLD highlight cells and
+        // its NEW row spans must recompose from truth this frame: damage
+        // them on the root layer (origin ZERO: screen == layer space) so
+        // the compositor rebuilds the full z-stack there — the repair for
+        // what the patch below painted last frame, and fresh ground for
+        // what it paints now. Zero cost while nothing changed.
+        {
+            let mut store = self.overlays.store().borrow_mut();
+            if let Some(root) = store.index_of(ROOT_LAYER_ID) {
+                self.selection
+                    .add_flatten_damage(store.layers[root].surface_mut());
+            }
+        }
+
         // ---- phase C: flatten (root + overlays, z-sorted) ---------------
         self.scratch_damage.clear();
         {
@@ -369,6 +453,19 @@ impl Driver {
             let flat = self.comp.flatten(&mut self.frame, &mut store.layers);
             self.scratch_damage.extend_from_slice(flat);
         }
+
+        // ---- selection patch: recolor selected cells post-flatten -------
+        // Glyphs kept, inks replaced (theme selection tokens). Everything
+        // this can CHANGE is already inside the flatten damage: region
+        // deltas were damaged above, and content changes beneath an
+        // unchanged selection arrive damaged by their own layers — cells
+        // the compositor left alone get byte-identical rewrites, which
+        // the diff never emits.
+        self.selection.paint_into(
+            &mut self.frame,
+            theme.tokens.get(TokenId::SelectionFg),
+            theme.tokens.get(TokenId::SelectionBg),
+        );
 
         // ---- phase P: diff -> present -> image payloads -> ONE flush ----
         // Scroll-aware diff (RENDER cycle 5): when the damage reads as
@@ -386,6 +483,14 @@ impl Driver {
         // the frame still reaches the terminal in one write + one flush.
         for (bytes, at) in self.pending_image_bytes.drain(..) {
             self.presenter.external_write(&mut self.out, &bytes, at);
+        }
+        // Clipboard payloads (OSC 52) ride the same custody path: after
+        // the cell runs, before the single flush. The park point is a
+        // formality — the sequence paints nothing — but custody still
+        // closes any open SGR/link state and invalidates the cursor.
+        for payload in self.pending_clipboard.drain(..) {
+            self.presenter
+                .external_write(&mut self.out, &payload, Point::ZERO);
         }
         let emitted = !self.out.is_empty();
         if emitted {
@@ -472,6 +577,28 @@ impl Driver {
                 }
             }
             other => {
+                // Screen-text selection intercept (0270 tier 3): while
+                // select mode is on, the layer owns left Down/Drag/Up —
+                // and, while a selection is VISIBLE, the copy/clear keys
+                // (Enter / c / Ctrl+C / Esc). Everything else (wheel,
+                // motion, other buttons, all other keys) routes normally,
+                // so scrolling keeps working mid-selection. Deliberately
+                // ahead of overlay routing: select mode is an explicit
+                // user mode and may copy from modal content too (the pane
+                // clamp resolves overlay tree panes).
+                let overlays = &self.overlays;
+                let size = self.size;
+                match self
+                    .selection
+                    .on_input(&other, &mut |p| selection_pane(app, overlays, size, p))
+                {
+                    SelectionAct::Pass => {}
+                    SelectionAct::Consumed => return,
+                    SelectionAct::Copy => {
+                        self.queue_selection_copy(app);
+                        return;
+                    }
+                }
                 if let Some(ui_event) = convert_event(&other) {
                     // Overlay trees route first, topmost-z down; a MODAL
                     // overlay owns everything while visible. Unclaimed
@@ -510,6 +637,10 @@ impl Driver {
             return;
         }
         self.size = size;
+        // Screen-space selection geometry is meaningless after a resize;
+        // the prev-poison below repaints every cell, so clearing state is
+        // all the repair needed.
+        self.selection.on_resize();
         let blank = Cell::EMPTY;
         self.overlays.ensure_root(size);
         // Image placements are geometry-relative; re-emit them (the
@@ -551,6 +682,46 @@ impl Driver {
             drop(store);
             reactive::request_frame();
         }
+    }
+
+    /// Tier-2 verb, immediate form — for embedders driving their own
+    /// turns (component code uses `app::selection::mouse_capture()`,
+    /// which the driver applies on its next turn). Emits the entered
+    /// mode's disarm/re-arm pair and flushes.
+    pub fn set_mouse_reporting(&mut self, term: &mut dyn Terminal, on: bool) -> Result<()> {
+        term.set_mouse_reporting(on)?;
+        term.flush()
+    }
+
+    /// Extract the active selection's screen text and queue its OSC 52
+    /// payload (release or copy-key path).
+    fn queue_selection_copy(&mut self, app: &mut App) {
+        if let Some(region) = self.selection.active_region() {
+            let text = super::selection::extract_text(&self.frame, &region);
+            self.queue_clipboard_text(app, &text);
+        }
+    }
+
+    /// Queue one OSC 52 clipboard write for presenter-custody emission.
+    /// Empty/whitespace text is refused (an empty OSC 52 payload CLEARS
+    /// the clipboard — a surprise, never a copy). Capability honesty:
+    /// OSC 52 is write-only fire-and-forget, so an unadvertising
+    /// terminal gets the bytes anyway (harmless — unsupporting terminals
+    /// ignore the frame, and the env pass is conservative) plus a
+    /// one-time labeled notice that the copy may have been ignored.
+    fn queue_clipboard_text(&mut self, app: &mut App, text: &str) {
+        if text.trim().is_empty() {
+            return;
+        }
+        if !self.caps.osc52_copy && !self.osc52_noticed {
+            self.osc52_noticed = true;
+            app.push_startup_notice(
+                "clipboard: OSC 52 not advertised by this terminal — copies may be ignored",
+            );
+        }
+        self.pending_clipboard
+            .push(crate::term::verbs::clipboard_copy_bytes(text));
+        reactive::request_frame();
     }
 
     /// Make every cell of `prev` unequal to any real content so the next

@@ -3,7 +3,7 @@
  the terminal, composed
 
  ┌ tokens ───────────────────────┐  ┌ widgets ────────────────────────────┐  ┌ content ──────────────────────┐
- │grounds                        │  │ accen   ok   war   err   inf   mute │  │100 │   ⢀⣀             ⣀⡀      │
+ │grounds                        │  │ accent   ok   warn   err   info   muted│100 │   ⢀⣀             ⣀⡀      │
  │██ bg                 Aa Aa Aa │  │                                     │  │    │ ⢀⠎⠁ ⠑⢄⡀        ⡠⠊ ⠈⠉⢢    │
  │██ surface            Aa Aa Aa │  │ action   disabled                   │  │    │⠉⠉⠢⡀   ⠘⢄⡠⠊⠉⠑⠒⡄⠜    ⢀⠎⠉⠉⠢⡀│
  │██ raised             Aa Aa Aa │  │                                     │  │    │   ⠈⢆⡀ ⢀⠔⠁⡀ ⢀⠤⠈⠢⡀ ⡠⠊⠁  ⠈⢆⠑│
