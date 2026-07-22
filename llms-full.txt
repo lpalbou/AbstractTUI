@@ -2887,7 +2887,7 @@ timeouts, and no sleeps.
   - `libc` 0.2 — Unix terminal FFI (unix targets only)
   - `windows-sys` 0.61 — Windows console FFI (windows targets only)
 - Test invocation (from CONTRIBUTING.md):
-  - `cargo test` — the whole suite (~1,440 tests: unit tests, integration suites under
+  - `cargo test` — the whole suite (~1,470 tests: unit tests, integration suites under
     `tests/`, and doctests).
   - `cargo test --test live_smoke -- --ignored --test-threads=1` — live pty smoke tests
     (spawn a real terminal session; run serially).

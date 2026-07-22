@@ -67,7 +67,7 @@
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
   (2026-07-21) is the first public release, 0.2.2 (2026-07-22) the current one.
-- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,440 tests) and the
+- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,470 tests) and the
   explicitly-run suites (live pty, two release-mode perf-budget suites), golden snapshots,
   lint gates, the strict module layering rule, code conventions, and how to add a widget
   or a theme.
