@@ -68,6 +68,19 @@ const DRAG_PITCH_PER_CELL: f32 = 0.10;
 /// loaded model is always fully in view at defaults).
 pub const DEFAULT_ORBIT: (f32, f32, f32) = (0.6, 0.35, 1.0);
 
+/// A software-rasterized 3D viewport: renders a loaded GLB
+/// [`Model`] into mosaic cells with orbit-drag and
+/// wheel-zoom REPORTING — the widget is pure over its props
+/// ([`orbit`](Viewport3D::orbit) takes plain floats; camera state lives
+/// in the app's signals, written from
+/// [`on_orbit`](Viewport3D::on_orbit)/[`on_zoom`](Viewport3D::on_zoom)).
+///
+/// Plays animation clips via [`animate`](Viewport3D::animate), lights
+/// via [`light_angles`](Viewport3D::light_angles), and defaults its
+/// layout to grow-into-region (a viewport has no intrinsic size).
+/// Builds with `.element(&tokens)` — it holds no reactive state. See
+/// the [module docs](crate::widgets::viewport3d) and the `viewer3d`
+/// example.
 pub struct Viewport3D {
     model: Arc<Model>,
     fog: f32,

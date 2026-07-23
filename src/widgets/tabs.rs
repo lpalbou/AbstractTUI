@@ -23,6 +23,16 @@ use crate::ui::{dyn_view, Element, EventCtx, Key, MouseButton, MouseKind, Phase,
 
 type PanelFn = Box<dyn FnMut() -> View>;
 
+/// The in-content tab strip: labeled tabs over one mounted panel, with
+/// an underline marking the active tab.
+///
+/// Bind [`active`](Tabs::active) to a `Signal<usize>`; only the active
+/// tab's content builder runs (switching disposes the outgoing panel's
+/// scope). For FULL pages behind an app-level bar — badges, windowed
+/// overflow, container-reserved chords — reach for
+/// [`PageHost`](crate::widgets::PageHost) instead. The canonical build
+/// is `.element(cx, &tokens)`; see the
+/// [module docs](crate::widgets::tabs).
 pub struct Tabs {
     titles: Vec<String>,
     panels: Vec<PanelFn>,
@@ -100,6 +110,8 @@ impl Tabs {
                 let target = target.min(len - 1);
                 if active.get_untracked() != target {
                     active.set(target);
+                    // Held borrow across `f`: safe — dispatch-only slot
+                    // (the SharedCallback held-borrow contract).
                     if let Some(f) = on_change.borrow_mut().as_mut() {
                         f(target);
                     }

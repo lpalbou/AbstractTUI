@@ -93,6 +93,30 @@ pub use page_host::PageHost;
 /// `Option<Box<dyn FnMut(..)>>` moved behind `Rc<RefCell<..>>` so
 /// multiple handlers (key + mouse) can fire the same app callback.
 /// One alias, one clippy-visible name (RT4-2 hygiene).
+///
+/// ## The held-borrow contract (wave-12 reentrancy audit)
+///
+/// Widgets invoke these slots with the `RefCell` borrow HELD across
+/// the user callback (`if let Some(f) = slot.borrow_mut().as_mut()`).
+/// That is safe under two engine facts, and only under them:
+///
+/// 1. Slots are fired from EVENT DISPATCH only — no public verb or
+///    handle re-invokes a widget's slot synchronously (the two that
+///    ever could, Drawer `on_close` and GraphView press, already use
+///    take-call-restore at their seams).
+/// 2. `UiTree::dispatch` runs inside `reactive::batch` (RT1-3), so a
+///    callback's signal writes — including writes to the widget's own
+///    controlled signal — flush effects (Dyn rebuild/disposal,
+///    relayout) only after routing ends and every borrow is dropped.
+///    In-callback `Scope::dispose` (the 0297 law) is also safe: the
+///    teardown seams it can reach (`Popup::end`, drawer `finish`)
+///    take their callbacks out before calling, and disposal never
+///    re-enters a widget slot.
+///
+/// If either fact changes — a callback-firing verb, synchronous
+/// effect flush in dispatch — convert the sites to take-call-restore
+/// (`extensions/graph` `fire_press` is the reference idiom). Pinned by
+/// `callback_reentrancy_*` tests in list/select tests.
 pub(crate) type SharedCallback<Arg> = std::rc::Rc<std::cell::RefCell<Option<Box<dyn FnMut(Arg)>>>>;
 
 /// Resolve the ACTIVE theme's tokens for `Widget::view(cx)` — reads the

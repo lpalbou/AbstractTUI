@@ -62,6 +62,9 @@ fn main() -> abstracttui::base::Result<()> {
         let notify = cx.signal(true);
         let density = cx.signal(0usize);
         let theme_ix = cx.signal(0usize);
+        // The reader's scroll position is page state too: scroll, switch
+        // away, come back — the document is where you left it.
+        let reader_scroll = cx.signal(0i32);
 
         // === DRAWER REGION (peer-owned) =============================
         // DRAWER (0585): a right INSPECTOR drawer (modal + scrim,
@@ -87,7 +90,9 @@ fn main() -> abstracttui::base::Result<()> {
             .page("overview", "Overview", move |gcx| {
                 overview_page(gcx, theme, alerts)
             })
-            .page("reader", "Reader", move |gcx| reader_page(gcx, theme))
+            .page("reader", "Reader", move |gcx| {
+                reader_page(gcx, theme, reader_scroll)
+            })
             .page("settings", "Settings", move |gcx| {
                 settings_page(gcx, theme, name, notify, density)
             })
@@ -96,6 +101,10 @@ fn main() -> abstracttui::base::Result<()> {
                 (n > 0).then(|| n.to_string())
             })
             .number_jump(true)
+            // The host is the shell's body: it takes every row the
+            // footer leaves (without this it hugs the active page's
+            // content and the bottom of the terminal goes dead).
+            .layout(LayoutStyle::column().grow(1.0))
             .view(cx);
 
         Element::new()
@@ -261,16 +270,51 @@ fn overview_page(
         .build()
 }
 
-/// Reader-ish: a scrolling markdown document filling the page.
-fn reader_page(cx: Scope, theme: Signal<&'static abstracttui::theme::Theme>) -> View {
+/// Reader-ish: a scrolling markdown document filling the page. The
+/// document drives its OWN row offset (`MarkdownView::scroll_offset`,
+/// the reader example's pattern — the widget typesets at draw time, so
+/// a generic `Scroll` cannot measure it); wheel and PgUp/PgDn move the
+/// app-owned offset signal, which survives page switches.
+fn reader_page(
+    cx: Scope,
+    theme: Signal<&'static abstracttui::theme::Theme>,
+    offset: Signal<i32>,
+) -> View {
+    let _ = cx;
     let t = theme.get().tokens;
+    let max_rows = MarkdownView::rows(READER_DOC, &t, 96) as i32;
+    let scroll_by = move |d: i32| offset.update(|o| *o = (*o + d).clamp(0, max_rows - 1));
+    let wheel = move |ctx: &mut abstracttui::ui::EventCtx, ev: &abstracttui::ui::UiEvent| {
+        if let abstracttui::ui::UiEvent::Mouse(m) = ev {
+            match m.kind {
+                abstracttui::ui::MouseKind::ScrollUp => {
+                    scroll_by(-3);
+                    ctx.stop_propagation();
+                }
+                abstracttui::ui::MouseKind::ScrollDown => {
+                    scroll_by(3);
+                    ctx.stop_propagation();
+                }
+                _ => {}
+            }
+        }
+    };
     Block::new()
         .border(BorderKind::Rounded)
-        .title("reader")
+        .title("reader — wheel or PgUp/PgDn scroll")
         .fill(t.surface)
         .layout(LayoutStyle::column().grow(1.0))
-        .child(Scroll::new(MarkdownView::new(READER_DOC).element(&t).build()).view(cx))
+        .child(dyn_view(LayoutStyle::column().grow(1.0), move || {
+            MarkdownView::new(READER_DOC)
+                .scroll_offset(offset.get())
+                .layout(LayoutStyle::default().grow(1.0))
+                .element(&t)
+                .on(abstracttui::ui::Phase::Bubble, wheel)
+                .build()
+        }))
         .element(&t)
+        .shortcut(KeyChord::plain(Key::PageUp), move |_| scroll_by(-8))
+        .shortcut(KeyChord::plain(Key::PageDown), move |_| scroll_by(8))
         .build()
 }
 

@@ -992,6 +992,12 @@ widget left it — a callback that mutates the widget's state (a
 submit-and-clear composer) sees that mutation rendered by the NEXT
 event, not retroactively applied to the one that fired it.
 
+The same law covers REENTRANCY, not just disposal: a callback may
+open a modal, write the widget's own controlled signal, or flush
+effects synchronously — no widget holds a borrow across a user
+callback (the invariant is documented on `widgets::SharedCallback`
+and pinned by reentrancy tests on List and Select).
+
 ## app — the runtime
 
 `App::simple` is the whole happy path: mount a component, enter the

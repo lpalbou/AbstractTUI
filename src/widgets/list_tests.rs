@@ -451,3 +451,75 @@ fn scroll_to_command_scrolls_and_consumes() {
     );
     assert_eq!(req.get_untracked(), None, "request consumed");
 }
+
+/// Wave-12 reentrancy pin (the SharedCallback held-borrow contract in
+/// widgets/mod.rs): an `on_select` that WRITES THE CONTROLLED
+/// SELECTION SIGNAL and then forces a synchronous `flush_effects()`
+/// mid-callback. The hosting `dyn_view_scoped` region rebuilds —
+/// disposing this very List's generation — while the widget's
+/// `on_select` borrow is held and its handler frame is live. Safe
+/// because dispatch's Rc clones keep the executing closures and the
+/// slot alive through the disposal, and the rebuilt generation owns
+/// the next interaction. If effects ever flush eagerly inside
+/// dispatch (breaking fact 2 of the contract), this is the tripwire.
+#[test]
+fn callback_reentrancy_pin_controlled_write_and_flush_mid_callback() {
+    use crate::ui::dyn_view_scoped;
+    let t = default_theme().tokens;
+    let sel_holder: Rc<RefCell<Option<crate::reactive::Signal<usize>>>> = Default::default();
+    let sh = sel_holder.clone();
+    let picks: Rc<RefCell<Vec<usize>>> = Default::default();
+    let pk = picks.clone();
+    let (_root, mut tree) = mount_widget(Size::new(14, 4), move |cx| {
+        let sel = cx.signal(0usize);
+        *sh.borrow_mut() = Some(sel);
+        Element::new()
+            .style(
+                LayoutStyle::default()
+                    .width(Dimension::Percent(1.0))
+                    .height(Dimension::Percent(1.0)),
+            )
+            .child(dyn_view_scoped(
+                LayoutStyle::default()
+                    .width(Dimension::Percent(1.0))
+                    .height(Dimension::Percent(1.0)),
+                move |gen_cx| {
+                    let _generation_key = sel.get(); // rebuild per selection write
+                    let pk = pk.clone();
+                    Element::new()
+                        .child(
+                            List::of((0..9).map(|i| format!("item {i}")))
+                                .selection(sel)
+                                .on_select(move |i| {
+                                    pk.borrow_mut().push(i);
+                                    if i != 7 {
+                                        sel.set(7); // write the CONTROLLED signal…
+                                        crate::reactive::flush_effects(); // …and rebuild NOW
+                                    }
+                                })
+                                .element(gen_cx, &t)
+                                .build(),
+                        )
+                        .build()
+                },
+            ))
+            .build()
+    });
+    let sel = sel_holder.borrow().unwrap();
+    key(&mut tree, Key::Tab); // focus the list
+    key(&mut tree, Key::Down); // select 1 -> callback forces 7 + rebuild
+    assert_eq!(*picks.borrow(), vec![1], "first pick delivered");
+    assert_eq!(sel.get_untracked(), 7, "mid-callback write landed");
+    // The rebuilt generation is live and interactive.
+    key(&mut tree, Key::Tab);
+    key(&mut tree, Key::Down); // 7 -> 8 -> callback forces 7 again
+    assert_eq!(*picks.borrow(), vec![1, 8], "rebuilt list still fires");
+    assert_eq!(sel.get_untracked(), 7);
+    crate::reactive::flush_effects();
+    tree.layout();
+    let canvas = render(&mut tree, Size::new(14, 4));
+    assert!(
+        (0..4).any(|y| canvas.row_text(y).contains("item")),
+        "rebuilt list renders"
+    );
+}

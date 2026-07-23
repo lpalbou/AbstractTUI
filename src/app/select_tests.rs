@@ -479,3 +479,59 @@ mod faces;
 // SelectHandle (0296 programmatic open) cases — same split pattern.
 #[path = "select_tests_handle.rs"]
 mod handle_tests;
+
+/// Wave-12 reentrancy pin (the SharedCallback held-borrow contract):
+/// a commit `on_change` that OPENS A MODAL mid-callback — synchronous
+/// overlay-tree mount, layout solve, and `focus_init` all run while
+/// the select's `on_change` RefCell borrow is held. Safe because
+/// nothing in the modal-open path re-enters the select's slot (fact 1
+/// of the contract) and the callback's signal traffic is batched past
+/// the borrow (fact 2). If `Modal::open` ever grows a synchronous
+/// blur/redispatch into the OPENER's tree, this test is the tripwire.
+#[test]
+fn callback_reentrancy_pin_on_change_opens_a_modal() {
+    let value_holder: Rc<RefCell<Option<Signal<usize>>>> = Default::default();
+    let vh = value_holder.clone();
+    let modal_holder: Rc<RefCell<Option<super::super::popups::Modal>>> = Default::default();
+    let mh = modal_holder.clone();
+    let mut rig = rig(move |cx, ov| {
+        let value = cx.signal(0usize);
+        *vh.borrow_mut() = Some(value);
+        let ov_for_change = ov.clone();
+        Select::new(fruit_options())
+            .value(value)
+            .layout(face_layout())
+            .overlays(ov)
+            .on_change(move |_| {
+                let modal = super::super::popups::Modal::open(
+                    &ov_for_change,
+                    cx,
+                    VP,
+                    Size::new(20, 5),
+                    |_mcx| text("confirm?"),
+                );
+                *mh.borrow_mut() = Some(modal);
+            })
+            .element(cx, &default_theme().tokens)
+            .build()
+    });
+    let value = value_holder.borrow().unwrap();
+    rig.key(Key::Enter); // open the popup
+    assert!(rig.popup().is_some(), "popup open");
+    rig.key(Key::Down); // highlight beta
+    rig.key(Key::Enter); // commit -> on_change opens the modal mid-borrow
+    assert_eq!(value.get_untracked(), 1, "commit landed");
+    let modal = modal_holder.borrow_mut().take().expect("modal opened");
+    assert!(
+        modal.layer().is_alive(),
+        "modal survived the mid-callback open"
+    );
+    // The only modal tree left is the MODAL (the select popup ended
+    // with the commit); its content proves which tree we found.
+    let (_, rows) = rig.popup().expect("the modal tree");
+    assert!(
+        rows.iter().any(|r| r.contains("confirm?")),
+        "modal content on screen, select popup gone: {rows:?}"
+    );
+    modal.close();
+}

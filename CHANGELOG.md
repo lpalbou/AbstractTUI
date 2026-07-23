@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.19] - 2026-07-25
+
+### Fixed
+
+- examples: the pixel-review wave — every example captured in staged
+  states through the screenshot pipeline and reviewed as renderings;
+  five examples shipped broken or degraded pixels (components stat
+  cards and grid cards rendered EMPTY, gallery's badge strip
+  overpainted its panel border, dashboard's io meter leaked through a
+  border and its help modal crushed its key list, voice_mock's meter
+  and scope were structurally invisible, shell's reader page was
+  empty, decide's footer split across a gap row, screenshot's note
+  dropped its filenames). All fixed; `docs/captures/` refreshed for
+  the affected examples (two-run byte-identical determinism held).
+- docs: guide staleness sweep — graphics-and-3d.md signature +
+  canvas cross-link + screenshot-veil honesty + Viewport3D default;
+  live-data.md gains the one-clock `set_loop_clock` testing note;
+  faq/troubleshooting damage-visualizer honesty
+  (`render::Compositor::set_debug_damage` is embedder-only today);
+  graphs-and-diagrams.md mermaid subset table re-synced verbatim with
+  the crate (four rows had drifted).
+
+### Added
+
+- rustdoc: type-level docs for eleven previously bare docs.rs pages
+  (List, Table, Block, Tabs, Scroll, TextInput, MarkdownView,
+  CodeView, Image, Viewport3D, PageHost) plus expanded Scope and
+  Style/LayoutStyle orientation docs.
+- internal: 12 of the 26 oversized engine files split into named
+  `#[path]` siblings (the whole `three/` family, term/caps, ui/mod,
+  ui/tree, app/overlays, testing/vt, term/unix — zero behavior
+  change, every public path preserved; inventory in backlog 0990).
+  All 19 perf budgets re-run and pinned
+  (`reviews/wave12/perf-status.md`) — zero emission drift from the
+  week's changes; the held-borrow reentrancy contract documented on
+  `widgets::SharedCallback` with two tripwire tests; Windows msvc
+  check clean workspace-wide.
+- examples: `capture -- review` family — staged multi-state review
+  shots for every example (never published, never part of `all`).
+
 ## [0.2.18] - 2026-07-25
 
 ### Added
@@ -1468,6 +1508,7 @@ First public release.
   theme browser, and 3D viewer.
 
 [Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.2.17...HEAD
+[0.2.19]: https://github.com/lpalbou/abstracttui/compare/v0.2.18...v0.2.19
 [0.2.18]: https://github.com/lpalbou/abstracttui/compare/v0.2.17...v0.2.18
 [0.2.17]: https://github.com/lpalbou/abstracttui/compare/v0.2.16...v0.2.17
 [0.2.16]: https://github.com/lpalbou/abstracttui/compare/v0.2.15...v0.2.16

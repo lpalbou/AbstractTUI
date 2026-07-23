@@ -202,6 +202,8 @@ impl Combobox {
                     return;
                 }
                 value.set(idx);
+                // Held borrow across `f`: safe — dispatch-only commit
+                // paths (the SharedCallback held-borrow contract).
                 if let Some(f) = on_change.borrow_mut().as_mut() {
                     f(idx);
                 }

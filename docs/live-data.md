@@ -316,3 +316,12 @@ The headless harness works unchanged: drive `Driver::turn` against
 assert on the rendered screen — one frame per burst, zero bytes while
 quiet. `tests/wave_livedata.rs` pins exactly those claims and is a
 gallery of the shapes.
+
+Time is scriptable too: timers arm **and** fire against the loop's
+clock, so an injected test clock drives `interval` cadence and
+`Backoff` retry deadlines deterministically — the driver publishes its
+clock around each turn automatically, and a custom loop calling
+`run_due_timers(now)` publishes the same value with
+`reactive::set_loop_clock(Some(now))` (`None` restores real-time
+arming). See [api.md § reactive](api.md#reactive--signals-memos-effects)
+for the one-clock story.

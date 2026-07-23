@@ -88,44 +88,41 @@
 <rect x="0" y="162" width="9" height="18" fill="#1a1a2e"/>
 <rect x="9" y="162" width="135" height="18" fill="#16213e"/>
 <rect x="144" y="162" width="9" height="18" fill="#10101d"/>
-<rect x="153" y="162" width="18" height="18" fill="#1a1a2e"/>
-<rect x="171" y="162" width="576" height="18" fill="#10101d"/>
-<rect x="747" y="162" width="18" height="18" fill="#1a1a2e"/>
+<rect x="153" y="162" width="9" height="18" fill="#1a1a2e"/>
+<rect x="162" y="162" width="576" height="18" fill="#16213e"/>
+<rect x="738" y="162" width="9" height="18" fill="#10101d"/>
+<rect x="747" y="162" width="9" height="18" fill="#1a1a2e"/>
+<rect x="756" y="162" width="9" height="18" fill="#16213e"/>
 <rect x="765" y="162" width="279" height="18" fill="#0f3460"/>
-<rect x="1044" y="162" width="18" height="18" fill="#10101d"/>
+<rect x="1044" y="162" width="9" height="18" fill="#16213e"/>
+<rect x="1053" y="162" width="9" height="18" fill="#10101d"/>
 <rect x="1062" y="162" width="18" height="18" fill="#1a1a2e"/>
 <rect x="0" y="180" width="9" height="18" fill="#1a1a2e"/>
 <rect x="9" y="180" width="135" height="18" fill="#16213e"/>
 <rect x="144" y="180" width="9" height="18" fill="#10101d"/>
 <rect x="153" y="180" width="9" height="18" fill="#1a1a2e"/>
-<rect x="162" y="180" width="333" height="18" fill="#16213e"/>
-<rect x="495" y="180" width="18" height="18" fill="#1a1a2e"/>
-<rect x="513" y="180" width="549" height="18" fill="#16213e"/>
+<rect x="162" y="180" width="576" height="18" fill="#16213e"/>
+<rect x="738" y="180" width="9" height="18" fill="#10101d"/>
+<rect x="747" y="180" width="9" height="18" fill="#1a1a2e"/>
+<rect x="756" y="180" width="297" height="18" fill="#16213e"/>
+<rect x="1053" y="180" width="9" height="18" fill="#10101d"/>
 <rect x="1062" y="180" width="18" height="18" fill="#1a1a2e"/>
 <rect x="0" y="198" width="9" height="18" fill="#1a1a2e"/>
 <rect x="9" y="198" width="135" height="18" fill="#16213e"/>
 <rect x="144" y="198" width="9" height="18" fill="#10101d"/>
-<rect x="153" y="198" width="9" height="18" fill="#1a1a2e"/>
-<rect x="162" y="198" width="333" height="18" fill="#16213e"/>
-<rect x="495" y="198" width="9" height="18" fill="#10101d"/>
-<rect x="504" y="198" width="9" height="18" fill="#1a1a2e"/>
-<rect x="513" y="198" width="9" height="18" fill="#16213e"/>
-<rect x="522" y="198" width="531" height="18" fill="#0f3460"/>
-<rect x="1053" y="198" width="9" height="18" fill="#16213e"/>
-<rect x="1062" y="198" width="9" height="18" fill="#10101d"/>
-<rect x="1071" y="198" width="9" height="18" fill="#1a1a2e"/>
+<rect x="153" y="198" width="18" height="18" fill="#1a1a2e"/>
+<rect x="171" y="198" width="576" height="18" fill="#10101d"/>
+<rect x="747" y="198" width="18" height="18" fill="#1a1a2e"/>
+<rect x="765" y="198" width="297" height="18" fill="#10101d"/>
+<rect x="1062" y="198" width="18" height="18" fill="#1a1a2e"/>
 <rect x="0" y="216" width="9" height="18" fill="#1a1a2e"/>
 <rect x="9" y="216" width="135" height="18" fill="#16213e"/>
 <rect x="144" y="216" width="9" height="18" fill="#10101d"/>
 <rect x="153" y="216" width="9" height="18" fill="#1a1a2e"/>
 <rect x="162" y="216" width="333" height="18" fill="#16213e"/>
-<rect x="495" y="216" width="9" height="18" fill="#10101d"/>
-<rect x="504" y="216" width="9" height="18" fill="#1a1a2e"/>
-<rect x="513" y="216" width="9" height="18" fill="#16213e"/>
-<rect x="522" y="216" width="531" height="18" fill="#58273d"/>
-<rect x="1053" y="216" width="9" height="18" fill="#16213e"/>
-<rect x="1062" y="216" width="9" height="18" fill="#10101d"/>
-<rect x="1071" y="216" width="9" height="18" fill="#1a1a2e"/>
+<rect x="495" y="216" width="18" height="18" fill="#1a1a2e"/>
+<rect x="513" y="216" width="549" height="18" fill="#16213e"/>
+<rect x="1062" y="216" width="18" height="18" fill="#1a1a2e"/>
 <rect x="0" y="234" width="9" height="18" fill="#1a1a2e"/>
 <rect x="9" y="234" width="135" height="18" fill="#16213e"/>
 <rect x="144" y="234" width="9" height="18" fill="#10101d"/>
@@ -133,7 +130,9 @@
 <rect x="162" y="234" width="333" height="18" fill="#16213e"/>
 <rect x="495" y="234" width="9" height="18" fill="#10101d"/>
 <rect x="504" y="234" width="9" height="18" fill="#1a1a2e"/>
-<rect x="513" y="234" width="549" height="18" fill="#16213e"/>
+<rect x="513" y="234" width="9" height="18" fill="#16213e"/>
+<rect x="522" y="234" width="531" height="18" fill="#0f3460"/>
+<rect x="1053" y="234" width="9" height="18" fill="#16213e"/>
 <rect x="1062" y="234" width="9" height="18" fill="#10101d"/>
 <rect x="1071" y="234" width="9" height="18" fill="#1a1a2e"/>
 <rect x="0" y="252" width="9" height="18" fill="#1a1a2e"/>
@@ -143,7 +142,9 @@
 <rect x="162" y="252" width="333" height="18" fill="#16213e"/>
 <rect x="495" y="252" width="9" height="18" fill="#10101d"/>
 <rect x="504" y="252" width="9" height="18" fill="#1a1a2e"/>
-<rect x="513" y="252" width="549" height="18" fill="#16213e"/>
+<rect x="513" y="252" width="9" height="18" fill="#16213e"/>
+<rect x="522" y="252" width="531" height="18" fill="#58273d"/>
+<rect x="1053" y="252" width="9" height="18" fill="#16213e"/>
 <rect x="1062" y="252" width="9" height="18" fill="#10101d"/>
 <rect x="1071" y="252" width="9" height="18" fill="#1a1a2e"/>
 <rect x="0" y="270" width="9" height="18" fill="#1a1a2e"/>
@@ -364,10 +365,7 @@
 <text x="162" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="171" y="68" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#666666">100</text>
 <text x="207" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="234" y="68" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#e94560">⡠⢄⣀⠤⡀⢀⣀</text>
-<text x="306" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">⢀⡀</text>
-<text x="612" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">⢀⡀</text>
-<text x="639" y="68" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#e94560">⡀⢀⣀⠤⡠⠤⢄⣀</text>
+<text x="639" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">⢀⡀</text>
 <text x="729" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="756" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="765" y="68" textLength="216" lengthAdjust="spacingAndGlyphs" fill="#f39c12">███████████████████████▌</text>
@@ -377,14 +375,8 @@
 <text x="135" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="207" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="216" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠒⠉</text>
-<text x="243" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠈</text>
-<text x="270" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠉⠁</text>
-<text x="297" y="86" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠉⠁⠈⠦⠳⠤⠤⡀</text>
-<text x="549" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">⢀</text>
-<text x="567" y="86" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#e94560">⣀⢄⡠⠤⠤⠃⠈⠉⠈⠁</text>
-<text x="693" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠈</text>
-<text x="711" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠓⠒</text>
+<text x="216" y="86" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠉⠉⠖⠒⠒⣄⠔⠢⡀⡄</text>
+<text x="576" y="86" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#e94560">⡰⢢⣀⠖⠔⠒⠉⠁⠈⠱⠒⡄⢀⣀⣀</text>
 <text x="729" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="756" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="765" y="86" textLength="279" lengthAdjust="spacingAndGlyphs" fill="#27ae60">⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒</text>
@@ -394,12 +386,11 @@
 <text x="135" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="207" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="216" y="104" textLength="108" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⠒⠒⠤⠤⣀⣀⡠⢄⣀⣀⡀⢀</text>
-<text x="360" y="104" textLength="99" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠉⠉⠉⠦⠒⠒⢢⠤⠤⢄⡀</text>
-<text x="477" y="104" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#e94560">⢀⣀⣀⢄</text>
-<text x="513" y="104" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⢀⡀</text>
-<text x="531" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠉</text>
-<text x="540" y="104" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⡀⢀⠤⣀⣀⣀⠤⠤⠤⠤⠤⠔⠒⠒⠉⠑⠊⠑⠒⠉⠉</text>
+<text x="288" y="104" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠉⠸⠤⠴⡀</text>
+<text x="513" y="104" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#e94560">⢀⡀⡤⠢⠜⠦⠒⠁</text>
+<text x="675" y="104" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠈⠁</text>
+<text x="702" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠈</text>
+<text x="711" y="104" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⢀⡀</text>
 <text x="729" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="756" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="774" y="104" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">mem</text>
@@ -409,10 +400,11 @@
 <text x="18" y="122" textLength="117" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">  alerts     </text>
 <text x="135" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="171" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#666666">0</text>
 <text x="207" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="279" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⠈</text>
-<text x="306" y="122" textLength="252" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⠈⠁⠉⠉⠑⠒⠉⠑⠒⠉⠉⠊⠉⠉⠉⠒⠒⠒⠒⠊⠉⠒⠊⠁⠈⠉⠈⠁</text>
+<text x="324" y="122" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠉⠉⠉⢣⠤⠤⢄⣀⣀⡀</text>
+<text x="486" y="122" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e94560">⢀⠖⠔⠊⠈</text>
+<text x="567" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⣀</text>
+<text x="585" y="122" textLength="144" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⢀⣀⣀⠔⠢⠋⠢⠔⠢⠤⠒⠊⠱⠒⠁⠘</text>
 <text x="729" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="756" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="765" y="122" textLength="153" lengthAdjust="spacingAndGlyphs" fill="#27ae60">████████████████▊</text>
@@ -421,106 +413,119 @@
 <text x="18" y="140" textLength="117" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">  settings   </text>
 <text x="135" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="207" y="140" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">└───────</text>
-<text x="279" y="140" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#666666">-15s</text>
-<text x="315" y="140" textLength="99" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">───────────</text>
-<text x="414" y="140" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#666666">-10s</text>
-<text x="450" y="140" textLength="117" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">─────────────</text>
-<text x="567" y="140" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#666666">-5s</text>
-<text x="594" y="140" textLength="108" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">────────────</text>
-<text x="702" y="140" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#666666">now</text>
+<text x="207" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="216" y="140" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⠉⠉⠉⠱⠒⠉⠢⠔⣄⡠⢄⣀⣀⢄⢀⣀⣀⢀⣀⣀⣀</text>
+<text x="405" y="140" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠈⠱⠤⠤</text>
+<text x="441" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⣀⣀</text>
+<text x="459" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠉</text>
+<text x="468" y="140" textLength="99" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⡠⠔⢢⠤⠢⠔⠊⠒⠑⠒⠉</text>
+<text x="576" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⠉⠁</text>
 <text x="729" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="756" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="765" y="140" textLength="279" lengthAdjust="spacingAndGlyphs" fill="#f39c12">⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒</text>
 <text x="1044" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="162" y="158" textLength="576" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">└──────────────────────────────────────────────────────────────┘</text>
-<text x="756" y="158" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">└─</text>
+<text x="162" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="171" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#666666">0</text>
+<text x="207" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="333" y="158" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⠈⠁</text>
+<text x="369" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⠁</text>
+<text x="405" y="158" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⠉⠉⠒⠉</text>
+<text x="459" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">⠉</text>
+<text x="729" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="756" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="774" y="158" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">io</text>
-<text x="792" y="158" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">──────────────────────</text>
 <text x="990" y="158" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">  45%</text>
-<text x="1035" y="158" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">─┘</text>
+<text x="1044" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="162" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="207" y="176" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">└───────</text>
+<text x="279" y="176" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#666666">-15s</text>
+<text x="315" y="176" textLength="99" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">───────────</text>
+<text x="414" y="176" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#666666">-10s</text>
+<text x="450" y="176" textLength="117" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">─────────────</text>
+<text x="567" y="176" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#666666">-5s</text>
+<text x="594" y="176" textLength="108" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">────────────</text>
+<text x="702" y="176" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#666666">now</text>
+<text x="729" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="756" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="765" y="176" textLength="126" lengthAdjust="spacingAndGlyphs" fill="#27ae60">█████████████▉</text>
+<text x="1044" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="162" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">┌</text>
-<text x="171" y="194" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> events </text>
-<text x="243" y="194" textLength="252" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">───────────────────────────┐</text>
-<text x="513" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">┌</text>
-<text x="522" y="194" textLength="243" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> sessions — s toggles sort </text>
-<text x="765" y="194" textLength="297" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">────────────────────────────────┐</text>
+<text x="162" y="194" textLength="576" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">└──────────────────────────────────────────────────────────────┘</text>
+<text x="756" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">└</text>
+<text x="765" y="194" textLength="279" lengthAdjust="spacingAndGlyphs" fill="#e74c3c">⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤</text>
+<text x="1044" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">┘</text>
 <text x="9" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="162" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="486" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="513" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="522" y="212" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa" font-weight="700">host         region   </text>
-<text x="720" y="212" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee" font-weight="700">rx▼</text>
-<text x="747" y="212" textLength="306" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa" font-weight="700">            tx            state   </text>
-<text x="1053" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="162" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="486" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="513" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="522" y="230" textLength="531" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">edge-2       eu-w     41.3 MB/s      20.8 MB/s     healthy </text>
-<text x="1053" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="162" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">┌</text>
+<text x="171" y="230" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> events </text>
+<text x="243" y="230" textLength="252" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">───────────────────────────┐</text>
+<text x="513" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">┌</text>
+<text x="522" y="230" textLength="243" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> sessions — s toggles sort </text>
+<text x="765" y="230" textLength="297" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">────────────────────────────────┐</text>
 <text x="9" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="486" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="522" y="248" textLength="531" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">core-a       us-e     41.1 MB/s      18.6 MB/s     syncing </text>
+<text x="522" y="248" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa" font-weight="700">host         region   </text>
+<text x="720" y="248" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee" font-weight="700">rx▼</text>
+<text x="747" y="248" textLength="306" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa" font-weight="700">            tx            state   </text>
 <text x="1053" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="486" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="522" y="266" textLength="531" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">edge-1       eu-w     38.7 MB/s      7.2 MB/s      healthy </text>
+<text x="522" y="266" textLength="531" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">edge-2       eu-w     41.3 MB/s      20.8 MB/s     healthy </text>
 <text x="1053" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="486" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="522" y="284" textLength="531" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">edge-3       us-e     38.1 MB/s      23.6 MB/s     syncing </text>
+<text x="522" y="284" textLength="531" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">core-a       us-e     41.1 MB/s      18.6 MB/s     syncing </text>
 <text x="1053" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="486" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="522" y="302" textLength="531" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">cache-2      ap-s     25.2 MB/s      16.5 MB/s     healthy </text>
+<text x="522" y="302" textLength="531" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">edge-1       eu-w     38.7 MB/s      7.2 MB/s      healthy </text>
 <text x="1053" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="486" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="522" y="320" textLength="531" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">core-b       ap-s     22.8 MB/s      8.4 MB/s      syncing </text>
+<text x="522" y="320" textLength="531" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">edge-3       us-e     38.1 MB/s      23.6 MB/s     syncing </text>
 <text x="1053" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="486" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="522" y="338" textLength="531" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">cache-1      eu-n     13.4 MB/s      19.9 MB/s     healthy </text>
+<text x="522" y="338" textLength="531" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">cache-2      ap-s     25.2 MB/s      16.5 MB/s     healthy </text>
 <text x="1053" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="486" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="522" y="356" textLength="531" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">core-b       ap-s     22.8 MB/s      8.4 MB/s      syncing </text>
 <text x="1053" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="374" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="374" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="374" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="486" y="374" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="374" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="522" y="374" textLength="531" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">cache-1      eu-n     13.4 MB/s      19.9 MB/s     healthy </text>
 <text x="1053" y="374" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="392" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="392" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
@@ -549,57 +554,63 @@
 <text x="9" y="464" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="464" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="464" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="180" y="464" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">00:00</text>
+<text x="225" y="464" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#60a5fa"> info  </text>
+<text x="288" y="464" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">session opened from …</text>
 <text x="486" y="464" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="464" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="1053" y="464" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="482" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="482" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="482" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="180" y="482" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">00:00</text>
+<text x="225" y="482" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#27ae60"> ok    </text>
+<text x="288" y="482" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">tls renewed for gate…</text>
 <text x="486" y="482" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="482" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="1053" y="482" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="500" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="500" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="500" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="180" y="500" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">00:00</text>
-<text x="225" y="500" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#60a5fa"> info  </text>
-<text x="288" y="500" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">session opened from …</text>
+<text x="180" y="500" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">00:01</text>
+<text x="225" y="500" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#27ae60"> ok    </text>
+<text x="288" y="500" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">backup verified</text>
 <text x="486" y="500" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="500" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="1053" y="500" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="518" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="518" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="518" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="180" y="518" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">00:00</text>
-<text x="225" y="518" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#27ae60"> ok    </text>
-<text x="288" y="518" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">tls renewed for gate…</text>
+<text x="180" y="518" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">00:01</text>
+<text x="225" y="518" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#60a5fa"> info  </text>
+<text x="288" y="518" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">session opened from …</text>
 <text x="486" y="518" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="518" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="1053" y="518" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="536" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="536" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="536" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="180" y="536" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">00:01</text>
-<text x="225" y="536" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#27ae60"> ok    </text>
-<text x="288" y="536" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">backup verified</text>
+<text x="180" y="536" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">00:02</text>
+<text x="225" y="536" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#60a5fa"> info  </text>
+<text x="288" y="536" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">session opened from …</text>
 <text x="486" y="536" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="536" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="1053" y="536" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="554" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="554" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="554" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="180" y="554" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">00:01</text>
-<text x="225" y="554" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#60a5fa"> info  </text>
-<text x="288" y="554" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">session opened from …</text>
+<text x="180" y="554" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">00:02</text>
+<text x="225" y="554" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#f39c12"> warn  </text>
+<text x="288" y="554" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">backpressure on shar…</text>
 <text x="486" y="554" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="554" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="1053" y="554" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="572" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="135" y="572" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="162" y="572" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="180" y="572" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">00:02</text>
-<text x="225" y="572" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#60a5fa"> info  </text>
-<text x="288" y="572" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">session opened from …</text>
+<text x="180" y="572" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">00:03</text>
+<text x="225" y="572" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#27ae60"> ok    </text>
+<text x="288" y="572" textLength="153" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">shard 2 caught up</text>
 <text x="486" y="572" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="513" y="572" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="1053" y="572" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>

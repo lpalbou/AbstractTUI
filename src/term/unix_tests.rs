@@ -6,6 +6,7 @@
 
 use super::*;
 use crate::term::options::{KittyFlags, MouseMode};
+use std::mem;
 use std::ptr;
 
 /// Read whatever the pty master has within `ms`.

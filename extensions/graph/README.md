@@ -4,9 +4,9 @@ Graph auto-layout AND rendering for
 [AbstractTUI](https://github.com/lpalbou/abstracttui): an
 [ADR-0004](https://github.com/lpalbou/abstracttui/blob/main/docs/adr/0004-extension-packaging.md)
 sibling crate (public core API only, std + `abstracttui` as the whole
-dependency posture). Both halves of the diagram lane's 0440: the
-layout engine (`GraphDesc -> Layout`) and the read-only widget
-(`GraphView`) over the core canvas layer.
+dependency posture). Two halves, one crate: the layout engine
+(`GraphDesc -> Layout`) and the read-only widget (`GraphView`) drawing
+node cards and sub-cell edge strokes over the core canvas layer.
 
 ```sh
 cargo add abstracttui abstracttui-graph
@@ -105,12 +105,12 @@ with a retry cycle) and `--example network` (force-placed concepts).
 
 ## Status
 
-Cycle 1 shipped the layout engine (`layered()` v1, `force()` v1.5,
-`grid()`, ASCII dump helper); cycle 2 shipped `GraphView` over the
-core canvas layer (0420) plus the BT/RL waypoint-mirror fix in
-`map_point` (cell-interval mirroring, found by the view's BT stroke
-golden). The mermaid renderer (0450) consumes this crate as its
-layout authority.
+Shipped and stable: the layout engine (`layered()`, `force()`,
+`grid()`, the ASCII dump helper) and `GraphView` with all four
+directions (BT/RL included), selection, tooltips and pan. The
+[`abstracttui-mermaid`](https://docs.rs/abstracttui-mermaid) renderer
+consumes this crate as its layout authority — flowcharts you write as
+mermaid text land on these same passes.
 
 ## License
 

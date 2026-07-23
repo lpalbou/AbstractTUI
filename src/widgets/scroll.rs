@@ -67,6 +67,16 @@ use crate::ui::{
 
 use super::list::draw_scrollbar;
 
+/// A clipped viewport over oversized mounted content: wheel, arrows,
+/// PgUp/PgDn, drag-able scrollbars, and the transcript idiom
+/// [`follow_tail`](Scroll::follow_tail) (pin to the bottom until the
+/// user scrolls up; re-arm by reaching it again or setting the signal).
+///
+/// Content mounts ONCE and keeps its widget state while scrolling; its
+/// extent is measured by default ([`content_size`](Scroll::content_size)
+/// is the optional hint). Bind [`offset_x`](Scroll::offset_x)/
+/// [`offset_y`](Scroll::offset_y) to own the position. The canonical
+/// build is `.view(cx)`; see the [module docs](crate::widgets::scroll).
 pub struct Scroll {
     content: View,
     /// `Some` = explicit extent hint (wins, nothing measured);

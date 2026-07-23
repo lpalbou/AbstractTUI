@@ -6,35 +6,33 @@
 <rect x="225" y="18" width="153" height="18" fill="#0f3460"/>
 <rect x="378" y="18" width="612" height="18" fill="#1a1a2e"/>
 <rect x="0" y="36" width="990" height="18" fill="#1a1a2e"/>
-<rect x="0" y="54" width="9" height="18" fill="#1a1a2e"/>
-<rect x="9" y="54" width="972" height="18" fill="#16213e"/>
-<rect x="981" y="54" width="9" height="18" fill="#1a1a2e"/>
+<rect x="0" y="54" width="990" height="18" fill="#1a1a2e"/>
 <rect x="0" y="72" width="9" height="18" fill="#1a1a2e"/>
 <rect x="9" y="72" width="972" height="18" fill="#16213e"/>
 <rect x="981" y="72" width="9" height="18" fill="#1a1a2e"/>
-<rect x="0" y="90" width="990" height="18" fill="#1a1a2e"/>
-<rect x="0" y="108" width="18" height="18" fill="#1a1a2e"/>
-<rect x="18" y="108" width="90" height="18" fill="#0f3460"/>
-<rect x="108" y="108" width="18" height="18" fill="#1a1a2e"/>
-<rect x="126" y="108" width="90" height="18" fill="#0f3460"/>
-<rect x="216" y="108" width="774" height="18" fill="#1a1a2e"/>
-<rect x="0" y="126" width="990" height="18" fill="#1a1a2e"/>
-<rect x="0" y="144" width="18" height="18" fill="#1a1a2e"/>
-<rect x="18" y="144" width="396" height="18" fill="#16213e"/>
-<rect x="414" y="144" width="576" height="18" fill="#1a1a2e"/>
-<rect x="0" y="162" width="990" height="18" fill="#1a1a2e"/>
+<rect x="0" y="90" width="9" height="18" fill="#1a1a2e"/>
+<rect x="9" y="90" width="972" height="18" fill="#16213e"/>
+<rect x="981" y="90" width="9" height="18" fill="#1a1a2e"/>
+<rect x="0" y="108" width="990" height="18" fill="#1a1a2e"/>
+<rect x="0" y="126" width="18" height="18" fill="#1a1a2e"/>
+<rect x="18" y="126" width="90" height="18" fill="#0f3460"/>
+<rect x="108" y="126" width="18" height="18" fill="#1a1a2e"/>
+<rect x="126" y="126" width="90" height="18" fill="#0f3460"/>
+<rect x="216" y="126" width="774" height="18" fill="#1a1a2e"/>
+<rect x="0" y="144" width="990" height="18" fill="#1a1a2e"/>
+<rect x="0" y="162" width="18" height="18" fill="#1a1a2e"/>
+<rect x="18" y="162" width="396" height="18" fill="#16213e"/>
+<rect x="414" y="162" width="576" height="18" fill="#1a1a2e"/>
 <rect x="0" y="180" width="990" height="18" fill="#1a1a2e"/>
 <rect x="0" y="198" width="990" height="18" fill="#1a1a2e"/>
-<rect x="0" y="216" width="18" height="18" fill="#1a1a2e"/>
-<rect x="18" y="216" width="954" height="18" fill="#16213e"/>
-<rect x="972" y="216" width="18" height="18" fill="#1a1a2e"/>
+<rect x="0" y="216" width="990" height="18" fill="#1a1a2e"/>
 <rect x="0" y="234" width="18" height="18" fill="#1a1a2e"/>
-<rect x="18" y="234" width="9" height="18" fill="#16213e"/>
-<rect x="27" y="234" width="936" height="18" fill="#58273d"/>
-<rect x="963" y="234" width="9" height="18" fill="#16213e"/>
+<rect x="18" y="234" width="954" height="18" fill="#16213e"/>
 <rect x="972" y="234" width="18" height="18" fill="#1a1a2e"/>
 <rect x="0" y="252" width="18" height="18" fill="#1a1a2e"/>
-<rect x="18" y="252" width="954" height="18" fill="#16213e"/>
+<rect x="18" y="252" width="9" height="18" fill="#16213e"/>
+<rect x="27" y="252" width="936" height="18" fill="#58273d"/>
+<rect x="963" y="252" width="9" height="18" fill="#16213e"/>
 <rect x="972" y="252" width="18" height="18" fill="#1a1a2e"/>
 <rect x="0" y="270" width="18" height="18" fill="#1a1a2e"/>
 <rect x="18" y="270" width="954" height="18" fill="#16213e"/>
@@ -83,50 +81,49 @@
 <text x="0" y="32" textLength="126" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">      Abstract</text>
 <text x="126" y="32" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#e94560">TUI</text>
 <text x="225" y="32" textLength="153" lengthAdjust="spacingAndGlyphs" fill="#e94560"> Dark (Abstract) </text>
-<text x="18" y="68" textLength="99" lengthAdjust="spacingAndGlyphs" fill="#eeeeee" font-weight="700">interactive</text>
-<text x="117" y="68" textLength="864" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">   visual                                                                                       </text>
-<text x="9" y="86" textLength="117" lengthAdjust="spacingAndGlyphs" fill="#e94560">▔▔▔▔▔▔▔▔▔▔▔▔▔</text>
-<text x="0" y="122" textLength="126" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   click me   </text>
-<text x="126" y="122" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#666666"> disabled </text>
-<text x="216" y="122" textLength="774" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">  clicks: 0                                                                           </text>
-<text x="18" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">▐</text>
-<text x="27" y="158" textLength="270" lengthAdjust="spacingAndGlyphs" fill="#666666">type your name, Enter submits…</text>
-<text x="405" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">▌</text>
-<text x="0" y="194" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">  hello, stranger!                                                                                            </text>
-<text x="18" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">┌</text>
-<text x="27" y="230" textLength="315" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> list — arrows move, wheel scrolls </text>
-<text x="342" y="230" textLength="630" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">─────────────────────────────────────────────────────────────────────┐</text>
-<text x="18" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="27" y="248" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">abstract-dark                                                                                           </text>
-<text x="963" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="50" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">the terminal, composed</text>
+<text x="18" y="86" textLength="99" lengthAdjust="spacingAndGlyphs" fill="#eeeeee" font-weight="700">interactive</text>
+<text x="117" y="86" textLength="864" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">   visual                                                                                       </text>
+<text x="9" y="104" textLength="117" lengthAdjust="spacingAndGlyphs" fill="#e94560">▔▔▔▔▔▔▔▔▔▔▔▔▔</text>
+<text x="0" y="140" textLength="126" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   click me   </text>
+<text x="126" y="140" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#666666"> disabled </text>
+<text x="216" y="140" textLength="774" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">  clicks: 0                                                                           </text>
+<text x="18" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">▐</text>
+<text x="27" y="176" textLength="270" lengthAdjust="spacingAndGlyphs" fill="#666666">type your name, Enter submits…</text>
+<text x="405" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">▌</text>
+<text x="0" y="212" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">  hello, stranger!                                                                                            </text>
+<text x="18" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">┌</text>
+<text x="27" y="248" textLength="315" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> list — arrows move, wheel scrolls </text>
+<text x="342" y="248" textLength="630" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">─────────────────────────────────────────────────────────────────────┐</text>
 <text x="18" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="27" y="266" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">observer-night                                                                                          </text>
+<text x="27" y="266" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">abstract-dark                                                                                           </text>
 <text x="963" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="27" y="284" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">catppuccin-mocha                                                                                        </text>
+<text x="27" y="284" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">observer-night                                                                                          </text>
 <text x="963" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="27" y="302" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">rose-pine                                                                                               </text>
+<text x="27" y="302" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">catppuccin-mocha                                                                                        </text>
 <text x="963" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="27" y="320" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">tokyo-night                                                                                             </text>
+<text x="27" y="320" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">rose-pine                                                                                               </text>
 <text x="963" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="27" y="338" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">nord                                                                                                    </text>
+<text x="27" y="338" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">tokyo-night                                                                                             </text>
 <text x="963" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="27" y="356" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">one-dark                                                                                                </text>
+<text x="27" y="356" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">nord                                                                                                    </text>
 <text x="963" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="374" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="27" y="374" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">dracula                                                                                                 </text>
+<text x="27" y="374" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">one-dark                                                                                                </text>
 <text x="963" y="374" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="392" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="27" y="392" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">monokai                                                                                                 </text>
+<text x="27" y="392" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">dracula                                                                                                 </text>
 <text x="963" y="392" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="410" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="27" y="410" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">gruvbox                                                                                                 </text>
+<text x="27" y="410" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">monokai                                                                                                 </text>
 <text x="963" y="410" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="428" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="27" y="428" textLength="936" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">gruvbox                                                                                                 </text>
 <text x="963" y="428" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="446" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="963" y="446" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>

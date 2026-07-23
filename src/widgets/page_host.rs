@@ -91,6 +91,19 @@ struct PageDef {
     build: PageBuilder,
 }
 
+/// The page-level tab host: N full pages addressed by id behind one
+/// themed, windowed tab bar with badges — the app-shell container.
+///
+/// Each page is a builder `FnMut(Scope) -> View` that runs on a fresh
+/// generation scope per activation: only the active page is mounted,
+/// and durable page state belongs in app-owned signals OUTSIDE the
+/// builders (type into a form, switch away, come back — the draft
+/// survives). Bind [`active`](PageHost::active) to own navigation;
+/// Ctrl+PgUp/PgDn are container-reserved,
+/// [`number_jump`](PageHost::number_jump) opts into digit jumps. For a
+/// small in-content strip use [`Tabs`](crate::widgets::Tabs). The
+/// canonical build is `.view(cx)`; see the
+/// [module docs](crate::widgets::page_host).
 pub struct PageHost {
     pages: Vec<PageDef>,
     active: Option<Signal<String>>,
@@ -260,6 +273,9 @@ impl PageHost {
                     return;
                 }
                 active.set(ids[target].clone());
+                // Held borrow across `f`: safe — dispatch/shortcut-only
+                // slot; external `active` writes deliberately never fire
+                // it (the SharedCallback held-borrow contract).
                 if let Some(f) = on_change.borrow_mut().as_mut() {
                     f(ids[target].as_str());
                 }

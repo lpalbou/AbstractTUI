@@ -148,7 +148,13 @@ fn main() -> abstracttui::base::Result<()> {
         let ptt = ptt.on_start(start_synth).on_stop(stop_synth);
 
         // ---- widgets -----------------------------------------------------
-        let mono = Meter::new(level).db_floor(-60.0).view(cx);
+        // The mono channel is pinned to one row (a dB bar is a line);
+        // the scope and spectrum keep their grow-into-region defaults
+        // and split what the meters row leaves them.
+        let mono = Meter::new(level)
+            .db_floor(-60.0)
+            .layout(LayoutStyle::line(1))
+            .view(cx);
         let spectrum = Meter::bands(bands).bar(3, 1).view(cx);
         let scope = AudioScope::new(scope_window).range(0.0, 1.0).view(cx);
 
@@ -170,9 +176,15 @@ fn main() -> abstracttui::base::Result<()> {
                 })
             })
             // level + spectrum row ---------------------------------------
+            // h(11) is the arithmetic, spelled out: 2 label rows + 3 gap
+            // rows + 1 meter row leaves 5 rows for the scope (Meter and
+            // AudioScope default to grow-into-region — at the old h(6)
+            // the fixed rows consumed everything and both were invisible).
+            // shrink(0.0): the meters are the demo; the transcript below
+            // is the pane that gives on a short terminal.
             .child(
                 Element::new()
-                    .style(LayoutStyle::row().gap(2).h(6))
+                    .style(LayoutStyle::row().gap(2).h(11).shrink(0.0))
                     .child(
                         Element::new()
                             .style(LayoutStyle::column().gap(1).grow(1.0))
@@ -204,8 +216,11 @@ fn main() -> abstracttui::base::Result<()> {
                 dyn_view(LayoutStyle::line(1), move || {
                     let fidelity = keys.fidelity();
                     let kitty = caps.get().kitty_keyboard;
+                    // The gesture label is a complete clause ("hold
+                    // Space" / "press Space to start/stop") — prefix it,
+                    // never append to it.
                     text(format!(
-                        "{} to talk · key state: {:?} (kitty keyboard: {}) · c clear · q quit",
+                        "talk: {} · key state: {:?} (kitty keyboard: {}) · c clear · q quit",
                         ptt.gesture_label(),
                         fidelity,
                         if kitty { "live" } else { "off" },

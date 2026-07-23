@@ -61,6 +61,18 @@ impl Column {
     }
 }
 
+/// Columns, a styled header, and virtualized selectable rows — the
+/// browsing surface.
+///
+/// Column widths are fixed/percent/flex; bind
+/// [`selection`](Table::selection) to a `Signal<usize>`. Selection
+/// follows movement; [`on_activate`](Table::on_activate) is the commit
+/// (Enter, Space, or a true double-click on the selected row — a slow
+/// re-click only re-selects). Sorting stays the app's job:
+/// [`on_sort_requested`](Table::on_sort_requested) reports the header
+/// click, the app reorders its data and passes `sorted` back for the
+/// indicator. The canonical build is `.view(cx)`; see the
+/// [module docs](crate::widgets::table).
 pub struct Table {
     columns: Vec<Column>,
     rows: Vec<Vec<String>>,
@@ -208,6 +220,8 @@ impl Table {
                     *o = (*o).clamp(0, (len as i32 - body_h.max(1)).max(0));
                 });
                 if changed {
+                    // Held borrow across `f`: safe — dispatch-only slot
+                    // (the SharedCallback held-borrow contract).
                     if let Some(f) = on_select.borrow_mut().as_mut() {
                         f(target);
                     }
@@ -231,6 +245,8 @@ impl Table {
                     // claim a key without a consumer).
                     if matches!(k.key, Key::Enter | Key::Char(' ')) {
                         if len > 0 {
+                            // Held borrow: safe — dispatch-only slot (the
+                            // SharedCallback held-borrow contract).
                             if let Some(f) = activate.borrow_mut().as_mut() {
                                 f(selection.get_untracked().min(len - 1));
                                 ctx.stop_propagation();
@@ -254,6 +270,8 @@ impl Table {
                                 Some((col, _)) => (col + 1) % ncols,
                                 None => 0,
                             };
+                            // Held borrow: safe — dispatch-only slot (the
+                            // SharedCallback held-borrow contract).
                             if let Some(f) = on_sort.borrow_mut().as_mut() {
                                 f(next);
                                 ctx.stop_propagation();
@@ -289,6 +307,8 @@ impl Table {
                             let mut x = rect.x;
                             for (i, w) in cols.iter().enumerate() {
                                 if m.pos.x >= x && m.pos.x < x + w {
+                                    // Held borrow: safe — dispatch-only slot
+                                    // (SharedCallback held-borrow contract).
                                     if let Some(f) = on_sort.borrow_mut().as_mut() {
                                         f(i);
                                     }

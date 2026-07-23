@@ -23,8 +23,19 @@ use super::node::{eq_any, NodeKind};
 use super::runtime::{self, with_rt, RawId};
 use super::signal::Signal;
 
-/// `Copy` handle to an ownership scope. Component bodies receive one and
-/// create their reactive state through it.
+/// `Copy` handle to an ownership scope: where reactive state is created,
+/// and when it dies. Component bodies receive one (`App::mount`, page
+/// and drawer builders, `create_root`) and mint their state through it:
+/// [`signal`](Scope::signal), [`memo`](Scope::memo),
+/// [`effect`](Scope::effect), [`provide_context`](Scope::provide_context)
+/// / [`use_context`](Scope::use_context), and [`child`](Scope::child)
+/// for a sub-lifetime you dispose yourself.
+///
+/// Everything created through a scope is disposed with it — a closed
+/// pane's signals, effects, timers and connections cannot outlive the
+/// pane. The handle is an arena index, so it is `Copy`: move it into as
+/// many closures as you like. See the [module docs](crate::reactive)
+/// for the ownership law and the runnable example.
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Scope {
     pub(crate) id: RawId,

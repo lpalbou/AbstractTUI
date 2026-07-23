@@ -183,12 +183,18 @@ fn main() -> abstracttui::base::Result<()> {
                     .style(LayoutStyle::default().grow(1.0))
                     .build(),
             )
-            .child(text(
-                "keys: 1/2/3 gates · inside: arrows move, Enter commits,",
-            ))
-            .child(text(
-                "Space toggles (multi), Esc cancels · Ctrl+T theme · q quit",
-            ))
+            // Two self-contained legend lines, grouped in a gapless
+            // sub-column (as direct children, the outer gap(1) would
+            // split the legend with a blank row).
+            .child(
+                Element::new()
+                    .style(LayoutStyle::column())
+                    .child(text("keys: 1/2/3 open the gates · Ctrl+T theme · q quit"))
+                    .child(text(
+                        "inside a gate: arrows move · Enter commits · Space toggles (multi) · Esc cancels",
+                    ))
+                    .build(),
+            )
             .build()
     })?;
     app.run()

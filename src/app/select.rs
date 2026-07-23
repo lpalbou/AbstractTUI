@@ -277,6 +277,10 @@ impl Select {
                     return;
                 }
                 value.set(idx);
+                // Held borrow across `f`: safe — every caller (commit,
+                // commit_on_move movement, Escape restore) runs from
+                // dispatch with no session borrow held (the
+                // SharedCallback held-borrow contract).
                 if let Some(f) = on_change.borrow_mut().as_mut() {
                     f(idx);
                 }

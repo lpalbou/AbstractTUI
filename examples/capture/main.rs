@@ -19,12 +19,18 @@
 //! pty — byte-deterministic.
 //!
 //! Usage:
-//!   cargo build --examples                    # shots run the built binaries
-//!   cargo run --example capture               # everything
+//!   cargo build --workspace --examples        # shots run the built binaries
+//!   cargo run --example capture               # everything published
 //!   cargo run --example capture -- themes     # just themes-table.md
 //!   cargo run --example capture -- splash     # just the splash frames
 //!   cargo run --example capture -- shots      # just the pty captures
 //!   cargo run --example capture -- apps       # just the in-process app shots
+//!   cargo run --example capture -- review     # review sweep -> untracked/
+//!
+//! The `review` family (`review_shots.rs`) is the design-review sweep:
+//! EVERY runnable example (root + extensions) in two or three staged
+//! states, written to `untracked/review-shots/` — never published, so
+//! wall-clock wobble is acceptable there.
 //!
 //! Determinism: sizes, themes, and demo data are fixed (the dashboard
 //! honors `ABSTRACTTUI_FIXED_CLOCK`/`ABSTRACTTUI_START_THEME`); the one
@@ -34,9 +40,14 @@
 //! `apps` family has no wobble at all (headless, scripted, clockless).
 
 mod app_shots;
+mod review_shots;
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+// The pty half (and its bin-dir walk) is unix-only; keep the import
+// with it so the windows cross-check stays warning-free.
+#[cfg(unix)]
+use std::path::PathBuf;
 
 use abstracttui::base::Size;
 use abstracttui::boot::{Brandmark3d, FallbackSplash, SplashFrameSource};
@@ -44,19 +55,25 @@ use abstracttui::render::{Cell, FrameDiff, PresentCaps, Presenter, Surface};
 use abstracttui::testing::VtScreen;
 use abstracttui::theme::{default_theme, themes, TokenSet};
 
-/// One pty capture: which example, at what size, with which env, how
-/// long to let it settle before the quit key lands.
+/// One pty capture: which example, at what size, with which env, and a
+/// paced key script. The captured frame is the LAST one painted before
+/// the app leaves the alternate screen — so the final step must quit
+/// WITHOUT disturbing the staged state (`\x03` = the default Ctrl+C
+/// quit works from any state: modals, focus traps, composers where a
+/// plain `q` would just type a letter).
+// Fields are read by the unix pty path only; the non-unix stub keeps
+// the table compiling without pretending to use it.
+#[cfg_attr(not(unix), allow(dead_code))]
 struct Shot {
-    /// Artifact base name in docs/captures/.
+    /// Artifact base name (in docs/captures/ or the review dir).
     name: &'static str,
     /// Example binary name under target/…/examples/.
     example: &'static str,
     cols: i32,
     rows: i32,
-    /// Settle time before `keys` are typed into the pty.
-    delay_ms: u64,
-    /// Bytes typed after the delay (usually just `q`).
-    keys: &'static str,
+    /// Paced input: (settle delay in ms, then these bytes) per step.
+    /// Each delay runs BEFORE its bytes — the first one covers boot.
+    steps: &'static [(u64, &'static str)],
     /// Extra env for the child (TERM/COLORTERM are always set).
     env: &'static [(&'static str, &'static str)],
 }
@@ -70,8 +87,7 @@ const SHOTS: &[Shot] = &[
         example: "hello",
         cols: 80,
         rows: 24,
-        delay_ms: 1500,
-        keys: "q",
+        steps: &[(1500, "q")],
         env: &[],
     },
     Shot {
@@ -79,8 +95,7 @@ const SHOTS: &[Shot] = &[
         example: "dashboard",
         cols: 120,
         rows: 35,
-        delay_ms: 3500,
-        keys: "q",
+        steps: &[(3500, "q")],
         env: &[FIXED_CLOCK],
     },
     Shot {
@@ -88,8 +103,7 @@ const SHOTS: &[Shot] = &[
         example: "dashboard",
         cols: 120,
         rows: 35,
-        delay_ms: 3500,
-        keys: "q",
+        steps: &[(3500, "q")],
         env: &[FIXED_CLOCK, ("ABSTRACTTUI_START_THEME", "abstract-dawn")],
     },
     Shot {
@@ -97,8 +111,7 @@ const SHOTS: &[Shot] = &[
         example: "themes",
         cols: 110,
         rows: 30,
-        delay_ms: 1800,
-        keys: "q",
+        steps: &[(1800, "q")],
         env: &[],
     },
     Shot {
@@ -106,8 +119,7 @@ const SHOTS: &[Shot] = &[
         example: "widgets",
         cols: 110,
         rows: 32,
-        delay_ms: 1800,
-        keys: "q",
+        steps: &[(1800, "q")],
         env: &[],
     },
     Shot {
@@ -115,8 +127,7 @@ const SHOTS: &[Shot] = &[
         example: "components",
         cols: 100,
         rows: 30,
-        delay_ms: 1800,
-        keys: "q",
+        steps: &[(1800, "q")],
         env: &[],
     },
     Shot {
@@ -124,8 +135,7 @@ const SHOTS: &[Shot] = &[
         example: "grid",
         cols: 110,
         rows: 30,
-        delay_ms: 1800,
-        keys: "q",
+        steps: &[(1800, "q")],
         env: &[],
     },
     Shot {
@@ -133,8 +143,7 @@ const SHOTS: &[Shot] = &[
         example: "gallery",
         cols: 112,
         rows: 38,
-        delay_ms: 1800,
-        keys: "q",
+        steps: &[(1800, "q")],
         env: &[],
     },
     Shot {
@@ -142,8 +151,7 @@ const SHOTS: &[Shot] = &[
         example: "viewer3d",
         cols: 100,
         rows: 30,
-        delay_ms: 2000,
-        keys: "q",
+        steps: &[(2000, "q")],
         env: &[],
     },
     Shot {
@@ -151,8 +159,7 @@ const SHOTS: &[Shot] = &[
         example: "images",
         cols: 100,
         rows: 30,
-        delay_ms: 1800,
-        keys: "q",
+        steps: &[(1800, "q")],
         env: &[],
     },
 ];
@@ -165,28 +172,46 @@ fn main() {
         std::process::exit(1);
     }
     let mut produced: Vec<String> = Vec::new();
+    let mut published = false;
     if matches!(what.as_str(), "all" | "themes") {
         produced.push(themes_table(&out));
+        published = true;
     }
     if matches!(what.as_str(), "all" | "splash") {
         produced.extend(splash_frames(&out));
+        published = true;
     }
     if matches!(what.as_str(), "all" | "shots") {
-        produced.extend(pty_shots(&out));
+        produced.extend(pty_shots(&out, SHOTS));
+        published = true;
     }
     if matches!(what.as_str(), "all" | "apps") {
         produced.extend(app_shots::app_shots(&out));
+        published = true;
+    }
+    // The design-review sweep: never part of `all`, never published —
+    // it writes to untracked/ so wall-clock wobble stays out of docs/.
+    if what.as_str() == "review" {
+        let review_out = Path::new(env!("CARGO_MANIFEST_DIR")).join("untracked/review-shots");
+        if let Err(e) = fs::create_dir_all(&review_out) {
+            eprintln!("capture: cannot create {}: {e}", review_out.display());
+            std::process::exit(1);
+        }
+        produced.extend(pty_shots(&review_out, review_shots::REVIEW_SHOTS));
     }
     if produced.is_empty() {
         eprintln!(
-            "capture: nothing produced (arg {what:?}; expected all|themes|splash|shots|apps)"
+            "capture: nothing produced (arg {what:?}; expected all|themes|splash|shots|apps|review)"
         );
         std::process::exit(1);
     }
     // The manifest indexes the DIRECTORY, not this run — partial runs
-    // (`-- shots`) must not delist the other artifact families.
-    write_manifest(&out);
-    println!("capture: {} artifacts in {}", produced.len(), out.display());
+    // (`-- shots`) must not delist the other artifact families. Review
+    // runs never touch it.
+    if published {
+        write_manifest(&out);
+    }
+    println!("capture: {} artifacts", produced.len());
 }
 
 // ---------------------------------------------------------------- themes
@@ -293,10 +318,10 @@ fn surface_screen(surface: &Surface, size: Size) -> VtScreen {
 /// truncated at the final `1049l` so the app's exit doesn't wipe the
 /// capture back to the primary screen).
 #[cfg(unix)]
-fn pty_shots(out: &Path) -> Vec<String> {
+fn pty_shots(out: &Path, shots: &[Shot]) -> Vec<String> {
     let mut produced = Vec::new();
     let bin_dir = example_bin_dir();
-    for shot in SHOTS {
+    for shot in shots {
         let bin = bin_dir.join(shot.example);
         if !bin.exists() {
             eprintln!(
@@ -338,14 +363,14 @@ fn pty_shots(out: &Path) -> Vec<String> {
 }
 
 #[cfg(not(unix))]
-fn pty_shots(_out: &Path) -> Vec<String> {
+fn pty_shots(_out: &Path, _shots: &[Shot]) -> Vec<String> {
     eprintln!("capture: pty shots need a unix `script`; themes/splash artifacts still work");
     Vec::new()
 }
 
 /// Drive one binary under `script -q` with the pty sized via `stty`,
-/// keys typed after a settle delay. macOS and util-linux `script` spell
-/// the command differently; both are handled.
+/// each key step typed after its own settle delay. macOS and util-linux
+/// `script` spell the command differently; both are handled.
 #[cfg(unix)]
 fn run_pty(shot: &Shot, bin: &Path) -> std::io::Result<Vec<u8>> {
     let raw_path = std::env::temp_dir().join(format!("abstracttui-capture-{}.raw", shot.name));
@@ -369,12 +394,19 @@ fn run_pty(shot: &Shot, bin: &Path) -> std::io::Result<Vec<u8>> {
             sh_quote(&raw_path.to_string_lossy())
         )
     };
-    let line = format!(
-        "(sleep {}; printf '%s' {}) | {} >/dev/null 2>&1",
-        shot.delay_ms as f64 / 1000.0,
-        sh_quote(shot.keys),
-        script_cmd
-    );
+    let feeder = shot
+        .steps
+        .iter()
+        .map(|(delay_ms, keys)| {
+            format!(
+                "sleep {}; printf '%s' {}",
+                *delay_ms as f64 / 1000.0,
+                sh_quote(keys)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    let line = format!("({feeder}) | {script_cmd} >/dev/null 2>&1");
     let mut cmd = std::process::Command::new("sh");
     cmd.arg("-c").arg(&line);
     cmd.env("TERM", "xterm-256color");

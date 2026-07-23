@@ -86,10 +86,14 @@ fn main() -> abstracttui::base::Result<()> {
                     ))
                     // -- component #2: StatCard, three instances ---------
                     // Same function, different props/events; each card's
-                    // value is a live Dyn over its own signal.
+                    // value is a live Dyn over its own signal. h(5) is
+                    // exactly border + label/value/arrow; shrink(0.0)
+                    // keeps those rows honest when the terminal is short
+                    // (fixed chrome never silently collapses — the form
+                    // below scrolls instead).
                     .child(
                         Element::new()
-                            .style(LayoutStyle::row().gap(2).h(6))
+                            .style(LayoutStyle::row().gap(2).h(5).shrink(0.0))
                             .child(stat_card(&t, "deploys", deploys, Trend::Up, move || {
                                 deploys.update(|n| *n += 1)
                             }))
@@ -104,95 +108,116 @@ fn main() -> abstracttui::base::Result<()> {
                     // -- component #3: Field { label, child } ------------
                     // The child is ANY View: input, checkbox, radio — the
                     // wrapper never knows what it hosts (composition).
+                    // Field rows stack gaplessly (a form reads fine
+                    // dense) so the whole card fits a 30-row terminal
+                    // with every row visible; the live summary sits
+                    // below the fields.
                     .child(
                         Block::new()
                             .title("settings")
                             .fill(t.surface)
                             .shadow(t.shadow_ground)
-                            .layout(LayoutStyle::column().gap(1).grow(1.0))
-                            .child(field(
-                                &t,
-                                "name",
-                                TextInput::new()
-                                    .value(name)
-                                    .placeholder("service name…")
-                                    .layout(LayoutStyle::default().w(32).h(1))
-                                    .element(gcx, &t)
-                                    .build(),
-                            ))
-                            .child(field(
-                                &t,
-                                "notifications",
-                                Checkbox::new("page the on-call")
-                                    .checked(notify)
-                                    .element(gcx, &t)
-                                    .build(),
-                            ))
-                            .child(field(
-                                &t,
-                                "channel",
-                                RadioGroup::new(vec!["stable".to_string(), "beta".to_string(), "nightly".to_string()])
-                                .selection(channel)
-                                .element(gcx, &t)
-                                .build(),
-                            ))
-                            // -- the 0500 choice family, real state ------
-                            // The SAME channel signal as the radio above:
-                            // committing here moves the radio dot too.
-                            .child(field(
-                                &t,
-                                "channel select",
-                                Select::new(vec![
-                                    SelectOption::new("stable").hint("lts"),
-                                    SelectOption::new("beta"),
-                                    SelectOption::new("nightly").hint("daily"),
-                                ])
-                                .value(channel)
-                                .layout(LayoutStyle::default().w(28).h(1).shrink(0.0))
-                                .element(gcx, &t)
-                                .build(),
-                            ))
-                            // The consumer's /theme case: pick a theme by
-                            // typing — commit applies it live.
-                            .child(field(
-                                &t,
-                                "theme",
-                                Combobox::new(
-                                    themes()
-                                        .iter()
-                                        .map(|th| {
-                                            SelectOption::new(th.label)
-                                                .hint(if th.dark { "dark" } else { "light" })
+                            .layout(
+                                LayoutStyle::column()
+                                    .gap(1)
+                                    .grow(1.0)
+                                    .padding(Edges::hv(1, 0)),
+                            )
+                            .child(
+                                Element::new()
+                                    .style(LayoutStyle::column())
+                                    .child(field(
+                                        &t,
+                                        "name",
+                                        TextInput::new()
+                                            .value(name)
+                                            .placeholder("service name…")
+                                            .layout(LayoutStyle::default().w(32).h(1))
+                                            .element(gcx, &t)
+                                            .build(),
+                                    ))
+                                    .child(field(
+                                        &t,
+                                        "notifications",
+                                        Checkbox::new("page the on-call")
+                                            .checked(notify)
+                                            .element(gcx, &t)
+                                            .build(),
+                                    ))
+                                    .child(field(
+                                        &t,
+                                        "channel",
+                                        RadioGroup::new(vec![
+                                            "stable".to_string(),
+                                            "beta".to_string(),
+                                            "nightly".to_string(),
+                                        ])
+                                        .selection(channel)
+                                        .element(gcx, &t)
+                                        .build(),
+                                    ))
+                                    // -- the 0500 choice family ----------
+                                    // The SAME channel signal as the radio
+                                    // above: committing here moves the
+                                    // radio dot too.
+                                    .child(field(
+                                        &t,
+                                        "channel select",
+                                        Select::new(vec![
+                                            SelectOption::new("stable").hint("lts"),
+                                            SelectOption::new("beta"),
+                                            SelectOption::new("nightly").hint("daily"),
+                                        ])
+                                        .value(channel)
+                                        .layout(LayoutStyle::default().w(28).h(1).shrink(0.0))
+                                        .element(gcx, &t)
+                                        .build(),
+                                    ))
+                                    // The consumer's /theme case: pick a
+                                    // theme by typing — commit applies it
+                                    // live.
+                                    .child(field(
+                                        &t,
+                                        "theme",
+                                        Combobox::new(
+                                            themes()
+                                                .iter()
+                                                .map(|th| {
+                                                    SelectOption::new(th.label).hint(
+                                                        if th.dark { "dark" } else { "light" },
+                                                    )
+                                                })
+                                                .collect(),
+                                        )
+                                        .value(theme_ix)
+                                        .placeholder("type to search themes…")
+                                        .on_change(|i| {
+                                            set_theme_by_id(themes()[i].id);
                                         })
-                                        .collect(),
-                                )
-                                .value(theme_ix)
-                                .placeholder("type to search themes…")
-                                .on_change(|i| {
-                                    set_theme_by_id(themes()[i].id);
-                                })
-                                .layout(LayoutStyle::default().w(28).h(1).shrink(0.0))
-                                .element(gcx, &t)
-                                .build(),
-                            ))
-                            .child(field(
-                                &t,
-                                "features",
-                                MultiSelect::new(vec![
-                                    SelectOption::new("autosave"),
-                                    SelectOption::new("telemetry"),
-                                    SelectOption::new("backups"),
-                                    SelectOption::new("beta api").disabled(true),
-                                ])
-                                .values(features)
-                                .placeholder("enable features…")
-                                .layout(LayoutStyle::default().w(28).h(1).shrink(0.0))
-                                .element(gcx, &t)
-                                .build(),
-                            ))
+                                        .layout(LayoutStyle::default().w(28).h(1).shrink(0.0))
+                                        .element(gcx, &t)
+                                        .build(),
+                                    ))
+                                    .child(field(
+                                        &t,
+                                        "features",
+                                        MultiSelect::new(vec![
+                                            SelectOption::new("autosave"),
+                                            SelectOption::new("telemetry"),
+                                            SelectOption::new("backups"),
+                                            SelectOption::new("beta api").disabled(true),
+                                        ])
+                                        .values(features)
+                                        .placeholder("enable features…")
+                                        .layout(LayoutStyle::default().w(28).h(1).shrink(0.0))
+                                        .element(gcx, &t)
+                                        .build(),
+                                    ))
+                                    .build(),
+                            )
                             // Live summary: a Dyn reading the SAME signals
                             // the form writes — edits appear as you type.
-                            .child(dyn_view(LayoutStyle::default().h(1), move || {
+                            .child(dyn_view(LayoutStyle::default().h(1).shrink(0.0), move || {
                                 let ch = ["stable", "beta", "nightly"][channel.get().min(2)];
                                 text(format!(
                                     "→ {} · notifications {} · {} channel · {} features",
@@ -215,7 +240,7 @@ fn main() -> abstracttui::base::Result<()> {
                     // title row or focus it and press Enter/Space.
                     .child(
                         Element::new()
-                            .style(LayoutStyle::row().gap(2))
+                            .style(LayoutStyle::row().gap(2).shrink(0.0))
                             .child(
                                 Button::new("toggle 3rd")
                                     .on_click(move || ext_folded.update(|f| *f = !*f))
@@ -265,10 +290,17 @@ enum Trend {
     Flat,
 }
 
-/// A reusable, clickable stat card: label + live value + trend arrow.
+/// A reusable, clickable stat card: label (the card title), live
+/// value, and trend arrow.
 /// PROPS: label (data), `value` (live signal), trend; EVENT: `on_click`.
 /// Click or focus+Enter fires it. One function — every instance on
 /// screen is this.
+///
+/// Sizing notes worth stealing: the block height is EXPLICIT and
+/// shadow-inclusive (title row plus 2 content rows plus bottom border
+/// plus 1 shadow row = 5, matching the row's `.h(5)`), and draw closures
+/// size themselves (`w(...)`) — a draw element has no intrinsic
+/// measure, so an unsized one can solve to zero cells.
 fn stat_card(
     t: &TokenSet,
     label: &'static str,
@@ -281,32 +313,20 @@ fn stat_card(
         Trend::Down => ("▼", t.error),
         Trend::Flat => ("→", t.text_muted),
     };
-    let label_ink = t.text_muted;
     let value_ink = t.accent;
     Block::new()
         .border(BorderKind::Rounded)
+        .title(label)
         .fill(t.surface)
         .shadow(t.shadow_ground)
-        .layout(LayoutStyle::column().grow(1.0))
-        .child(
-            Element::new()
-                .style(LayoutStyle::default().h(1))
-                .draw(move |canvas, rect| {
-                    canvas.print(
-                        Point::new(rect.x, rect.y),
-                        label,
-                        label_ink,
-                        Rgba::TRANSPARENT,
-                    );
-                })
-                .build(),
-        )
-        .child(dyn_view(LayoutStyle::default().h(1), move || {
+        .layout(LayoutStyle::column().grow(1.0).h(5))
+        .child(dyn_view(LayoutStyle::line(1), move || {
             // The card's number is live: only THIS row re-renders when
             // its signal changes.
             let shown = format!("{}", value.get());
+            let w = shown.chars().count() as i32 + 1;
             Element::new()
-                .style(LayoutStyle::default().h(1))
+                .style(LayoutStyle::default().h(1).w(w))
                 .draw(move |canvas, rect| {
                     canvas.print(
                         Point::new(rect.x, rect.y),
@@ -319,7 +339,7 @@ fn stat_card(
         }))
         .child(
             Element::new()
-                .style(LayoutStyle::default().h(1))
+                .style(LayoutStyle::default().h(1).w(2))
                 .draw(move |canvas, rect| {
                     canvas.print(
                         Point::new(rect.x, rect.y),
@@ -385,12 +405,19 @@ fn build_log() -> String {
 }
 
 /// A toolbar strip: children on a raised ground — the simplest
-/// children-collection component.
+/// children-collection component. `shrink(0.0)`: a toolbar is
+/// incompressible chrome (the §"row vanishes" rule).
 fn toolbar(t: &TokenSet, children: Vec<View>) -> View {
     let ground = t.surface_raised;
     let ink = t.text;
     Element::new()
-        .style(LayoutStyle::row().gap(2).h(1).padding(Edges::hv(1, 0)))
+        .style(
+            LayoutStyle::row()
+                .gap(2)
+                .h(1)
+                .padding(Edges::hv(1, 0))
+                .shrink(0.0),
+        )
         .draw(move |canvas, rect| {
             canvas.fill(rect, ' ', ink, ground);
         })

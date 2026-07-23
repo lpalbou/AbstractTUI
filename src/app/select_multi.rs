@@ -186,6 +186,9 @@ impl MultiSelect {
                 let set = canonical(&options, &working.get_untracked());
                 if values.get_untracked() != set {
                     values.set(set.clone());
+                    // Held borrow across `f`: safe — Enter-commit only,
+                    // from dispatch (the SharedCallback held-borrow
+                    // contract).
                     if let Some(f) = on_change.borrow_mut().as_mut() {
                         f(set);
                     }

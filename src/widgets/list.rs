@@ -74,6 +74,15 @@ use crate::ui::{dyn_view, Element, EventCtx, Key, MouseButton, MouseKind, Phase,
 type HeightFn = Box<dyn Fn(usize, &str) -> i32>;
 type KeyFn = Box<dyn Fn(usize, &str) -> String>;
 
+/// A virtualized, selectable vertical list — the picker surface.
+///
+/// Bind [`selection`](List::selection) to a `Signal<usize>`; selection
+/// follows movement ([`on_select`](List::on_select) is the
+/// notification), and [`on_activate`](List::on_activate) is the commit:
+/// Enter, Space, or a click on the already-selected row (which is why a
+/// double-click activates with no timer). The canonical build is
+/// `.view(cx)`. See the [module docs](crate::widgets::list) for the
+/// full selection-vs-activation contract.
 pub struct List {
     items: Vec<String>,
     selection: Option<Signal<usize>>,
@@ -295,6 +304,8 @@ impl List {
                     *o = (*o).clamp(0, (total_rows - view_h.max(1)).max(0));
                 });
                 if changed {
+                    // Held borrow across `f`: safe — dispatch-only slot
+                    // (the SharedCallback held-borrow contract).
                     if let Some(f) = on_select.borrow_mut().as_mut() {
                         f(target);
                     }
@@ -331,6 +342,8 @@ impl List {
                     // own shortcuts (pre-0250 behavior, kept).
                     if matches!(k.key, Key::Enter | Key::Char(' ')) {
                         if len > 0 {
+                            // Held borrow: safe — dispatch-only slot (the
+                            // SharedCallback held-borrow contract).
                             if let Some(f) = activate.borrow_mut().as_mut() {
                                 f(selection.get_untracked().min(len - 1));
                                 ctx.stop_propagation();

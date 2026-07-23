@@ -47,6 +47,17 @@ pub(crate) type BoxedTextFn = Box<dyn FnMut(&str)>;
 /// reuses the alias + `notify` for the same borrow discipline.
 pub(crate) type TextCallback = Rc<RefCell<Option<BoxedTextFn>>>;
 
+/// The single-line text editor: bind [`value`](TextInput::value) to a
+/// `Signal<String>` and the field is controlled — cursor movement,
+/// Shift+arrow selection, word jumps, clipboard paste and masked
+/// (secret) mode come built in.
+///
+/// [`on_change`](TextInput::on_change) fires after every edit,
+/// [`on_submit`](TextInput::on_submit) on Enter; the placeholder
+/// renders `text_faint` and disappears on first input. For a multiline
+/// composer that grows with content, use
+/// [`TextArea`](crate::widgets::TextArea). The canonical build is
+/// `.view(cx)`; see the [module docs](crate::widgets::input).
 pub struct TextInput {
     value: Option<Signal<String>>,
     placeholder: String,

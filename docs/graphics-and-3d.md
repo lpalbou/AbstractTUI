@@ -22,7 +22,8 @@ fuzz-hardened.
 ### Picture to terminal: the capability ladder
 
 The engine picks the best channel the terminal proves it supports —
-`gfx::choose_channel(&caps)` — best first:
+`gfx::choose_channel(&caps.graphics())` (the ladder reads the
+graphics view of the capability report) — best first:
 
 | channel | how it draws | moves / resizes | removal | requires |
 | --- | --- | --- | --- | --- |
@@ -121,6 +122,19 @@ passthrough probe proves `allow-passthrough on` (see above). If a
 protocol row reads `yes` but you see mosaic, check `cell pixel size` —
 without pixel geometry the ladder stays conservative.
 
+### Not an image: hand-drawn vector strokes
+
+Charts, gauges, and hand-rolled traces do not go through the image
+pipeline at all. The public sub-cell canvas (`DotCanvas`, in the
+prelude) draws braille/quadrant dot grids with line/bezier/arc strokes
+and eighth-block fills — the same layer the shipped charts render
+through, and what the diagram extensions stroke their edges with.
+The full surface (dot-space model, primitives, the cell-color rule) is
+[api.md § canvas](api.md#canvas--canvas--vector-strokes); for
+node-and-edge diagrams, prefer the `abstracttui-graph` /
+`abstracttui-mermaid` crates over hand-stroking
+([graphs-and-diagrams.md](graphs-and-diagrams.md)).
+
 ## 3D end-to-end
 
 ### The five-line hello
@@ -190,8 +204,11 @@ orbits (the pointer is captured for the drag, so fast drags keep steering
 outside the rect), the wheel zooms — but the widget only *reports* deltas
 through `on_orbit`/`on_zoom`; the app owns camera state and clamping.
 `element(&TokenSet)` takes no scope because the widget holds no reactive
-state. Buffers persist inside the draw closure, so a steady-state repaint
-allocates nothing. `light`, `background`, `spin` (caller-driven
+state. The default layout grows into whatever region the parent hands it
+(a viewport has no intrinsic size to measure), so an un-`layout()`ed
+viewport is visible by construction; pass `.layout(...)` to size it
+explicitly. Buffers persist inside the draw closure, so a steady-state
+repaint allocates nothing. `light`, `background`, `spin` (caller-driven
 auto-rotation), and `cull_backfaces` round out the builder.
 
 For a complete interactive viewer, run
@@ -254,6 +271,10 @@ pure-cell 2D path with its own particle field (everywhere else). Try both:
 - **Pixel protocols** are verified byte-for-byte against the protocol
   specifications and a protocol state model, not against every live
   terminal emulator; mosaic is the universal, always-correct path.
+- **Screenshots**: cells under a kitty/iTerm2/sixel placement are not
+  the picture — captures export those regions as labeled veils rather
+  than fake cells, while mosaic images capture as themselves (they ARE
+  cells). See [api.md § "Screenshots & captures"](api.md#screenshots--captures).
 - **Animation**: LINEAR/STEP only; CUBICSPLINE channels and morph weights
   skip with labels; rotation interpolation is nlerp, not slerp.
 - **Skinning**: `JOINTS_0`/`WEIGHTS_0` only (4 joints per vertex), linear

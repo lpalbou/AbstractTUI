@@ -165,11 +165,15 @@ fn main() -> abstracttui::base::Result<()> {
                     return;
                 }
                 let help_inner = help.clone();
+                // 46x17: the panel content is 15 rows exactly (padding
+                // 2 + logo 1 + six key rows + six gap rows) and the
+                // modal chrome spends two more — undersized, flex
+                // pressure silently crushes the FIRST key rows away.
                 let modal = Modal::open(
                     &overlays,
                     cx,
                     viewport.get_untracked(),
-                    Size::new(46, 12),
+                    Size::new(46, 17),
                     {
                         let help_inner = help_inner.clone();
                         move |mcx| help_panel(mcx, help_inner)
@@ -348,8 +352,13 @@ fn body(
             Element::new()
                 .style(LayoutStyle::column().grow(1.0).gap(0))
                 .child(
+                    // min_h(11): the load cluster is 9 fixed rows of
+                    // meters + 2 border rows. The charts measure almost
+                    // nothing, so without a floor the measured basis
+                    // hands this row too little and the io meter leaks
+                    // through the panel's bottom border.
                     Element::new()
-                        .style(LayoutStyle::row().grow(3.0).gap(1))
+                        .style(LayoutStyle::row().grow(3.0).gap(1).min_h(11))
                         .child(traffic_panel(t, traffic.0, traffic.1))
                         .child(load_panel(t, tick))
                         .child(mark_panel(t, tick, show_mark, mark_model))

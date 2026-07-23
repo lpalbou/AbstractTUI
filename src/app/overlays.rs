@@ -29,12 +29,12 @@
 //! cycle.
 
 use std::cell::RefCell;
-use std::rc::{Rc, Weak};
+use std::rc::Rc;
 
 use crate::base::{Point, Rect, Size};
 use crate::gfx::Bitmap;
 use crate::reactive::{request_frame, Scope};
-use crate::render::{Blend, Cell, CellShader, ColorTransform, Layer, Surface};
+use crate::render::{Cell, Layer, Surface};
 use crate::ui::{StyledCanvas, SurfaceCanvas, UiTree, View};
 
 /// The root layer's id: created by the driver, never removable, z = 0.
@@ -347,140 +347,14 @@ impl Overlays {
             })
     }
 
-    /// Route an input event through overlay trees, topmost-z first.
-    /// Returns Some(consumed) when an overlay owned the event (a MODAL
-    /// overlay owns EVERYTHING while visible); None = fall through to
-    /// the root tree.
-    pub(crate) fn dispatch(&self, event: &crate::ui::UiEvent) -> Option<bool> {
-        use crate::ui::UiEvent;
-        // Snapshot (tree handle, modal, bounds, z) without holding the
-        // borrow while user handlers run.
-        let mut targets: Vec<(UiTree, bool, Rect, i32, u64)> = {
-            let store = self.store.borrow();
-            store
-                .meta
-                .iter()
-                .zip(&store.layers)
-                .filter(|(_, l)| l.visible())
-                .filter_map(|(m, l)| match &m.content {
-                    OverlayContent::Tree { tree, modal, .. } => {
-                        Some((tree.handle(), *modal, l.bounds(), l.z(), m.id))
-                    }
-                    _ => None,
-                })
-                .collect()
-        };
-        targets.sort_by_key(|(_, _, _, z, _)| std::cmp::Reverse(*z));
-        let mut fell_through_press = false;
-        for (tree, modal, bounds, _, id) in targets.iter() {
-            let mut tree = tree.handle();
-            let modal = *modal;
-            let bounds = *bounds;
-            match event {
-                UiEvent::Mouse(m) => {
-                    if modal || bounds.contains(m.pos) {
-                        // A press OUTSIDE a modal's bounds is swallowed
-                        // AND reported to its dismiss hook (menus close;
-                        // the press never acts below — deliberate).
-                        if modal
-                            && !bounds.contains(m.pos)
-                            && matches!(m.kind, crate::ui::MouseKind::Down(_))
-                        {
-                            self.fire_outside_press(*id);
-                            return Some(true);
-                        }
-                        // Overlay trees live in layer-local coordinates.
-                        let mut local = *m;
-                        local.pos = Point::new(m.pos.x - bounds.x, m.pos.y - bounds.y);
-                        let consumed = tree.dispatch(&UiEvent::Mouse(local));
-                        if modal {
-                            return Some(true); // modals swallow even misses
-                        }
-                        // The panel is OPAQUE: pointer events over it are
-                        // its own even when no handler consumed them —
-                        // click-through to covered content would act on
-                        // things the user cannot see.
-                        return Some(consumed);
-                    }
-                    if matches!(m.kind, crate::ui::MouseKind::Down(_)) {
-                        fell_through_press = true;
-                    }
-                }
-                UiEvent::Key(_) | UiEvent::Paste(_) => {
-                    if modal {
-                        return Some(tree.dispatch(event));
-                    }
-                    // NON-MODAL KEY RULE (cycle 5): the topmost overlay
-                    // tree HOLDING FOCUS owns keys — same opacity logic
-                    // as the pointer rule (a focused popup's Escape must
-                    // not also scroll the app). No focused overlay =
-                    // keys fall to the root.
-                    if tree.focused().is_some() {
-                        return Some(tree.dispatch(event));
-                    }
-                }
-                _ => {}
-            }
-        }
-        // A press that landed on the ROOT (outside every overlay) steals
-        // key focus back from non-modal overlays: one focus story across
-        // trees — click where you want your keys to go.
-        if fell_through_press {
-            for (tree, modal, _, _, _) in targets.iter() {
-                if !modal {
-                    tree.handle().set_focus(None);
-                }
-            }
-        }
-        None
-    }
+    // Input routing (dispatch, outside-press, pointer-cancel) lives in
+    // a `#[path]` sibling (file-size split): see overlay_input.rs.
+}
 
-    /// Take-out/run/put-back a modal's outside-press callback — user
-    /// code never runs under the store borrow, and the callback may
-    /// remove the layer it belongs to (a menu closing itself).
-    fn fire_outside_press(&self, id: u64) {
-        let taken = {
-            let mut store = self.store.borrow_mut();
-            store
-                .index_of(id)
-                .and_then(|i| match &mut store.meta[i].content {
-                    OverlayContent::Tree { on_outside, .. } => on_outside.take(),
-                    _ => None,
-                })
-        };
-        let Some(mut f) = taken else { return };
-        f();
-        let mut store = self.store.borrow_mut();
-        if let Some(i) = store.index_of(id) {
-            if let OverlayContent::Tree { on_outside, .. } = &mut store.meta[i].content {
-                *on_outside = Some(f);
-            }
-        }
-    }
+#[path = "overlay_input.rs"]
+mod input;
 
-    /// Cancel in-progress pointer presses in every overlay tree (0285:
-    /// the selection layer claimed a passed-through gesture — see
-    /// `UiTree::cancel_pointer_press`). Snapshot handles first — widget
-    /// un-press handlers must never run under the store borrow. Covers
-    /// hidden layers too: a stale capture is worth dropping wherever it
-    /// lives.
-    pub(crate) fn cancel_pointer_press(&self) {
-        let trees: Vec<UiTree> = {
-            let store = self.store.borrow();
-            store
-                .meta
-                .iter()
-                .filter_map(|m| match &m.content {
-                    OverlayContent::Tree { tree, .. } => Some(tree.handle()),
-                    _ => None,
-                })
-                .collect()
-        };
-        for mut tree in trees {
-            tree.cancel_pointer_press();
-        }
-    }
-
+impl Overlays {
     /// Drain zero-collapse diagnostics from every overlay tree (the
     /// root tree is drained separately by the driver).
     pub(crate) fn take_collapse_notices(&self) -> Vec<String> {
@@ -622,203 +496,10 @@ impl Overlays {
         }
     }
 }
-
-/// Handle to one overlay layer. `Clone`; all mutations request a frame.
-/// Weak-backed: outliving the app is safe (ops become no-ops).
-#[derive(Clone)]
-pub struct LayerHandle {
-    store: Weak<RefCell<OverlayStore>>,
-    id: u64,
-}
-
-impl LayerHandle {
-    fn with_layer<R>(&self, f: impl FnOnce(&mut Layer) -> R) -> Option<R> {
-        let store = self.store.upgrade()?;
-        let mut store = match store.try_borrow_mut() {
-            Ok(s) => s,
-            Err(_) => {
-                // The store is mid-phase (drawing): mutating layers from
-                // draw closures violates draw purity. Loud in debug.
-                if cfg!(debug_assertions) {
-                    panic!(
-                        "abstracttui overlays: LayerHandle mutation while the overlay store \
-                         is busy — layer ops are forbidden inside draw closures (draw is pure; \
-                         mutate from effects/handlers instead)"
-                    );
-                }
-                return None;
-            }
-        };
-        let i = store.index_of(self.id)?;
-        let r = f(&mut store.layers[i]);
-        drop(store);
-        request_frame();
-        Some(r)
-    }
-
-    pub fn set_offset(&self, offset: Point) {
-        self.with_layer(|l| l.set_origin(offset));
-    }
-
-    pub fn set_opacity(&self, opacity: f32) {
-        self.with_layer(|l| l.set_opacity(opacity));
-    }
-
-    pub fn set_visible(&self, visible: bool) {
-        self.with_layer(|l| l.set_visible(visible));
-    }
-
-    pub fn set_blend(&self, blend: Blend) {
-        self.with_layer(|l| l.set_blend(blend));
-    }
-
-    pub fn set_color_transform(&self, transform: ColorTransform) {
-        self.with_layer(|l| l.set_color_transform(transform));
-    }
-
-    pub fn set_shader(&self, shader: Option<Box<dyn CellShader>>) {
-        self.with_layer(|l| l.set_shader(shader));
-    }
-
-    /// Advance the layer's shader clock — an animated shader is an
-    /// ANIMATION: drive this from `reactive::animate`/frame tasks so it
-    /// is billed as frame requests (§4).
-    pub fn set_shader_t(&self, t: f32) {
-        self.with_layer(|l| l.set_shader_t(t));
-    }
-
-    /// Paint directly (manual layers). The surface is layer-local;
-    /// writes self-damage.
-    pub fn with_surface<R>(&self, f: impl FnOnce(&mut Surface) -> R) -> Option<R> {
-        self.with_layer(|l| f(l.surface_mut()))
-    }
-
-    /// Request a repaint: full-surface for Draw layers, damage-all for
-    /// manual/tree layers.
-    pub fn damage(&self) {
-        let Some(store) = self.store.upgrade() else {
-            return;
-        };
-        let mut store = match store.try_borrow_mut() {
-            Ok(s) => s,
-            Err(_) => return,
-        };
-        if let Some(i) = store.index_of(self.id) {
-            if let OverlayContent::Draw { needs_paint, .. } = &mut store.meta[i].content {
-                *needs_paint = true;
-            }
-            store.layers[i].surface_mut().damage_all();
-        }
-        drop(store);
-        request_frame();
-    }
-
-    pub fn bounds(&self) -> Option<Rect> {
-        let store = self.store.upgrade()?;
-        let store = store.try_borrow().ok()?;
-        let i = store.index_of(self.id)?;
-        Some(store.layers[i].bounds())
-    }
-
-    /// The UI tree mounted on this layer (tree layers only): a handle
-    /// onto the LIVE tree — shared core, so focus moves, dispatches and
-    /// inspection act on the real thing. `None` for manual/draw layers,
-    /// after removal, or while the store is mid-phase.
-    pub fn tree(&self) -> Option<UiTree> {
-        let store = self.store.upgrade()?;
-        let store = store.try_borrow().ok()?;
-        let i = store.index_of(self.id)?;
-        match &store.meta[i].content {
-            OverlayContent::Tree { tree, .. } => Some(tree.handle()),
-            _ => None,
-        }
-    }
-
-    pub fn is_alive(&self) -> bool {
-        self.bounds().is_some()
-    }
-
-    /// Remove the layer; the vacated region repaints from below (root
-    /// damage). Safe to call twice.
-    pub fn remove(&self) {
-        let Some(store) = self.store.upgrade() else {
-            return;
-        };
-        let mut store = match store.try_borrow_mut() {
-            Ok(s) => s,
-            Err(_) => return,
-        };
-        if let Some(i) = store.index_of(self.id) {
-            let bounds = store.layers[i].bounds();
-            store.layers.remove(i);
-            store.meta.remove(i);
-            store.damage_root_under(bounds);
-        }
-        drop(store);
-        request_frame();
-    }
-}
-
-/// Handle to a registered image overlay.
-#[derive(Clone)]
-pub struct ImageHandle {
-    store: Weak<RefCell<OverlayStore>>,
-    id: u64,
-}
-
-impl ImageHandle {
-    fn with_entry(&self, f: impl FnOnce(&mut ImageEntry)) {
-        let Some(store) = self.store.upgrade() else {
-            return;
-        };
-        let mut store = match store.try_borrow_mut() {
-            Ok(s) => s,
-            Err(_) => return,
-        };
-        if let Some(entry) = store.images.iter_mut().find(|e| e.id == self.id) {
-            f(entry);
-            entry.dirty = true;
-        }
-        drop(store);
-        request_frame();
-    }
-
-    /// New pixels: bumps the CONTENT version (full retransmit on
-    /// protocol channels — the pixels really changed).
-    pub fn set_bitmap(&self, bitmap: Bitmap) {
-        self.with_entry(|e| {
-            e.bitmap = bitmap;
-            e.version += 1;
-        });
-    }
-
-    /// New placement, same pixels: version UNCHANGED — kitty re-places
-    /// by id (tiny escape), only id-less channels re-emit.
-    pub fn set_rect(&self, rect: Rect) {
-        self.with_entry(|e| e.rect = rect);
-    }
-
-    pub fn remove(&self) {
-        let Some(store) = self.store.upgrade() else {
-            return;
-        };
-        let mut store = match store.try_borrow_mut() {
-            Ok(s) => s,
-            Err(_) => return,
-        };
-        if let Some(i) = store.images.iter().position(|e| e.id == self.id) {
-            let rect = store.images[i].rect;
-            let key = store.images[i].id;
-            store.images.remove(i);
-            // The session must free the terminal-side upload (kitty) —
-            // the driver drains this on its next image pass (RT4-1).
-            store.retired_images.push(key);
-            store.damage_root_under(rect);
-        }
-        drop(store);
-        request_frame();
-    }
-}
+// Layer/image handles live in a `#[path]` sibling (file-size split).
+#[path = "overlay_handles.rs"]
+mod handles;
+pub use handles::{ImageHandle, LayerHandle};
 
 #[cfg(test)]
 #[path = "overlay_tests.rs"]

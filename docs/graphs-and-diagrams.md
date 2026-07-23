@@ -120,31 +120,34 @@ network` (force-directed).
 Mermaid has no spec grammar, and "faithful" is the wrong bar for a
 terminal. `abstracttui-mermaid` renders an exhaustive, tested subset
 natively and falls back ATOMICALLY on everything else. The table
-below is the contract, verbatim from the backlog item that ruled it
-(0450); the YES rows enumerate accepted SPELLINGS, and any spelling
-outside them triggers the fallback naming the first unrecognized
-line — unknown syntax is safe by construction:
+below is the contract, verbatim from the crate docs
+([docs.rs/abstracttui-mermaid](https://docs.rs/abstracttui-mermaid));
+the YES rows enumerate accepted SPELLINGS, and any spelling outside
+them triggers the fallback naming the first unrecognized line —
+unknown syntax is safe by construction:
 
 | Mermaid | v1 | Accepted spellings (exhaustive) | Behavior |
 | --- | --- | --- | --- |
-| `flowchart` / `graph` TD/TB/LR/BT/RL | YES | header keyword + direction token only | 0440 layered layout (BT/RL as transposes) |
-| Node shapes | YES | `id`, `id[text]`, `id(text)`, `id{text}`, `id([text])`; quoted `"text"` inside brackets | box glyph variants |
-| Edges | YES | `-->`, `---`, `-.->`, `==>`; label as `--\|label\|` postfix form only (the `--label-->` infix form and `&`-chaining are v2 — fallback) | 0420 strokes; dotted/thick as glyph styles |
-| `subgraph` | NO (v2, needs 0440 clusters) | — | atomic fallback |
-| `sequenceDiagram` | YES | `participant id [as alias]`; messages `->>`, `-->>`, `->`, `-->` with `:` text; `Note left of/right of/over` | deterministic columns/rows — no graph solver |
-| sequence `loop`/`alt`/`par`/activations (`+`/`-`, `activate`) | NO (v2) | — | atomic fallback |
-| `stateDiagram-v2` (flat states + transitions) | STRETCH | `[*]`, `id`, `id : label`, `-->` with `:` labels | flowchart engine reuse; else fallback |
+| `flowchart` / `graph` TD/TB/LR/BT/RL | YES | header keyword + direction token only | layered layout (BT/RL as transposes) |
+| Node shapes | YES | `id`, `id[text]`, `id(text)`, `id{text}`, `id([text])`; quoted `"text"` inside brackets | cards; shape = accent + badge sigil (see below) |
+| Edges | YES | `-->`, `---`, `-.->`, `==>`; label as postfix `\|label\|` only | strokes; dotted/thick as stroke styles |
+| `subgraph` | NO (v2) | — | atomic fallback |
+| `sequenceDiagram` | YES | `participant id [as alias]`; messages `->>`, `-->>`, `->`, `-->` with `: text`; `Note left of/right of/over` | deterministic columns/rows — no solver |
+| sequence `loop`/`alt`/`par`/activations | NO (v2) | — | atomic fallback |
+| `stateDiagram-v2` (flat) | YES (stretch) | `[*]`, `id`, `id : label`, `-->` with `: label` | compiles to the flowchart engine |
 | `classDiagram`, `erDiagram`, `gantt`, `pie`, `journey`, `mindmap`, `timeline`, `gitGraph` | NO | — | atomic fallback |
-| Styling directives (`classDef`, `style`, `%%` comments, themes) | IGNORED (parsed, dropped with notice; comments silently) | recognized-and-dropped list enumerated in docs | render proceeds |
+| `classDef`, `style`, `%%{init}` directives | IGNORED | recognized-and-dropped WITH a notice; `%%` comments drop silently | render proceeds |
 
-The STRETCH row shipped: flat `stateDiagram-v2` parses as a third
+The stretch row shipped: flat `stateDiagram-v2` parses as a third
 front end to the flowchart IR (`[*]` becomes synthetic start/end
 nodes). Cell-honest shape mapping: terminal cards do not rotate into
 diamonds — a shape arrives as the card's accent kind plus a badge
 sigil (`id{..}` → `decision` + ◆, `id(..)` → `rounded` + ○,
 `id([..])` → `stadium` + ◎). Lexical notes (normalization, not new
 constructs): `;` is a statement terminator, `%%` comments strip to
-end of line (quote-aware).
+end of line (quote-aware); the infix label form (`--label-->`),
+`&`-chaining, and edge chaining (`A --> B --> C`) are named v2
+fallbacks.
 
 ### The atomic fallback
 

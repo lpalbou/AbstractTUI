@@ -63,10 +63,13 @@ fn main() -> abstracttui::base::Result<()> {
                 let label = theme.get().label;
                 Element::new()
                     .style(LayoutStyle::column().gap(1))
-                    // Header: logo + active-theme badge.
+                    // Header: logo + active-theme badge. shrink(0.0):
+                    // incompressible chrome — without it, overflow
+                    // pressure from the tab panels can silently steal
+                    // the tagline row (§"A row vanishes" recipe).
                     .child(
                         Element::new()
-                            .style(LayoutStyle::row().gap(2).h(2))
+                            .style(LayoutStyle::row().gap(2).h(2).shrink(0.0))
                             .child(Logo::new().tagline(true).element(&t).build())
                             .child(Badge::new(label).tone(Tone::Accent).element(&t).build())
                             .build(),
@@ -142,11 +145,14 @@ fn interactive_panel(
     .map(|s| s.to_string())
     .collect();
 
+    // The fixed rows carry shrink(0.0): under height pressure the LIST
+    // block below gives (it scrolls honestly) instead of these rows
+    // silently collapsing.
     Element::new()
         .style(LayoutStyle::column().gap(1).padding(Edges::all(1)))
         .child(
             Element::new()
-                .style(LayoutStyle::row().gap(2).h(1))
+                .style(LayoutStyle::row().gap(2).h(1).shrink(0.0))
                 .child(
                     Button::new("click me")
                         .on_click(move || clicks.update(|c| *c += 1))
@@ -168,20 +174,23 @@ fn interactive_panel(
             TextInput::new()
                 .value(name)
                 .placeholder("type your name, Enter submits…")
-                .layout(LayoutStyle::default().w(44).h(1))
+                .layout(LayoutStyle::default().w(44).h(1).shrink(0.0))
                 .element(cx, t)
                 .build(),
         )
-        .child(dyn_view(LayoutStyle::default().h(1), move || {
-            text(format!("hello, {}!", {
-                let n = name.get();
-                if n.is_empty() {
-                    "stranger".to_string()
-                } else {
-                    n
-                }
-            }))
-        }))
+        .child(dyn_view(
+            LayoutStyle::default().h(1).shrink(0.0),
+            move || {
+                text(format!("hello, {}!", {
+                    let n = name.get();
+                    if n.is_empty() {
+                        "stranger".to_string()
+                    } else {
+                        n
+                    }
+                }))
+            },
+        ))
         .child(
             Block::new()
                 .title("list — arrows move, wheel scrolls")
@@ -246,8 +255,14 @@ fn visual_panel(cx: Scope, t: &TokenSet, spin_frame: u64) -> View {
         );
     }
 
-    let content = Element::new()
-        .style(LayoutStyle::column().gap(1))
+    let _ = cx;
+    // Plain column — the panel's 18 rows fit the tab at the demo size,
+    // and the interactive tab's List already demonstrates scrolling.
+    // (A Scroll wrapper here rendered only its bar: scroll content
+    // that is a plain element tree currently solves to zero width —
+    // see reviews/wave12/visual-to-code-handoff.md §2.)
+    Element::new()
+        .style(LayoutStyle::column().gap(1).padding(Edges::all(1)))
         .child(blocks.build())
         .child(badges.build())
         .child(Separator::horizontal().label("progress").element(t).build())
@@ -261,12 +276,5 @@ fn visual_panel(cx: Scope, t: &TokenSet, spin_frame: u64) -> View {
                 .build(),
         )
         .child(spinners.build())
-        .build();
-
-    Scroll::new(content)
-        .content_size(96, 18)
-        .axes(false, true)
-        .layout(LayoutStyle::column().grow(1.0))
-        .element(cx, t)
         .build()
 }

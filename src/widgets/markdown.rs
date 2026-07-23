@@ -79,6 +79,18 @@ impl Row {
     }
 }
 
+/// The typeset markdown document surface: headings, inline styles, GFM
+/// tables with alignment, task lists, quotes, fences, in-flow images —
+/// the reader vocabulary in one widget.
+///
+/// It typesets at draw time (cached per width) and scrolls by ROW
+/// OFFSET: pass [`scroll_offset`](MarkdownView::scroll_offset) from an
+/// app signal rather than wrapping it in a generic scroller (a draw
+/// widget has no intrinsic measure for `Scroll` to read).
+/// [`outline_rows`](MarkdownView::outline_rows) feeds a TOC;
+/// [`find`](MarkdownView::find) powers search highlights — the reader
+/// example composes all of it. The canonical build is `.view(cx)`; see
+/// the [module docs](crate::widgets::markdown).
 pub struct MarkdownView {
     source: String,
     scroll_offset: i32,

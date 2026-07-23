@@ -107,6 +107,14 @@ enum Tinter {
     Diff(DiffLexer),
 }
 
+/// A syntax-tinted code block on the raised code ground: line-lexed
+/// highlighting through the theme's `syntax_*` tokens, with optional
+/// line numbers and wrap-or-clip control.
+///
+/// [`lang`](CodeView::lang) picks the lexer by name — including
+/// `"diff"`, which maps added/removed/hunk/meta lines onto
+/// `ok`/`error`/`info`/muted inks (the review surface). The canonical
+/// build is `.view(cx)`; see the [module docs](crate::widgets::code).
 pub struct CodeView {
     source: String,
     tinter: Tinter,

@@ -154,7 +154,7 @@ an explicit Unsupported error on Windows — hide the Ctrl+Z binding there.)
 ## How big is the crate?
 
 One crate, no feature flags, no build script, three small library
-dependencies plus the platform bindings. The source is roughly 65k lines
+dependencies plus the platform bindings. The source is roughly 105k lines
 of Rust including its extensive inline test suites — decoders, rasterizer,
 layout solver, and signals runtime included, since none of that is pulled
 in from elsewhere.
@@ -171,11 +171,16 @@ different props into a settings screen.
 
 ## How do I see what is actually repainting?
 
-The compositor has a damage visualizer: `set_debug_damage(true)` outlines
-exactly the regions each frame repaints. If a "static" screen shows
-outlines every frame, something is writing a signal it shouldn't — that is
-your profiling starting point, before reaching for a profiler. Perf
-numbers only mean anything in `--release` builds.
+The compositor has a damage visualizer
+(`render::Compositor::set_debug_damage(true)`) that outlines exactly the
+regions each frame repaints. The switch lives on the compositor itself, so
+today it is for embedders driving the render pipeline directly
+([api.md § render](api.md#render--surfaces-and-paint-advanced)) — under
+`App::run` the driver owns the compositor and exposes no toggle yet. The
+signal-side diagnosis needs no visualizer: if a "static" screen keeps
+repainting, something is writing a signal it shouldn't (every `dyn_view`
+that reads it re-renders) — audit the writes before reaching for a
+profiler. Perf numbers only mean anything in `--release` builds.
 
 ## Why can my app write the clipboard but not read it?
 

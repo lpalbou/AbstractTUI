@@ -50,7 +50,16 @@ fn scene(cx: Scope, quitter: Quitter, note: Signal<String>) -> View {
                         }
                     }
                 }
-                note.set(format!("wrote {}.{{{}}}", stem.display(), wrote.join(",")));
+                // Two wrappable chunks: the full path is one unbreakable
+                // "word" longer than the panel, which word-wrap can only
+                // drop — name the file, then the directory.
+                note.set(format!(
+                    "wrote screenshot-demo.{{{}}} in {}",
+                    wrote.join(","),
+                    stem.parent()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default(),
+                ));
             });
         })
         .child(dyn_view(LayoutStyle::default().grow(1.0), move || {
@@ -61,7 +70,11 @@ fn scene(cx: Scope, quitter: Quitter, note: Signal<String>) -> View {
                 .fill(t.surface)
                 .layout(LayoutStyle::column().gap(1).padding(Edges::all(1)))
                 .child(text("A themed scene worth capturing: 世界 🚀"))
-                .child(dyn_view(LayoutStyle::line(1), move || text(note.get())))
+                // Two rows: the note carries a full temp-dir path, which
+                // is one long unbreakable "word" — in a single row the
+                // wrap pushed it to a clipped second line and only
+                // "wrote" survived on screen.
+                .child(dyn_view(LayoutStyle::line(2), move || text(note.get())))
                 .child(text("s · capture      q · quit"))
                 .element(&t)
                 .build()

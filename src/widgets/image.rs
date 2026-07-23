@@ -84,6 +84,17 @@ impl ImageAlign {
     }
 }
 
+/// A bitmap in the cell plane: decodes (or receives) an image and
+/// renders unicode mosaic — colored sub-cell glyphs that work in any
+/// terminal, picking the best glyph family the capabilities allow.
+///
+/// Build from a path ([`from_path`](Image::from_path), decoded lazily
+/// on first view) or a shared decode
+/// ([`from_bitmap`](Image::from_bitmap)); fit with
+/// `Contain`/`Cover`/`Fill`/`None`. The widget always renders CELLS —
+/// pixel-protocol placement (kitty/iTerm2/sixel) lives one level up in
+/// [`gfx::ImageSession`](crate::gfx::ImageSession). The canonical build
+/// is `.view(cx)`; see the [module docs](crate::widgets::image).
 pub struct Image {
     source: Result<Arc<Bitmap>, String>,
     fit: ImageFit,

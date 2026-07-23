@@ -258,14 +258,17 @@ fn widgets_panel(
     channel: Signal<usize>,
     composer: &TextAreaState,
 ) -> View {
+    // Abbreviated like the tokens panel's ●ok ●wrn dots: all six tones
+    // at 34 cells, inside the panel at every supported width (the full
+    // words overflowed the interior and painted over the border).
     let mut badges = Element::new().style(LayoutStyle::row().gap(1).h(1));
     for (tone, label) in [
-        (Tone::Accent, "accent"),
+        (Tone::Accent, "acc"),
         (Tone::Ok, "ok"),
-        (Tone::Warn, "warn"),
+        (Tone::Warn, "wrn"),
         (Tone::Error, "err"),
-        (Tone::Info, "info"),
-        (Tone::Muted, "muted"),
+        (Tone::Info, "inf"),
+        (Tone::Muted, "mut"),
     ] {
         badges = badges.child(Badge::new(label).tone(tone).element(t).build());
     }

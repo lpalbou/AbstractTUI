@@ -117,10 +117,13 @@ medians inflate several-fold under host contention); or your app damaging
 more than it thinks (a signal written every tick re-renders every region
 that reads it).
 
-**Fix**: measure in `--release` first. Then turn on the compositor's
-damage visualizer (`set_debug_damage(true)`) — it outlines exactly which
-regions repaint each frame; a supposedly idle screen with outlines
-everywhere means some signal is being written needlessly. For 3D scenes,
+**Fix**: measure in `--release` first. Then audit what repaints: a
+supposedly idle screen that keeps painting means some signal is being
+written needlessly (every `dyn_view` that reads it re-renders). Embedders
+driving the render pipeline directly can also flip the compositor's damage
+visualizer (`render::Compositor::set_debug_damage(true)`) to outline each
+frame's repaint regions — under `App::run` the driver owns the compositor,
+so there is no app-level toggle yet. For 3D scenes,
 the perf envelope and its reproduction commands are in
 [graphics-and-3d.md](graphics-and-3d.md#performance-envelope) — the
 renderer is vertex-bound at cell scale, so triangle count matters far more

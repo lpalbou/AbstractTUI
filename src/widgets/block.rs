@@ -60,6 +60,14 @@ pub enum TitleAlign {
     Right,
 }
 
+/// The panel container: an optional border (plain/rounded/double/heavy)
+/// with an optional title, a ground fill, a cell-space drop shadow, and
+/// the focus ring (`border_focus` ink when [`focused`](Block::focused)).
+///
+/// Blocks are how an app builds its chrome — cards, panes, sidebars:
+/// children lay out inside the border box. Stateless: build with
+/// `.element(&tokens)` (or `.view(cx)` for theme-from-context). See the
+/// [module docs](crate::widgets::block).
 pub struct Block {
     border: BorderKind,
     title: Option<String>,

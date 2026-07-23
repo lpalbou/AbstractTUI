@@ -591,9 +591,9 @@ the headless-test recipe.
   the honest mermaid subset (`abstracttui-mermaid`), installed only
   when you need them.
 - [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
-- [Examples catalog](../examples/README.md) — twenty-two runnable programs
-  ordered as a learning path, from the 53-line `hello` to the full
-  `dashboard`, with the keys each answers to. For content-heavy apps start
+- [Examples catalog](../examples/README.md) — twenty-five runnable programs
+  (three of them in the extension crates) ordered as a learning path, from
+  the 53-line `hello` to the full `dashboard`, with the keys each answers to. For content-heavy apps start
   with `transcript` (streaming markdown chat), `reader` (tables, images,
   TOC, search), and `voice_mock` (push-to-talk and live meters, no audio
   required); for app chrome start with `shell` (full pages behind a
@@ -1957,6 +1957,12 @@ widget left it — a callback that mutates the widget's state (a
 submit-and-clear composer) sees that mutation rendered by the NEXT
 event, not retroactively applied to the one that fired it.
 
+The same law covers REENTRANCY, not just disposal: a callback may
+open a modal, write the widget's own controlled signal, or flush
+effects synchronously — no widget holds a borrow across a user
+callback (the invariant is documented on `widgets::SharedCallback`
+and pinned by reentrancy tests on List and Select).
+
 ## app — the runtime
 
 `App::simple` is the whole happy path: mount a component, enter the
@@ -3254,7 +3260,8 @@ fuzz-hardened.
 ### Picture to terminal: the capability ladder
 
 The engine picks the best channel the terminal proves it supports —
-`gfx::choose_channel(&caps)` — best first:
+`gfx::choose_channel(&caps.graphics())` (the ladder reads the
+graphics view of the capability report) — best first:
 
 | channel | how it draws | moves / resizes | removal | requires |
 | --- | --- | --- | --- | --- |
@@ -3353,6 +3360,19 @@ passthrough probe proves `allow-passthrough on` (see above). If a
 protocol row reads `yes` but you see mosaic, check `cell pixel size` —
 without pixel geometry the ladder stays conservative.
 
+### Not an image: hand-drawn vector strokes
+
+Charts, gauges, and hand-rolled traces do not go through the image
+pipeline at all. The public sub-cell canvas (`DotCanvas`, in the
+prelude) draws braille/quadrant dot grids with line/bezier/arc strokes
+and eighth-block fills — the same layer the shipped charts render
+through, and what the diagram extensions stroke their edges with.
+The full surface (dot-space model, primitives, the cell-color rule) is
+[api.md § canvas](api.md#canvas--canvas--vector-strokes); for
+node-and-edge diagrams, prefer the `abstracttui-graph` /
+`abstracttui-mermaid` crates over hand-stroking
+([graphs-and-diagrams.md](graphs-and-diagrams.md)).
+
 ## 3D end-to-end
 
 ### The five-line hello
@@ -3422,8 +3442,11 @@ orbits (the pointer is captured for the drag, so fast drags keep steering
 outside the rect), the wheel zooms — but the widget only *reports* deltas
 through `on_orbit`/`on_zoom`; the app owns camera state and clamping.
 `element(&TokenSet)` takes no scope because the widget holds no reactive
-state. Buffers persist inside the draw closure, so a steady-state repaint
-allocates nothing. `light`, `background`, `spin` (caller-driven
+state. The default layout grows into whatever region the parent hands it
+(a viewport has no intrinsic size to measure), so an un-`layout()`ed
+viewport is visible by construction; pass `.layout(...)` to size it
+explicitly. Buffers persist inside the draw closure, so a steady-state
+repaint allocates nothing. `light`, `background`, `spin` (caller-driven
 auto-rotation), and `cull_backfaces` round out the builder.
 
 For a complete interactive viewer, run
@@ -3486,6 +3509,10 @@ pure-cell 2D path with its own particle field (everywhere else). Try both:
 - **Pixel protocols** are verified byte-for-byte against the protocol
   specifications and a protocol state model, not against every live
   terminal emulator; mosaic is the universal, always-correct path.
+- **Screenshots**: cells under a kitty/iTerm2/sixel placement are not
+  the picture — captures export those regions as labeled veils rather
+  than fake cells, while mosaic images capture as themselves (they ARE
+  cells). See [api.md § "Screenshots & captures"](api.md#screenshots--captures).
 - **Animation**: LINEAR/STEP only; CUBICSPLINE channels and morph weights
   skip with labels; rotation interpolation is nlerp, not slerp.
 - **Skinning**: `JOINTS_0`/`WEIGHTS_0` only (4 joints per vertex), linear
@@ -3652,31 +3679,34 @@ network` (force-directed).
 Mermaid has no spec grammar, and "faithful" is the wrong bar for a
 terminal. `abstracttui-mermaid` renders an exhaustive, tested subset
 natively and falls back ATOMICALLY on everything else. The table
-below is the contract, verbatim from the backlog item that ruled it
-(0450); the YES rows enumerate accepted SPELLINGS, and any spelling
-outside them triggers the fallback naming the first unrecognized
-line — unknown syntax is safe by construction:
+below is the contract, verbatim from the crate docs
+([docs.rs/abstracttui-mermaid](https://docs.rs/abstracttui-mermaid));
+the YES rows enumerate accepted SPELLINGS, and any spelling outside
+them triggers the fallback naming the first unrecognized line —
+unknown syntax is safe by construction:
 
 | Mermaid | v1 | Accepted spellings (exhaustive) | Behavior |
 | --- | --- | --- | --- |
-| `flowchart` / `graph` TD/TB/LR/BT/RL | YES | header keyword + direction token only | 0440 layered layout (BT/RL as transposes) |
-| Node shapes | YES | `id`, `id[text]`, `id(text)`, `id{text}`, `id([text])`; quoted `"text"` inside brackets | box glyph variants |
-| Edges | YES | `-->`, `---`, `-.->`, `==>`; label as `--\|label\|` postfix form only (the `--label-->` infix form and `&`-chaining are v2 — fallback) | 0420 strokes; dotted/thick as glyph styles |
-| `subgraph` | NO (v2, needs 0440 clusters) | — | atomic fallback |
-| `sequenceDiagram` | YES | `participant id [as alias]`; messages `->>`, `-->>`, `->`, `-->` with `:` text; `Note left of/right of/over` | deterministic columns/rows — no graph solver |
-| sequence `loop`/`alt`/`par`/activations (`+`/`-`, `activate`) | NO (v2) | — | atomic fallback |
-| `stateDiagram-v2` (flat states + transitions) | STRETCH | `[*]`, `id`, `id : label`, `-->` with `:` labels | flowchart engine reuse; else fallback |
+| `flowchart` / `graph` TD/TB/LR/BT/RL | YES | header keyword + direction token only | layered layout (BT/RL as transposes) |
+| Node shapes | YES | `id`, `id[text]`, `id(text)`, `id{text}`, `id([text])`; quoted `"text"` inside brackets | cards; shape = accent + badge sigil (see below) |
+| Edges | YES | `-->`, `---`, `-.->`, `==>`; label as postfix `\|label\|` only | strokes; dotted/thick as stroke styles |
+| `subgraph` | NO (v2) | — | atomic fallback |
+| `sequenceDiagram` | YES | `participant id [as alias]`; messages `->>`, `-->>`, `->`, `-->` with `: text`; `Note left of/right of/over` | deterministic columns/rows — no solver |
+| sequence `loop`/`alt`/`par`/activations | NO (v2) | — | atomic fallback |
+| `stateDiagram-v2` (flat) | YES (stretch) | `[*]`, `id`, `id : label`, `-->` with `: label` | compiles to the flowchart engine |
 | `classDiagram`, `erDiagram`, `gantt`, `pie`, `journey`, `mindmap`, `timeline`, `gitGraph` | NO | — | atomic fallback |
-| Styling directives (`classDef`, `style`, `%%` comments, themes) | IGNORED (parsed, dropped with notice; comments silently) | recognized-and-dropped list enumerated in docs | render proceeds |
+| `classDef`, `style`, `%%{init}` directives | IGNORED | recognized-and-dropped WITH a notice; `%%` comments drop silently | render proceeds |
 
-The STRETCH row shipped: flat `stateDiagram-v2` parses as a third
+The stretch row shipped: flat `stateDiagram-v2` parses as a third
 front end to the flowchart IR (`[*]` becomes synthetic start/end
 nodes). Cell-honest shape mapping: terminal cards do not rotate into
 diamonds — a shape arrives as the card's accent kind plus a badge
 sigil (`id{..}` → `decision` + ◆, `id(..)` → `rounded` + ○,
 `id([..])` → `stadium` + ◎). Lexical notes (normalization, not new
 constructs): `;` is a statement terminator, `%%` comments strip to
-end of line (quote-aware).
+end of line (quote-aware); the infix label form (`--label-->`),
+`&`-chaining, and edge chaining (`A --> B --> C`) are named v2
+fallbacks.
 
 ### The atomic fallback
 
@@ -4042,6 +4072,15 @@ assert on the rendered screen — one frame per burst, zero bytes while
 quiet. `tests/wave_livedata.rs` pins exactly those claims and is a
 gallery of the shapes.
 
+Time is scriptable too: timers arm **and** fire against the loop's
+clock, so an injected test clock drives `interval` cadence and
+`Backoff` retry deadlines deterministically — the driver publishes its
+clock around each turn automatically, and a custom loop calling
+`run_due_timers(now)` publishes the same value with
+`reactive::set_loop_clock(Some(now))` (`None` restores real-time
+arming). See [api.md § reactive](api.md#reactive--signals-memos-effects)
+for the one-clock story.
+
 ===== FILE: docs/faq.md =====
 # FAQ
 
@@ -4199,7 +4238,7 @@ an explicit Unsupported error on Windows — hide the Ctrl+Z binding there.)
 ## How big is the crate?
 
 One crate, no feature flags, no build script, three small library
-dependencies plus the platform bindings. The source is roughly 65k lines
+dependencies plus the platform bindings. The source is roughly 105k lines
 of Rust including its extensive inline test suites — decoders, rasterizer,
 layout solver, and signals runtime included, since none of that is pulled
 in from elsewhere.
@@ -4216,11 +4255,16 @@ different props into a settings screen.
 
 ## How do I see what is actually repainting?
 
-The compositor has a damage visualizer: `set_debug_damage(true)` outlines
-exactly the regions each frame repaints. If a "static" screen shows
-outlines every frame, something is writing a signal it shouldn't — that is
-your profiling starting point, before reaching for a profiler. Perf
-numbers only mean anything in `--release` builds.
+The compositor has a damage visualizer
+(`render::Compositor::set_debug_damage(true)`) that outlines exactly the
+regions each frame repaints. The switch lives on the compositor itself, so
+today it is for embedders driving the render pipeline directly
+([api.md § render](api.md#render--surfaces-and-paint-advanced)) — under
+`App::run` the driver owns the compositor and exposes no toggle yet. The
+signal-side diagnosis needs no visualizer: if a "static" screen keeps
+repainting, something is writing a signal it shouldn't (every `dyn_view`
+that reads it re-renders) — audit the writes before reaching for a
+profiler. Perf numbers only mean anything in `--release` builds.
 
 ## Why can my app write the clipboard but not read it?
 
@@ -4388,10 +4432,13 @@ medians inflate several-fold under host contention); or your app damaging
 more than it thinks (a signal written every tick re-renders every region
 that reads it).
 
-**Fix**: measure in `--release` first. Then turn on the compositor's
-damage visualizer (`set_debug_damage(true)`) — it outlines exactly which
-regions repaint each frame; a supposedly idle screen with outlines
-everywhere means some signal is being written needlessly. For 3D scenes,
+**Fix**: measure in `--release` first. Then audit what repaints: a
+supposedly idle screen that keeps painting means some signal is being
+written needlessly (every `dyn_view` that reads it re-renders). Embedders
+driving the render pipeline directly can also flip the compositor's damage
+visualizer (`render::Compositor::set_debug_damage(true)`) to outline each
+frame's repaint regions — under `App::run` the driver owns the compositor,
+so there is no app-level toggle yet. For 3D scenes,
 the perf envelope and its reproduction commands are in
 [graphics-and-3d.md](graphics-and-3d.md#performance-envelope) — the
 renderer is vertex-bound at cell scale, so triangle count matters far more
@@ -4544,8 +4591,8 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.2.17 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.2.18 (2026-07-25).
+- Crate: `abstracttui` 0.2.18 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.2.19 (2026-07-25).
 - Extension family (sibling crates in the repo workspace, installed only when needed;
   ADR-0004 — public core API only, same MIT license and dependency discipline):
   - `abstracttui-graph` 0.1.0 — graph auto-layout (`GraphDesc -> Layout`: layered /

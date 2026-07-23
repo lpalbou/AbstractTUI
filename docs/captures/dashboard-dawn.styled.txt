@@ -2,24 +2,24 @@ size=120x35 cursor=0,34 modes=[7,25,1049]
   0| ▲ AbstractTUI  ops dashboard                                                          Dawn (Abstract)  ·  12:34:56 UTC |
   1| ┌ nav ────────┐  ┌ traffic — rx/tx (MB/s) ──────────────────────────────────────┐  ┌ load ─────────────────────────┐   |
   2| │  overview   │  │ ── rx   ── tx                                                │  │ cpu                       76% │   |
-  3| │  traffic    │  │100 │⣀⠤⡀⢀⣀ ⢀⡀                                ⢀⡀ ⣀⢀⣀⠤⡠⠤⢄⣀      │  │███████████████████████▌       │   |
-  4| │  sessions   │  │    │  ⠉⠁ ⠉⠁⠈⠦⠳⠤⠤⡀                    ⢀⡀⣀⢄⡠⠤⠤⠃⠈⠉ ⠁    ⠈ ⠓⠒⠒⠙⢀⡀│  │⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒│   |
-  5| │  logs       │  │    │⣀⣀⡠⢄⣀⣀⡀⢀    ⠉⠉⠉⠱⠒⠒⢢⠤⠤⢄⡀  ⢀⣀⣀⢄⢀⡀⠉⡀⢀⡠⣀⣀⣀⠤⠤⠤⠤⠤⠤⠒⠒⠉⠑⠊⠑⠒⠉⠉⠑⠒⠁⠈│  │ mem                       54% │   |
-  6| │  alerts     │  │0   │   ⠈  ⠈⠁⠉⠉⠑⠒⠉⠑⠒⠊⠉⠊⠉⠉⠉⠒⠒⠒⠒⠊⠉⠒⠊⠁⠈⠉⠈⠁                       │  │████████████████▊              │   |
-  7| │  settings   │  │    └───────-15s───────────-10s─────────────-5s────────────now│  │⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒│   |
-  8| │             │  └──────────────────────────────────────────────────────────────┘  └─io──────────────────────  45%─┘   |
-  9| │             │                                                                     █████████████▉                     |
- 10| │             │  ┌ events ───────────────────────────┐  ┌ sessions — s toggles sort ────────────────────────────────┐  |
- 11| │             │  │                                   │  │host         region   rx▼            tx            state   │  |
- 12| │             │  │                                   │  │edge-2       eu-w     41.3 MB/s      20.8 MB/s     healthy │  |
- 13| │             │  │                                   │  │core-a       us-e     41.1 MB/s      18.6 MB/s     syncing │  |
- 14| │             │  │                                   │  │edge-1       eu-w     38.7 MB/s      7.2 MB/s      healthy │  |
- 15| │             │  │                                   │  │edge-3       us-e     38.1 MB/s      23.6 MB/s     syncing │  |
- 16| │             │  │                                   │  │cache-2      ap-s     25.2 MB/s      16.5 MB/s     healthy │  |
- 17| │             │  │                                   │  │core-b       ap-s     22.8 MB/s      8.4 MB/s      syncing │  |
- 18| │             │  │                                   │  │cache-1      eu-n     13.4 MB/s      19.9 MB/s     healthy │  |
- 19| │             │  │                                   │  │                                                           │  |
- 20| │             │  │                                   │  │                                                           │  |
+  3| │  traffic    │  │100 │                                               ⢀⡀        │  │███████████████████████▌       │   |
+  4| │  sessions   │  │    │⠉⠉⠖⠒⠒⣄⠔⠢⡀⡄                              ⡰⢢⣀⠖⠔⠒⠉⠁⠈⠱⠒⡄⢀⣀⣀  │  │⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒│   |
+  5| │  logs       │  │    │        ⠉⠸⠤⠴⡀                    ⢀⡀⡤⠢⠜⠦⠒⠁          ⠈⠁ ⠈⢀⡀│  │ mem                       54% │   |
+  6| │  alerts     │  │    │            ⠉⠉⠉⢣⠤⠤⢄⣀⣀⡀        ⢀⠖⠔⠊⠈    ⣀ ⢀⣀⣀⠔⠢⠋⠢⠔⠢⠤⠒⠊⠱⠒⠁⠘│  │████████████████▊              │   |
+  7| │  settings   │  │    │⠉⠉⠉⠱⠒⠉⠢⠔⣄⡠⢄⣀⣀⢄⢀⣀⣀⢀⣀⣀⣀⠈⠱⠤⠤⣀⣀⠉⡠⠔⢢⠤⠢⠔⠊⠒⠑⠒⠉ ⠉⠁               │  │⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒│   |
+  8| │             │  │0   │             ⠈⠁  ⠁   ⠉⠉⠒⠉  ⠉                             │  │ io                        45% │   |
+  9| │             │  │    └───────-15s───────────-10s─────────────-5s────────────now│  │█████████████▉                 │   |
+ 10| │             │  └──────────────────────────────────────────────────────────────┘  └⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤┘   |
+ 11| │             │                                                                                                        |
+ 12| │             │  ┌ events ───────────────────────────┐  ┌ sessions — s toggles sort ────────────────────────────────┐  |
+ 13| │             │  │                                   │  │host         region   rx▼            tx            state   │  |
+ 14| │             │  │                                   │  │edge-2       eu-w     41.3 MB/s      20.8 MB/s     healthy │  |
+ 15| │             │  │                                   │  │core-a       us-e     41.1 MB/s      18.6 MB/s     syncing │  |
+ 16| │             │  │                                   │  │edge-1       eu-w     38.7 MB/s      7.2 MB/s      healthy │  |
+ 17| │             │  │                                   │  │edge-3       us-e     38.1 MB/s      23.6 MB/s     syncing │  |
+ 18| │             │  │                                   │  │cache-2      ap-s     25.2 MB/s      16.5 MB/s     healthy │  |
+ 19| │             │  │                                   │  │core-b       ap-s     22.8 MB/s      8.4 MB/s      syncing │  |
+ 20| │             │  │                                   │  │cache-1      eu-n     13.4 MB/s      19.9 MB/s     healthy │  |
  21| │             │  │                                   │  │                                                           │  |
  22| │             │  │                                   │  │                                                           │  |
  23| │             │  │                                   │  │                                                           │  |
@@ -88,14 +88,9 @@ styles:
   3:19..22 fg=#7c8699 bg=#fbfcfe
   3:22..23 fg=#fbfcfe bg=#fbfcfe
   3:23..24 fg=#c2c6cc bg=#fbfcfe
-  3:24..29 fg=#4a72c4 bg=#fbfcfe
-  3:29..30 fg=#fbfcfe bg=#fbfcfe
-  3:30..32 fg=#4a72c4 bg=#fbfcfe
-  3:32..64 fg=#fbfcfe bg=#fbfcfe
-  3:64..66 fg=#4a72c4 bg=#fbfcfe
-  3:66..67 fg=#fbfcfe bg=#fbfcfe
-  3:67..75 fg=#4a72c4 bg=#fbfcfe
-  3:75..81 fg=#fbfcfe bg=#fbfcfe
+  3:24..71 fg=#fbfcfe bg=#fbfcfe
+  3:71..73 fg=#4a72c4 bg=#fbfcfe
+  3:73..81 fg=#fbfcfe bg=#fbfcfe
   3:81..82 fg=#c2c6cc bg=#fbfcfe
   3:82..83 fg=#c6c9cf bg=#c6c9cf
   3:83..84 fg=#2b3442 bg=#f2f4f7
@@ -114,19 +109,10 @@ styles:
   4:18..19 fg=#c2c6cc bg=#fbfcfe
   4:19..23 fg=#fbfcfe bg=#fbfcfe
   4:23..24 fg=#c2c6cc bg=#fbfcfe
-  4:24..26 fg=#fbfcfe bg=#fbfcfe
-  4:26..28 fg=#4a72c4 bg=#fbfcfe
-  4:28..29 fg=#fbfcfe bg=#fbfcfe
-  4:29..37 fg=#4a72c4 bg=#fbfcfe
-  4:37..57 fg=#fbfcfe bg=#fbfcfe
-  4:57..67 fg=#4a72c4 bg=#fbfcfe
-  4:67..68 fg=#fbfcfe bg=#fbfcfe
-  4:68..69 fg=#4a72c4 bg=#fbfcfe
-  4:69..73 fg=#fbfcfe bg=#fbfcfe
-  4:73..74 fg=#4a72c4 bg=#fbfcfe
-  4:74..75 fg=#fbfcfe bg=#fbfcfe
-  4:75..79 fg=#4a72c4 bg=#fbfcfe
-  4:79..81 fg=#2f7fa8 bg=#fbfcfe
+  4:24..34 fg=#4a72c4 bg=#fbfcfe
+  4:34..64 fg=#fbfcfe bg=#fbfcfe
+  4:64..79 fg=#4a72c4 bg=#fbfcfe
+  4:79..81 fg=#fbfcfe bg=#fbfcfe
   4:81..82 fg=#c2c6cc bg=#fbfcfe
   4:82..83 fg=#c6c9cf bg=#c6c9cf
   4:83..84 fg=#2b3442 bg=#f2f4f7
@@ -144,14 +130,15 @@ styles:
   5:18..19 fg=#c2c6cc bg=#fbfcfe
   5:19..23 fg=#fbfcfe bg=#fbfcfe
   5:23..24 fg=#c2c6cc bg=#fbfcfe
-  5:24..32 fg=#2f7fa8 bg=#fbfcfe
-  5:32..36 fg=#fbfcfe bg=#fbfcfe
-  5:36..47 fg=#4a72c4 bg=#fbfcfe
-  5:47..49 fg=#fbfcfe bg=#fbfcfe
-  5:49..53 fg=#4a72c4 bg=#fbfcfe
-  5:53..55 fg=#2f7fa8 bg=#fbfcfe
-  5:55..56 fg=#4a72c4 bg=#fbfcfe
-  5:56..81 fg=#2f7fa8 bg=#fbfcfe
+  5:24..32 fg=#fbfcfe bg=#fbfcfe
+  5:32..37 fg=#4a72c4 bg=#fbfcfe
+  5:37..57 fg=#fbfcfe bg=#fbfcfe
+  5:57..65 fg=#4a72c4 bg=#fbfcfe
+  5:65..75 fg=#fbfcfe bg=#fbfcfe
+  5:75..77 fg=#4a72c4 bg=#fbfcfe
+  5:77..78 fg=#fbfcfe bg=#fbfcfe
+  5:78..79 fg=#4a72c4 bg=#fbfcfe
+  5:79..81 fg=#2f7fa8 bg=#fbfcfe
   5:81..82 fg=#c2c6cc bg=#fbfcfe
   5:82..83 fg=#c6c9cf bg=#c6c9cf
   5:83..84 fg=#2b3442 bg=#f2f4f7
@@ -171,14 +158,16 @@ styles:
   6:16..17 fg=#c6c9cf bg=#c6c9cf
   6:17..18 fg=#2b3442 bg=#f2f4f7
   6:18..19 fg=#c2c6cc bg=#fbfcfe
-  6:19..20 fg=#7c8699 bg=#fbfcfe
-  6:20..23 fg=#fbfcfe bg=#fbfcfe
+  6:19..23 fg=#fbfcfe bg=#fbfcfe
   6:23..24 fg=#c2c6cc bg=#fbfcfe
-  6:24..27 fg=#fbfcfe bg=#fbfcfe
-  6:27..28 fg=#2f7fa8 bg=#fbfcfe
-  6:28..30 fg=#fbfcfe bg=#fbfcfe
-  6:30..58 fg=#2f7fa8 bg=#fbfcfe
-  6:58..81 fg=#fbfcfe bg=#fbfcfe
+  6:24..36 fg=#fbfcfe bg=#fbfcfe
+  6:36..46 fg=#4a72c4 bg=#fbfcfe
+  6:46..54 fg=#fbfcfe bg=#fbfcfe
+  6:54..59 fg=#4a72c4 bg=#fbfcfe
+  6:59..63 fg=#fbfcfe bg=#fbfcfe
+  6:63..64 fg=#2f7fa8 bg=#fbfcfe
+  6:64..65 fg=#fbfcfe bg=#fbfcfe
+  6:65..81 fg=#2f7fa8 bg=#fbfcfe
   6:81..82 fg=#c2c6cc bg=#fbfcfe
   6:82..83 fg=#c6c9cf bg=#c6c9cf
   6:83..84 fg=#2b3442 bg=#f2f4f7
@@ -196,14 +185,15 @@ styles:
   7:17..18 fg=#2b3442 bg=#f2f4f7
   7:18..19 fg=#c2c6cc bg=#fbfcfe
   7:19..23 fg=#fbfcfe bg=#fbfcfe
-  7:23..31 fg=#c2c6cc bg=#fbfcfe
-  7:31..35 fg=#7c8699 bg=#fbfcfe
-  7:35..46 fg=#c2c6cc bg=#fbfcfe
-  7:46..50 fg=#7c8699 bg=#fbfcfe
-  7:50..63 fg=#c2c6cc bg=#fbfcfe
-  7:63..66 fg=#7c8699 bg=#fbfcfe
-  7:66..78 fg=#c2c6cc bg=#fbfcfe
-  7:78..81 fg=#7c8699 bg=#fbfcfe
+  7:23..24 fg=#c2c6cc bg=#fbfcfe
+  7:24..45 fg=#2f7fa8 bg=#fbfcfe
+  7:45..49 fg=#4a72c4 bg=#fbfcfe
+  7:49..51 fg=#2f7fa8 bg=#fbfcfe
+  7:51..52 fg=#4a72c4 bg=#fbfcfe
+  7:52..63 fg=#2f7fa8 bg=#fbfcfe
+  7:63..64 fg=#fbfcfe bg=#fbfcfe
+  7:64..66 fg=#2f7fa8 bg=#fbfcfe
+  7:66..81 fg=#fbfcfe bg=#fbfcfe
   7:81..82 fg=#c2c6cc bg=#fbfcfe
   7:82..83 fg=#c6c9cf bg=#c6c9cf
   7:83..84 fg=#2b3442 bg=#f2f4f7
@@ -218,14 +208,29 @@ styles:
   8:15..16 fg=#c2c6cc bg=#fbfcfe
   8:16..17 fg=#c6c9cf bg=#c6c9cf
   8:17..18 fg=#2b3442 bg=#f2f4f7
-  8:18..82 fg=#c2c6cc bg=#fbfcfe
+  8:18..19 fg=#c2c6cc bg=#fbfcfe
+  8:19..20 fg=#7c8699 bg=#fbfcfe
+  8:20..23 fg=#fbfcfe bg=#fbfcfe
+  8:23..24 fg=#c2c6cc bg=#fbfcfe
+  8:24..37 fg=#fbfcfe bg=#fbfcfe
+  8:37..39 fg=#2f7fa8 bg=#fbfcfe
+  8:39..41 fg=#fbfcfe bg=#fbfcfe
+  8:41..42 fg=#2f7fa8 bg=#fbfcfe
+  8:42..45 fg=#fbfcfe bg=#fbfcfe
+  8:45..49 fg=#2f7fa8 bg=#fbfcfe
+  8:49..51 fg=#fbfcfe bg=#fbfcfe
+  8:51..52 fg=#2f7fa8 bg=#fbfcfe
+  8:52..81 fg=#fbfcfe bg=#fbfcfe
+  8:81..82 fg=#c2c6cc bg=#fbfcfe
   8:82..83 fg=#c6c9cf bg=#c6c9cf
   8:83..84 fg=#2b3442 bg=#f2f4f7
-  8:84..86 fg=#c2c6cc bg=#fbfcfe
+  8:84..85 fg=#c2c6cc bg=#fbfcfe
+  8:85..86 fg=#fbfcfe bg=#fbfcfe
   8:86..88 fg=#55617a bg=#fbfcfe
-  8:88..110 fg=#c2c6cc bg=#fbfcfe
+  8:88..110 fg=#fbfcfe bg=#fbfcfe
   8:110..115 fg=#2b3442 bg=#fbfcfe
-  8:115..117 fg=#c2c6cc bg=#fbfcfe
+  8:115..116 fg=#fbfcfe bg=#fbfcfe
+  8:116..117 fg=#c2c6cc bg=#fbfcfe
   8:117..118 fg=#c6c9cf bg=#c6c9cf
   8:118..120 fg=#2b3442 bg=#f2f4f7
   9:0..1 fg=#2b3442 bg=#f2f4f7
@@ -233,12 +238,25 @@ styles:
   9:2..15 fg=#2b3442 bg=#fbfcfe
   9:15..16 fg=#c2c6cc bg=#fbfcfe
   9:16..17 fg=#c6c9cf bg=#c6c9cf
-  9:17..19 fg=#2b3442 bg=#f2f4f7
-  9:19..83 fg=#c6c9cf bg=#c6c9cf
-  9:83..85 fg=#2b3442 bg=#f2f4f7
+  9:17..18 fg=#2b3442 bg=#f2f4f7
+  9:18..19 fg=#c2c6cc bg=#fbfcfe
+  9:19..23 fg=#fbfcfe bg=#fbfcfe
+  9:23..31 fg=#c2c6cc bg=#fbfcfe
+  9:31..35 fg=#7c8699 bg=#fbfcfe
+  9:35..46 fg=#c2c6cc bg=#fbfcfe
+  9:46..50 fg=#7c8699 bg=#fbfcfe
+  9:50..63 fg=#c2c6cc bg=#fbfcfe
+  9:63..66 fg=#7c8699 bg=#fbfcfe
+  9:66..78 fg=#c2c6cc bg=#fbfcfe
+  9:78..81 fg=#7c8699 bg=#fbfcfe
+  9:81..82 fg=#c2c6cc bg=#fbfcfe
+  9:82..83 fg=#c6c9cf bg=#c6c9cf
+  9:83..84 fg=#2b3442 bg=#f2f4f7
+  9:84..85 fg=#c2c6cc bg=#fbfcfe
   9:85..99 fg=#3d8a4e bg=#e3e7ee
   9:99..116 fg=#e3e7ee bg=#e3e7ee
-  9:116..118 fg=#c6c9cf bg=#c6c9cf
+  9:116..117 fg=#c2c6cc bg=#fbfcfe
+  9:117..118 fg=#c6c9cf bg=#c6c9cf
   9:118..120 fg=#2b3442 bg=#f2f4f7
   10:0..1 fg=#2b3442 bg=#f2f4f7
   10:1..2 fg=#c2c6cc bg=#fbfcfe
@@ -246,32 +264,24 @@ styles:
   10:15..16 fg=#c2c6cc bg=#fbfcfe
   10:16..17 fg=#c6c9cf bg=#c6c9cf
   10:17..18 fg=#2b3442 bg=#f2f4f7
-  10:18..19 fg=#c2c6cc bg=#fbfcfe
-  10:19..27 fg=#55617a bg=#fbfcfe
-  10:27..55 fg=#c2c6cc bg=#fbfcfe
-  10:55..57 fg=#2b3442 bg=#f2f4f7
-  10:57..58 fg=#c2c6cc bg=#fbfcfe
-  10:58..85 fg=#55617a bg=#fbfcfe
-  10:85..118 fg=#c2c6cc bg=#fbfcfe
+  10:18..82 fg=#c2c6cc bg=#fbfcfe
+  10:82..83 fg=#c6c9cf bg=#c6c9cf
+  10:83..84 fg=#2b3442 bg=#f2f4f7
+  10:84..85 fg=#c2c6cc bg=#fbfcfe
+  10:85..116 fg=#c44536 bg=#fbfcfe
+  10:116..117 fg=#c2c6cc bg=#fbfcfe
+  10:117..118 fg=#c6c9cf bg=#c6c9cf
   10:118..120 fg=#2b3442 bg=#f2f4f7
   11:0..1 fg=#2b3442 bg=#f2f4f7
   11:1..2 fg=#c2c6cc bg=#fbfcfe
   11:2..15 fg=#2b3442 bg=#fbfcfe
   11:15..16 fg=#c2c6cc bg=#fbfcfe
   11:16..17 fg=#c6c9cf bg=#c6c9cf
-  11:17..18 fg=#2b3442 bg=#f2f4f7
-  11:18..19 fg=#c2c6cc bg=#fbfcfe
-  11:19..54 fg=#fbfcfe bg=#fbfcfe
-  11:54..55 fg=#c2c6cc bg=#fbfcfe
-  11:55..56 fg=#c6c9cf bg=#c6c9cf
-  11:56..57 fg=#2b3442 bg=#f2f4f7
-  11:57..58 fg=#c2c6cc bg=#fbfcfe
-  11:58..80 fg=#55617a bg=#e3e7ee attrs=B
-  11:80..83 fg=#2b3442 bg=#e3e7ee attrs=B
-  11:83..117 fg=#55617a bg=#e3e7ee attrs=B
-  11:117..118 fg=#c2c6cc bg=#fbfcfe
-  11:118..119 fg=#c6c9cf bg=#c6c9cf
-  11:119..120 fg=#2b3442 bg=#f2f4f7
+  11:17..19 fg=#2b3442 bg=#f2f4f7
+  11:19..83 fg=#c6c9cf bg=#c6c9cf
+  11:83..85 fg=#2b3442 bg=#f2f4f7
+  11:85..118 fg=#c6c9cf bg=#c6c9cf
+  11:118..120 fg=#2b3442 bg=#f2f4f7
   12:0..1 fg=#2b3442 bg=#f2f4f7
   12:1..2 fg=#c2c6cc bg=#fbfcfe
   12:2..15 fg=#2b3442 bg=#fbfcfe
@@ -279,15 +289,13 @@ styles:
   12:16..17 fg=#c6c9cf bg=#c6c9cf
   12:17..18 fg=#2b3442 bg=#f2f4f7
   12:18..19 fg=#c2c6cc bg=#fbfcfe
-  12:19..54 fg=#fbfcfe bg=#fbfcfe
-  12:54..55 fg=#c2c6cc bg=#fbfcfe
-  12:55..56 fg=#c6c9cf bg=#c6c9cf
-  12:56..57 fg=#2b3442 bg=#f2f4f7
+  12:19..27 fg=#55617a bg=#fbfcfe
+  12:27..55 fg=#c2c6cc bg=#fbfcfe
+  12:55..57 fg=#2b3442 bg=#f2f4f7
   12:57..58 fg=#c2c6cc bg=#fbfcfe
-  12:58..117 fg=#2b3442 bg=#c0cde8
-  12:117..118 fg=#c2c6cc bg=#fbfcfe
-  12:118..119 fg=#c6c9cf bg=#c6c9cf
-  12:119..120 fg=#2b3442 bg=#f2f4f7
+  12:58..85 fg=#55617a bg=#fbfcfe
+  12:85..118 fg=#c2c6cc bg=#fbfcfe
+  12:118..120 fg=#2b3442 bg=#f2f4f7
   13:0..1 fg=#2b3442 bg=#f2f4f7
   13:1..2 fg=#c2c6cc bg=#fbfcfe
   13:2..15 fg=#2b3442 bg=#fbfcfe
@@ -300,7 +308,9 @@ styles:
   13:55..56 fg=#c6c9cf bg=#c6c9cf
   13:56..57 fg=#2b3442 bg=#f2f4f7
   13:57..58 fg=#c2c6cc bg=#fbfcfe
-  13:58..117 fg=#2b3442 bg=#fbfcfe
+  13:58..80 fg=#55617a bg=#e3e7ee attrs=B
+  13:80..83 fg=#2b3442 bg=#e3e7ee attrs=B
+  13:83..117 fg=#55617a bg=#e3e7ee attrs=B
   13:117..118 fg=#c2c6cc bg=#fbfcfe
   13:118..119 fg=#c6c9cf bg=#c6c9cf
   13:119..120 fg=#2b3442 bg=#f2f4f7
@@ -316,7 +326,7 @@ styles:
   14:55..56 fg=#c6c9cf bg=#c6c9cf
   14:56..57 fg=#2b3442 bg=#f2f4f7
   14:57..58 fg=#c2c6cc bg=#fbfcfe
-  14:58..117 fg=#2b3442 bg=#fbfcfe
+  14:58..117 fg=#2b3442 bg=#c0cde8
   14:117..118 fg=#c2c6cc bg=#fbfcfe
   14:118..119 fg=#c6c9cf bg=#c6c9cf
   14:119..120 fg=#2b3442 bg=#f2f4f7

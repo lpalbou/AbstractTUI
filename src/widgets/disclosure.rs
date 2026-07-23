@@ -225,6 +225,8 @@ impl Disclosure {
         let toggle = move || {
             let now = !folded.get_untracked();
             folded.set(now);
+            // Held borrow across `f`: safe — dispatch-only slot (the
+            // SharedCallback held-borrow contract).
             if let Some(f) = on_toggle.borrow_mut().as_mut() {
                 f(now);
             }

@@ -73,15 +73,19 @@ fn main() -> abstracttui::base::Result<()> {
                     .grow(1.0);
                 let mut grid = Element::new().style(grid_style);
                 // A spanning hero card first (col_span 2), then cards.
+                // The card layouts are COLUMNS: a card stacks its accent
+                // bar over its caption (`LayoutStyle::default()` is a
+                // row, which would lay them side by side, each at its
+                // measured width — zero for a draw closure).
                 grid = grid.child(card(
                     &t,
                     "hero — col_span 2",
                     0,
-                    LayoutStyle::default().col_span(2),
+                    LayoutStyle::column().col_span(2),
                 ));
                 for i in 1..8 {
                     let label: &'static str = CARD_LABELS[i % CARD_LABELS.len()];
-                    grid = grid.child(card(&t, label, i, LayoutStyle::default()));
+                    grid = grid.child(card(&t, label, i, LayoutStyle::column()));
                 }
                 grid.build()
             }))

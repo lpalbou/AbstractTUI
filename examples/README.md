@@ -105,7 +105,8 @@ keypress restyles the entire board — the theme-switch acceptance surface
 and the marketing screenshot. Below ~104 cols the content column bows
 out and the board stays composed.
 
-- Keys: `t`/`T` cycle themes, Tab focus, Enter/space activate, `q` quit.
+- Keys: `t`/`T` cycle themes, Tab focus, Enter/space activate, space
+  advances the spinners when nothing focused consumes it, `q` quit.
 - Needs: 104+ cols for all three columns; degrades to two.
 - Looks like: a design-system poster that repaints under one key.
 
@@ -259,7 +260,8 @@ to this same shell.
 
 - Keys: Ctrl+PgUp/PgDn or click pages, 1-3 jump, `i` inspector drawer,
   `g` nav drawer, Tab focus, `n` raise an alert (watch the Overview
-  badge), Ctrl+T theme, `q` quit.
+  badge), wheel/PgUp/PgDn scroll the Reader page, Ctrl+T theme, `q`
+  quit.
 - Needs: any tty; `ABSTRACTTUI_THEME=<id>` themes it.
 - Looks like: one calm shell — a tab bar with an underline strip and
   a count badge over one full page at a time, with drawers sliding

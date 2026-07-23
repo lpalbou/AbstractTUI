@@ -158,8 +158,16 @@ pub struct Inset {
     pub bottom: Option<i32>,
 }
 
-/// The full per-node style. `Default` is a sane flow child: auto-sized,
-/// no growth, stretch cross-axis, zero spacing.
+/// The full per-node layout style (`LayoutStyle` in the prelude).
+/// `Default` is a sane flow child: auto-sized, no growth, stretch
+/// cross-axis, zero spacing — and ROW direction, so stacked children
+/// usually start from [`Style::column`].
+///
+/// The working vocabulary: [`column`](Style::column)/[`row`](Style::row)
+/// set direction, [`line(n)`](Style::line) is a full-width n-row slot,
+/// [`fill`](Style::fill) fills the parent on both axes; then chain
+/// `gap`, `padding`, `w`/`h`, `grow`/`shrink`/`basis`, `min_w`/`min_h`,
+/// `absolute` for overlays, and [`grid`](Style::grid) for track grids.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Style {
     /// Layout algorithm for THIS container's children.

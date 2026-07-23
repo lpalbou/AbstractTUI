@@ -3,8 +3,8 @@
 Honest-subset mermaid rendering for
 [AbstractTUI](https://github.com/lpalbou/abstracttui): an
 [ADR-0004](https://github.com/lpalbou/abstracttui/blob/main/docs/adr/0004-extension-packaging.md)
-sibling crate (hand-rolled parser — std + the abstracttui family is
-the whole dependency posture). Backlog 0450.
+sibling crate — a hand-rolled parser, with std + the abstracttui
+family as the whole dependency posture.
 
 ```sh
 cargo add abstracttui abstracttui-graph abstracttui-mermaid
@@ -52,11 +52,20 @@ named reason.
 ## Example
 
 ```rust
-use abstracttui_mermaid::MermaidView;
+use abstracttui_mermaid::{live_link_url, parse};
 
-// In an app view:
-// MermaidView::new("graph TD\n  A[Start] --> B{Ship?}\n  B -->|yes| C(Done)")
-//     .view(cx)
+// Pure data first: parse to the IR, or a NAMED refusal.
+let src = "graph TD\n  A[Start] --> B{Ship?}\n  B -->|yes| C(Done)";
+assert!(parse(src).is_ok());
+assert!(parse("gantt\n  title Nope").is_err()); // named Unsupported
+
+// The escape hatch for out-of-subset diagrams: the source travels in
+// the URL fragment — nothing is sent anywhere by this crate.
+let url = live_link_url("gantt\n  title Nope");
+assert!(url.starts_with("https://mermaid.live/edit#"));
+
+// In an app view, rendering is one line:
+// MermaidView::new(src).view(cx)
 ```
 
 Pure-data entry points for other consumers: `parse(&str)` (IR or a
