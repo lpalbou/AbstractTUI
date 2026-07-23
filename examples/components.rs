@@ -51,6 +51,9 @@ fn main() -> abstracttui::base::Result<()> {
         let channel = cx.signal(0usize);
         let theme_ix = cx.signal(0usize);
         let features = cx.signal(Vec::<String>::new());
+        // App-owned fold state for the CONTROLLED disclosure card —
+        // the external button flips it (the 0850 toggle-all shape).
+        let ext_folded = cx.signal(true);
 
         Element::new()
             .style(LayoutStyle::column().padding(Edges::all(1)).gap(1))
@@ -200,6 +203,48 @@ fn main() -> abstracttui::base::Result<()> {
                             .element(&t)
                             .build(),
                     )
+                    // -- component #4: Disclosure cards ------------------
+                    // Progressive disclosure, three state modes: card 1
+                    // starts OPEN (uncontrolled initial state), card 2
+                    // folds a long body behind a capped scroll region
+                    // (unfold it: 4 rows + a scrollbar), card 3's fold
+                    // state lives in an app signal the external button
+                    // writes (the toggle-all policy shape). Click a
+                    // title row or focus it and press Enter/Space.
+                    .child(
+                        Element::new()
+                            .style(LayoutStyle::row().gap(2))
+                            .child(
+                                Button::new("toggle 3rd")
+                                    .on_click(move || ext_folded.update(|f| *f = !*f))
+                                    .element(gcx, &t)
+                                    .build(),
+                            )
+                            .child(
+                                Disclosure::markdown("welcome", "**hello** — this card starts open")
+                                    .initially_folded(false)
+                                    .max_body_rows(3)
+                                    .layout(card_slot())
+                                    .element(gcx, &t)
+                                    .build(),
+                            )
+                            .child(
+                                Disclosure::text("build log", build_log())
+                                    .detail("14 lines")
+                                    .max_body_rows(4)
+                                    .layout(card_slot())
+                                    .element(gcx, &t)
+                                    .build(),
+                            )
+                            .child(
+                                Disclosure::text("external", "fold state lives in an app signal")
+                                    .folded(ext_folded)
+                                    .layout(card_slot())
+                                    .element(gcx, &t)
+                                    .build(),
+                            )
+                            .build(),
+                    )
                     .child(text(
                         "tab focus · enter/space activate · click cards · ctrl+t theme · q quit",
                     ))
@@ -317,6 +362,24 @@ fn field(t: &TokenSet, label: &'static str, child: View) -> View {
         )
         .child(child)
         .build()
+}
+
+/// Equal-split slot for a disclosure card in the demo row: basis 0 +
+/// grow shares the row; shrink 0 keeps cards honest under pressure.
+fn card_slot() -> LayoutStyle {
+    LayoutStyle::column()
+        .grow(1.0)
+        .basis(Dimension::Cells(0))
+        .shrink(0.0)
+}
+
+/// 14 log lines — enough to overflow the 4-row body cap and show the
+/// scrollbar.
+fn build_log() -> String {
+    (0..14)
+        .map(|i| format!("compiling unit {i:>2} … ok"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// A toolbar strip: children on a raised ground — the simplest

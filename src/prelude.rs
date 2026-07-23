@@ -86,3 +86,7 @@ pub use crate::app::{
     ChoiceAnswer, ChoiceOption, ChoiceOutcome, ChoicePrompt, ChoicePromptHandle, ChoiceQuestion,
     ChoiceSequence, ChoiceSequenceOutcome,
 };
+
+// The fold/unfold card (wave 7: first-app/0260 + field-agora/0850) —
+// appended with its wave.
+pub use crate::widgets::Disclosure;

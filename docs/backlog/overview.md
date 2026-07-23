@@ -22,7 +22,7 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | --- | --- |
 | Planned | 5 |
 | Proposed | 65 |
-| Completed | 48 |
+| Completed | 50 |
 | Deprecated | 0 |
 | Recurrent | 0 |
 
@@ -124,6 +124,8 @@ composer wave).
 | 0287 | ChoicePrompt `.body(view)` slot — structured/scrollable/reactive display region; options-first height budget — completed 2026-07-23 | completed/first-app/ |
 | 0288 | ChoicePrompt `option_key` uppercase dead on kitty — letter matcher folds both wire spellings (`KeyEvent::means_char`) — completed 2026-07-23 | completed/first-app/ |
 | 0271 | ChoicePrompt approval-gate adoption gaps: `body_width` (body joins the panel measure), `dismiss_label` (defer-honest vocabulary), `handle.retire()` (host close without resolving) — completed 2026-07-23 | completed/first-app/ |
+| 0260 | Disclosure card widget — fold/unfold title row, configurable initial state, capped body with scrollbar (`widgets::Disclosure`) — completed 2026-07-24 | completed/first-app/ |
+| 0850 | Feed message-card enablers — `Feed::on_item_press` + `item_at_row`, `Scroll::extent_signal`/`scrollbar_auto_hide`, the documented card recipe (Feed-native kind stays behind 0280) — completed 2026-07-24 | completed/field-agora/ |
 
 ## Proposed ledger
 
@@ -136,7 +138,6 @@ composer wave).
 | 0170 | 1.0-track API stability pass — PARTIALLY EXECUTED: ADRs 0001-0003 landed + `Capabilities`/`GraphicsCaps` now `#[non_exhaustive]`; the full 1.0 audit (prelude criteria, public-api gate, breaking budget enforcement) stays open | app-widgets | The remaining audit rides the 0.3 window (budget doc: planned/0002). |
 | 0200 | EPIC: coding-agent console over `abstractcode serve` JSONL | ports | Its widget + live-data dependencies land (Feed/stream/follow-tail + TextArea 0120 DONE — widget deps complete). |
 | 0210 | EPIC: a2a chat TUI over the agora hub | ports | Its widget + live-data dependencies land (Feed + TextArea 0120 DONE; lifecycle 0040/0050 remain). |
-| 0260 | Disclosure widget: per-item fold/unfold for transcripts (maintainer ask) | first-app | Fold into Feed's item model (0100 shipped — extend), or standalone on a second consumer. |
 | 0280 | Feed custom blocks cannot host widgets; protocol images degrade to mosaic in Feed | first-app | Filed 2026-07-22 (0.2.0 adoption wave); design with Feed's item model + the 0144 protocol-images-in-flow question. |
 | 0300 | App lifecycle events (boot/ready/resize/caps/focus/suspend/resume/quit + custom) — the band foundation | control-plane | Scheduling any of 0310/0340/0350, or the first app needing suspend/flush hooks. |
 | 0310 | Automation bus: inject input, query semantic tree + screen text, invoke named actions, subscribe to events | control-plane | 0300 + a driving consumer (port harness, embedder, or 0320). |

@@ -9,7 +9,6 @@ item records the workaround so the engine fix can delete it.
 
 | ID | Title | Class |
 | --- | --- | --- |
-| 0260 | Disclosure widget — graphical per-item fold/unfold (maintainer ask) | feature |
 | 0272 | ChoicePrompt aux-key vocabulary — no non-option key surface, hint row closed to callers (split out of 0271 at its completion; the `f` cards↔JSON toggle ask) | API gap |
 | 0280 | Feed custom blocks cannot host widgets — protocol images degrade to mosaic | capability gap |
 | 0289 | Typed uppercase inserts lowercase on kitty-spelling wires — `convert_event` drops the kitty `text` field; TextInput inserts the base char (found during the 0286/0288 verification) | bug |
@@ -57,6 +56,12 @@ Completed 2026-07-23 (choice-0271 wave):
 | ID | Title | Class |
 | --- | --- | --- |
 | 0271 | ChoicePrompt approval-gate adoption gaps — `body_width(cols)` (body participates in the panel's measure), `dismiss_label(label)` (button + hint + advertised Esc follow the caller's vocabulary; outcome stays `Cancelled`), `handle.retire()` (host close without resolving — distinct from user-Esc). The aux-key gap (gap 2) was split out UNSHIPPED to 0272 above. | API gap |
+
+Completed 2026-07-24 (disclosure wave, jointly with field-agora 0850):
+
+| ID | Title | Class |
+| --- | --- | --- |
+| 0260 | Disclosure widget — standalone fold/unfold card shipped (`▸`/`▾` title row + detail slot, click/Enter/Space toggle, `max_body_rows` cap + auto-hiding scrollbar, uncontrolled + `folded(Signal<bool>)` modes, folded = body unmounted) with the Feed enablers (`on_item_press`, `item_at_row`) and the documented message-card recipe. The feed-NATIVE card kind stays future work behind 0280's draw-only block boundary. | feature |
 
 Table reconciliation (2026-07-23, by the consumer while filing 0281-0283):
 the open table above had gone stale against the directory — 0250 (fixed

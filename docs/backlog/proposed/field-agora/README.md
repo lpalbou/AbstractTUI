@@ -33,3 +33,11 @@ Each item carries a severity in its Metadata and in the row here:
 | 0820 | Connection has no app-initiated re-dial verb | API gap | P3 |
 | 0830 | reconnect countdown needs app-side deadline bookkeeping | API gap | P3 |
 | 0840 | layout docs: grow vs intrinsic basis for content-heavy panes | UX defect (docs) | P3 |
+| 0860 | RichTextView/MarkdownView have no intrinsic measure — invisible in Scroll | footgun | P3 |
+
+Completed 2026-07-24 (disclosure wave, moved to
+`../../completed/field-agora/`):
+
+| ID | Title | Class | Severity |
+| --- | --- | --- | --- |
+| 0850 | Disclosure/Card widget for feed items — standalone `Disclosure` widget + `Feed::on_item_press`/`FeedState::item_at_row` (the unreachable click-hit-info) + the documented message-card recipe (fold map + `(rev, folded)` fingerprint); the feed-NATIVE card kind deferred behind first-app 0280's draw-only block boundary | capability gap | P2 |

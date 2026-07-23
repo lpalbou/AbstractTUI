@@ -175,7 +175,8 @@ widgets take just `&TokenSet`, no `Scope`. The catalog:
 - **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
-- **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override), and `follow_tail` binds the pinned-to-bottom idiom.
+- **Disclosure** — the fold/unfold card: a one-row title header (glyph + truncating title + muted detail slot) that expands a body in place. Click or Enter/Space toggles; `max_body_rows` caps the body behind a scrollbar; state is widget-internal (`initially_folded`) or app-owned (`folded(Signal<bool>)`).
+- **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override) and can be read back through `extent_signal`; `follow_tail` binds the pinned-to-bottom idiom; `scrollbar_auto_hide` hides the bar while content fits.
 - **Checkbox** — `[x] label` bound to a `Signal<bool>`.
 - **RadioGroup** — one-of-N bound to a `Signal<usize>`; one tab stop, Up/Down move the selection.
 - **Progress** — bar with sub-cell precision; optional ok→warn→error ramp.
@@ -401,7 +402,76 @@ fn tool_result(body: &str) -> FeedItem {
 }
 ```
 
-### Charts — history rings and time axes
+### Feed — item press (click hit info)
+
+`Feed::on_item_press(|key, row_within_item| ...)` fires on a left
+press over an item's rows — row 0 is the item's first typeset row, so
+"the user clicked this card's title row" is `row_within_item == 0`.
+Presses on the gap between items or past the tail fire nothing (honest
+geometry, never rounded to a neighbor), and an unbound feed attaches
+no handler at all. The row math is public as
+`FeedState::item_at_row(row) -> Option<(key, row_within_item)>` (the
+inverse of `row_of`) for apps with their own pointer logic. The
+callback runs after the feed releases its state borrow, so it may
+mutate the `FeedState` (re-push the pressed item) or dispose the
+feed's scope.
+
+### Disclosure — the fold/unfold card
+
+Progressive disclosure for transcripts, message boards and settings
+panes: a one-row header — fold glyph (`▸`/`▾`), truncating title,
+optional right-aligned muted `detail` slot — over a body that mounts
+on expand and UNMOUNTS on fold (a folded card costs zero idle work).
+Click the title row, or Enter/Space while it is focused (one tab
+stop; focus wears the selection pair). The card is borderless
+two-tone chrome (header `surface_raised`, body `surface`) — wrap it
+in a `Block` when you want a frame.
+
+`max_body_rows(n)` (default 8) limits the unfolded body: shorter
+content takes its natural height, taller content scrolls inside the
+capped region with a scrollbar that auto-hides when it fits;
+`max_body_rows(0)` removes the cap. Bodies: `Disclosure::text` /
+`Disclosure::markdown` (typeset once through the shared Feed recipe,
+kept across folds) or `.body(|scope| view)` for any `View` — the
+closure runs once per EXPANSION on a generation scope, so durable
+state belongs in signals outside it.
+
+State is uncontrolled by default (`initially_folded`, default folded);
+`folded(Signal<bool>)` hands the policy to the app — the signal's
+current value is the state, toggling writes it back, and a
+"collapse all" is a loop of writes. `on_toggle(|folded_now| ...)`
+fires after the state write (disposal-safe):
+
+```rust
+use abstracttui::prelude::*;
+
+fn cycle_card(cx: Scope, n: usize, reasoning_md: &str) -> View {
+    Disclosure::markdown(format!("cycle {n}"), reasoning_md)
+        .detail("12 lines")
+        .max_body_rows(6)
+        .view(cx) // folded by default: the header is the summary
+}
+```
+
+#### The message-card recipe (Feed + Disclosure semantics)
+
+A hub/chat transcript wants Feed virtualization AND per-card fold —
+today that composes from parts (both validator apps hand-rolled
+exactly this; it is now the packaged pattern). Keep fold state in a
+`Signal<HashMap<key, bool>>`, include it in the `FeedState::sync`
+fingerprint `(rev, folded)` so a toggle re-typesets exactly the
+changed item, render folded items as one rich header line (+ an
+optional `max_rows` preview) and unfolded items as header + body
+blocks, then wire both toggle surfaces: Enter on the selected key
+(`Feed::selected_key`), and click via `on_item_press` gated on
+`row_within_item == 0` — flip the key's entry, bump the fingerprint,
+and the feed re-renders that card in place (extent and follow-tail
+stay exact because item heights are re-typeset, never guessed). A
+Feed-NATIVE card item kind (engine-owned title row inside the feed's
+own block vocabulary) remains future work: feed blocks are draw-only
+regions today (the 0280 block-boundary honesty), so the packaged
+per-item WIDGET is `Disclosure`, and inside a `Feed` the pattern
+above is the supported shape.
 
 Monitors stop hand-rolling sample rings: `TimeSeriesState` (reactive)
 or `TimeSeries` (plain) take `push(t, value)` — `t` is a `Duration` on

@@ -23,6 +23,7 @@ pub mod button;
 pub mod chart;
 pub mod checkbox;
 pub mod code;
+pub mod disclosure;
 pub mod feed;
 pub mod grid;
 pub mod image;
@@ -81,6 +82,9 @@ pub use meter::Meter;
 // Appended (wave 3, reader enablers 0146/0148): outline entries with
 // typeset rows + search matches for the markdown reader surface.
 pub use markdown::{MdSearchMatch, OutlineEntry};
+// Appended (wave 7, first-app 0260 + field-agora 0850): the
+// fold/unfold card.
+pub use disclosure::Disclosure;
 
 /// Shared callback-slot shape for interactive widgets: the builder's
 /// `Option<Box<dyn FnMut(..)>>` moved behind `Rc<RefCell<..>>` so
@@ -136,7 +140,7 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 34] = [
+    const SOURCES: [(&str, &str); 36] = [
         ("mod.rs", include_str!("mod.rs")),
         ("audio_scope.rs", include_str!("audio_scope.rs")),
         ("meter.rs", include_str!("meter.rs")),
@@ -147,7 +151,9 @@ mod lint_tests {
         ("chart_time.rs", include_str!("chart_time.rs")),
         ("checkbox.rs", include_str!("checkbox.rs")),
         ("code.rs", include_str!("code.rs")),
+        ("disclosure.rs", include_str!("disclosure.rs")),
         ("feed.rs", include_str!("feed.rs")),
+        ("feed_draw.rs", include_str!("feed_draw.rs")),
         ("feed_item.rs", include_str!("feed_item.rs")),
         ("feed_sync.rs", include_str!("feed_sync.rs")),
         ("feed_typeset.rs", include_str!("feed_typeset.rs")),

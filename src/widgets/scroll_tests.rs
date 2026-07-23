@@ -14,8 +14,9 @@ use crate::widgets::{Feed, FeedItem, FeedState};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-/// 1-column-wide content: 20 numbered rows.
-fn tall_content() -> (View, i32) {
+/// 1-column-wide content: 20 numbered rows. Shared with the sibling
+/// `scroll_extent_tests.rs` (pub(super), the feed_tests precedent).
+pub(super) fn tall_content() -> (View, i32) {
     let mut col = Element::new().style(LayoutStyle::column());
     for i in 0..20 {
         col = col.child(text(format!("row {i}")));
@@ -26,7 +27,7 @@ fn tall_content() -> (View, i32) {
 /// Settle the deferred geometry loop: draw (probes record), fire due
 /// timers (probes publish), flush (pins apply), repeat until quiet.
 /// Mirrors what consecutive `Driver::turn`s do in a real app.
-fn settle(tree: &mut UiTree, size: Size) -> BufferCanvas {
+pub(super) fn settle(tree: &mut UiTree, size: Size) -> BufferCanvas {
     flush_effects();
     tree.layout();
     let mut canvas = render(tree, size);

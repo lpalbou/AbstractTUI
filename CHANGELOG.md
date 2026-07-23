@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.11] - 2026-07-24
+
+### Added
+
+- widgets: `Disclosure` — the fold/unfold card (first-app 0260 +
+  field-agora 0850, both operator-requested). A one-row title header
+  (fold glyph `▸`/`▾` in accent ink, truncate-ellipsis title, optional
+  right-aligned muted `detail` slot) over a body that mounts on expand
+  and unmounts on fold. Toggle by clicking the title row or
+  Enter/Space while focused (one tab stop, selection-pair focus
+  affordance); state is widget-internal (`initially_folded`, default
+  FOLDED — progressive disclosure) or app-owned
+  (`folded(Signal<bool>)`, two-way — the toggle-all policy hook).
+  `max_body_rows(n)` (default 8) caps the unfolded body at
+  `min(content, n)` rows with a scrollbar when content overflows
+  (`0` = uncapped natural height); `Disclosure::text`/`::markdown`
+  convenience bodies typeset once through the shared Feed recipe and
+  survive fold cycles; `.body(|scope| view)` hosts any `View`, built
+  per expansion. `on_toggle(FnMut(bool))` runs after the state write
+  (disposal-safe, backlog-0297 law). A11y: `region` labeled by the
+  title wrapping a `button` whose value reads "collapsed"/"expanded".
+  Exported from the prelude; demoed in `examples/components.rs`.
+- widgets: `Feed::on_item_press(FnMut(&str, i32))` (field-agora 0850)
+  — item-level press hit info: a left press over an item's rows
+  reports `(key, row_within_item)` (row 0 = the item's first typeset
+  row, the click-on-card-title gate). Gap rows and the void past the
+  tail fire nothing; unbound feeds attach no handler. The row math is
+  public as `FeedState::item_at_row(row)` (the inverse of `row_of`).
+- widgets: `Scroll::extent_signal(Signal<(i32, i32)>)` — read back the
+  content extent (measured mode publishes the solver's answer; hint
+  mode lands the hint verbatim). `Disclosure` sizes its capped body
+  region from it; apps get "N more rows" chrome.
+- widgets: `Scroll::scrollbar_auto_hide(bool)` — opt-in: hide the
+  vertical scrollbar while content fits the viewport (the column stays
+  reserved so content width never re-wraps; the hidden strip ignores
+  drags). Default `false` keeps the always-on bar byte-stable.
+- docs: api.md gained the Disclosure section, the Feed item-press
+  section and the message-card recipe (Feed + Disclosure semantics);
+  live-data.md points at them from the transcript recipes.
+
+### Fixed
+
+- widgets: `Disclosure` review hardening (adversarial pass,
+  `tests/wave_disclosure_review.rs` + `reviews/wave7/disclosure-review.md`):
+  the header no longer paints its fold glyph outside a 1-cell-wide
+  rect (draw closures are not clipped to their element — damage
+  contract §5), and a capped body whose content measures ZERO rows now
+  settles to the 1-row floor instead of standing at the full cap
+  ("limited to", never "padded to" — only `(0, 0)` is the unmeasured
+  sentinel, matching Scroll's offset-repair reading).
+
 ## [0.2.10] - 2026-07-23
 
 ### Added
@@ -995,6 +1046,7 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[0.2.11]: https://github.com/lpalbou/abstracttui/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/lpalbou/abstracttui/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/lpalbou/abstracttui/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/lpalbou/abstracttui/compare/v0.2.7...v0.2.8

@@ -293,6 +293,22 @@ engine's job ends at the thread boundary, and this page is that
 boundary's contract. The runnable version with bursty timing, pause,
 and an events/sec `interval` is [`examples/feed.rs`](../examples/feed.rs).
 
+## Message cards that fold (per-item disclosure)
+
+Hub watchers and chat transcripts render each message as a card with a
+one-row title that folds/unfolds. Standalone cards (settings panes,
+tool results outside a feed) are the `Disclosure` widget directly —
+capped scrolling body, click/Enter toggling, app-owned fold signals.
+INSIDE a `Feed`, keep the feed's virtualization and compose the same
+semantics: fold state in a `Signal<HashMap<key, bool>>`, the fold bit
+folded into each item's `SyncSpec` fingerprint (`(rev, folded)` — a
+toggle re-typesets exactly that item), folded items rendered as one
+rich header line, unfolded as header + body blocks, Enter on the
+selected key plus click-to-toggle via `Feed::on_item_press` gated on
+`row_within_item == 0`. The full recipe (and why the in-feed card is a
+pattern rather than an engine block kind today) lives in
+[api.md → "The message-card recipe"](api.md#the-message-card-recipe-feed--disclosure-semantics).
+
 ## Testing live-data apps
 
 The headless harness works unchanged: drive `Driver::turn` against

@@ -77,6 +77,8 @@ pub struct Scroll {
     offset_y: Option<Signal<i32>>,
     offset_x: Option<Signal<i32>>,
     follow: Option<Signal<bool>>,
+    extent_out: Option<Signal<(i32, i32)>>,
+    scrollbar_auto_hide: bool,
     layout: Option<LayoutStyle>,
 }
 
@@ -90,6 +92,8 @@ impl Scroll {
             offset_y: None,
             offset_x: None,
             follow: None,
+            extent_out: None,
+            scrollbar_auto_hide: false,
             layout: None,
         }
     }
@@ -130,6 +134,33 @@ impl Scroll {
         self
     }
 
+    /// Bind the CONTENT EXTENT `(w, h)` in cells to an app-visible
+    /// signal (first-app 0260 / field-agora 0850 enabler): in measured
+    /// mode the solver's answer lands here one settle turn after it
+    /// changes (`(0, 0)` = not measured yet — a supplied signal's
+    /// current value is kept until then, so a remounting caller warm-
+    /// starts from its last measurement); in hint mode the hint lands
+    /// verbatim at build. The Scroll OWNS the writes while mounted —
+    /// read it for "N more rows" chrome or height-capped wrappers
+    /// (`Disclosure::max_body_rows` sizes its body region from it);
+    /// writing it yourself desynchronizes clamps and the thumb.
+    pub fn extent_signal(mut self, sig: Signal<(i32, i32)>) -> Scroll {
+        self.extent_out = Some(sig);
+        self
+    }
+
+    /// Auto-hide the vertical scrollbar while the content FITS the
+    /// viewport (default `false`: the bar always renders, full-height
+    /// thumb when nothing overflows — the pre-0.2.11 behavior,
+    /// byte-stable). When hidden, the bar's column is still RESERVED
+    /// (painted as bare ground) so content width never re-wraps when
+    /// the bar appears, and the invisible strip ignores drags — an
+    /// invisible target must never jump the offset.
+    pub fn scrollbar_auto_hide(mut self, auto_hide: bool) -> Scroll {
+        self.scrollbar_auto_hide = auto_hide;
+        self
+    }
+
     pub fn layout(mut self, layout: LayoutStyle) -> Scroll {
         self.layout = Some(layout);
         self
@@ -152,8 +183,20 @@ impl Scroll {
 
         let hint = self.content_size;
         // The reactive content extent: the hint verbatim, or the solved
-        // size of the content wrapper read back by the probe below.
-        let extent: Signal<(i32, i32)> = cx.signal(hint.unwrap_or((0, 0)));
+        // size of the content wrapper read back by the probe below. A
+        // caller-bound signal (`extent_signal`) REPLACES the internal
+        // one — same writes, app-visible; its pre-existing value is
+        // kept in measured mode (warm start for remounting callers),
+        // while a hint overwrites it (the hint IS the truth).
+        let extent: Signal<(i32, i32)> = match self.extent_out {
+            Some(sig) => {
+                if let Some(h) = hint {
+                    sig.set_if_changed(h);
+                }
+                sig
+            }
+            None => cx.signal(hint.unwrap_or((0, 0))),
+        };
         // Viewport box — reactive only for the follow-tail pin (resize
         // re-pins); gestures read their own rect from the event ctx.
         let view_box: Signal<(i32, i32)> = cx.signal((0, 0));
@@ -370,7 +413,13 @@ impl Scroll {
 
         // Scrollbar: its own Dyn column so offset/extent changes damage
         // exactly this strip; drag maps pointer y to offset with capture
-        // keeping the drag alive outside the strip.
+        // keeping the drag alive outside the strip. Under
+        // `scrollbar_auto_hide`, a fitting content hides the bar: the
+        // strip paints bare ground (deterministic pixels — skipping the
+        // draw would leave the previous frame's glyphs in a damaged
+        // region) and ignores drags (an invisible target must never
+        // steer the offset).
+        let auto_hide = self.scrollbar_auto_hide;
         let bar = dyn_view(
             LayoutStyle::default()
                 .width(Dimension::Cells(1))
@@ -393,6 +442,9 @@ impl Scroll {
                             );
                             if grabbed {
                                 let bar = ctx.current_rect();
+                                if auto_hide && content_h <= bar.h {
+                                    return; // hidden bar: inert strip
+                                }
                                 let usable = (bar.h - 1).max(1);
                                 let frac = (m.pos.y - bar.y).clamp(0, usable);
                                 let max_off = (content_h - bar.h).max(0);
@@ -404,6 +456,11 @@ impl Scroll {
                     })
                     .draw(move |canvas, rect| {
                         if rect.is_empty() {
+                            return;
+                        }
+                        if auto_hide && content_h <= rect.h {
+                            let blank = crate::render::Style::new().fg(ground).bg(ground);
+                            canvas.fill_styled(rect, ' ', &blank);
                             return;
                         }
                         draw_scrollbar(canvas, rect, offset, content_h, track, thumb, ground);
@@ -457,3 +514,9 @@ fn size_probe(sig: Signal<(i32, i32)>) -> impl FnMut(&mut dyn StyledCanvas, Rect
 #[cfg(test)]
 #[path = "scroll_tests.rs"]
 mod tests;
+
+// The 0260/0850 enabler tests (extent_signal + scrollbar_auto_hide),
+// split for the file-size discipline.
+#[cfg(test)]
+#[path = "scroll_extent_tests.rs"]
+mod extent_tests;

@@ -54,6 +54,10 @@ impl Segment {
 }
 
 pub(super) struct Entry {
+    /// The item's key (identity). `index` maps key -> position; this is
+    /// the reverse edge, so row -> item hit info (`item_at_row`) answers
+    /// in O(log n) without scanning the map.
+    pub(super) key: String,
     pub(super) kind: EntryKind,
     /// Typeset at `FeedInner::width`. For streams: [closed, open].
     pub(super) segments: Vec<Segment>,

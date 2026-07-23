@@ -72,20 +72,18 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::base::Rect;
 use crate::layout::{Dimension, Style as LayoutStyle};
 use crate::reactive::{Scope, Signal};
 use crate::render::md::DocStreamSession;
 use crate::theme::TokenSet;
-use crate::ui::{dyn_view, Element, StyledCanvas};
+use crate::ui::{dyn_view, Element, MouseButton, MouseKind, Phase, UiEvent};
 
-use super::markdown::{draw_rows, md_styles};
+use super::markdown::md_styles;
 
 // Content model (public block vocabulary + item builder) — sibling
 // module for the file-size discipline.
 #[path = "feed_item.rs"]
 mod item;
-use item::SharedDrawFn;
 pub use item::{CustomBlock, FeedBlock, FeedItem};
 
 // The Signal<Vec<T>> -> keyed-feed diffing bridge (backlog 0104).
@@ -97,7 +95,7 @@ pub use sync::SyncSpec;
 // same child-module pattern `md.rs` uses for its stream half).
 #[path = "feed_typeset.rs"]
 mod typeset;
-use typeset::{Entry, EntryKind, FeedInner, Segment, StreamEntry};
+use typeset::{Entry, EntryKind, FeedInner, StreamEntry};
 
 /// Cloneable handle to a feed's items. Mutations are O(1) for appends
 /// and tail streaming; the widget re-renders one dyn region per change.
@@ -134,12 +132,13 @@ impl FeedState {
             }
             let i = inner.entries.len();
             inner.mutations += 1;
-            inner.index.insert(key, i);
             inner.entries.push(Entry {
+                key: key.clone(),
                 kind: EntryKind::Static(item.blocks),
                 segments: Vec::new(),
                 height: 0,
             });
+            inner.index.insert(key, i);
             inner.typeset_entry(i, true);
             inner.rebuild_prefix_from(i);
         }
@@ -191,12 +190,13 @@ impl FeedState {
                 }
                 None => {
                     let i = inner.entries.len();
-                    inner.index.insert(key, i);
                     inner.entries.push(Entry {
+                        key: key.clone(),
                         kind,
                         segments: Vec::new(),
                         height: 0,
                     });
+                    inner.index.insert(key, i);
                     i
                 }
             };
@@ -310,6 +310,34 @@ impl FeedState {
         Some(inner.prefix.get(i).copied().unwrap_or(0))
     }
 
+    /// The inverse of [`FeedState::row_of`] (field-agora 0850): which
+    /// item owns CONTENT ROW `row` at the current typeset width, and
+    /// where inside it — `(key, row_within_item)` with row 0 = the
+    /// item's first typeset row. `None` for negative rows, rows in the
+    /// GAP between items, and rows past the last item (a gap row
+    /// belongs to no one — honest hit info, never rounded to a
+    /// neighbor). O(log n) via the prefix sums. This is the row math
+    /// behind [`Feed::on_item_press`]; it is public so apps with their
+    /// own pointer logic (hover chrome, context menus) share one
+    /// geometry truth.
+    pub fn item_at_row(&self, row: i32) -> Option<(String, i32)> {
+        let inner = self.inner.borrow();
+        if row < 0 || inner.entries.is_empty() {
+            return None;
+        }
+        let i = inner
+            .prefix
+            .partition_point(|&p| p <= row)
+            .saturating_sub(1);
+        let top = *inner.prefix.get(i)?;
+        let entry = inner.entries.get(i)?;
+        let within = row - top;
+        if within < 0 || within >= entry.height {
+            return None; // a gap row or beyond the tail
+        }
+        Some((entry.key.clone(), within))
+    }
+
     /// Publish after a mutation: sync the extent signal (lawful here —
     /// mutations happen in event/effect phases) and bump the render key.
     /// The `try_` reads guard against a disposed UI scope (an app-held
@@ -343,11 +371,15 @@ impl FeedState {
     }
 }
 
+/// Item-press callback: `(key, row_within_item)`.
+type ItemPressFn = Box<dyn FnMut(&str, i32)>;
+
 /// The Feed widget builder. See the module docs.
 pub struct Feed {
     state: FeedState,
     gap: i32,
     selected: Option<Signal<Option<String>>>,
+    on_item_press: Option<ItemPressFn>,
     layout: Option<LayoutStyle>,
 }
 
@@ -357,6 +389,7 @@ impl Feed {
             state: state.clone(),
             gap: 1,
             selected: None,
+            on_item_press: None,
             layout: None,
         }
     }
@@ -377,6 +410,22 @@ impl Feed {
     /// Blank rows between items (default 1).
     pub fn gap(mut self, rows: i32) -> Feed {
         self.gap = rows.max(0);
+        self
+    }
+
+    /// Item-level PRESS hit info (field-agora 0850): a left mouse-down
+    /// on an item's rows fires `f(key, row_within_item)` — row 0 = the
+    /// item's first typeset row, so "click on the card's title row"
+    /// is `row_within_item == 0`. Presses on the gap between items or
+    /// past the last item fire nothing (honest geometry, never rounded
+    /// to a neighbor). A consumed press stops propagation; when
+    /// unbound, no handler is attached at all (pre-0.2.11 behavior,
+    /// byte-stable). The Feed finishes no bookkeeping of its own here,
+    /// so the callback may mutate the `FeedState` (toggle a card's
+    /// fold, re-push the item) or dispose the Feed's scope synchronously
+    /// (the disposal-safety law).
+    pub fn on_item_press(mut self, f: impl FnMut(&str, i32) + 'static) -> Feed {
+        self.on_item_press = Some(Box::new(f));
         self
     }
 
@@ -442,6 +491,28 @@ impl Feed {
             el = el.style(style);
         }
 
+        // Item press hit info (0850): attached ONLY when bound — an
+        // unwired feed keeps zero handlers. Row math: the element rect
+        // IS the content rect in both modes (content-sized feeds are
+        // positioned by the surrounding Scroll; fixed-box feeds show
+        // their head), so `pos.y - rect.y` is the content row directly.
+        // The state borrow ends inside `item_at_row`, so the callback
+        // may mutate the feed freely.
+        if let Some(mut press) = self.on_item_press {
+            let press_state = state.clone();
+            el = el.on(Phase::Bubble, move |ctx, ev| {
+                if let UiEvent::Mouse(m) = ev {
+                    if matches!(m.kind, MouseKind::Down(MouseButton::Left)) {
+                        let row = m.pos.y - ctx.current_rect().y;
+                        if let Some((key, within)) = press_state.item_at_row(row) {
+                            press(&key, within);
+                            ctx.stop_propagation();
+                        }
+                    }
+                }
+            });
+        }
+
         let version = state.version;
         let selected = self.selected;
         el.child(dyn_view(
@@ -469,105 +540,12 @@ impl Feed {
     }
 }
 
-/// Windowed paint: only entries intersecting `rect ∩ canvas bounds`
-/// touch the canvas. Custom draws run after the state borrow releases
-/// (they are app code).
-fn draw_feed(
-    state: &FeedState,
-    t: &TokenSet,
-    selected: Option<&str>,
-    canvas: &mut dyn StyledCanvas,
-    rect: Rect,
-) {
-    let mut customs: Vec<(SharedDrawFn, Rect)> = Vec::new();
-    {
-        let mut inner = state.inner.borrow_mut();
-        if rect.w > 1 && inner.width != rect.w {
-            // Width discovery / resize: re-typeset (pure cache fill;
-            // the reactive extent syncs via the deferred fixup).
-            inner.width = rect.w;
-            inner.retypeset_all();
-            drop(inner);
-            state.schedule_geometry_sync();
-            inner = state.inner.borrow_mut();
-        }
-        let bounds = Rect::from_size(canvas.size());
-        let band = rect.intersect(bounds);
-        if band.is_empty() || inner.entries.is_empty() {
-            return;
-        }
-        let first_row = band.y - rect.y;
-        let last_row = first_row + band.h; // exclusive
-        let inner = &*inner;
-        // Selection highlight: ground the selected item's band FIRST —
-        // rows paint over with transparent backgrounds, so item inks
-        // stay and the tint shows through (code-fence rows keep their
-        // own ground by design).
-        if let Some(i) = selected.and_then(|k| inner.index.get(k).copied()) {
-            let top = inner.prefix[i];
-            let h = inner.entries[i].height;
-            if top < last_row && top + h > first_row {
-                canvas.fill(
-                    Rect::new(rect.x, rect.y + top, rect.w, h),
-                    ' ',
-                    t.selection_fg,
-                    t.selection_bg,
-                );
-            }
-        }
-        // First entry whose span can reach the band (binary search on
-        // prefix starts, then step back one).
-        let mut i = inner
-            .prefix
-            .partition_point(|&p| p <= first_row)
-            .saturating_sub(1);
-        while i < inner.entries.len() {
-            let top = inner.prefix[i];
-            if top >= last_row {
-                break;
-            }
-            let entry = &inner.entries[i];
-            let mut seg_top = top;
-            for seg in &entry.segments {
-                let h = seg.height();
-                if seg_top >= last_row {
-                    break;
-                }
-                if seg_top + h > first_row {
-                    match seg {
-                        Segment::Rows(rows) => {
-                            let skip = (first_row - seg_top).max(0) as usize;
-                            let visible = ((last_row - seg_top).min(h) as usize).min(rows.len());
-                            if skip < visible {
-                                let y = rect.y + seg_top + skip as i32;
-                                draw_rows(
-                                    canvas,
-                                    Rect::new(rect.x, y, rect.w, (visible - skip) as i32),
-                                    t,
-                                    &rows[skip..visible],
-                                );
-                            }
-                        }
-                        Segment::Custom { draw, height } => {
-                            // The custom block gets its FULL rect (its
-                            // top may sit above the band); the canvas
-                            // clips.
-                            customs.push((
-                                draw.clone(),
-                                Rect::new(rect.x, rect.y + seg_top, rect.w, *height),
-                            ));
-                        }
-                    }
-                }
-                seg_top += h;
-            }
-            i += 1;
-        }
-    }
-    for (draw, r) in customs {
-        draw(canvas, r);
-    }
-}
+// The windowed painter — sibling module for the file-size discipline
+// (this file grew past the 600-line budget when the item-press wiring
+// landed; the painter is its own one-file-one-task cut).
+#[path = "feed_draw.rs"]
+mod draw;
+use draw::draw_feed;
 
 #[cfg(test)]
 #[path = "feed_tests.rs"]
@@ -577,3 +555,8 @@ mod tests;
 #[cfg(test)]
 #[path = "feed_rich_tests.rs"]
 mod rich_tests;
+
+// Item-press hit-info tests (field-agora 0850), same split.
+#[cfg(test)]
+#[path = "feed_press_tests.rs"]
+mod press_tests;
