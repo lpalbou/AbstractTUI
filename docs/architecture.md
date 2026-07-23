@@ -83,7 +83,8 @@ ship as separate crates in an in-repo cargo workspace
 installed by downstreams only when needed. Extensions consume the
 PUBLIC API exclusively (the same "no private engine privileges" rule
 the built-in widgets live under); a capability an extension needs and
-cannot reach is, by definition, a core backlog item. They inherit the
+cannot reach is, by definition, a feature request against the core
+crate. They inherit the
 dependency posture (hand-rolled parsers, std + the family), the token
 discipline, and the honest-degradation principle; publish order is
 core first, family the same day. The family guide is

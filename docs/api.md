@@ -179,8 +179,8 @@ if let UiEvent::Mouse(m) = ev {
 Counts flow only where time flows: the driver publishes its
 (`set_clock`-injectable) clock as the ambient event time each turn, so
 apps under `App::run` get counts for free and tests script double-click
-timing through the same injected clock animations use — and, since the
-wave-11 timer fix, the same clock timer deadlines ARM against
+timing through the same injected clock animations use — and the same
+clock is what timer deadlines arm against
 (`reactive::set_loop_clock` is the custom-loop half of that one-clock
 story; see the reactive section). A bare `UiTree`
 driven directly has no time source and every press deterministically
@@ -259,6 +259,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
 - **PageHost** — the page-level tab host: N FULL pages behind one themed tab bar, exactly one mounted (see [its own section](#widgetspagehost--the-page-level-tab-host) below).
 - **Disclosure** — the fold/unfold card: a one-row title header (glyph + truncating title + muted detail slot) that expands a body in place. Click or Enter/Space toggles; `max_body_rows` caps the body behind a scrollbar; state is widget-internal (`initially_folded`) or app-owned (`folded(Signal<bool>)`).
+- **FilePicker** — directory browser for modals and attach flows: breadcrumb header, type-to-filter input, entry rows with kind glyphs and an optional size column, opt-in multi-select, `on_pick(Vec<String>)`; entries come from the pluggable `FileSource` seam (see [the file-attachments section](#file-attachments--paste-intercept-drop-classifier-filepicker) below).
 - **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override) and can be read back through `extent_signal`; `follow_tail` binds the pinned-to-bottom idiom; `scrollbar_auto_hide` hides the bar while content fits.
 - **Checkbox** — `[x] label` bound to a `Signal<bool>`.
 - **RadioGroup** — one-of-N bound to a `Signal<usize>`; one tab stop, Up/Down move the selection.
@@ -271,7 +272,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
   history-rings section below).
 - **Grid** — container widget over `Display::Grid`; spans ride each child's own style.
 - **Image** — bitmap display through the mosaic pipeline (`ImageFit`; `Bitmap` re-exported beside it). Measures as its native cell footprint, so it holds real space in `Auto`-sized rows/panels.
-- **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals. Grows into its region by default (a draw widget has no intrinsic size — the old zero-height default rendered nothing without an explicit `.layout`).
+- **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals. Grows into its region by default (a draw widget has no intrinsic size to grow from, so the default layout claims the available space).
 - **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code.
 - **Meter / AudioScope** — live level rendering: dB meter with real ballistics (instant attack, timed decay, peak hold) and a rolling braille waveform — see the live-levels section below.
 - **Logo** — the AbstractTUI wordmark for headers, about screens, empty states.
@@ -281,8 +282,8 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 Panels sometimes need to be closed to free their space for the
 siblings. `Block::on_close(f)` opts a panel in: a muted `✕` renders at
 the title row's right end (inside the border corner), hover tints it
-`error` (a consequence-bearing action — the diff-vocabulary precedent,
-not the neutral-accent hover rule), press adds BOLD, and a click runs
+`error` (closing is a consequence-bearing action, so it does not take
+the neutral accent hover), press adds BOLD, and a click runs
 `f`. Whether a panel is closable is the APP's decision, per panel, per
 build:
 
@@ -303,16 +304,16 @@ fn pane(t: &abstracttui::theme::TokenSet, hidden: abstracttui::reactive::Signal<
 
 The rules, all deliberate:
 
-- **Mouse-only, never focusable.** A focusable ✕ becomes the panel's
-  first tab stop and steals initial focus from the content (the drawer
-  0.2.12 lesson). Keyboard close stays APP-side — bind whatever key
-  the app means (agora-tui's `v`, a drawer's Esc) to the same state
+- **Mouse-only, never focusable.** A focusable ✕ would become the
+  panel's first tab stop and steal initial focus from the content.
+  Keyboard close stays APP-side — bind whatever key
+  the app means (a `v` toggle, a drawer's Esc) to the same state
   the callback writes.
 - **Click = press + release inside the ✕ run** (the Button
   convention): press-and-drag-out cancels; the release deciding cell
   is the run the frame shows. Clicking the border corner glyph, the
   title, or the body never closes.
-- **Truncation order** (pinned): the TITLE yields first — it truncates
+- **Truncation order** (test-pinned): the TITLE yields first — it truncates
   and then disappears entirely before the ✕ gives up its padded 3-cell
   run (` ✕ `); under more pressure the pads drop (bare `✕` at the last
   interior cell); at 1–2 total columns the ✕ yields too — corners
@@ -545,7 +546,7 @@ fn wire(cx: abstracttui::reactive::Scope, feed: &FeedState,
 }
 ```
 
-When the items live INSIDE a larger reactive shape — one field of a `Signal<Fold>` whose stats mutate under the same signal, or a focus-selected convo's nested vec — `FeedState::sync_with(cx, move |read| fold.with(|f| read(&f.items)), spec)` is the same bridge behind a borrow-based source (first-app/0282): the closure hands the current items over in place (zero copies), every signal it reads becomes a dependency of the sync effect, and a stats-only write re-runs the drain but the fingerprint walk renders nothing; `sync` itself delegates here.
+When the items live INSIDE a larger reactive shape — one field of a `Signal<Fold>` whose stats mutate under the same signal, or a focus-selected convo's nested vec — `FeedState::sync_with(cx, move |read| fold.with(|f| read(&f.items)), spec)` is the same bridge behind a borrow-based source: the closure hands the current items over in place (zero copies), every signal it reads becomes a dependency of the sync effect, and a stats-only write re-runs the drain but the fingerprint walk renders nothing; `sync` itself delegates here.
 
 ### Feed — selection by key
 
@@ -636,8 +637,7 @@ fn cycle_card(cx: Scope, n: usize, reasoning_md: &str) -> View {
 #### The message-card recipe (Feed + Disclosure semantics)
 
 A hub/chat transcript wants Feed virtualization AND per-card fold —
-today that composes from parts (both validator apps hand-rolled
-exactly this; it is now the packaged pattern). Keep fold state in a
+that composes from parts. Keep fold state in a
 `Signal<HashMap<key, bool>>`, include it in the `FeedState::sync`
 fingerprint `(rev, folded)` so a toggle re-typesets exactly the
 changed item, render folded items as one rich header line (+ an
@@ -649,9 +649,8 @@ and the feed re-renders that card in place (extent and follow-tail
 stay exact because item heights are re-typeset, never guessed). A
 Feed-NATIVE card item kind (engine-owned title row inside the feed's
 own block vocabulary) remains future work: feed blocks are draw-only
-regions today (the 0280 block-boundary honesty), so the packaged
-per-item WIDGET is `Disclosure`, and inside a `Feed` the pattern
-above is the supported shape.
+regions, so the per-item WIDGET is `Disclosure`, and inside a `Feed`
+the pattern above is the supported shape.
 
 Monitors stop hand-rolling sample rings: `TimeSeriesState` (reactive)
 or `TimeSeries` (plain) take `push(t, value)` — `t` is a `Duration` on
@@ -755,7 +754,7 @@ fn log_pane(cx: Scope, content: View) -> View {
 ### Modal content that can overflow
 
 Put the overflow inside a `Scroll` and keep the fixed rows fixed — the
-defaults now do the bookkeeping: `Scroll`'s default layout is
+defaults do the bookkeeping: `Scroll`'s default layout is
 `grow(1.0).basis(Cells(0))` (it absorbs overflow instead of demanding
 its content size), one-row controls default `shrink(0.0)` (an
 overflowing sibling can never crush them to zero rows), and
@@ -790,7 +789,10 @@ terminal) and Shift+Enter where the kitty protocol reports it insert a
 newline — flip it with `SubmitPolicy::EnterInserts`. Up/Down navigate the buffer first and
 reach for history only at the edges; the in-progress draft survives a
 recall round trip. Pastes insert whole, newlines included — never a
-submit:
+submit — and `on_paste` can intercept a paste before insertion (file
+drops, paste policy for secret fields): see
+[File attachments](#file-attachments--paste-intercept-drop-classifier-filepicker)
+below.
 
 ```rust
 use abstracttui::prelude::*;
@@ -810,20 +812,20 @@ fn composer(cx: Scope) -> View {
 }
 ```
 
-**Placeholder while focused** (first-app/0291): by default the
+**Placeholder while focused.** By default the
 placeholder paints only while the field is empty AND unfocused — the
 classic yield-to-the-caret rule — which means an `.autofocus()`ed
 composer (focused from boot) never shows its hint at all. Opt in with
 `.placeholder_while_focused(true)`: the hint then also paints while
 focused-and-empty, one cell past the caret in the same `text_faint`
 ink, so the caret block stays visible beside it — the convention
-modern editors ship. The default stays off so existing apps render
-byte-identically; `TextInput` has the same option.
+modern editors ship. The option is off by default; `TextInput` has the
+same option.
 
 ### Completion dropdown (anchored panel)
 
 `app::anchored` ships the passive half of the anchored-popup substrate
-(backlog 0500) and the completion controller riding it (backlog 0120):
+and the completion controller riding it:
 `place_panel` places below-preferred, flips above when cramped, and
 clamps into the viewport; `AnchoredPanel` mounts the result as a
 NON-modal overlay above everything live (`Overlays::top_z() + 1`) that
@@ -853,9 +855,9 @@ fn composer_with_commands(cx: Scope, app: &App) -> View {
 }
 ```
 
-Triggers fire for whitespace-delimited tokens; `Completion::trigger_at(char, TriggerPosition, provider)` additionally scopes WHERE the token may sit (first-app/0292) — `StartOfInput` (the draft's first token, leading whitespace tolerated: slash commands), `StartOfLine` (a line's first token), or the `Anywhere` default that plain `trigger` registers — and a token outside its policy never opens the dropdown nor consults the provider.
+Triggers fire for whitespace-delimited tokens; `Completion::trigger_at(char, TriggerPosition, provider)` additionally scopes WHERE the token may sit — `StartOfInput` (the draft's first token, leading whitespace tolerated: slash commands), `StartOfLine` (a line's first token), or the `Anywhere` default that plain `trigger` registers — and a token outside its policy never opens the dropdown nor consults the provider.
 
-`place_panel` prefers below and flips above only when below cannot fit the content; the opener can state the mirror bias (first-app/0294) — `Completion::placement(PanelPlacement::AbovePreferred)` / `AnchoredPanel::open_passive_biased` / the pure `place_panel_biased` — so a bottom composer's short candidate list sits above the caret instead of on the chrome row below; the default stays `BelowPreferred` everywhere.
+`place_panel` prefers below and flips above only when below cannot fit the content; the opener can state the mirror bias — `Completion::placement(PanelPlacement::AbovePreferred)` / `AnchoredPanel::open_passive_biased` / the pure `place_panel_biased` — so a bottom composer's short candidate list sits above the caret instead of on the chrome row below; the default stays `BelowPreferred` everywhere.
 
 Providers run synchronously with the query typed after the trigger;
 an empty Vec closes the dropdown. The OWNED mode (`Popup`, a modal
@@ -956,11 +958,8 @@ fn command_picker(cx: Scope) -> (View, SelectHandle) {
 
 ## widgets::PageHost — the page-level tab host
 
-Full complex pages behind one themed tab bar (app-kits 0545 — "a
-global tab system... higher-level containers able to contain full
-complex pages"). `Tabs` remains the small in-content strip; the
-navigation-kit `FilterTabs` (0550, proposed) filters one surface
-without panels. A `PageHost` is the app-shell container: N pages
+Full complex pages behind one themed tab bar. `Tabs` is the small
+in-content strip; a `PageHost` is the app-shell container: N pages
 addressed by id, exactly one mounted.
 
 ```rust
@@ -990,12 +989,12 @@ fn shell(cx: Scope, alerts: Signal<u32>) -> View {
   compose store pattern); builders re-read them on remount. Demo:
   `examples/shell.rs` (type into Settings, leave, return).
 - **Controlled or uncontrolled**: `.active(Signal<String>)` hands the
-  app the navigation signal (the cycle-7 router ruling: navigation
-  state IS a signal — external writes switch pages, `on_change` does
+  app the navigation signal (navigation state IS a signal —
+  external writes switch pages, `on_change` does
   not fire for them); otherwise the host owns an internal signal and
   `.initial(id)` picks the start page. Unknown ids fold to the first
   page. `on_change(|id|)` fires after the active write on host-driven
-  switches (disposal-safe, the 0297 law). It hands you the page ID
+  switches (disposal-safe). It hands you the page ID
   where `Tabs::on_change` hands an index — deliberate, not drift: a
   `Tabs` strip is positional (its panels are an ordered list), while
   `PageHost` pages are id-addressed identities that navigation state
@@ -1070,8 +1069,7 @@ consumed, never a dead-signal panic).
 Terminals have no drop protocol: **dropping a file onto every major
 terminal PASTES its path**, and the spelling varies per terminal. The
 engine owns the three surfaces a file-attaching app needs
-(`examples/attachments.rs` is the wired recipe; backlog
-first-app/0273):
+(`examples/attachments.rs` is the wired recipe):
 
 **1. The paste intercept.** `TextInput::on_paste` and
 `TextArea::on_paste` (uniform semantics) run when `UiEvent::Paste`
@@ -1085,8 +1083,8 @@ TextArea::new()
     })
 ```
 
-`PasteAction::Insert` = today's behavior exactly (TextInput folds line
-breaks to spaces, TextArea normalizes newlines); `Consume` = the
+`PasteAction::Insert` = the default paste behavior exactly (TextInput
+folds line breaks to spaces, TextArea normalizes newlines); `Consume` = the
 editor inserts NOTHING, fires no `on_change`, touches neither caret
 nor history. The hook fires in `masked` fields too — return `Consume`
 unconditionally to block pasting into a password field. The enum is
@@ -1317,7 +1315,7 @@ sees keys unless the user explicitly clicks it, and even then
 letters/Enter bubble past it to the gate). The WHEEL scrolls a
 `Scroll`-wrapped body while the pointer is over it and moves the
 highlight elsewhere. Height honesty: the options are allocated FIRST
-(never crushed by a tall body — the 0240 law); the body absorbs what
+(never crushed by a tall body); the body absorbs what
 remains up to `body_rows`, floors at one row under pressure, and
 clips instead of painting over the rows below. Width: the panel is
 content-derived (options, prompt, hint, buttons) and the body closure
@@ -1392,7 +1390,7 @@ would accumulate undrained damage and spin the frame loop; removal is
 the zero-idle-lawful shape. The slide bills exactly its band
 (`Layer::set_origin` damages old ∪ new bounds) and the flight requests
 frames only while easing — settled, parked or closed drawers cost zero
-bytes (wave-pinned).
+bytes (test-pinned).
 
 Stacking laws: drawers occupy fixed per-edge z slots in a band below
 `MODAL_Z` (Left < Right < Top < Bottom at corners), so a `Modal` opened
@@ -1534,7 +1532,7 @@ handles, all in `app::selection` (functions re-exported in the prelude):
 use abstracttui::prelude::*; // selection(), mouse_capture(), copy_to_clipboard()
 
 // Tier 3 — engine drag-select. Opt in once (or bind a key to toggle):
-selection().set_enabled(true);   // left-drag now paints a selection
+selection().set_enabled(true);   // left-drag paints a selection
 selection().is_active();         // a region is visible
 selection().clear();             // Esc and click do this too
 
@@ -1547,14 +1545,13 @@ copy_to_clipboard("exact source text");
 ```
 
 While selection is enabled, the engine claims **left drags only — plain
-clicks pass through to the widgets** (click-through, 0285). The click
+clicks pass through to the widgets** (click-through). The click
 rules, stated plainly:
 
 - **Left Down with no visible region**: the drag anchor arms silently
   and the Down PASSES — the widget under the pointer arms its own
   pressed state in parallel, so a Button stays clickable with select
-  mode on (the layer used to consume every Down/Up, which made every
-  Button in the app dead by mouse).
+  mode on.
 - **First Drag that leaves the anchor cell**: the layer CLAIMS the
   gesture — dragging paints the theme's `selection_fg`/`selection_bg`
   inks over the composed frame (damage-contract honest — only changed
@@ -1570,10 +1567,9 @@ rules, stated plainly:
   selection — clear + consume, both halves of the click (Esc parity:
   the user was clearing a highlight, not aiming at the widget beneath).
 
-**Every copy ends the gesture** (0290): the region clears with the copy,
+**Every copy ends the gesture**: the region clears with the copy,
 so the app's next keystrokes — including Enter and `c` — route normally
-at once (a retained region used to silently eat them in composer-shaped
-apps). The key table while a region is visible (i.e. mid-drag):
+at once. The key table while a region is visible (i.e. mid-drag):
 
 | Key            | Effect                                   |
 |----------------|------------------------------------------|
@@ -1596,8 +1592,8 @@ Selection semantics, stated plainly:
   frame shows: wide glyphs (CJK, emoji) are never split, blank cells read
   as spaces, trailing whitespace trims per row, rows join with `\n`.
   Soft-wrapped lines copy as separate rows; scrolled-away content cannot
-  be selected. The logical text↔cells mapping is future work (backlog
-  0160), not this feature.
+  be selected. Copying a widget's logical text (rather than rendered
+  screen rows) is outside this feature's scope.
 - **Linear row flow, clamped to a pane.** The selection flows like a
   terminal's own: anchor to right edge, full middle rows, left edge to
   head. Both ends clamp to the pane under the drag *anchor* — the content
@@ -1621,7 +1617,7 @@ The damage contract trusts the terminal to keep every cell the engine
 painted. When that breaks EXTERNALLY — Cmd+K in Terminal.app,
 `printf '\033c'` from a stray process, an emulator glitch — model-side
 repaints cannot heal it: cells whose bytes did not change emit
-nothing, so the loss is permanent. Two verbs (first-app/0299, exported
+nothing, so the loss is permanent. Two verbs (exported
 at `app::` and re-exported in the prelude) reach the driver's "screen
 is unknown" resync — the same pair resize and suspend-resume run
 (previous-frame model poisoned, presenter re-anchored, every layer
@@ -1752,7 +1748,7 @@ assert_eq!(
 
 ## render::md — the doc vocabulary and the markdown reader surface
 
-The core `md::Block` enum shipped exhaustive, so the extended block
+The core `md::Block` enum is exhaustive, so the extended block
 kinds live in `md::DocBlock` (`#[non_exhaustive]`, wrapping the core
 set verbatim in `DocBlock::Core`): `Table(TableBlock)` — GFM header +
 alignment delimiter + body rows, inline styles inside cells, `\|`
@@ -1792,19 +1788,16 @@ case_insensitive)` returns `MdSearchMatch { row, bytes, cells }` over
 the TYPESET text (matches live in what the eye sees; offsets snap to
 grapheme clusters), and `.highlights(matches, current)` paints them
 non-destructively at draw in selection tones, the current match
-distinguished with BOLD+UNDERLINE. An empty query costs nothing. The
-underlying text↔cells mapping (byte offset ↔ column, both directions)
-is the shared substrate content selection (backlog 0160) will consume.
+distinguished with BOLD+UNDERLINE. An empty query costs nothing.
 `examples/reader.rs` composes all of it into an mdpad-class reader.
 
 ## canvas — Canvas & vector strokes
 
-The sub-cell vector layer (extensions 0420): the dot-grid math the
-charts always used privately, promoted to public API so diagram
-extensions (`abstracttui-graph`, mermaid) and app draw closures stop
-re-deriving it. `Sparkline`/`LineChart` lines, `BarChart` bars and
-`Progress` fills all draw through this layer today — the promotion
-kept their rendered cells byte-identical (test-pinned).
+The sub-cell vector layer: the dot-grid math the shipped charts draw
+through, as public API — diagram extensions (`abstracttui-graph`,
+`abstracttui-mermaid`) and app draw closures use the same primitives.
+`Sparkline`/`LineChart` lines, `BarChart` bars and `Progress` fills
+all render through this layer.
 
 ```rust
 use abstracttui::base::Point;
@@ -2099,7 +2092,7 @@ and `Screenshot::from_surface(&Surface)` captures any surface directly.
   neutral ink/paper; pass your own via `to_svg_with(fg, bg)`.
   A generated sample lives at
   [`docs/captures/transcript-stream.svg`](captures/transcript-stream.svg)
-  (the capture pipeline now emits `.svg` beside every `.txt` still).
+  (the capture pipeline emits `.svg` beside every `.txt` still).
 
 **Honesty notes.** Cells under a kitty/iTerm2/sixel image are not the
 picture — the terminal shows pixels the cell plane cannot see.
@@ -2113,10 +2106,6 @@ capture has no click surface — the styled debug dumps show them);
 `blink` exports as static; `undercurl` draws as a straight underline in
 SVG. Capture is on-demand only: nothing here runs per-frame, and an
 idle app still costs zero.
-
-The future control-server "observe" verb (backlog control-plane
-0310/0320) is a serialization of this same value — the bus exposes
-`Screenshot` exports over the wire; nothing new to invent there.
 
 ## Stability and limits
 

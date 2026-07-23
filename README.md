@@ -43,7 +43,8 @@ through ordinary reactivity.*
   `Combobox` / `MultiSelect` over anchored popups that layer above modals),
   lists and sortable tables with distinct selection and activation events
   (single click selects; Enter or double-click activates),
-  tabs, checkboxes, radio groups, scroll regions, panels, badges, progress
+  tabs, checkboxes, radio groups, scroll regions, panels (closable via an
+  opt-in title-row ✕), a directory `FilePicker`, badges, progress
   bars, spinners, modals, toasts, tooltips — plus the app-shell pair:
   `PageHost` (full pages behind one themed tab bar — container-reserved
   chords, reactive tab badges, overflow windowing) and `Drawer`
@@ -74,11 +75,15 @@ through ordinary reactivity.*
 - **26 built-in themes** — catppuccin, rose-pine, tokyo-night, nord, one-dark,
   dracula, monokai, gruvbox, solarized, everforest and the Abstract originals —
   over 36 semantic design tokens, contrast-audited against WCAG floors, and
-  hot-swappable at runtime through one signal.
+  hot-swappable at runtime through one signal. `ThemeSwitcher` is the drop-in
+  chrome: a one-cell ☾/☼ button opening a grouped Dark/Light menu with live
+  preview, or a one-click dark↔light toggle that remembers your theme per mode.
 - **Input everywhere** — keyboard and mouse (click, hover, drag, wheel), the
   kitty keyboard protocol and xterm modifyOtherKeys decoded automatically when
   present, bracketed paste hardened against multi-megabyte and hostile input,
-  focus events, key chords with modifiers.
+  focus events, key chords with modifiers — plus a paste intercept
+  (`on_paste`) with a cross-terminal file-drop classifier, so a file dropped
+  onto the terminal becomes an attachment instead of pasted text.
 - **Voice and AV plumbing** — key press/release state with honest fidelity
   (true hold detection where the terminal reports releases; never a
   fabricated "held" on legacy wires), a `PushToTalk` gesture built on it
@@ -166,7 +171,7 @@ cd abstracttui
 cargo run --example dashboard
 ```
 
-Twenty-two runnable examples live in [examples/](examples/README.md) — ordered
+Twenty-three runnable examples live in [examples/](examples/README.md) — ordered
 there as a learning path — plus three more in the extension crates, and every
 one exits cleanly with a notice when no interactive terminal is present, so they
 are safe to run anywhere. Start with these six:

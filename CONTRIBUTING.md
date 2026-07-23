@@ -13,7 +13,7 @@ cargo build
 
 The crate targets stable Rust (edition 2021) and builds from std plus five
 small, permissively licensed dependencies (see `Cargo.toml`). To try it out,
-run any of the 22 examples:
+run any of the 23 examples:
 
 ```sh
 cargo run --example hello
@@ -25,10 +25,10 @@ See `examples/README.md` for the full list.
 
 ## Testing
 
-The default test pass runs the core suite — roughly 2,015 tests across unit
+The default test pass runs the core suite — roughly 2,120 tests across unit
 tests, the integration suites under `tests/`, and doctests. The repo is a
-cargo workspace since the extension family landed: `--workspace` adds the
-family crates (`extensions/graph`, `extensions/mermaid`) for roughly 2,140
+cargo workspace: `--workspace` adds the
+family crates (`extensions/graph`, `extensions/mermaid`) for roughly 2,245
 tests total, and is what CI gates on:
 
 ```sh

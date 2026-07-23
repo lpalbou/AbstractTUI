@@ -316,7 +316,7 @@ the headless-test recipe.
   the honest mermaid subset (`abstracttui-mermaid`), installed only
   when you need them.
 - [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
-- [Examples catalog](../examples/README.md) — twenty-five runnable programs
+- [Examples catalog](../examples/README.md) — twenty-six runnable programs
   (three of them in the extension crates) ordered as a learning path, from
   the 53-line `hello` to the full `dashboard`, with the keys each answers to. For content-heavy apps start
   with `transcript` (streaming markdown chat), `reader` (tables, images,

@@ -39,7 +39,7 @@ the contract):
 - `sequenceDiagram`: participants (with `as` aliases), the four
   message arrows with `: text`, `Note left of/right of/over`. Rendered
   by a deterministic, solverless column/row plan.
-- `stateDiagram-v2` **flat** (the stretch row): transitions with
+- `stateDiagram-v2` **flat**: transitions with
   labels and `[*]` — a third front end to the flowchart engine.
 - `classDef`/`style`/`%%{init}` directives are recognized and dropped
   with a notice; `%%` comments drop silently.

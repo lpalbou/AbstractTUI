@@ -222,7 +222,7 @@ fn interactive_panel(
         .build()
 }
 
-/// The operator's panel ✕ (app-kits 0605): each pane opts into
+/// The panel ✕: each pane opts into
 /// `Block::on_close`, the callback clears its bit, the row's dyn
 /// re-renders and the SURVIVORS RE-FLEX into the freed space. Closing
 /// is the app's decision — and so is coming back (the restore button).

@@ -221,9 +221,33 @@ reporting is actually active, never posing as cells.
 
 ## How do I let users pick a theme?
 
-`set_theme_by_id(id)` switches at runtime and the whole app restyles
-through the one theme signal; `theme::list()` gives you `(id, label,
-dark)` for every visible theme, including ones your app registered. The
-shipped examples honor `ABSTRACTTUI_THEME=<id>` as a startup convention,
-and `cargo run --example themes` is a complete picker UI — card grid, live
+The one-line answer is `ThemeSwitcher` (in the prelude): mount
+`ThemeSwitcher::new().view(cx)` in any header or footer row and you get
+a ☾/☼ menu button whose popup lists every visible theme grouped
+Dark/Light with live preview; `ThemeSwitcher::toggle()` is the
+no-popup face that flips dark ↔ light per click, restoring your last
+theme of the target mode. `on_change` is the hook for persisting the
+preference. See [theming.md](theming.md#theme-modes--the-switcher).
+
+For your own picker UI: `set_theme_by_id(id)` switches at runtime and
+the whole app restyles through the one theme signal; `theme::list()`
+gives you `(id, label, dark)` for every visible theme, including ones
+your app registered, and `theme::themes_by_mode(mode)` lists one
+polarity in curated order. The shipped examples honor
+`ABSTRACTTUI_THEME=<id>` as a startup convention, and
+`cargo run --example themes` is a complete picker UI — card grid, live
 preview, measured contrast ratios — you can crib from.
+
+## Can users attach files by dropping them onto the terminal?
+
+Yes, with one honest caveat: terminals have no drop protocol — dropping
+a file PASTES its path, with per-terminal quoting. The engine gives you
+the pieces to turn that into a real attach flow: `TextInput::on_paste` /
+`TextArea::on_paste` intercept a paste before insertion, and
+`input::paste::classify` answers "is this paste a file drop?" against
+the researched spellings of the major terminals (ambiguous input always
+falls through to a normal paste — a false positive would eat user
+text). `FilePicker` is the explicit browse-and-pick door for when there
+is nothing to drag from. The wired recipe is
+`cargo run --example attachments`; the API walkthrough is
+[api.md § File attachments](api.md#file-attachments--paste-intercept-drop-classifier-filepicker).

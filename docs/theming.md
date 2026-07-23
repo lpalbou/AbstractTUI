@@ -169,8 +169,8 @@ source, never a second luminance threshold — and
 `theme::themes_by_mode(mode)` lists every visible theme of one mode in
 the same curated order `list()` presents: built-ins in registry order
 (the house palette of each mode first), runtime registrations trailing.
-That "first of mode is the house theme" fact is documented and pinned;
-pickers and the toggle default rely on it.
+The first theme of each mode is guaranteed to be the house palette —
+pickers and the toggle default rely on that order.
 
 `app::toggle_mode()` flips dark ↔ light while keeping the user's theme
 *choice* per mode: `set_theme` (the one signal-write choke point)
@@ -215,6 +215,11 @@ which some terminal stacks promote to a double-width emoji glyph.
 Closed, the switcher is zero-idle: no layers, no timers — it re-renders
 only when the theme signal or its own hover/focus state is written. The
 popup's subscriptions live on a per-open scope and die at dismissal.
+The full behavior reference (popup keys, `on_change` semantics,
+accessibility roles) is
+[api.md § ThemeSwitcher](api.md#appthemeswitcher--the-theme-menu-button);
+`examples/themes.rs` shows both faces in a toolbar and
+`examples/shell.rs` the footer placement.
 
 ## Contrast guarantees
 

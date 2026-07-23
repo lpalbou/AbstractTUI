@@ -4,7 +4,7 @@ Genuinely new domains ship as `abstracttui-<domain>` sibling crates in
 this directory (residents: `abstracttui-graph`, `abstracttui-mermaid`),
 governed by
 [ADR-0004](../docs/adr/0004-extension-packaging.md): public API only —
-a needed-but-missing capability is a core backlog item, never a private
+a needed-but-missing capability is a core feature request, never a private
 hook; the core dependency posture binds siblings (parsers are
 hand-rolled, new dependencies take the same review path as core); and
 every crate spells its core dependency dual-form —

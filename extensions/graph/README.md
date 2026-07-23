@@ -97,8 +97,9 @@ One tab stop; arrows pan until a node is selected (Enter selects the
 first, then arrows walk nodes spatially — aligned-first — Enter
 presses, Escape returns to pan). Layout is an ACT at view build:
 rebuild inside a `dyn_view` over your data to relayout (force re-runs
-under its fixed seed — cached-position reheat is the 0430 editor's
-lane). Colors are caller-resolved (`GraphStyle::from_tokens`); a
+under its fixed seed; incremental reheat of cached positions is
+outside the widget's scope). Colors are caller-resolved
+(`GraphStyle::from_tokens`); a
 parked view idles at zero (test-pinned). Examples:
 `cargo run -p abstracttui-graph --example workflow` (layered pipeline
 with a retry cycle) and `--example network` (force-placed concepts).

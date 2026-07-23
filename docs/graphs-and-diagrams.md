@@ -134,11 +134,11 @@ unknown syntax is safe by construction:
 | `subgraph` | NO (v2) | — | atomic fallback |
 | `sequenceDiagram` | YES | `participant id [as alias]`; messages `->>`, `-->>`, `->`, `-->` with `: text`; `Note left of/right of/over` | deterministic columns/rows — no solver |
 | sequence `loop`/`alt`/`par`/activations | NO (v2) | — | atomic fallback |
-| `stateDiagram-v2` (flat) | YES (stretch) | `[*]`, `id`, `id : label`, `-->` with `: label` | compiles to the flowchart engine |
+| `stateDiagram-v2` (flat) | YES | `[*]`, `id`, `id : label`, `-->` with `: label` | compiles to the flowchart engine |
 | `classDiagram`, `erDiagram`, `gantt`, `pie`, `journey`, `mindmap`, `timeline`, `gitGraph` | NO | — | atomic fallback |
 | `classDef`, `style`, `%%{init}` directives | IGNORED | recognized-and-dropped WITH a notice; `%%` comments drop silently | render proceeds |
 
-The stretch row shipped: flat `stateDiagram-v2` parses as a third
+Flat `stateDiagram-v2` parses as a third
 front end to the flowchart IR (`[*]` becomes synthetic start/end
 nodes). Cell-honest shape mapping: terminal cards do not rotate into
 diamonds — a shape arrives as the card's accent kind plus a badge

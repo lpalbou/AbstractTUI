@@ -1,5 +1,4 @@
-//! attachments — file attachments in a composer, both doors (backlog
-//! first-app/0273).
+//! attachments — file attachments in a composer, both doors.
 //!
 //! Terminals have no drop protocol: dropping a file PASTES its path
 //! (spelling varies per terminal — see `input::paste`'s corpus table).
@@ -20,6 +19,9 @@
 //!                                       Backspace = parent, Esc closes)
 //!   Enter                            -> "send" (status line), chips clear
 //!   Ctrl+C                           -> quit
+//!
+//! Docs: docs/api.md § "File attachments — paste intercept, drop
+//! classifier, FilePicker".
 //!
 //! OWNER: REACT.
 

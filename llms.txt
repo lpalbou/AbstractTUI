@@ -11,7 +11,9 @@
 > an app-shell vocabulary
 > (a page-level tab host and edge-anchored drawer panels, both hosting full pages),
 > 26 built-in themes over 36
-> contrast-audited semantic design tokens, PNG/baseline-JPEG images drawn through the best
+> contrast-audited semantic design tokens with a drop-in theme-switcher control
+> (grouped dark/light menu with live preview, or a one-click mode toggle that
+> remembers the theme per mode), PNG/baseline-JPEG images drawn through the best
 > channel the terminal proves (kitty graphics, iTerm2, sixel, or unicode mosaic),
 > software-rasterized 3D from GLB files (textures, animation, skinning — no GPU),
 > cell-shader animation with tweens, easings, and timelines, streaming transcripts
@@ -22,7 +24,10 @@
 > ingestion, honest drop counters, `TimeSeries` history rings with relative time axes on
 > the charts) plus an engine-owned connection lifecycle with jittered-backoff reconnect,
 > key press/release state with honest fidelity (push-to-talk, level meters, and a
-> waveform scope for voice surfaces), text selection with OSC 52 clipboard copy, an
+> waveform scope for voice surfaces), file-attachment surfaces (a paste intercept
+> with a cross-terminal file-drop classifier plus a directory FilePicker widget, so
+> a dropped file becomes an attachment instead of pasted text), text selection with
+> OSC 52 clipboard copy, an
 > optional boot splash, and a headless testing harness that drives the production
 > pipeline without a pty — including screenshot capture with deterministic plain-text,
 > replayable-ANSI and GitHub-renderable-SVG exporters. A public sub-cell vector canvas
@@ -54,13 +59,18 @@
   the widget catalog (`List` and `Table` selection-vs-activation, masked `TextInput`,
   diff-aware `CodeView`,
   `Feed` streaming/rich lines/sync/selection-by-key, chart history rings with time axes,
-  `Meter`/`AudioScope` levels, the `PageHost` page-level tab host), the widget
-  disposal-safety law, the `canvas` sub-cell vector layer (braille/quadrant dot grids,
+  `Meter`/`AudioScope` levels, the `PageHost` page-level tab host, the `Block`
+  close affordance `on_close`), the widget
+  disposal-safety law, the file-attachment surfaces (`TextInput`/`TextArea`
+  `on_paste` with `PasteAction`, the `input::paste::classify` drop classifier
+  with its per-terminal spelling table, and the `FilePicker` widget over the
+  pluggable `FileSource` seam), the `canvas` sub-cell vector layer (braille/quadrant dot grids,
   Bresenham/bezier/arc strokes, eighth-block fills, the cell-color z-order rule), the
   app runtime (overlays,
   modal, toast, edge-anchored `Drawer` panels, the anchored-popup substrate and the
   Select/Combobox/MultiSelect pickers,
-  completion, hooks, key press/release state and `PushToTalk`), theme, render
+  completion, the `ThemeSwitcher` menu/toggle control, hooks, key press/release
+  state and `PushToTalk`), theme, render
   (Style-as-patch, shaders, the markdown doc vocabulary and the reader surface), gfx,
   three, term/input, the testing harness, screenshots & captures (the `Screenshot`
   value from the live driver, the `request_screenshot` verb, or the testing rig, with
@@ -95,13 +105,17 @@
   worker-thread example), the Feed + follow-tail rendering pattern, and back-pressure
   honesty.
 - [FAQ](docs/faq.md): Real questions — design rationale, SSH, which terminals support
-  images, wide-character widths, headless testing, embedding in an existing event loop,
+  images, wide-character widths, headless testing, screenshots, letting users switch
+  themes (`ThemeSwitcher`), attaching files dropped onto the terminal, embedding in an
+  existing event loop,
   the near-zero dependency policy, theme readability, `NO_COLOR`/dumb terminals, Windows
   status, crate size, shareable components, damage debugging, and the clipboard policy.
 - [Troubleshooting](docs/troubleshooting.md): Symptom → cause → fix — nothing renders,
   dead keyboard, images falling back to mosaic, washed-out colors, flicker/tearing,
   Ctrl+Enter behaving like Enter, the splash not playing, slow frames, wide-character
-  misalignment, and tests that hang.
+  misalignment, rows vanishing on small terminals, double-click not activating, file
+  drops pasting a path instead of attaching, text selection under mouse capture,
+  copies not reaching the clipboard, and tests that hang.
 
 ## Project
 
@@ -109,7 +123,7 @@
   (2026-07-21) is the first public release, 0.2.22 (2026-07-25) the current one —
   released alongside the first extension-family crates (`abstracttui-graph` 0.1.0,
   `abstracttui-mermaid` 0.1.0, each with its own changelog under `extensions/`).
-- [Contributing](CONTRIBUTING.md): Building, the test suite (~2,015 core tests; ~2,140
+- [Contributing](CONTRIBUTING.md): Building, the test suite (~2,120 core tests; ~2,245
   with the extension family via `--workspace`, the CI gate) and the explicitly-run suites
   (live pty, two release-mode perf-budget suites with byte-emission ratchets, plus the
   scheduled weekly `perf.yml` deep gate), golden snapshots, lint gates, the strict module
@@ -130,11 +144,12 @@
 - [src/lib.rs](src/lib.rs): Crate root with the layer map — `base`, `term`, `input`,
   `render`, `text`, `anim`, `reactive`, `layout`, `ui`, `canvas`, `widgets`, `gfx`,
   `three`, `theme`, `app`, `boot`, `testing`.
-- [examples/](examples/README.md): The catalog of the twenty-two runnable examples,
+- [examples/](examples/README.md): The catalog of the twenty-three runnable examples,
   ordered as a learning path —
   `hello`,
   `widgets`, `components`, `gallery`, `themes`, `grid`, `activate`, `decide`, `feed`,
-  `transcript`, `reader`, `voice_mock`, `shell`, `drawers`, `dashboard`, `images`,
+  `transcript`, `attachments`, `reader`, `voice_mock`, `shell`, `drawers`, `dashboard`,
+  `images`,
   `effects`, `splash`, `viewer3d`,
   `screenshot`, `caps`, `capture` — plus the extension-crate examples
   (`workflow`/`network` in `extensions/graph`, `mermaid` in `extensions/mermaid`); each

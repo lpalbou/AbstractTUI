@@ -156,7 +156,7 @@ let conn = connection(cx, Backoff::default(), move |events| {
                 events.connected();
                 while let Ok(msg) = stream.read() {
                     if events.is_closed() { return; }  // stop condition
-                    tx.send(msg);                // the 0010/0020 lanes
+                    tx.send(msg);          // into a source lane above
                 }
                 events.failed("stream ended");   // drop -> reconnect
             }

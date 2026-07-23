@@ -149,7 +149,7 @@ structural chrome.
 
 **Cause**: flex overflow pressure crushed a node to zero area — content
 demanded more rows/columns than the viewport has, and something had to
-give. The engine's guarantees at any size (0.2.15): a zero-area node is
+give. The engine's guarantees at any size: a zero-area node is
 CLEAN ABSENCE — its draw closure never runs, so it can never smear onto a
 sibling's row; `Modal` and `Drawer` clamp into the viewport at open and
 re-clamp on every resize; tab strips window with overflow indicators; wide
@@ -200,6 +200,37 @@ the unicode-mosaic path for the capture — mosaic images ARE cells and
 capture as themselves. Otherwise accept the veil: it marks exactly the
 region the terminal owned. See
 [api.md § "Screenshots & captures"](api.md#screenshots--captures).
+
+## Dropping a file pastes a path instead of attaching it
+
+**Cause**: that is all a terminal can do. There is no drop protocol —
+every major terminal turns a file drop into a PASTE of the file's path,
+each with its own quoting (backslash escapes, single or double quotes,
+`file://` URIs). Without an intercept, the path lands in your composer
+as text.
+
+**Fix**: intercept the paste and classify it. `TextInput::on_paste` /
+`TextArea::on_paste` run before insertion with the raw paste text;
+`input::paste::classify` parses the known drop spellings and returns
+the paths (or `None` for ordinary text — ambiguity always falls through
+to a normal paste, so prose containing a path is never eaten):
+
+```rust,ignore
+TextArea::new()
+    .on_paste(|pasted| match abstracttui::input::paste::classify(pasted) {
+        Some(paths) => { attach(paths); PasteAction::Consume }
+        None => PasteAction::Insert,
+    })
+```
+
+Existence-checking is deliberately yours (the engine does no I/O in the
+input path): fs-check the returned paths and show the result. If drops
+still arrive as text, your terminal may be one whose drop spelling is
+ambiguous by design — kitty pastes raw unescaped paths, so a path with
+spaces cannot be told apart from prose; offer `FilePicker` as the
+explicit door. The full walkthrough:
+[api.md § File attachments](api.md#file-attachments--paste-intercept-drop-classifier-filepicker)
+and `cargo run --example attachments`.
 
 ## I can't select text with the mouse
 

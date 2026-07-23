@@ -1,9 +1,7 @@
 # AbstractTUI examples
 
-Owner: DESIGN. These are the acceptance targets the engine builds toward:
-each demo is the smallest program that proves a layer of the stack in front
-of a human. A cycle that claims a capability ships or upgrades the matching
-demo — "it works" means the demo runs, looks right, and survives resize.
+Each demo is the smallest program that proves a layer of the stack in
+front of a human — it runs, looks right, and survives resize.
 
 Every example exits 0 with a one-line notice when there is no interactive
 terminal, so `cargo run --example <name>` is safe anywhere (CI included).
@@ -69,8 +67,10 @@ ergonomics bar from the vision doc (a real app in < 60 lines).
 
 The widget gallery. Tabs split "interactive" (button — incl. a disabled
 one in `text_faint` outside the focus order — text input, selectable
-list) from "visual" (border families with the focus ring, badge tones,
-ramped progress, spinner sets, separators) inside a vertical Scroll.
+list, and a closable-panels row: click a pane's ✕ and the survivors
+re-flex into the freed space) from "visual" (border families with the
+focus ring, badge tones, ramped progress, spinner sets, separators)
+inside a vertical Scroll.
 
 - Keys: Tab focus, arrows in lists, F2 advances spinners, Ctrl+T theme,
   `q` quit. Mouse hovers/clicks.
@@ -210,6 +210,25 @@ dropdown at the caret.
 - Looks like: a chat client answering itself — markdown typesetting
   live under a composer that completes your commands.
 
+## attachments
+
+File attachments in a composer, both doors. Terminals have no drop
+protocol — dropping a file PASTES its path, quoted differently per
+terminal — so the composer's `on_paste` hook runs
+`input::paste::classify` on every paste: recognized drops become
+attachment chips (a real client would fs-check and offer an undo
+here — the classifier itself does no I/O), everything else inserts as
+ordinary text. Ctrl+O opens the second door: a `FilePicker` in a
+`Modal` — breadcrumb, type-to-filter, multi-select with Space, size
+column. Enter "sends" (status line) and clears the chips.
+
+- Keys: drop or paste a path · Ctrl+O picker (type filters, Space
+  marks, Enter picks, Backspace parent, Esc closes) · Enter send ·
+  Ctrl+C quit.
+- Needs: any tty; a terminal to drag files onto to feel the classifier.
+- Looks like: a chat composer where dropped files land as chips above
+  the text, never as pasted paths.
+
 ## reader
 
 The mdpad-class markdown reader: loads a `.md` file from the first
@@ -259,8 +278,8 @@ and a live tab badge, a scrolling markdown reader, a settings form —
 behind one themed tab bar. Durable page state lives in app-owned
 signals (type into Settings, switch away, come back: the draft
 survives the remount); the badge follows the alert count without
-remounting anything. The drawer wave adds its edge-anchored drawers
-to this same shell.
+remounting anything. `Drawer` panels slide over this same shell from
+both edges on demand.
 
 - Keys: Ctrl+PgUp/PgDn or click pages, 1-3 jump, `i` inspector drawer,
   `g` nav drawer, Tab focus, `n` raise an alert (watch the Overview
@@ -440,7 +459,7 @@ beats), and in-process APP stills driven headlessly through
 `Driver` + `CaptureTerm` (streaming transcript with the completion
 dropdown open, an open Select popup, a diff-tinted `CodeView`, a feed
 with follow-tail broken, a doc-vocabulary reader table) — those five
-are clockless and byte-deterministic. The docs cycle embeds these as
+are clockless and byte-deterministic. The docs embed these as
 fenced "screenshots".
 
 - Run: `cargo build --examples && cargo run --example capture`
