@@ -370,6 +370,149 @@ fn app_can_force_follow_to_jump_to_latest() {
     root.dispose();
 }
 
+// ---------------------------------------------------------------------------
+// 0281 (first-app): offset repair when content shrinks under a bound
+// offset — the details-fold / session-switch void state.
+// ---------------------------------------------------------------------------
+
+struct BoundRig {
+    feed: FeedState,
+    offset: crate::reactive::Signal<i32>,
+    follow: crate::reactive::Signal<bool>,
+}
+
+/// The consumer shape: external offset + follow signals both bound.
+fn mount_bound_feed(size: Size) -> (crate::reactive::RootScope, UiTree, BoundRig) {
+    let holder: Rc<RefCell<Option<BoundRig>>> = Rc::new(RefCell::new(None));
+    let h = holder.clone();
+    let (root, tree) = mount_widget(size, move |cx| {
+        let t = default_theme().tokens;
+        let feed = FeedState::new(cx);
+        let offset = cx.signal(0i32);
+        let follow = cx.signal(true);
+        *h.borrow_mut() = Some(BoundRig {
+            feed: feed.clone(),
+            offset,
+            follow,
+        });
+        Scroll::new(Feed::new(&feed).gap(0).view(cx))
+            .offset_y(offset)
+            .follow_tail(follow)
+            .element(cx, &t)
+            .build()
+    });
+    let rig = holder.borrow_mut().take().expect("rig captured");
+    (root, tree, rig)
+}
+
+#[test]
+fn shrink_below_offset_reclamps_and_repaints_without_a_gesture() {
+    let size = Size::new(16, 4);
+    let (root, mut tree, rig) = mount_bound_feed(size);
+    for i in 0..20 {
+        rig.feed
+            .push(format!("m{i}"), FeedItem::text(format!("line {i}")));
+    }
+    let _ = settle(&mut tree, size);
+    // Disengage: the user reads scrollback at a held offset.
+    mouse(&mut tree, MouseKind::ScrollUp, 2, 1);
+    assert!(!rig.follow.get_untracked());
+    let held = rig.offset.get_untracked();
+    assert!(held > 0, "reading scrollback at {held}");
+
+    // Session switch: the content is replaced wholesale, far below the
+    // held offset — the wrapper lands fully above the clip (the state
+    // where an unflagged extent probe starves). The engine must
+    // re-clamp and repaint content with NO gesture.
+    rig.feed.clear();
+    rig.feed.push("n0", FeedItem::text("new 0"));
+    rig.feed.push("n1", FeedItem::text("new 1"));
+    let canvas = settle(&mut tree, size);
+    assert_eq!(
+        rig.offset.get_untracked(),
+        0,
+        "offset repaired to the new max_off"
+    );
+    assert!(
+        canvas.row_text(0).contains("new 0"),
+        "pane repaints content immediately:\n{:?}",
+        (0..4).map(|y| canvas.row_text(y)).collect::<Vec<_>>()
+    );
+    assert!(
+        !rig.follow.get_untracked(),
+        "a repair is not a gesture: follow stays disengaged"
+    );
+
+    // Growth after the repair: a disengaged, in-range offset is never
+    // touched (max_off only grows — live streaming must not fight a
+    // reading user).
+    for i in 0..10 {
+        rig.feed
+            .push(format!("g{i}"), FeedItem::text(format!("grown {i}")));
+    }
+    let canvas = settle(&mut tree, size);
+    assert_eq!(rig.offset.get_untracked(), 0, "growth keeps the offset");
+    assert!(canvas.row_text(0).contains("new 0"), "view held on growth");
+    root.dispose();
+}
+
+#[test]
+fn restored_offset_survives_startup_measurement() {
+    // An app restoring a session may write the offset BEFORE the first
+    // frame measures anything: the repair must stay inert until the
+    // extent is real (the (0,0) unmeasured sentinel), never snap a
+    // valid restored offset to 0.
+    let t = &default_theme().tokens;
+    let size = Size::new(12, 4);
+    let holder: Rc<RefCell<Option<crate::reactive::Signal<i32>>>> = Rc::new(RefCell::new(None));
+    let h = holder.clone();
+    let (content, _) = tall_content();
+    let (_root, mut tree) = mount_widget(size, move |cx| {
+        let offset = cx.signal(12i32); // restored scroll position
+        *h.borrow_mut() = Some(offset);
+        Scroll::new(content).offset_y(offset).element(cx, t).build()
+    });
+    let offset = holder.borrow().expect("signal");
+    let canvas = settle(&mut tree, size);
+    assert_eq!(offset.get_untracked(), 12, "restored offset kept");
+    assert!(
+        canvas.row_text(0).starts_with("row 12"),
+        "{:?}",
+        canvas.row_text(0)
+    );
+}
+
+#[test]
+fn viewport_growth_reclamps_a_hint_mode_offset() {
+    // Hint mode has no measurement, but the repair still covers it:
+    // a taller viewport shrinks max_off under a bottom-held offset.
+    let t = &default_theme().tokens;
+    let size = Size::new(12, 4);
+    let holder: Rc<RefCell<Option<crate::reactive::Signal<i32>>>> = Rc::new(RefCell::new(None));
+    let h = holder.clone();
+    let (content, _) = tall_content();
+    let (_root, mut tree) = mount_widget(size, move |cx| {
+        let offset = cx.signal(26i32); // bottom under a 30-row hint
+        *h.borrow_mut() = Some(offset);
+        Scroll::new(content)
+            .content_size(10, 30)
+            .offset_y(offset)
+            .element(cx, t)
+            .build()
+    });
+    let offset = holder.borrow().expect("signal");
+    let _ = settle(&mut tree, size);
+    assert_eq!(offset.get_untracked(), 26, "in range at 4 rows");
+    let tall = Size::new(12, 12);
+    tree.set_viewport(tall);
+    let _ = settle(&mut tree, tall);
+    assert_eq!(
+        offset.get_untracked(),
+        18,
+        "viewport growth re-clamps: 30 - 12"
+    );
+}
+
 #[test]
 fn follow_tail_repins_across_resize() {
     // The width-change row-count case: wrapped content re-typesets on

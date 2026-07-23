@@ -111,6 +111,9 @@ pub struct Element {
     /// Focus this node when it mounts (initial-focus policy: autofocus
     /// wins; apps without one call `UiTree::focus_first`).
     pub(crate) autofocus: bool,
+    /// Draw even when culled (measurement probes) — see
+    /// [`Element::probe_when_culled`].
+    pub(crate) probe_when_culled: bool,
     /// PROTECTED minimum padding (per-side max), applied at mount and
     /// on every style_signal update — chrome insets (a Block's border
     /// room) that a later user `.style(..)` must NOT clobber (RT8-7).
@@ -135,6 +138,7 @@ impl Element {
             focus_trap: false,
             focus_memory: false,
             autofocus: false,
+            probe_when_culled: false,
             padding_floor: None,
             access: super::access::AccessProps::default(),
             children: Vec::new(),
@@ -159,6 +163,20 @@ impl Element {
     /// Paint callback over the element's solved rect.
     pub fn draw(mut self, f: impl FnMut(&mut dyn StyledCanvas, Rect) + 'static) -> Element {
         self.draw = Some(Box::new(f));
+        self
+    }
+
+    /// Run this node's OWN draw closure even when its rect lies fully
+    /// outside the paint clip (crate-internal, first-app/0281).
+    /// Culling is a paint optimization; a measurement-readback probe
+    /// riding a draw closure (Scroll's content-extent probe) is not
+    /// paint — starving it freezes the measurement exactly when the
+    /// content scrolls fully out (the shrunken-feed void state).
+    /// Children still cull individually, so the subtree stays cheap;
+    /// the canvas remains damage-clipped, so a rogue paint could not
+    /// escape anyway.
+    pub(crate) fn probe_when_culled(mut self) -> Element {
+        self.probe_when_culled = true;
         self
     }
 

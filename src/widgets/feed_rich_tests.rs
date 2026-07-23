@@ -329,3 +329,150 @@ fn selection_by_key_highlights_band_and_row_of_targets() {
     assert_eq!(feed.row_of("zz"), None);
     root.dispose();
 }
+
+// ---------------------------------------------------------------------------
+// Capped preview blocks (first-app/0283): width-aware max_rows +
+// honest overflow marker on Text/Rich blocks.
+// ---------------------------------------------------------------------------
+
+/// Six logical lines, 18 columns each: one wrapped row per line at
+/// width 40, two at width 12 — so the SAME cap hides a different K.
+fn six_line_body() -> String {
+    (0..6)
+        .map(|_| "one two three four")
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn max_rows_caps_post_wrap_and_k_changes_with_width() {
+    let size = Size::new(40, 8);
+    let (root, mut tree, feed) = mount_feed(size);
+    feed.push("body", FeedItem::text(six_line_body()).max_rows(3));
+    let canvas = settle(&mut tree, size);
+    // Width 40: 6 wrapped rows -> 2 shown + marker; 4 hidden.
+    assert!(canvas.row_text(0).contains("one two three four"));
+    assert!(canvas.row_text(1).contains("one two three four"));
+    assert!(
+        canvas.row_text(2).contains("(+4 more lines)"),
+        "marker names the hidden count: {:?}",
+        canvas.row_text(2)
+    );
+    assert_eq!(
+        feed.total_rows().get_untracked(),
+        3,
+        "capped extent counts the marker row"
+    );
+
+    // Width 12: every line wraps to 2 rows (12 total) -> K = 10. The
+    // cap must recompute where the wrap happens.
+    let narrow = Size::new(12, 8);
+    tree.set_viewport(narrow);
+    let canvas = settle(&mut tree, narrow);
+    assert!(
+        canvas.row_text(2).contains("(+10 more"),
+        "K recomputed post-wrap at the new width: {:?}",
+        canvas.row_text(2)
+    );
+    assert_eq!(feed.total_rows().get_untracked(), 3);
+    root.dispose();
+}
+
+#[test]
+fn overflow_marker_wears_muted_ink_and_custom_wording() {
+    let t = default_theme().tokens;
+    let size = Size::new(40, 8);
+    let (root, mut tree, feed) = mount_feed(size);
+    feed.push("plain", FeedItem::text(six_line_body()).max_rows(2));
+    feed.push(
+        "worded",
+        FeedItem::text(six_line_body())
+            .max_rows(2)
+            .overflow_marker(|k| format!("+{k} hidden — see the ledger")),
+    );
+    let canvas = settle(&mut tree, size);
+    // Default wording, theme-muted ink on the marker row.
+    assert!(canvas.row_text(1).contains("… (+5 more lines)"));
+    let (ch, fg, _) = canvas.cell(Point::new(0, 1)).unwrap();
+    assert_eq!(ch, '…');
+    assert_eq!(fg, t.text_muted, "marker ink is text_muted");
+    // Custom wording renders verbatim (item 2 starts after the gap).
+    let worded_row = feed.row_of("worded").unwrap() + 1;
+    assert!(
+        canvas
+            .row_text(worded_row)
+            .contains("+5 hidden — see the ledger"),
+        "custom marker wording: {:?}",
+        canvas.row_text(worded_row)
+    );
+    root.dispose();
+}
+
+#[test]
+fn fitting_content_and_uncapped_blocks_render_unchanged() {
+    let size = Size::new(40, 8);
+    let (root, mut tree, feed) = mount_feed(size);
+    // Fits exactly: 2 wrapped rows under a 2-row cap — no marker.
+    feed.push("fits", FeedItem::text("alpha\nbeta").max_rows(2));
+    let canvas = settle(&mut tree, size);
+    assert!(canvas.row_text(0).contains("alpha"));
+    assert!(canvas.row_text(1).contains("beta"));
+    assert!(
+        !(0..size.h).any(|y| canvas.row_text(y).contains("more lines")),
+        "no marker when content fits"
+    );
+    assert_eq!(feed.total_rows().get_untracked(), 2);
+    root.dispose();
+}
+
+#[test]
+fn rich_blocks_cap_with_marker_and_keep_shown_inks() {
+    let t = default_theme().tokens;
+    let size = Size::new(40, 8);
+    let (root, mut tree, feed) = mount_feed(size);
+    let lines: Vec<RichLine> = (0..5)
+        .map(|i| {
+            RichLine::from_spans(vec![
+                Span::new("ERR ", Style::new().fg(t.error)),
+                Span::plain(format!("rich body line {i}")),
+            ])
+        })
+        .collect();
+    feed.push("rich", FeedItem::rich_lines(lines).max_rows(3));
+    let canvas = settle(&mut tree, size);
+    // Shown rows keep their span inks; the marker follows.
+    assert_eq!(canvas.cell(Point::new(0, 0)).unwrap().1, t.error);
+    assert!(canvas.row_text(1).contains("rich body line 1"));
+    assert!(
+        canvas.row_text(2).contains("(+3 more lines)"),
+        "{:?}",
+        canvas.row_text(2)
+    );
+    assert_eq!(feed.total_rows().get_untracked(), 3);
+    root.dispose();
+}
+
+#[test]
+fn streaming_items_are_unaffected_by_row_caps() {
+    // Caps live on static Text/Rich blocks only: a streamed item of
+    // ten lines renders all ten, and its extent counts them all.
+    let size = Size::new(24, 14);
+    let (root, mut tree, feed) = mount_feed(size);
+    feed.push_stream("s");
+    for i in 0..10 {
+        feed.stream_append("s", &format!("line {i}\n\n"));
+    }
+    feed.stream_finish("s");
+    let canvas = settle(&mut tree, size);
+    assert!(canvas.row_text(0).contains("line 0"));
+    assert!(
+        (0..size.h).any(|y| canvas.row_text(y).contains("line 6")),
+        "streamed rows render uncapped"
+    );
+    assert!(
+        !(0..size.h).any(|y| canvas.row_text(y).contains("more lines")),
+        "no marker ever appears on a stream"
+    );
+    assert!(feed.total_rows().get_untracked() >= 19, "full extent kept");
+    root.dispose();
+}

@@ -246,6 +246,36 @@ struct Rig {
 /// Mount a bottom-anchored composer with '/' + '@' completion on a real
 /// tree + overlay store. Events route driver-style via `Rig::send`.
 fn completion_rig(size: Size) -> Rig {
+    completion_rig_with(size, false, |c, q| {
+        c.trigger('/', move |query| {
+            q.borrow_mut().push(query.to_string());
+            ["help", "theme", "clear", "quit"]
+                .iter()
+                .filter(|c| c.starts_with(query))
+                .map(|c| CompletionCandidate::new(format!("/{c}"), format!("/{c} ")).detail("cmd"))
+                .collect()
+        })
+        .trigger('@', |query| {
+            ["alice", "bob"]
+                .iter()
+                .filter(|c| c.starts_with(query))
+                .map(|c| CompletionCandidate::new(format!("@{c}"), format!("@{c} ")))
+                .collect()
+        })
+        .max_visible(3)
+    })
+}
+
+/// The parameterized rig behind `completion_rig` (first-app/0292/0294
+/// cases): `status_row` mounts a one-row legend UNDER the composer —
+/// the filed 0294 shape, where short dropdowns land on chrome — and
+/// `wire` registers the triggers/options on the `Completion` (it
+/// receives the query-recording cell the rig hands back).
+fn completion_rig_with(
+    size: Size,
+    status_row: bool,
+    wire: impl FnOnce(Completion, Rc<RefCell<Vec<String>>>) -> Completion,
+) -> Rig {
     super::super::viewport::publish_viewport(size);
     let overlays = Overlays::new();
     overlays.ensure_root(size);
@@ -264,27 +294,8 @@ fn completion_rig(size: Size) -> Rig {
             .rows(1, 3)
             .element(cx, &t)
             .build();
-        let wrapped = Completion::new()
-            .trigger('/', move |q| {
-                q2.borrow_mut().push(q.to_string());
-                ["help", "theme", "clear", "quit"]
-                    .iter()
-                    .filter(|c| c.starts_with(q))
-                    .map(|c| {
-                        CompletionCandidate::new(format!("/{c}"), format!("/{c} ")).detail("cmd")
-                    })
-                    .collect()
-            })
-            .trigger('@', |q| {
-                ["alice", "bob"]
-                    .iter()
-                    .filter(|c| c.starts_with(q))
-                    .map(|c| CompletionCandidate::new(format!("@{c}"), format!("@{c} ")))
-                    .collect()
-            })
-            .max_visible(3)
-            .attach(cx, &ov, &state, composer);
-        let view = Element::new()
+        let wrapped = wire(Completion::new(), q2).attach(cx, &ov, &state, composer);
+        let mut view = Element::new()
             .style(
                 LayoutStyle::column()
                     .width(Dimension::Percent(1.0))
@@ -295,9 +306,16 @@ fn completion_rig(size: Size) -> Rig {
                     .style(LayoutStyle::default().grow(1.0))
                     .build(),
             )
-            .child(wrapped)
-            .build();
-        tree.mount(cx, view);
+            .child(wrapped);
+        if status_row {
+            // The key-legend row the 0294 report shows being clobbered.
+            view = view.child(
+                Element::new()
+                    .style(LayoutStyle::line(1).shrink(0.0))
+                    .build(),
+            );
+        }
+        tree.mount(cx, view.build());
     });
     tree.layout();
     let state = holder.borrow().clone().expect("state");
@@ -505,3 +523,9 @@ fn panel_follows_the_caret_anchor() {
     let (r2, _) = rig.panel().expect("reopened");
     assert!(r2.x > r1.x, "anchor moved right: {r1:?} -> {r2:?}");
 }
+
+// Trigger position policies (first-app/0292) + placement bias
+// (first-app/0294) — a child module in a sibling file (<600-line
+// budget) sharing this rig through `super::*`.
+#[path = "anchored_policy_tests.rs"]
+mod policy;

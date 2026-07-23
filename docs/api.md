@@ -364,6 +364,8 @@ fn wire(cx: abstracttui::reactive::Scope, feed: &FeedState,
 }
 ```
 
+When the items live INSIDE a larger reactive shape — one field of a `Signal<Fold>` whose stats mutate under the same signal, or a focus-selected convo's nested vec — `FeedState::sync_with(cx, move |read| fold.with(|f| read(&f.items)), spec)` is the same bridge behind a borrow-based source (first-app/0282): the closure hands the current items over in place (zero copies), every signal it reads becomes a dependency of the sync effect, and a stats-only write re-runs the drain but the fingerprint walk renders nothing; `sync` itself delegates here.
+
 ### Feed — selection by key
 
 `Feed::selected_key(sig)` binds a `Signal<Option<String>>`: the
@@ -373,6 +375,31 @@ Selection is app-driven state — the app writes the signal and can pair
 it with `FeedState::row_of(key)` (the item's first content row) to
 drive a wrapping `Scroll`'s offset to the selected item. Unknown keys
 highlight nothing.
+
+### Feed — capped preview blocks (`max_rows`)
+
+Transcript previews cap their bodies: `FeedItem::max_rows(n)` bounds
+the most recently appended Text/Rich block at `n` typeset rows TOTAL,
+applied post-wrap at the width the engine typesets at (the row count
+only exists after the wrap — a consumer cannot precompute it). Content
+that wraps to at most `n` rows renders unchanged; overflow shows the
+first `n - 1` wrapped rows and spends the last row on an honest marker
+— "… (+K more lines)" in `text_muted`, where K is the hidden
+wrapped-row count at the current width (it changes on resize).
+`FeedItem::overflow_marker(|k| ...)` overrides the wording. Extent and
+windowing count the marker row, so a capped block is never taller than
+`n`; chain per block (`.block(a).max_rows(3).block(b).max_rows(8)`);
+streaming items are unaffected (caps live on static Text/Rich blocks):
+
+```rust
+use abstracttui::widgets::FeedItem;
+
+fn tool_result(body: &str) -> FeedItem {
+    FeedItem::text(body)
+        .max_rows(6)
+        .overflow_marker(|k| format!("… (+{k} more lines — full text in the run ledger)"))
+}
+```
 
 ### Charts — history rings and time axes
 
@@ -568,6 +595,10 @@ fn composer_with_commands(cx: Scope, app: &App) -> View {
         .attach(cx, &app.overlays(), &state, composer)
 }
 ```
+
+Triggers fire for whitespace-delimited tokens; `Completion::trigger_at(char, TriggerPosition, provider)` additionally scopes WHERE the token may sit (first-app/0292) — `StartOfInput` (the draft's first token, leading whitespace tolerated: slash commands), `StartOfLine` (a line's first token), or the `Anywhere` default that plain `trigger` registers — and a token outside its policy never opens the dropdown nor consults the provider.
+
+`place_panel` prefers below and flips above only when below cannot fit the content; the opener can state the mirror bias (first-app/0294) — `Completion::placement(PanelPlacement::AbovePreferred)` / `AnchoredPanel::open_passive_biased` / the pure `place_panel_biased` — so a bottom composer's short candidate list sits above the caret instead of on the chrome row below; the default stays `BelowPreferred` everywhere.
 
 Providers run synchronously with the query typed after the trigger;
 an empty Vec closes the dropdown. The OWNED mode (`Popup`, a modal

@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.7] - 2026-07-23
+
+### Added
+
+- widgets: `FeedState::sync_with(cx, read, spec)` (first-app/0282) —
+  the `sync` bridge behind a borrow-based source, for items living
+  INSIDE a larger reactive shape (one field of a `Signal<Fold>`, a
+  focus-selected convo's nested vec). The closure hands the items over
+  in place (zero copies); every signal it reads becomes a dependency
+  of the sync effect; a stats-only fold write re-runs the drain but
+  the fingerprint walk renders nothing. `sync` now delegates to
+  `sync_with` — one shared drain core (fast paths, rebuild policy,
+  one-writer self-heal), byte-identical semantics.
+- app: `Completion::trigger_at(char, TriggerPosition, provider)` +
+  `TriggerPosition::{Anywhere, StartOfInput, StartOfLine}`
+  (first-app/0292) — per-trigger position policy: slash commands scope
+  to the draft's first token (leading whitespace tolerated), mentions
+  stay `Anywhere` (the default plain `trigger` registers). A token
+  outside its policy never opens the dropdown nor consults the
+  provider. Re-exported in the prelude.
+- app: `PanelPlacement::{BelowPreferred, AbovePreferred}` +
+  `place_panel_biased`, `AnchoredPanel::open_passive_biased`,
+  `Completion::placement` (first-app/0294) — opener-stated side bias
+  for the anchored panel: `AbovePreferred` mirrors the classic rule so
+  a bottom composer's SHORT candidate list sits above the caret
+  instead of on the chrome row below (the status-bar occlusion).
+  Default stays `BelowPreferred` everywhere — existing callers
+  byte-identical (test-pinned parity grid). Re-exported in the
+  prelude.
+- widgets: `FeedItem::max_rows(rows)` + `FeedItem::overflow_marker(f)`
+  (first-app/0283) — width-aware row cap on the most recently appended
+  Text/Rich feed block, applied POST-WRAP at the width the engine
+  typesets at. Overflow shows the first `rows - 1` wrapped rows plus
+  an honest marker row ("… (+K more lines)" or the closure's wording,
+  `text_muted` ink); K is the hidden wrapped-row count at the current
+  width, so it changes on resize. A capped block is never taller than
+  `rows`, never hides content silently, and extent/windowing count the
+  marker row. Uncapped blocks and streaming items are byte-identical.
+
+### Fixed
+
+- widgets: `Scroll` now repairs a bound offset that a CONTENT shrink
+  (details fold, session switch) or viewport growth left beyond the
+  new maximum (first-app/0281) — the pane used to render void until a
+  gesture rescued it. The repair clamps the offset signal down when
+  the measured extent or viewport box changes; in-range programmatic
+  writes are never touched, growth never moves a reading user, and
+  follow-tail is neither disengaged nor armed by a repair. Includes a
+  crate-internal paint-walk exemption so the content-extent probe
+  keeps measuring while the content wrapper is fully scrolled out of
+  the clip (the state where the probe previously starved).
+- widgets: `TextArea`/`TextInput` placeholders clip to the widget's
+  interior in BOTH branches (first-app/0284) — a hint longer than the
+  interior used to overwrite the widget's own right stroke and escape
+  the rect at narrow widths (draw closures clip to damage regions,
+  not element rects). Clipped with `truncate_ellipsis`, so a cut hint
+  is honest about it; at interior width 1 it degrades to a bare `…`.
+
 ## [0.2.6] - 2026-07-23
 
 ### Added
@@ -798,6 +856,7 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[0.2.7]: https://github.com/lpalbou/abstracttui/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/lpalbou/abstracttui/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/lpalbou/abstracttui/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/lpalbou/abstracttui/compare/v0.2.3...v0.2.4

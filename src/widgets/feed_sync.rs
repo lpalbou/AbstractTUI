@@ -1,5 +1,8 @@
 //! `FeedState::sync` — the diffing bridge from a `Signal<Vec<T>>`
-//! source of truth to the keyed, append-only feed (backlog 0104).
+//! source of truth to the keyed, append-only feed (backlog 0104) —
+//! and `FeedState::sync_with`, the same bridge behind a borrow-based
+//! source for items that live INSIDE a larger reactive shape
+//! (first-app/0282).
 //!
 //! Feed order is PUSH order, so a key may only be appended when it
 //! lands at the tail; everything that violates push order (mid-list
@@ -10,7 +13,8 @@
 //! tail keys `push` (O(1)), changed fingerprints `update` in place.
 //!
 //! Child module of `feed` (file-size discipline). Tests live in
-//! `feed_sync_tests.rs`.
+//! `feed_sync_tests.rs` (+ the `sync_with` cases in
+//! `feed_sync_with_tests.rs`).
 //!
 //! OWNER: CONTENT (app-widgets wave).
 
@@ -85,6 +89,81 @@ impl<T, Fp> SyncSpec<T, Fp> {
     }
 }
 
+/// One drain of the bridge: diff `list` against what the feed shows.
+/// The SHARED core of [`FeedState::sync`] and [`FeedState::sync_with`]
+/// — every semantic documented on `sync` (fast paths, rebuild policy,
+/// one-writer self-heal) lives here, once. `shown` is the mirror
+/// bookkeeping (the visible (key, fingerprint) sequence in push
+/// order); `synced_mutations` is the one-writer detector record.
+fn drain_into<T, Fp: PartialEq>(
+    feed: &FeedState,
+    spec: &SyncSpec<T, Fp>,
+    shown: &mut Vec<(String, Fp)>,
+    synced_mutations: &mut Option<u64>,
+    list: &[T],
+) {
+    let SyncSpec {
+        key,
+        fingerprint,
+        visible,
+        render,
+    } = spec;
+    let is_visible = |item: &T| visible.as_ref().is_none_or(|f| f(item));
+
+    // Self-heal check (C-1): the counter moved past this bridge's own
+    // record — someone else wrote to the feed between drains. The
+    // `shown` bookkeeping no longer describes the feed, so the only
+    // honest move is the rebuild path. One u64 compare on every drain.
+    let foreign = synced_mutations.is_some_and(|recorded| recorded != feed.mutation_count());
+
+    // Pass 1 — order check against the shown prefix. Keys are the only
+    // per-item probe here; fingerprints are compared in pass 2 only
+    // when the order holds.
+    let mut vis_count = 0usize;
+    let mut prefix_holds = true;
+    for item in list.iter().filter(|i| is_visible(i)) {
+        if vis_count < shown.len() && key(item) != shown[vis_count].0 {
+            prefix_holds = false;
+            break;
+        }
+        vis_count += 1;
+    }
+    let fast = !foreign && prefix_holds && vis_count >= shown.len();
+
+    if fast {
+        // Fast path: in-place updates + tail appends.
+        for (at, item) in list.iter().filter(|i| is_visible(i)).enumerate() {
+            if at < shown.len() {
+                let fp = fingerprint(item);
+                if fp != shown[at].1 {
+                    feed.update(&shown[at].0, render(item));
+                    shown[at].1 = fp;
+                }
+            } else {
+                let k = key(item);
+                feed.push(k.clone(), render(item));
+                shown.push((k, fingerprint(item)));
+            }
+        }
+    } else {
+        // Rebuild path: push order broke, the list shrank, or a
+        // foreign write desynced the mirror — the append-only feed
+        // rebuilds whole (strays evicted, order restored to source
+        // order).
+        feed.clear();
+        shown.clear();
+        for item in list.iter().filter(|i| is_visible(i)) {
+            let k = key(item);
+            feed.push(k.clone(), render(item));
+            shown.push((k, fingerprint(item)));
+        }
+    }
+    // Record the counter AFTER this drain's own writes: any bump past
+    // this value before the next drain is a foreign mutation by
+    // construction.
+    *synced_mutations = Some(feed.mutation_count());
+}
+
 impl FeedState {
     /// Mirror a `Signal<Vec<T>>` into this feed, diffing by key (the
     /// fold-shaped consumer's bridge — backlog 0104). Runs immediately
@@ -132,80 +211,60 @@ impl FeedState {
         items: Signal<Vec<T>>,
         spec: SyncSpec<T, Fp>,
     ) -> Effect {
+        // One door: `sync` IS `sync_with` over the whole-signal read,
+        // so every `sync` test pins the shared drain core.
+        self.sync_with(cx, move |read| items.with(|list| read(list)), spec)
+    }
+
+    /// [`FeedState::sync`] behind a BORROW-BASED source
+    /// (first-app/0282): the bridge for items that live INSIDE a
+    /// larger reactive shape — one field of a `Signal<Fold>` whose
+    /// siblings (stats, waits, flags) mutate under the same signal, or
+    /// a focus-selected convo's nested vec — where no `Signal<Vec<T>>`
+    /// exists and a clone-mirror would copy the item vec on every
+    /// unrelated write.
+    ///
+    /// `source` runs INSIDE the sync effect and must hand the current
+    /// items to the callback, borrowed in place (zero copies):
+    ///
+    /// ```ignore
+    /// // Items are one field of a fold struct:
+    /// feed.sync_with(cx, move |read| fold.with(|f| read(&f.items)), spec);
+    /// // A focus-selected projection over two signals:
+    /// feed.sync_with(cx, move |read| {
+    ///     let at = focus.get();
+    ///     convos.with(|cs| read(&cs[at].items))
+    /// }, spec);
+    /// ```
+    ///
+    /// Every signal `source` reads becomes a dependency of the sync
+    /// effect — the drain re-runs on ANY of them (a stats-only write
+    /// on a fold signal re-runs the drain, but the fingerprint walk
+    /// then renders nothing, test-pinned). Call the callback EXACTLY
+    /// ONCE per run: zero calls skip the drain (the feed keeps its
+    /// previous content); multiple calls drain sequentially (the last
+    /// call wins, paying a rebuild whenever the lists disagree).
+    ///
+    /// Diff semantics, rebuild policy, the one-writer self-heal and
+    /// the spec-closure borrow rules are exactly [`FeedState::sync`]'s
+    /// — the two share one drain core, and `sync` itself delegates
+    /// here.
+    pub fn sync_with<T: 'static, Fp: PartialEq + 'static>(
+        &self,
+        cx: Scope,
+        source: impl Fn(&mut dyn FnMut(&[T])) + 'static,
+        spec: SyncSpec<T, Fp>,
+    ) -> Effect {
         let feed = self.clone();
-        // The mirror bookkeeping: the visible (key, fingerprint)
-        // sequence the feed currently shows, in push order.
+        // The mirror bookkeeping + one-writer detector. `None` until
+        // the first drain — the contract begins when the bridge
+        // attaches, so pre-attach pushes are not its business (the
+        // first drain appends after them exactly as before).
         let mut shown: Vec<(String, Fp)> = Vec::new();
-        // The one-writer detector (C-1): the feed's mutation count as
-        // this bridge last left it. `None` until the first drain — the
-        // contract begins when the bridge attaches, so pre-attach
-        // pushes are not its business (the first drain appends after
-        // them exactly as before).
         let mut synced_mutations: Option<u64> = None;
         cx.effect_labeled("feed.sync", move || {
-            items.with(|list| {
-                let SyncSpec {
-                    key,
-                    fingerprint,
-                    visible,
-                    render,
-                } = &spec;
-                let is_visible = |item: &T| visible.as_ref().is_none_or(|f| f(item));
-
-                // Self-heal check (C-1): the counter moved past this
-                // bridge's own record — someone else wrote to the feed
-                // between drains. The `shown` bookkeeping no longer
-                // describes the feed, so the only honest move is the
-                // rebuild path. One u64 compare on every drain.
-                let foreign =
-                    synced_mutations.is_some_and(|recorded| recorded != feed.mutation_count());
-
-                // Pass 1 — order check against the shown prefix. Keys
-                // are the only per-item probe here; fingerprints are
-                // compared in pass 2 only when the order holds.
-                let mut vis_count = 0usize;
-                let mut prefix_holds = true;
-                for item in list.iter().filter(|i| is_visible(i)) {
-                    if vis_count < shown.len() && key(item) != shown[vis_count].0 {
-                        prefix_holds = false;
-                        break;
-                    }
-                    vis_count += 1;
-                }
-                let fast = !foreign && prefix_holds && vis_count >= shown.len();
-
-                if fast {
-                    // Fast path: in-place updates + tail appends.
-                    for (at, item) in list.iter().filter(|i| is_visible(i)).enumerate() {
-                        if at < shown.len() {
-                            let fp = fingerprint(item);
-                            if fp != shown[at].1 {
-                                feed.update(&shown[at].0, render(item));
-                                shown[at].1 = fp;
-                            }
-                        } else {
-                            let k = key(item);
-                            feed.push(k.clone(), render(item));
-                            shown.push((k, fingerprint(item)));
-                        }
-                    }
-                } else {
-                    // Rebuild path: push order broke, the list shrank,
-                    // or a foreign write desynced the mirror — the
-                    // append-only feed rebuilds whole (strays evicted,
-                    // order restored to source order).
-                    feed.clear();
-                    shown.clear();
-                    for item in list.iter().filter(|i| is_visible(i)) {
-                        let k = key(item);
-                        feed.push(k.clone(), render(item));
-                        shown.push((k, fingerprint(item)));
-                    }
-                }
-                // Record the counter AFTER this drain's own writes:
-                // any bump past this value before the next drain is a
-                // foreign mutation by construction.
-                synced_mutations = Some(feed.mutation_count());
+            source(&mut |list: &[T]| {
+                drain_into(&feed, &spec, &mut shown, &mut synced_mutations, list);
             });
         })
     }

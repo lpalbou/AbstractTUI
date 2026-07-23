@@ -46,6 +46,11 @@ pub(super) struct Inst {
     pub(super) focusable: bool,
     pub(super) focus_trap: bool,
     pub(super) focus_memory: bool,
+    /// Run this node's own draw even when its rect is fully outside
+    /// the clip (measurement-readback probes — see
+    /// [`Element::probe_when_culled`](super::Element::probe_when_culled)).
+    /// Children still cull individually.
+    pub(super) probe_when_culled: bool,
     pub(super) access: super::access::AccessProps,
     pub(super) payload: InstPayload,
 }

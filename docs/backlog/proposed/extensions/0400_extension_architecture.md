@@ -228,3 +228,13 @@ packaging question) inherit one policy.
 - [ ] Anchor-surface list written
 - [ ] Workspace restructure decision (integrator sign-off — Cargo.toml owner)
 - [ ] ADR-0004 landed + indexed; track README non-goals ratified
+
+
+## Status update (2026-07-23)
+
+MAINTAINER APPROVED the hybrid architecture (lean core + optional
+sibling crates + two feature classes). ADR-0004 is Accepted
+(`docs/adr/0004-extension-packaging.md`, executed from this item's
+skeleton). Remaining execution: the 0410 feature gates (integrator
+Cargo.toml act, batched with a release window) and the workspace
+scaffold when the first sibling crate (0430/0440 graph) starts.

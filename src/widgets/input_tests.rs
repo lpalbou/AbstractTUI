@@ -223,6 +223,81 @@ fn placeholder_while_focused_paints_beside_the_caret() {
     );
 }
 
+/// First-app/0284: BOTH placeholder branches clip to the interior —
+/// draw closures clip to damage regions, not element rects, so the
+/// old unbounded print overwrote the widget's own right stroke and
+/// escaped the rect at narrow widths. 8-wide field in a 16-wide
+/// canvas: columns 8.. are foreign ground.
+#[test]
+fn placeholder_clips_to_the_interior_at_narrow_widths() {
+    let size = Size::new(16, 1);
+    let t = &default_theme().tokens;
+    // The tree root always fills the viewport: mount the constrained
+    // field as a child of a plain container.
+    let (_root, mut tree) = mount_widget(size, |cx| {
+        crate::ui::Element::new()
+            .style(LayoutStyle::column())
+            .child(
+                TextInput::new()
+                    .placeholder("a very long hint")
+                    .placeholder_while_focused(true)
+                    .layout(LayoutStyle::default().width(Dimension::Cells(8)))
+                    .element(cx, t)
+                    .build(),
+            )
+            .build()
+    });
+    // Unfocused branch: interior = 6 columns, ellipsis on the last.
+    let canvas = render(&mut tree, size);
+    assert_eq!(canvas.cell(Point::new(6, 0)).unwrap().0, '…');
+    assert_eq!(
+        canvas.cell(Point::new(7, 0)).unwrap().0,
+        '▌',
+        "right stroke survives the hint"
+    );
+    assert!(
+        canvas.row_text(0).chars().skip(8).all(|c| c == ' '),
+        "hint escaped the widget rect: {:?}",
+        canvas.row_text(0)
+    );
+    // Focused opt-in branch: hint starts past the caret cell and
+    // clips one column earlier (tw - 1 of room).
+    key(&mut tree, Key::Tab);
+    let canvas = render(&mut tree, size);
+    assert_eq!(canvas.cell(Point::new(6, 0)).unwrap().0, '…');
+    assert_eq!(canvas.cell(Point::new(7, 0)).unwrap().0, '▌');
+    assert!(
+        canvas.row_text(0).chars().skip(8).all(|c| c == ' '),
+        "focused hint escaped the widget rect: {:?}",
+        canvas.row_text(0)
+    );
+}
+
+/// First-app/0284, hostile width 3 (tw = 1): a bare ellipsis between
+/// intact strokes (the width-1/2 guard `rect.w < 3` already exists).
+#[test]
+fn placeholder_width_three_degrades_to_a_bare_ellipsis() {
+    let size = Size::new(8, 1);
+    let t = &default_theme().tokens;
+    let (_root, mut tree) = mount_widget(size, |cx| {
+        crate::ui::Element::new()
+            .style(LayoutStyle::column())
+            .child(
+                TextInput::new()
+                    .placeholder("hello")
+                    .layout(LayoutStyle::default().width(Dimension::Cells(3)))
+                    .element(cx, t)
+                    .build(),
+            )
+            .build()
+    });
+    let canvas = render(&mut tree, size);
+    assert_eq!(canvas.cell(Point::new(0, 0)).unwrap().0, '▐');
+    assert_eq!(canvas.cell(Point::new(1, 0)).unwrap().0, '…');
+    assert_eq!(canvas.cell(Point::new(2, 0)).unwrap().0, '▌');
+    assert!(canvas.row_text(0).chars().skip(3).all(|c| c == ' '));
+}
+
 /// A masked field mounted with a probe on its value signal.
 fn masked_input(size: Size) -> (crate::reactive::RootScope, UiTree, Signal<String>) {
     let t = &default_theme().tokens;

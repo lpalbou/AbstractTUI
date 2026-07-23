@@ -32,6 +32,19 @@
 //! bottom edge re-arms it. The app may force it true ("jump to latest")
 //! and render it ("following / scrolled"). Vertical axis only.
 //!
+//! ## Offset repair on content shrink (first-app/0281)
+//!
+//! A bound offset that a CONTENT shrink (or viewport growth) left
+//! beyond the new `max_off` is repaired by the engine: the offset
+//! signal clamps down to the new max when the measured extent or the
+//! viewport box changes, so the pane never renders void waiting for a
+//! gesture. In-range programmatic writes are never touched (offset
+//! reads are untracked — only extent/viewport changes trigger the
+//! repair), growth never moves a reading user, and `follow` is neither
+//! disengaged nor armed by a repair (only gestures write follow). The
+//! repair rides the signal, not the pixels: scrollbar, gestures and
+//! app reads stay coherent, one settle turn after the shrink.
+//!
 //! Wheel scrolls vertically (horizontal wheel scrolls x); arrows/PgUp/
 //! PgDn/Home/End work while focused; the scrollbar thumb drags with
 //! pointer capture (mouse-down auto-captures, so drags keep steering the
@@ -216,12 +229,18 @@ impl Scroll {
         let mut wrapper = Element::new().style_signal(wrapper_style);
         if hint.is_none() {
             // Measured mode: read the solver's answer back into the
-            // extent signal (clamps, thumb, follow pin).
-            wrapper = wrapper.draw(size_probe(extent));
+            // extent signal (clamps, thumb, follow pin). The probe
+            // draws even when the wrapper is fully scrolled out of the
+            // clip (`probe_when_culled`, first-app/0281): a content
+            // SHRINK below the held offset puts the wrapper entirely
+            // above the viewport, where a culled probe would starve —
+            // the extent would freeze at the pre-shrink value and the
+            // offset repair below could never see the shrink.
+            wrapper = wrapper.draw(size_probe(extent)).probe_when_culled();
         }
         let wrapper = wrapper.child(self.content);
 
-        let mut viewport = Element::new()
+        let viewport = Element::new()
             .style(
                 LayoutStyle::default()
                     .grow(1.0)
@@ -231,10 +250,11 @@ impl Scroll {
                     .scroll(),
             )
             .role(crate::ui::Role::ScrollArea)
-            .child(wrapper.build());
-        if follow.is_some() {
-            viewport = viewport.draw(size_probe(view_box));
-        }
+            .child(wrapper.build())
+            // The viewport box feeds the follow pin AND the offset
+            // repair (0281), so the probe is unconditional now. Steady
+            // frames record an unchanged size and schedule nothing.
+            .draw(size_probe(view_box));
 
         // Follow-tail pin: while following, the offset tracks the
         // content bottom across appends (extent growth) and resizes
@@ -256,6 +276,41 @@ impl Scroll {
                 }
             });
         }
+
+        // Offset repair (first-app/0281): a CONTENT shrink (details
+        // fold, session switch) or a viewport growth can strand a bound
+        // offset beyond the new max — the pane rendered void until a
+        // gesture rescued it. Track the two truths of max_off (extent +
+        // viewport) and clamp the offset DOWN when they change; offset
+        // reads stay untracked, so in-range programmatic writes are
+        // never touched and growth never moves a reading user (max_off
+        // only grows). `follow` is never written here: a repair is not
+        // a gesture, so it neither disengages nor arms the follow —
+        // and while following, the pin above computes the same value,
+        // so the two effects can never fight.
+        cx.effect(move || {
+            let (content_w, content_h) = extent.get();
+            let (view_w, view_h) = view_box.get();
+            if hint.is_none() && content_w == 0 && content_h == 0 {
+                // Measured mode before the first measurement: (0,0) is
+                // the unmeasured sentinel (a real solve gives the
+                // cross axis the viewport's extent). Clamping against
+                // it would destroy a restored offset at startup.
+                return;
+            }
+            if vertical && view_h > 0 {
+                let max_off = (content_h - view_h).max(0);
+                if oy.try_get_untracked().is_some_and(|o| o > max_off) {
+                    oy.set(max_off);
+                }
+            }
+            if horizontal && view_w > 0 {
+                let max_off = (content_w - view_w).max(0);
+                if ox.try_get_untracked().is_some_and(|o| o > max_off) {
+                    ox.set(max_off);
+                }
+            }
+        });
 
         // After a user gesture: landing on the bottom edge re-arms the
         // follow, landing above it releases it (0130 semantics).

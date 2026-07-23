@@ -14,6 +14,7 @@ item records the workaround so the engine fix can delete it.
 | 0281 | Scroll never re-clamps a bound offset when content shrinks under it | API gap |
 | 0282 | `FeedState::sync` source shape too narrow — fold-shaped stores cannot adopt (borrow-based `sync_with` ask) | API gap |
 | 0283 | Capped preview blocks — width-aware `max_rows` + honest overflow marker on Text/Rich feed blocks (+ hang-indent, tight-rhythm notes) | capability gap |
+| 0284 | TextArea/TextInput placeholder paints unclipped past the widget rect (both branches; surfaced by the 0291 adoption) | rendering defect |
 | 0292 | Completion triggers fire on any mid-text token — no position policy (renumbered from 0300: band collision with control-plane) | API gap |
 | 0294 | Anchored panel places short lists over the chrome below instead of flipping up (renumbered from 0310) | UX defect |
 

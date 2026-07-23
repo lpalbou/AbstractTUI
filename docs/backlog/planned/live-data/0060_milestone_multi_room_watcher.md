@@ -104,3 +104,13 @@ Read reviews/cycle11/robustness-and-chat-port.md Part 2 before building — it m
 domain onto engine surfaces. Keep the watcher's transcript rendering deliberately primitive
 (windowed, last-N); resist upstreaming it — the real widget is specified in the app-widgets
 track with different requirements (streaming re-typeset, keyed reconciliation).
+
+
+## Status update (2026-07-23)
+
+MAINTAINER GREEN-LIT (validator decision): a read-only a2a/agora
+multi-channel watcher is one of the two chosen second-validator apps.
+Promoted proposed -> planned. Scope stands as written (read-only,
+multi-room, live panes + presence sidebar, quit/switch-focus only);
+it validates live-data 0010/0020/0040 in the field and produces the
+evidence 0050's transport ADR waits on.

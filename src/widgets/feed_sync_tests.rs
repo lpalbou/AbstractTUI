@@ -416,6 +416,12 @@ fn foreign_push_of_a_future_source_key_heals_to_source_order() {
 /// ```sh
 /// cargo test --release --lib perf_sync_burst -- --ignored --nocapture
 /// ```
+// The borrow-based source door (first-app/0282) — a child module in a
+// sibling file (<600-line budget) so it shares this rig through
+// `super::*` with zero visibility churn.
+#[path = "feed_sync_with_tests.rs"]
+mod sync_with;
+
 #[test]
 #[ignore]
 fn perf_sync_burst_1k_into_10k() {

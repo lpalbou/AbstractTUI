@@ -20,9 +20,9 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 
 | State | Count |
 | --- | --- |
-| Planned | 3 |
-| Proposed | 48 |
-| Completed | 36 |
+| Planned | 5 |
+| Proposed | 45 |
+| Completed | 42 |
 | Deprecated | 0 |
 | Recurrent | 0 |
 
@@ -61,6 +61,8 @@ renumbered to 0291 the same way.)
 | --- | --- | --- |
 | 0001 | Roadmap: general capability classes, milestone bands, validation vehicles (canonical) | roadmap |
 | 0002 | The 0.3 breaking budget (Role/TokenKind non_exhaustive, content_size deprecation) — Accepted-pending-maintainer; enforced by the CI semver gate | governance |
+| 0060 | Milestone: read-only a2a/agora multi-channel watcher — MAINTAINER GREEN-LIT 2026-07-23 (validator app #1); validates 0010/0020/0040 live, feeds 0050's transport ADR | live-data |
+| 0215 | EPIC: gateway configuration wizard — MAINTAINER-CHOSEN validator app #2 ("gateway/console but improved"); promotion trigger for app-kits 0510/0520 | ports |
 | 0150 | Terminal verbs (notify/bell/title) reachable from components — clipboard leg SHIPPED with the selection wave | app-widgets |
 
 ## Completed ledger
@@ -108,13 +110,18 @@ composer wave).
 | 0040 | Connection lifecycle + jittered reconnect: `reactive::connection`/`ConnState`/`Connection`/`ConnectionEvents` (state as signals, retries on the timer heap, generation-stamped reporters, zero cost when Closed — pinned) + `reactive::Backoff` (FULL jitter, base 500ms ×2 cap 30s, seeded tests); engine does NO I/O — dial fn is the 0050 seam; docs/live-data.md state diagram — completed 2026-07-23 (fix wave 3, FIXNET; graduated directly from proposed/ on the fired trigger, per the in-item evidence section) | completed/live-data/ |
 | 0291 | Placeholder-while-focused opt-in: `TextArea::placeholder_while_focused` + `TextInput` parity (hint one cell past the caret, `text_faint` ink, caret block stays visible; default OFF — byte-stability for existing apps, decision in-item) — autofocused composers finally paint their teaching — completed 2026-07-23 (0.2.6 field wave) | completed/first-app/ |
 | 0299 | Public full-redraw verb: `app::request_full_redraw()` (thread-local drain → `resync_unknown_screen`: prev poison + presenter invalidate + damage-all + per-channel image re-place) + opt-in `set_redraw_on_focus_gained` (FocusGained heal; RunConfig field rejected — literal-constructible struct, semver-major); image re-place fixed for suspend-resume too (dirty alone read `Unchanged` from the session) — completed 2026-07-23 (0.2.6 field wave) | completed/first-app/ |
+| 0281 | Scroll offset repair on content shrink (clamp on extent/viewport change; culled-probe exemption) — completed 2026-07-23 | completed/first-app/ |
+| 0282 | `FeedState::sync_with` borrow-based source (fold-shaped stores; shared drain core) — completed 2026-07-23 | completed/first-app/ |
+| 0283 | Capped preview blocks: `FeedItem::max_rows` + overflow marker (post-wrap, width-aware) — completed 2026-07-23 | completed/first-app/ |
+| 0284 | Placeholder clipping fix (both widgets, both branches; right stroke untouchable) — completed 2026-07-23 | completed/first-app/ |
+| 0292 | Completion trigger position policy (`trigger_at` + TriggerPosition) — completed 2026-07-23 | completed/first-app/ |
+| 0294 | Anchored-panel placement bias (`PanelPlacement`, AbovePreferred for bottom composers) — completed 2026-07-23 | completed/first-app/ |
 
 ## Proposed ledger
 
 | ID | Title | Track | Promotion trigger |
 | --- | --- | --- | --- |
 | 0050 | Transport story: HTTP/WebSocket/TLS dependency decision (first ADR) | live-data | Decide only after the watcher's evidence (0060); do not settle from the armchair. 0040 shipped meanwhile — the dial-fn seam is where the transport plugs in. |
-| 0060 | Milestone: read-only multi-room watcher over the a2a hub (dogfood) | live-data | Maintainer green-light; validates 0010/0020/0040. Explicitly not-now. |
 | 0140 | Stateful cross-line lexers (python/js/toml) — diff lexer SHIPPED 2026-07-22 (`text::DiffLexer`, additive); stateful seam + language presets remain | app-widgets | A consumer needing real language tinting; the stateful-seam design note in the item gates python. |
 | 0160 | Content selection + copy — screen-level v1 SHIPPED via 0270; remaining scope = logical widget-content mapping (copy markdown source, unwrap soft-wraps) shared with 0148 | app-widgets | A consumer needing source-text copy (screen-text copy ships today). |
 | 0165 | Hyperlink/reference hit-testing through the event path | app-widgets | A dogfood app reaching its "activate a reference" phase. |
@@ -123,8 +130,6 @@ composer wave).
 | 0210 | EPIC: a2a chat TUI over the agora hub | ports | Its widget + live-data dependencies land (Feed + TextArea 0120 DONE; lifecycle 0040/0050 remain). |
 | 0260 | Disclosure widget: per-item fold/unfold for transcripts (maintainer ask) | first-app | Fold into Feed's item model (0100 shipped — extend), or standalone on a second consumer. |
 | 0280 | Feed custom blocks cannot host widgets; protocol images degrade to mosaic in Feed | first-app | Filed 2026-07-22 (0.2.0 adoption wave); design with Feed's item model + the 0144 protocol-images-in-flow question. |
-| 0292 | Completion triggers fire on any mid-text token — no position policy (renumbered from 0300) | first-app | Filed 2026-07-22; add trigger-position policy to `Completion` (start-of-line/word options). |
-| 0294 | Anchored panel places short lists over the chrome below instead of flipping up (renumbered from 0310) | first-app | Filed 2026-07-22; placement scoring in `place_panel`. |
 | 0300 | App lifecycle events (boot/ready/resize/caps/focus/suspend/resume/quit + custom) — the band foundation | control-plane | Scheduling any of 0310/0340/0350, or the first app needing suspend/flush hooks. |
 | 0310 | Automation bus: inject input, query semantic tree + screen text, invoke named actions, subscribe to events | control-plane | 0300 + a driving consumer (port harness, embedder, or 0320). |
 | 0320 | JSONL control protocol + opt-in serve seam (default-OFF `control-server` feature; socket perms = auth) | control-plane | 0310 + the JSON-promotion precondition (with extensions 0410); closes only with the protocol ADR. |

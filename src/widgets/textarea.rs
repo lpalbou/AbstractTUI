@@ -434,10 +434,17 @@ impl TextArea {
                         }
                         let tx = rect.x + 1;
                         let tw = rect.w - 2;
+                        // Placeholder branches clip to the INTERIOR
+                        // (first-app/0284): draw closures clip to damage
+                        // regions, not element rects, so an unbounded
+                        // print overwrote the widget's own right stroke
+                        // and escaped the rect at narrow widths.
+                        // `truncate_ellipsis` keeps the hint honest about
+                        // being cut (same discipline as List/Table cells).
                         if text.is_empty() && !focused {
                             canvas.print_styled(
                                 Point::new(tx, rect.y),
-                                &placeholder,
+                                &crate::text::truncate_ellipsis(&placeholder, tw),
                                 &Style::new().fg(placeholder_fg).bg(bg),
                             );
                             return;
@@ -452,7 +459,7 @@ impl TextArea {
                         if text.is_empty() && focused && placeholder_while_focused && tw > 1 {
                             canvas.print_styled(
                                 Point::new(tx + 1, rect.y),
-                                &placeholder,
+                                &crate::text::truncate_ellipsis(&placeholder, tw - 1),
                                 &Style::new().fg(placeholder_fg).bg(bg),
                             );
                         }
@@ -630,3 +637,7 @@ mod tests;
 #[cfg(test)]
 #[path = "textarea_disposal_tests.rs"]
 mod disposal_tests;
+
+#[cfg(test)]
+#[path = "textarea_placeholder_tests.rs"]
+mod placeholder_tests;

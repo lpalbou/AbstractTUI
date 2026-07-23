@@ -75,3 +75,7 @@ pub use crate::reactive::{connection, Backoff, ConnState, Connection, Connection
 // Full-redraw verb + focus-regain repaint opt-in (first-app/0299) —
 // appended with its wave.
 pub use crate::app::{request_full_redraw, set_redraw_on_focus_gained};
+
+// Completion trigger-position policy + anchored-panel placement bias
+// (first-app/0292 + 0294) — appended with their wave.
+pub use crate::app::anchored::{PanelPlacement, TriggerPosition};

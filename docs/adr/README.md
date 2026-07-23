@@ -25,3 +25,4 @@ supersession discipline). Conventions:
 | [0001](0001-api-stability-policy.md) | API stability policy toward 0.2/1.0 | Accepted |
 | [0002](0002-two-style-types.md) | The two `Style` types stay distinct; `LayoutStyle` is the documented spelling | Accepted |
 | [0003](0003-struct-extensibility.md) | Struct extensibility: `non_exhaustive` capability structs, FRU style structs | Accepted |
+| [0004](0004-extension-packaging.md) | Extension packaging: feature classes, sibling-crate family, dependency inheritance | Accepted |

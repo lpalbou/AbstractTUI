@@ -9,11 +9,12 @@
 use std::collections::HashMap;
 
 use crate::render::md::{self, Block, DocBlock, DocStreamSession};
+use crate::render::rich::Span;
 use crate::render::{RichLine, RichText};
 use crate::theme::TokenSet;
 
 use super::super::markdown::{BlockTypesetter, Row};
-use super::item::{ItemBlock, SharedDrawFn};
+use super::item::{ItemBlock, RowCap, SharedDrawFn};
 
 pub(super) enum EntryKind {
     Static(Vec<ItemBlock>),
@@ -243,17 +244,16 @@ fn typeset_static(
     let mut any_content = false;
     for b in blocks {
         match b {
-            ItemBlock::Text(s) => {
+            ItemBlock::Text { text, cap } => {
                 if any_content && current.is_empty() {
                     current.push(Row::plain(RichLine::new()));
                 }
                 let ink = crate::render::Style::new().fg(tokens.text);
-                for line in RichText::plain(s, ink).wrap(width.max(4)).lines {
-                    current.push(Row::plain(line));
-                }
+                let lines = RichText::plain(text, ink).wrap(width.max(4)).lines;
+                push_capped(&mut current, lines, cap.as_ref(), tokens);
                 any_content = true;
             }
-            ItemBlock::Rich(text) => {
+            ItemBlock::Rich { text, cap } => {
                 // Backlog 0102: span-model lines through the SAME
                 // span-preserving wrap (`RichText::wrap`) and the same
                 // row walk (`draw_rows` -> `print_span_clipped`) as
@@ -265,9 +265,8 @@ fn typeset_static(
                 if any_content && current.is_empty() {
                     current.push(Row::plain(RichLine::new()));
                 }
-                for line in text.wrap(width.max(4)).lines {
-                    current.push(Row::plain(line));
-                }
+                let lines = text.wrap(width.max(4)).lines;
+                push_capped(&mut current, lines, cap.as_ref(), tokens);
                 any_content = true;
             }
             ItemBlock::Markdown(src) => {
@@ -313,4 +312,49 @@ fn typeset_static(
         segments.push(Segment::Rows(current));
     }
     segments
+}
+
+/// Push wrapped Text/Rich lines under an optional row cap
+/// (first-app/0283). Uncapped or fitting content pushes unchanged.
+/// Overflow keeps the first `max_rows - 1` wrapped rows and spends the
+/// last row on an honest marker — "… (+K more lines)" (or the block's
+/// override wording) in `text_muted` — so a capped block is never
+/// taller than `max_rows`, never hides content silently, and the
+/// extent arithmetic (segment height = row count) stays exact with the
+/// marker row counted. K is the HIDDEN wrapped-row count at this
+/// width, so it changes when the width does — which is exactly why the
+/// cap lives where the wrap lives. The marker is minted at typeset
+/// time from the bound tokens, so a theme rebind retints it (feeds
+/// re-typeset everything on token change).
+fn push_capped(
+    current: &mut Vec<Row>,
+    lines: Vec<RichLine>,
+    cap: Option<&RowCap>,
+    tokens: &TokenSet,
+) {
+    let max = cap.and_then(|c| c.max_rows).map(|m| m.max(1));
+    match max {
+        Some(max) if lines.len() > max => {
+            let shown = max - 1;
+            let hidden = lines.len() - shown;
+            for line in lines.into_iter().take(shown) {
+                current.push(Row::plain(line));
+            }
+            let text = match cap.and_then(|c| c.marker.as_ref()) {
+                Some(f) => f(hidden),
+                None => format!("… (+{hidden} more lines)"),
+            };
+            // One row by design: overwide marker text clips at the
+            // item width through the shared row walk, never wraps.
+            current.push(Row::plain(RichLine::from_spans(vec![Span::new(
+                text,
+                crate::render::Style::new().fg(tokens.text_muted),
+            )])));
+        }
+        _ => {
+            for line in lines {
+                current.push(Row::plain(line));
+            }
+        }
+    }
 }

@@ -6,7 +6,8 @@
 //!
 //! One live token at a time: an effect watches the composer's
 //! value/caret/focus/caret-cell signals, scans the token behind the
-//! caret, asks the matching provider, and keeps a passive
+//! caret, asks the matching provider — gated by that trigger's
+//! [`TriggerPosition`] policy (first-app/0292) — and keeps a passive
 //! [`AnchoredPanel`] placed at the caret cell. A capture-phase wrapper
 //! element intercepts Down/Up/Enter/Tab/Escape while the dropdown is
 //! open; everything else falls through to the composer untouched.
@@ -25,7 +26,7 @@ use crate::widgets::TextAreaState;
 
 use super::super::overlays::Overlays;
 use super::super::viewport::use_viewport;
-use super::{AnchoredPanel, PanelAnchor, PanelWidth};
+use super::{AnchoredPanel, PanelAnchor, PanelPlacement, PanelWidth};
 
 /// One completion row. `label` renders; `detail` renders muted after
 /// it; `insert` replaces the whole token (trigger char included) on
@@ -53,6 +54,53 @@ impl CompletionCandidate {
 }
 
 type Provider = Rc<dyn Fn(&str) -> Vec<CompletionCandidate>>;
+
+/// Where a trigger token must SIT in the draft for its provider to
+/// fire (first-app/0292). Every trigger already requires a token
+/// START (the trigger char at byte 0 or right after whitespace — a
+/// mid-word `/` never arms); the position policy constrains WHERE
+/// that token sits, per registration: slash COMMANDS are commands
+/// only as the draft's first token (`StartOfInput`), while
+/// `@`-mentions legitimately fire `Anywhere`. Whitespace before the
+/// token is tolerated on purpose ("first token", not "byte zero" —
+/// the consumer convention is `trim_start`). When the policy refuses,
+/// the provider is never consulted and no dropdown opens.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub enum TriggerPosition {
+    /// Any token start, anywhere in the draft — the pre-0292 behavior
+    /// and the default ([`Completion::trigger`] registers this).
+    #[default]
+    Anywhere,
+    /// Only the draft's FIRST token: everything before the trigger
+    /// char (blank lines included) must be whitespace.
+    StartOfInput,
+    /// Only a LINE's first token: everything between the previous
+    /// newline (or the text start) and the trigger char must be
+    /// whitespace.
+    StartOfLine,
+}
+
+/// Does a token starting at `token_start` satisfy `at`?
+fn position_allows(at: TriggerPosition, text: &str, token_start: usize) -> bool {
+    let blank = |s: &str| s.chars().all(char::is_whitespace);
+    match at {
+        TriggerPosition::Anywhere => true,
+        TriggerPosition::StartOfInput => blank(&text[..token_start]),
+        TriggerPosition::StartOfLine => {
+            let prefix = &text[..token_start];
+            let line_start = prefix.rfind('\n').map_or(0, |i| i + 1);
+            blank(&prefix[line_start..])
+        }
+    }
+}
+
+/// One registered trigger: the char, its position policy, and the
+/// provider it arms.
+struct Trigger {
+    ch: char,
+    at: TriggerPosition,
+    provider: Provider,
+}
 
 /// Session state behind the controller (one live token at a time).
 struct Session {
@@ -86,8 +134,9 @@ fn close_open(s: &mut Session) {
 /// the query typed after the trigger; returning an empty Vec closes the
 /// dropdown.
 pub struct Completion {
-    triggers: Vec<(char, Provider)>,
+    triggers: Vec<Trigger>,
     max_visible: usize,
+    placement: PanelPlacement,
 }
 
 impl Default for Completion {
@@ -101,18 +150,41 @@ impl Completion {
         Completion {
             triggers: Vec::new(),
             max_visible: 6,
+            placement: PanelPlacement::BelowPreferred,
         }
     }
 
     /// Register a provider for tokens starting with `trigger` (at the
     /// start of the text or after whitespace). The query excludes the
-    /// trigger char and never contains whitespace.
+    /// trigger char and never contains whitespace. Position policy:
+    /// [`TriggerPosition::Anywhere`] — use [`Completion::trigger_at`]
+    /// to scope the trigger to the draft or line start.
     pub fn trigger(
-        mut self,
+        self,
         trigger: char,
         provider: impl Fn(&str) -> Vec<CompletionCandidate> + 'static,
     ) -> Completion {
-        self.triggers.push((trigger, Rc::new(provider)));
+        self.trigger_at(trigger, TriggerPosition::Anywhere, provider)
+    }
+
+    /// [`Completion::trigger`] with a [`TriggerPosition`] policy
+    /// (first-app/0292): the provider is consulted only when the
+    /// token sits where the policy allows — a mid-sentence `/` under
+    /// `StartOfInput` neither opens the dropdown nor runs the
+    /// provider. The same char may be registered more than once with
+    /// different policies; the first registration whose policy passes
+    /// wins.
+    pub fn trigger_at(
+        mut self,
+        trigger: char,
+        at: TriggerPosition,
+        provider: impl Fn(&str) -> Vec<CompletionCandidate> + 'static,
+    ) -> Completion {
+        self.triggers.push(Trigger {
+            ch: trigger,
+            at,
+            provider: Rc::new(provider),
+        });
         self
     }
 
@@ -120,6 +192,16 @@ impl Completion {
     /// window around the highlight.
     pub fn max_visible(mut self, n: usize) -> Completion {
         self.max_visible = n.max(1);
+        self
+    }
+
+    /// Which side of the caret the dropdown prefers (first-app/0294;
+    /// default [`PanelPlacement::BelowPreferred`], the classic rule).
+    /// A composer sitting directly above chrome (a status bar) states
+    /// `AbovePreferred` so SHORT candidate lists — which always "fit"
+    /// in the one row below — stop landing on the legend.
+    pub fn placement(mut self, placement: PanelPlacement) -> Completion {
+        self.placement = placement;
         self
     }
 
@@ -136,6 +218,7 @@ impl Completion {
         let t = crate::widgets::theme_tokens(cx);
         let triggers = Rc::new(self.triggers);
         let max_visible = self.max_visible;
+        let placement = self.placement;
         let overlays = overlays.clone();
         let state = state.clone();
         let viewport = use_viewport(cx);
@@ -310,7 +393,7 @@ impl Completion {
                 }
                 session.borrow_mut().muted_at = None;
                 // Provider runs OUTSIDE any session borrow (user code).
-                let cands = (triggers[trigger_idx].1)(&query);
+                let cands = (triggers[trigger_idx].provider)(&query);
                 if cands.is_empty() {
                     let mut s = session.borrow_mut();
                     close_open(&mut s);
@@ -338,13 +421,14 @@ impl Completion {
                     close_open(&mut s);
                     let scope = cx.child();
                     let build = build.clone();
-                    let panel = AnchoredPanel::open_passive(
+                    let panel = AnchoredPanel::open_passive_biased(
                         &overlays,
                         scope,
                         vp,
                         anchor,
                         PanelWidth::Content { min: 8, max: 44 },
                         content,
+                        placement,
                         move |pcx| (build)(pcx),
                     );
                     s.open = Some(OpenSession {
@@ -436,13 +520,11 @@ fn measure_candidates(cands: &[CompletionCandidate], max_visible: usize) -> Size
 
 /// The token behind the caret: scan back to the nearest whitespace (or
 /// the text start); the token completes when its FIRST cluster is a
-/// registered trigger char. Returns (token start byte, trigger index,
-/// query after the trigger).
-fn find_token(
-    text: &str,
-    caret: usize,
-    triggers: &[(char, Provider)],
-) -> Option<(usize, usize, String)> {
+/// registered trigger char whose position policy accepts the token's
+/// place in the draft (first-app/0292 — the first passing registration
+/// wins). Returns (token start byte, trigger index, query after the
+/// trigger).
+fn find_token(text: &str, caret: usize, triggers: &[Trigger]) -> Option<(usize, usize, String)> {
     if caret > text.len() || !text.is_char_boundary(caret) {
         return None;
     }
@@ -454,6 +536,8 @@ fn find_token(
     }
     let token = &text[start..caret];
     let first = token.chars().next()?;
-    let idx = triggers.iter().position(|(c, _)| *c == first)?;
+    let idx = triggers
+        .iter()
+        .position(|t| t.ch == first && position_allows(t.at, text, start))?;
     Some((start, idx, token[first.len_utf8()..].to_string()))
 }

@@ -8,7 +8,11 @@
 //! placed against an anchor rect — below-preferred, flipped above when
 //! the space below is short AND the space above is longer, clamped into
 //! the viewport (the Toast clamp math), width matched to the anchor or
-//! sized to content. It rides `app::overlays` with no engine privileges
+//! sized to content. The preferred side is the OPENER's call
+//! ([`PanelPlacement`], first-app/0294): the engine cannot know which
+//! rows under an anchor are occupied chrome, so a bottom composer over
+//! a status bar states `AbovePreferred` and short content stays off
+//! the legend. It rides `app::overlays` with no engine privileges
 //! beyond the one 0500-budgeted delta, [`Overlays::top_z`], so a panel
 //! opened over any modal stack allocates above it.
 //!
@@ -80,12 +84,59 @@ pub enum PanelWidth {
     Content { min: i32, max: i32 },
 }
 
+/// Which side of the anchor a panel PREFERS (first-app/0294). The
+/// classic contract is below-preferred, which parks a SHORT list on
+/// the row(s) directly under the anchor even when those rows are
+/// occupied chrome — the filed shape: a bottom composer over a status
+/// bar, where the flip engaged only once below could not fit the
+/// content. The engine cannot know which rows are chrome, so the
+/// OPENER states the bias; `AbovePreferred` is the exact mirror rule.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub enum PanelPlacement {
+    /// Prefer below the anchor; flip above only when below cannot fit
+    /// the content AND above offers more rows — the classic rule, and
+    /// the default everywhere (existing callers byte-identical).
+    #[default]
+    BelowPreferred,
+    /// Prefer above the anchor; fall below only when above cannot fit
+    /// the content AND below offers more rows (bottom-anchored
+    /// composers with chrome underneath).
+    AbovePreferred,
+}
+
 /// The 0500 placement contract, pure and unit-testable: prefer BELOW
 /// the anchor; FLIP above when the rows below are fewer than needed AND
 /// the rows above outnumber them; height = min(content, chosen side);
 /// x clamped into the viewport (the Toast clamp). The result can be
 /// EMPTY (h == 0) when neither side has a row — callers skip opening.
+/// [`place_panel_biased`] is the same contract with the preferred side
+/// chosen by the opener (first-app/0294); this classic face delegates
+/// with [`PanelPlacement::BelowPreferred`].
 pub fn place_panel(viewport: Size, anchor: Rect, content: Size, width: PanelWidth) -> Rect {
+    place_panel_biased(
+        viewport,
+        anchor,
+        content,
+        width,
+        PanelPlacement::BelowPreferred,
+    )
+}
+
+/// [`place_panel`] with an explicit side bias (first-app/0294):
+/// `BelowPreferred` is byte-identical to [`place_panel`];
+/// `AbovePreferred` mirrors the rule — above wins whenever the content
+/// fits there (or above offers no fewer rows than below), and the
+/// panel falls below only when below is genuinely the longer side, so
+/// the viewport-edge flip still works in both directions. Width, the
+/// height clamp, the x clamp and the empty-result contract are
+/// unchanged.
+pub fn place_panel_biased(
+    viewport: Size,
+    anchor: Rect,
+    content: Size,
+    width: PanelWidth,
+    placement: PanelPlacement,
+) -> Rect {
     let w = match width {
         PanelWidth::MatchAnchor => anchor.w,
         PanelWidth::Content { min, max } => content.w.clamp(min, max.max(min)),
@@ -93,7 +144,14 @@ pub fn place_panel(viewport: Size, anchor: Rect, content: Size, width: PanelWidt
     .clamp(1, viewport.w.max(1));
     let below = (viewport.h - anchor.bottom()).max(0);
     let above = anchor.y.max(0);
-    let (y, h) = if below >= content.h || below >= above {
+    let below_wins = match placement {
+        PanelPlacement::BelowPreferred => below >= content.h || below >= above,
+        // The mirror: above wins when the content fits there or above
+        // offers no fewer rows; only a genuinely longer below side
+        // pulls the panel down.
+        PanelPlacement::AbovePreferred => !(above >= content.h || above >= below),
+    };
+    let (y, h) = if below_wins {
         (anchor.bottom(), content.h.min(below))
     } else {
         let h = content.h.min(above);
@@ -113,6 +171,7 @@ struct PanelInner {
     overlays: Overlays,
     owner: Scope,
     width: PanelWidth,
+    placement: PanelPlacement,
     build: Rc<dyn Fn(Scope) -> View>,
     open: Option<OpenLayer>,
     closed: bool,
@@ -156,11 +215,43 @@ impl AnchoredPanel {
         content: Size,
         build: impl Fn(Scope) -> View + 'static,
     ) -> AnchoredPanel {
+        AnchoredPanel::open_passive_biased(
+            overlays,
+            cx,
+            viewport,
+            anchor,
+            width,
+            content,
+            PanelPlacement::BelowPreferred,
+            build,
+        )
+    }
+
+    /// [`AnchoredPanel::open_passive`] with an explicit
+    /// [`PanelPlacement`] bias (first-app/0294): every placement this
+    /// panel ever solves — the open and every [`AnchoredPanel::update`]
+    /// — prefers the stated side, so a bottom-anchored opener whose
+    /// rows below are occupied chrome (a status bar) keeps short
+    /// content off them. All other contracts are `open_passive`'s.
+    #[allow(clippy::too_many_arguments)] // the biased face mirrors
+                                         // open_passive + one policy; the 7-arg default face
+                                         // stays the common path (the open_impl precedent).
+    pub fn open_passive_biased(
+        overlays: &Overlays,
+        cx: Scope,
+        viewport: Size,
+        anchor: PanelAnchor,
+        width: PanelWidth,
+        content: Size,
+        placement: PanelPlacement,
+        build: impl Fn(Scope) -> View + 'static,
+    ) -> AnchoredPanel {
         let panel = AnchoredPanel {
             inner: Rc::new(RefCell::new(PanelInner {
                 overlays: overlays.clone(),
                 owner: cx,
                 width,
+                placement,
                 build: Rc::new(build),
                 open: None,
                 closed: false,
@@ -191,7 +282,7 @@ impl AnchoredPanel {
 
     fn apply(&self, viewport: Size, anchor: PanelAnchor, content: Size) {
         let mut inner = self.inner.borrow_mut();
-        let rect = place_panel(viewport, anchor.rect, content, inner.width);
+        let rect = place_panel_biased(viewport, anchor.rect, content, inner.width, inner.placement);
         if rect.h <= 0 || rect.w <= 0 || viewport.w <= 0 || viewport.h <= 0 {
             inner.drop_layer();
             return;
@@ -243,7 +334,7 @@ impl AnchoredPanel {
 // app-facing path stays `app::anchored::{Completion, ...}`.
 #[path = "anchored_completion.rs"]
 mod completion;
-pub use completion::{Completion, CompletionCandidate};
+pub use completion::{Completion, CompletionCandidate, TriggerPosition};
 
 // The OWNED + TOOLTIP routing modes (backlog 0500, completing the
 // three-mode substrate) — same private-sibling pattern; the app-facing

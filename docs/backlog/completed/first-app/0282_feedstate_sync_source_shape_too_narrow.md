@@ -2,8 +2,8 @@
 
 ## Metadata
 - Created: 2026-07-23
-- Status: Proposed (API gap report — first-app finding, 0.2.6 adoption wave)
-- Completed: N/A
+- Status: Completed (shipped as proposed — borrow-based source variant)
+- Completed: 2026-07-23
 
 ## ADR status
 - Governing ADRs: None. ADR impact: none — feed sync-bridge API surface.
@@ -59,3 +59,49 @@ effect with positional `i{index}` keys + focus-dimension bookkeeping),
 the FNV fingerprint (~100 lines), the `is_visible` mirror predicate,
 and the mirror-drift pin test (~250 lines total), once item identities
 exist app-side.
+
+## Completion report (2026-07-23, 0.2.6 field wave)
+
+Shipped the proposed borrow-based source variant, exactly the
+`read_fn: Fn(&mut dyn FnMut(&[T]))` shape:
+
+- `FeedState::sync_with(cx, source, spec)` (`widgets/feed_sync.rs`) —
+  the source closure runs INSIDE the sync effect and hands the current
+  items to the callback borrowed in place (zero copies): a fold-shaped
+  store reads `fold.with(|f| read(&f.items))`; a focus-selected
+  projection reads `focus.get()` then the nested slice. Every signal
+  the closure touches becomes a dependency of the sync effect — the
+  drain re-runs on any of them, and unchanged items cost exactly one
+  fingerprint compare (a stats-only fold write renders NOTHING,
+  test-pinned). Contract text covers the exactly-once callback rule
+  (zero calls skip the drain; multiple calls drain sequentially).
+- ONE drain core, never duplicated: the diff body moved verbatim into
+  a private `drain_into` (fast prefix path, rebuild policy, C-1
+  one-writer self-heal, C-2/C-3 doc contracts untouched), and
+  **`sync` now delegates to `sync_with`** over the whole-signal read —
+  so the entire pre-existing `feed_sync_tests` suite (append-only
+  never rebuilds, parity bar, both self-heal shapes) pins the shared
+  core through the new door. All 12 pass unchanged.
+- The minted-seq identity homework stays APP-SIDE as the item names it
+  (keys must be real identities; nothing engine-side can mint them) —
+  no engine recipe was added beyond the existing key-uniqueness
+  contract on `SyncSpec::new`.
+
+Tests (`widgets/feed_sync_with_tests.rs`, child module of the sync
+suite sharing its rig):
+- `fold_shaped_source_syncs_and_stats_only_writes_render_nothing` —
+  the 0282 evidence shape: items one field beside stats under ONE
+  signal; stats-only writes leave the render counter untouched
+  (fingerprint path), appends through the fold stay O(1), fingerprint
+  bumps update in place.
+- `focus_switched_nested_source_rebuilds_on_focus_and_stays_fast_within`
+  — two-signal projection: focus switch rebuilds to the other convo,
+  background writes to the unfocused convo render nothing, the focused
+  convo keeps the fast path on both sides of the switch.
+- `self_heal_still_fires_through_the_borrow_door` — a manual `push`
+  between drains is detected and healed by the next fold write; fast
+  paths resume after the heal.
+
+Docs: `docs/api.md` feed-sync section (one-line `sync_with` note),
+CHANGELOG under `[Unreleased]`. Gates: whole-tree tests green, clippy
+clean, semver-additive vs 0.2.6 (new method only).

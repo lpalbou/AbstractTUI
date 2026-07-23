@@ -55,6 +55,7 @@ pub(super) fn mount_view(
                     focusable: el.focusable,
                     focus_trap: el.focus_trap,
                     focus_memory: el.focus_memory,
+                    probe_when_culled: el.probe_when_culled,
                     access: el.access.clone(),
                     payload: InstPayload::Element {
                         draw: el.draw.map(|d| Rc::new(RefCell::new(d))),
@@ -129,6 +130,7 @@ pub(super) fn mount_view(
                 focusable: false,
                 focus_trap: false,
                 focus_memory: false,
+                probe_when_culled: false,
                 access: Default::default(),
                 payload: InstPayload::Text { content },
             }));
@@ -146,6 +148,7 @@ pub(super) fn mount_view(
                     focusable: false,
                     focus_trap: false,
                     focus_memory: false,
+                    probe_when_culled: false,
                     access: Default::default(),
                     payload: InstPayload::Dyn,
                 }));

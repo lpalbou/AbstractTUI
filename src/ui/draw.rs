@@ -73,8 +73,11 @@ impl UiTree {
             // Skip subtrees fully outside the clip. Absolute children can
             // escape their parent's rect; they re-enter via their own
             // geometry damage when they move (documented conservative
-            // skip; a clipping ancestor bounds them anyway).
-            if !rect.intersects(clip) && !rect.is_empty() {
+            // skip; a clipping ancestor bounds them anyway). Exception:
+            // a `probe_when_culled` node keeps its OWN draw (measurement
+            // readback must not starve when the content scrolls fully
+            // out — first-app/0281); its children still cull below.
+            if !rect.intersects(clip) && !rect.is_empty() && !inst.probe_when_culled {
                 return;
             }
             let paint = match &inst.payload {
