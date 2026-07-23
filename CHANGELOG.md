@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.15] - 2026-07-24
+
+### Fixed
+
+- ui: the FUSION class (gateway-console field incident 2026-07-24) —
+  a node crushed to ZERO AREA by flex overflow pressure no longer runs
+  its draw closure with the degenerate rect. Empty rects never
+  intersect anything, so they fell through the paint cull and a
+  hand-rolled closure that clips on one axis only (a title bar
+  truncating horizontally, then painting "its" row) smeared that row
+  onto whichever sibling owned the y — two texts fused on one row.
+  Collapse is now CLEAN ABSENCE: the node's own paint skips, its
+  children still walk (their rects are truthful — absolute children
+  and main-axis-min flow children of an empty parent can be non-empty
+  and still paint), the zero-collapse startup notice still names the
+  crush (it rides the solver, not the draw), and rects crossing the
+  empty threshold in either direction repaint correctly (fresh-paint-
+  oracle pinned). `probe_when_culled` measurement probes are exempt:
+  a scroll extent reading zero IS the reading the offset repair
+  depends on (first-app/0281).
+- app: `Modal` re-clamps on terminal resize (the Drawer contract,
+  extended): the panel re-solves against the fresh viewport from the
+  same size request — re-centering, clamping inside the new bounds,
+  and recovering its requested size when room returns. Before this,
+  at-open bounds were kept forever and a shrink could park a
+  focus-trapped modal ENTIRELY off-screen (an invisible panel owning
+  every key reads as a locked app).
+
+### Added
+
+- tests: the wave-10 size/ratio adversarial sweep
+  (`tests/wave_size_sweep.rs` + parts) — heavy-fixture scenes driven
+  through the real `Driver`/`CaptureTerm` across
+  {80x24, 100x24, 60x16, 200x20, 60x50, 40x12}: chrome survival under
+  content over-demand (pinned, unpinned, Scroll-absorbed), PageHost
+  tab-bar windowing at 60/40 columns (goldens), oversized modals at
+  open and across resizes, drawer extent clamps at small widths, live
+  resize ladders with chrome+PageHost+drawer+modal all open compared
+  cell-for-cell against fresh-paint oracles and the composed-frame
+  screenshot, and CJK/emoji truncation walked for wide-pair soundness
+  at glyph-splitting widths. Findings + the engine-guarantees vs
+  app-recipes table: `reviews/wave10/size-ratio-sweep.md`.
+- docs: `api.md` layout section gains "Small terminals & content
+  pressure" — the engine's any-size guarantees and the two app-side
+  recipes (`shrink(0.0)` pins on incompressible chrome; render
+  `use_startup_notices` somewhere visible).
+
 ## [0.2.14] - 2026-07-24
 
 ### Added
@@ -1248,6 +1295,7 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[0.2.15]: https://github.com/lpalbou/abstracttui/compare/v0.2.14...v0.2.15
 [0.2.14]: https://github.com/lpalbou/abstracttui/compare/v0.2.13...v0.2.14
 [0.2.13]: https://github.com/lpalbou/abstracttui/compare/v0.2.12...v0.2.13
 [0.2.12]: https://github.com/lpalbou/abstracttui/compare/v0.2.11...v0.2.12

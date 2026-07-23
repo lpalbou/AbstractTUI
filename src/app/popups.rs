@@ -19,7 +19,7 @@ use crate::anim::Easing;
 use crate::base::{Point, Rect, Size};
 use crate::layout::{Dimension, Style as LayoutStyle};
 use crate::reactive::{after, animate, Scope};
-use crate::render::Style;
+use crate::render::{Cell, Style};
 use crate::theme::TokenId;
 use crate::ui::{Element, View};
 
@@ -42,6 +42,11 @@ pub const TOAST_Z: i32 = 2000;
 /// cycles the panel's focusables). Close explicitly — dropping the
 /// handle does NOT close (handles are `Clone`; lifetime is the app's
 /// decision, not drop order's).
+///
+/// Geometry: the panel clamps inside the viewport at open and
+/// RE-CLAMPS on every terminal resize (the Drawer contract) — a panel
+/// requested larger than the screen centers clamped, and recovers its
+/// requested size when room returns.
 pub struct Modal {
     layer: LayerHandle,
     scope: Scope,
@@ -68,12 +73,7 @@ impl Modal {
         build: impl FnOnce(Scope) -> View,
     ) -> Modal {
         let scope = cx.child();
-        let bounds = Rect::new(
-            ((viewport.w - size.w) / 2).max(0),
-            ((viewport.h - size.h) / 2).max(0),
-            size.w.min(viewport.w),
-            size.h.min(viewport.h),
-        );
+        let bounds = modal_bounds(viewport, size);
         let tokens = &current_theme().tokens;
         let ground = tokens.get(TokenId::Overlay);
         let ink = tokens.get(TokenId::Text);
@@ -94,6 +94,43 @@ impl Modal {
             .child(content)
             .build();
         let layer = overlays.layer_tree(MODAL_Z, bounds, true, scope, panel);
+        // Resize re-clamps (the Drawer contract, extended to modals —
+        // size/ratio sweep, wave 10): the panel re-solves against the
+        // fresh viewport from the SAME size request, re-centering and
+        // clamping inside the new bounds. Before this, at-open bounds
+        // were kept forever and a shrink could park a focus-trapped
+        // panel entirely OFF-SCREEN — an invisible modal owning every
+        // key reads as a locked app. The effect lives on the modal's
+        // scope (dies at close); a bare rig with no published viewport
+        // (Size::ZERO) keeps its at-open bounds.
+        let vp_sig = super::viewport::use_viewport(scope);
+        let panel_layer = layer.clone();
+        let ov = overlays.clone();
+        scope.effect_labeled("modal-reclamp", move || {
+            let vp = vp_sig.get(); // tracked: re-runs per resize
+            if vp.w <= 0 || vp.h <= 0 {
+                return; // transient/unpublished: keep the last real bounds
+            }
+            let want = modal_bounds(vp, size);
+            let Some(old) = panel_layer.bounds() else {
+                return; // layer removed mid-flush
+            };
+            if want == old {
+                return;
+            }
+            if want.size() != old.size() {
+                panel_layer.with_surface(|s| s.resize(want.size(), Cell::EMPTY));
+                if let Some(mut tree) = panel_layer.tree() {
+                    tree.set_viewport(want.size());
+                }
+            }
+            panel_layer.set_offset(want.origin());
+            panel_layer.damage();
+            // A shrink/move vacates part of the old footprint; the
+            // panel's own damage covers only the new bounds, so name
+            // the old rect for the compositor (the drawer F1 rule).
+            ov.damage_root_under_rect(old);
+        });
         Modal { layer, scope }
     }
 
@@ -119,6 +156,18 @@ impl Modal {
             scope: self.scope,
         }
     }
+}
+
+/// Panel bounds for a `size` request in `viewport`: clamped to fit,
+/// centered (top-left biased once the request exceeds an axis). Used
+/// at open AND by the resize re-clamp, so the two can never disagree.
+fn modal_bounds(viewport: Size, size: Size) -> Rect {
+    Rect::new(
+        ((viewport.w - size.w) / 2).max(0),
+        ((viewport.h - size.h) / 2).max(0),
+        size.w.min(viewport.w),
+        size.h.min(viewport.h),
+    )
 }
 
 /// The 0240 floor: a declared `Cells` extent with no explicit minimum

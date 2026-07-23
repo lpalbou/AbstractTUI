@@ -159,6 +159,22 @@ let form = LayoutStyle::default().grid(
 );
 ```
 
+### Small terminals & content pressure
+
+The engine guarantees, at any viewport size and any content volume: a
+child flex crushes to zero area is CLEAN ABSENCE — its draw closure
+does not run (so a hand-rolled bar can never smear onto a sibling's
+row), the collapse is named by a startup notice in debug builds, and
+the row repaints correctly when the child returns. `Modal` and `Drawer`
+clamp inside the viewport at open AND re-clamp on every resize; tab
+strips window with overflow indicators; wide glyphs never tear at a
+truncation or clip edge. Two recipes remain the app's job: give chrome
+you want incompressible `shrink(0.0)` (or wrap the oversized middle in
+a `Scroll`, whose default `basis(0)` exerts no pressure), and render
+`use_startup_notices` somewhere visible — the engine names every
+zero-collapse into that lane, and a notice nobody renders is a
+debugging session someone else pays for.
+
 ## widgets — the built-in library
 
 Every widget is built from the same public `ui` + `layout` + `theme` surface

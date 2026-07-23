@@ -80,10 +80,33 @@ impl UiTree {
             if !rect.intersects(clip) && !rect.is_empty() && !inst.probe_when_culled {
                 return;
             }
-            let paint = match &inst.payload {
-                InstPayload::Element { draw: Some(d), .. } => Paint::Draw(d.clone(), rect),
-                InstPayload::Text { content } => Paint::Text(content.clone(), rect, core.text_fg),
-                _ => Paint::None,
+            // A zero-AREA node paints nothing (the fusion class,
+            // gateway-console field incident 2026-07-24): empty rects
+            // never intersect anything, so they fell through the cull
+            // above and their draw closures ran with degenerate rects
+            // — a hand-rolled closure that clips on one axis only (a
+            // title bar truncating horizontally, then painting "its"
+            // row) smeared that row onto whichever sibling owned the
+            // y after flex crushed the bar to zero. Collapse must be
+            // CLEAN ABSENCE; the zero-collapse notice (solver-side,
+            // layout/solve.rs) names it. Same exemption as the cull:
+            // a `probe_when_culled` measurement probe must READ the
+            // collapse (a scroll extent going to zero is a reading
+            // the offset repair depends on — first-app/0281).
+            // Children still walk below: their rects are truthful and
+            // an empty parent's children can be non-empty (absolute
+            // children size independently; flow children with an
+            // explicit main-axis min hold their extent).
+            let paint = if rect.is_empty() && !inst.probe_when_culled {
+                Paint::None
+            } else {
+                match &inst.payload {
+                    InstPayload::Element { draw: Some(d), .. } => Paint::Draw(d.clone(), rect),
+                    InstPayload::Text { content } => {
+                        Paint::Text(content.clone(), rect, core.text_fg)
+                    }
+                    _ => Paint::None,
+                }
             };
             let child_clip = match core.layout.style(inst.layout) {
                 Some(style) if style.clips_children() => {
@@ -137,5 +160,54 @@ impl UiTree {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    use crate::base::{Rect, Size};
+    use crate::layout::Style as LayoutStyle;
+    use crate::reactive::create_root;
+    use crate::ui::{BufferCanvas, Element, UiTree};
+
+    /// The fusion fix at its narrowest: a zero-area node's own draw
+    /// closure never runs (a crushed bar must not smear a sibling's
+    /// row), while a `probe_when_culled` node's closure STILL runs on
+    /// an empty rect — a measurement probe must read the collapse
+    /// (scroll extents going to zero, first-app/0281).
+    #[test]
+    fn empty_rect_skips_draw_but_probes_still_read() {
+        let calls: Rc<Cell<u32>> = Rc::new(Cell::new(0));
+        let probe_rect: Rc<Cell<Option<Rect>>> = Rc::new(Cell::new(None));
+        let mut tree = UiTree::new(Size::new(10, 4));
+        let (root, ()) = create_root(|cx| {
+            let c = calls.clone();
+            let p = probe_rect.clone();
+            let plain = Element::new()
+                .style(LayoutStyle::default().w(0).h(0))
+                .draw(move |_, _| c.set(c.get() + 1));
+            let probe = Element::new()
+                .style(LayoutStyle::default().w(0).h(0))
+                .draw(move |_, rect| p.set(Some(rect)))
+                .probe_when_culled();
+            let view = Element::new()
+                .child(plain.build())
+                .child(probe.build())
+                .build();
+            tree.mount(cx, view);
+        });
+        tree.layout();
+        let mut canvas = BufferCanvas::new(Size::new(10, 4));
+        tree.draw(&mut canvas);
+        assert_eq!(calls.get(), 0, "zero-area draw closures must not run");
+        assert_eq!(
+            probe_rect.get(),
+            Some(Rect::new(0, 0, 0, 0)),
+            "a probe reads its empty rect (the collapse IS the reading)"
+        );
+        root.dispose();
     }
 }

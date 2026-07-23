@@ -4300,7 +4300,7 @@ timeouts, and no sleeps.
 ===== PACKAGE FACTS =====
 
 - Crate: `abstracttui` 0.2.13 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.2.14 (2026-07-24).
+  (0.1.0); current release 0.2.15 (2026-07-24).
 - Extension family (sibling crates in the repo workspace, installed only when needed;
   ADR-0004 — public core API only, same MIT license and dependency discipline):
   - `abstracttui-graph` 0.1.0 — graph auto-layout (`GraphDesc -> Layout`: layered /
