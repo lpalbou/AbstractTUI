@@ -39,8 +39,11 @@ fn ensure_examples_built() -> bool {
     static BUILD: Once = Once::new();
     static OK: AtomicBool = AtomicBool::new(false);
     BUILD.call_once(|| {
+        // --workspace: the extension-family examples (network, workflow,
+        // mermaid) land in the same target/debug/examples dir, so the
+        // smoke covers the whole repo's example surface (wave 11).
         let ok = std::process::Command::new(env!("CARGO"))
-            .args(["build", "--examples"])
+            .args(["build", "--workspace", "--examples"])
             .status()
             .map(|s| s.success())
             .unwrap_or(false);
@@ -539,4 +542,148 @@ fn live_transcript() {
         Duration::from_secs(12),
     );
     assert_clean("transcript", &r);
+}
+
+// ---------------------------------------------------------------------------
+// Wave-11 gap fill (CODE): every example runs under the referee — the
+// cases below cover the examples the battery had not yet adopted
+// (drawers/shell = 0.2.12, screenshot = 0.2.14, feed/gallery/decide/
+// caps, and the extension-family examples via the --workspace build).
+// Scripts stay SHORT and end in a state where `q` quits: fixed key
+// pacing desyncs on loaded machines, and a desynced long script is a
+// flake, not a finding.
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_feed() {
+    // Toggle follow-tail once, then quit.
+    let r = smoke(
+        "feed",
+        Duration::from_millis(1500),
+        &[b" ", b"q"],
+        Duration::from_secs(8),
+    );
+    assert_clean("feed", &r);
+}
+
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_gallery() {
+    // One theme step, then quit.
+    let r = smoke(
+        "gallery",
+        Duration::from_millis(1500),
+        &[b"t", b"q"],
+        Duration::from_secs(8),
+    );
+    assert_clean("gallery", &r);
+}
+
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_decide() {
+    // Open the confirm prompt (gate 1 is dismissable(false): Esc is a
+    // deliberate no-op — its options ARE the exits), resolve it with
+    // the `k` option key ("Keep my copies"), quit.
+    let r = smoke(
+        "decide",
+        Duration::from_millis(1500),
+        &[b"1", b"k", b"q"],
+        Duration::from_secs(8),
+    );
+    assert_clean("decide", &r);
+}
+
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_drawers() {
+    // Open the inspector drawer (modal: keys route to the panel),
+    // close it with Esc, quit from the restored main surface.
+    let r = smoke(
+        "drawers",
+        Duration::from_millis(1500),
+        &[b"i", b"\x1b", b"q"],
+        Duration::from_secs(8),
+    );
+    assert_clean("drawers", &r);
+}
+
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_shell() {
+    // One container chord page switch (Ctrl+PgDn), then quit — the
+    // PageHost never consumes plain `q`, so the app shortcut fires.
+    let r = smoke(
+        "shell",
+        Duration::from_millis(1500),
+        &[b"\x1b[6;5~", b"q"],
+        Duration::from_secs(8),
+    );
+    assert_clean("shell", &r);
+}
+
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_screenshot() {
+    // Capture once (s writes text/ansi/svg artifacts), then quit.
+    let r = smoke(
+        "screenshot",
+        Duration::from_millis(1500),
+        &[b"s", b"q"],
+        Duration::from_secs(8),
+    );
+    assert_clean("screenshot", &r);
+}
+
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_caps() {
+    // The capability report screen under a real tty (probe runs).
+    let r = smoke(
+        "caps",
+        Duration::from_millis(1500),
+        &[b"q"],
+        Duration::from_secs(8),
+    );
+    assert_clean("caps", &r);
+}
+
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_graph_workflow() {
+    // Extension family: select the first card (Enter), then quit.
+    let r = smoke(
+        "workflow",
+        Duration::from_millis(1500),
+        &[b"\r", b"q"],
+        Duration::from_secs(8),
+    );
+    assert_clean("workflow", &r);
+}
+
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_graph_network() {
+    // Extension family: select, one spatial move, quit.
+    let r = smoke(
+        "network",
+        Duration::from_millis(1500),
+        &[b"\r", b"\x1b[C", b"q"],
+        Duration::from_secs(8),
+    );
+    assert_clean("network", &r);
+}
+
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_mermaid() {
+    // Extension family: step through two diagrams, quit.
+    let r = smoke(
+        "mermaid",
+        Duration::from_millis(1500),
+        &[b"l", b"l", b"q"],
+        Duration::from_secs(8),
+    );
+    assert_clean("mermaid", &r);
 }

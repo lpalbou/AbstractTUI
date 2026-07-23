@@ -1,30 +1,30 @@
 
    deploy    ack alert    disabled
 
- ╭───────────────────╮   ╭───────────────────╮   ╭───────────────────╮
- │deploys            │   │alerts             │   │uptime d           │
- │12                 │   │2                  │   │97                 │
- │▲                  │   │▼                  │   │→                  │
- ╰───────────────────╯   ╰───────────────────╯   ╰───────────────────╯
+ ╭─────────────────────────────╮   ╭────────────────────────────╮   ╭────────────────────────────╮
+ │                             │   │                            │   │                            │
+ │▲                            │   │▼                           │   │→                           │
+ ╰─────────────────────────────╯   ╰────────────────────────────╯   ╰────────────────────────────╯
 
 
- ┌ settings ─────────────────────────────────────────────────────────┐
- │name            ▐orion                         ▌                   │
- │                                                                   │
- │notifications   [x] page the on-call                               │
- │                                                                   │
- │channel         (•) stable                                         │
- │                ( ) beta                                           │
- │                                                                   │
- │channel select  ▐stable                   ▾▌                       │
- │                                                                   │
- │theme           ▐Dark (Abstract)          ▾▌                       │
- │                                                                   │
- │features        ▐enable features…         ▾▌                       │
- │                                                                   │
- │→ orion · notifications on · stable channel · 0 features           │
- └───────────────────────────────────────────────────────────────────┘
+ ┌ settings ─────────────────────────────────────────────────────────────────────────────────────┐
+ │                                                                                               │
+ │                                                                                               │
+ │channel         (•) stable                                                                     │
+ │                ( ) beta                                                                       │
+ │                                                                                               │
+ │channel select  ▐stable                   ▾▌                                                   │
+ │                                                                                               │
+ │theme           ▐Dark (Abstract)          ▾▌                                                   │
+ │                                                                                               │
+ │features        ▐enable features…         ▾▌                                                   │
+ │                                                                                               │
+ │→ orion · notifications on · stable channel · 0 features                                       │
+ └───────────────────────────────────────────────────────────────────────────────────────────────┘
 
 
+  toggle 3rd    ▾ welcome                    ▸ build log      14 lines    ▸ external
+                hello — this card starts
+                open
  tab focus · enter/space activate · click cards · ctrl+t theme · q quit
 

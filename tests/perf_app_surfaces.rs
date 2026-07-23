@@ -98,7 +98,7 @@ fn median_of(mut v: Vec<usize>) -> usize {
 /// emission proportional to the rows that changed — never the
 /// document, never the screen.
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_feed_streaming_token_frame_90x30() {
     let size = Size::new(90, 30);
     let mut term = CaptureTerm::new(size);
@@ -183,7 +183,7 @@ fn perf_feed_streaming_token_frame_90x30() {
 /// both halves are asserted against the full paint: opening damages
 /// the popup rect, closing repaints only what it vacated.
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_select_popup_open_close_100x30() {
     let size = Size::new(100, 30);
     let mut term = CaptureTerm::new(size);
@@ -264,7 +264,7 @@ fn perf_select_popup_open_close_100x30() {
 /// diff emits the delta. Time is the budget; bytes prove the diff only
 /// pays for the rows that actually changed.
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_selection_drag_full_screen_200x60() {
     let size = Size::new(200, 60);
     let mut term = CaptureTerm::new(size);
@@ -318,7 +318,7 @@ fn perf_selection_drag_full_screen_200x60() {
 /// keystroke (insert or backspace) that re-filters the candidates and
 /// re-renders the anchored panel. Charter: keystroke -> frame < 3 ms.
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_textarea_keystroke_with_completion_open_90x30() {
     let size = Size::new(90, 30);
     let mut term = CaptureTerm::new(size);
@@ -394,7 +394,7 @@ fn perf_textarea_keystroke_with_completion_open_90x30() {
 /// pane re-tints its 38 visible lines per frame — the honest cost of
 /// app-managed scrolling — and must stay comfortably interactive.
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_codeview_diff_scroll_100x40() {
     let mut patch =
         String::from("diff --git a/render.rs b/render.rs\n@@ -1,200 +1,200 @@ fn frame()\n");
@@ -468,7 +468,7 @@ fn perf_codeview_diff_scroll_100x40() {
 // ---------------------------------------------------------------------------
 
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_feed_scroll_with_parked_protocol_image_90x30() {
     let size = Size::new(90, 30);
     let mut term = CaptureTerm::new(size);
@@ -602,7 +602,7 @@ fn perf_feed_scroll_with_parked_protocol_image_90x30() {
 /// millisecond drift).
 #[cfg(unix)]
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_startup_time_to_first_frame() {
     use abstracttui::testing::pty::spawn_in_pty;
     use abstracttui::testing::VtScreen;

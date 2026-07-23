@@ -21,6 +21,8 @@
 //!
 //! Keys: q quits.
 //!
+//! Docs: docs/graphics-and-3d.md § "Verifying image support on your terminal".
+//!
 //! OWNER: MEDIA.
 
 use abstracttui::prelude::*;

@@ -72,6 +72,10 @@ impl AudioScope {
 
     /// Build the reactive view: a `dyn_view` tracking the window signal
     /// and re-typesetting the braille trace only when data arrives.
+    ///
+    /// There is deliberately no `element(&tokens)` form: the scope is
+    /// signal-driven and theme-reactive by construction — tokens
+    /// resolve TRACKED inside its own dyn region (the Meter rule).
     pub fn view(self, cx: Scope) -> View {
         let window = self.window;
         let slot = self.slot;

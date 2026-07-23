@@ -36,6 +36,8 @@
 //!
 //! Try: `cargo run --example transcript`
 //!
+//! Docs: docs/api.md § "Feed — streaming transcripts"; docs/live-data.md.
+//!
 //! OWNER: CONTENT (composer slice: REACT, backlog 0120).
 
 use std::cell::Cell;

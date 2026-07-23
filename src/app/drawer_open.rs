@@ -155,10 +155,24 @@ pub(super) fn open_now(inner: &Rc<RefCell<Inner>>) {
             }
             closing.set_if_changed(false);
             progress.set(1.0);
-            // A passive drawer may have taken focus during the closing
-            // flight; a modal heading open owns the keys again (REVIEW
-            // wave 8 — see blur_passive_drawers).
-            if inner.borrow().cfg.focus == DrawerFocus::Modal {
+            // Re-arm what `begin_close` released (wave 11): the modal
+            // flag comes back and initial focus is re-established (the
+            // 0230 from-frame-one rule), so the reopened panel owns the
+            // keyboard again. A passive drawer reopening stays
+            // unfocused until clicked into, exactly like a fresh open.
+            let (panel, modal, overlays) = {
+                let b = inner.borrow();
+                (
+                    b.mount.as_ref().map(|m| m.panel.clone()),
+                    b.cfg.focus == DrawerFocus::Modal,
+                    b.overlays.clone(),
+                )
+            };
+            if let (Some(panel), true) = (panel, modal) {
+                overlays.set_tree_modal(&panel, true);
+                if let Some(mut tree) = panel.tree() {
+                    tree.focus_init();
+                }
                 blur_passive_drawers(inner);
             }
         }
@@ -303,12 +317,53 @@ pub(super) fn begin_close(inner: &Rc<RefCell<Inner>>, reason: DrawerCloseReason)
             b.desired_open = false;
             b.pending_reason = Some(reason);
             let m = b.mount.as_ref().expect("checked above");
-            Some((m.progress, m.closing, b.bound))
+            Some((
+                m.progress,
+                m.closing,
+                b.bound,
+                m.panel.clone(),
+                b.overlays.clone(),
+            ))
         }
     };
-    let Some((progress, closing, bound)) = plan else {
+    let Some((progress, closing, bound, panel, overlays)) = plan else {
         return;
     };
+    // Release the input trap the INSTANT the close begins (wave 11):
+    // the exit slide is cosmetics — a key pressed during the ~160ms
+    // flight belongs to the APP, not to a dying panel (the engine's
+    // own `Modal` closes instantly and never had this window; a fast
+    // Esc-then-shortcut sequence silently lost the shortcut here,
+    // found live by the pty smoke's `i`, Esc, `q` script). Two halves:
+    // the modal flag flips NOW (store bookkeeping — input dispatch
+    // snapshots targets per event, so the next event routes free); the
+    // focus blur DEFERS one turn on a one-shot FRAME TASK, because Esc
+    // inside the panel reaches here DURING that very tree's dispatch
+    // and a synchronous `set_focus` would re-borrow it (live RefCell
+    // panic). A frame task — not `after(ZERO)` — because it runs at
+    // the NEXT turn's phase U unconditionally, before input, on any
+    // clock (a timer deadline compares clocks; under an injected clock
+    // lagging real time it could defer the blur past the whole test —
+    // the arm-coherence flake class). The closure guards on
+    // `desired_open`: a reopen reversing this flight before it runs
+    // re-arms the trap (see `open_now`), and the blur must not undo it.
+    overlays.set_tree_modal(&panel, false);
+    {
+        let weak = Rc::downgrade(inner);
+        let mut blur = Some(panel.clone());
+        crate::reactive::register_frame_task(move |_now| {
+            let panel = blur.take();
+            if let (Some(inner), Some(panel)) = (weak.upgrade(), panel) {
+                if !inner.borrow().desired_open {
+                    if let Some(mut tree) = panel.tree() {
+                        tree.set_focus(None);
+                    }
+                }
+            }
+            false // one-shot
+        });
+        crate::reactive::request_frame();
+    }
     if let Some(sig) = bound {
         sig.set_if_changed(false);
     }

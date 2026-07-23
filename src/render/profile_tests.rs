@@ -27,7 +27,7 @@ fn median_us(samples: &mut [f64]) -> f64 {
 /// One measured pass per phase, isolated by re-running the pipeline up
 /// to the phase under measurement each iteration.
 #[test]
-#[ignore]
+#[ignore = "perf profile: report-only, run explicitly in release with --nocapture"]
 fn profile_shader_pipeline_phases_200x60() {
     let size = Size::new(200, 60);
     let caps = PresentCaps::FULL;

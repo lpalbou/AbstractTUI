@@ -25,6 +25,8 @@
 //! Keys: Tab focus · Enter/Space activate · type in the field ·
 //! Ctrl+T theme · q quit.
 //!
+//! Docs: docs/api.md § "ui — elements, views, composition" and § "Disclosure — the fold/unfold card".
+//!
 //! OWNER: DESIGN.
 
 mod common;

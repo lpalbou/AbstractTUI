@@ -41,7 +41,8 @@ through ordinary reactivity.*
 - **Widgets + layout** — buttons, text inputs, a multiline composer
   (`TextArea` with history and completion dropdowns), selects (`Select` /
   `Combobox` / `MultiSelect` over anchored popups that layer above modals),
-  lists and sortable tables with distinct selection and activation events,
+  lists and sortable tables with distinct selection and activation events
+  (single click selects; Enter or double-click activates),
   tabs, checkboxes, radio groups, scroll regions, panels, badges, progress
   bars, spinners, modals, toasts, tooltips — plus the app-shell pair:
   `PageHost` (full pages behind one themed tab bar — container-reserved
@@ -112,11 +113,10 @@ through ordinary reactivity.*
 
 ## Your first app
 
-Sixteen lines, one import:
+Fifteen lines, one import:
 
 ```rust
 use abstracttui::prelude::*;
-use abstracttui::widgets::Button;
 
 fn main() -> abstracttui::base::Result<()> {
     App::simple(|cx| {
@@ -166,7 +166,8 @@ cd abstracttui
 cargo run --example dashboard
 ```
 
-Twenty-one runnable examples live in [examples/](examples/README.md), and every
+Twenty-two runnable examples live in [examples/](examples/README.md) — ordered
+there as a learning path — plus three more in the extension crates, and every
 one exits cleanly with a notice when no interactive terminal is present, so they
 are safe to run anywhere. Start with these six:
 

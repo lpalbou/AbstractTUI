@@ -73,8 +73,9 @@ scale. Measured on a dev machine (unoptimized profile): 500 nodes /
 optional kind-tinted left accent, a reactive badge slot), edges as
 sub-cell canvas strokes (smoothed beziers through the waypoints,
 arrowheads, dotted/thick styles from `EdgeDesc::style`, cycle-broken
-edges dotted in their own ink), the fallback label as a non-scrolling
-notice line, and pan via `Scroll`.
+edges dotted in their own ink — drawn through core's public
+[canvas layer](api.md#canvas--canvas--vector-strokes)), the fallback
+label as a non-scrolling notice line, and pan via `Scroll`.
 
 ```rust
 use abstracttui::prelude::*;

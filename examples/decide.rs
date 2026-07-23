@@ -25,6 +25,8 @@
 //!
 //! Keys: 1/2/3 open gates · Ctrl+T theme · q quit.
 //!
+//! Docs: docs/api.md § "app::ChoicePrompt — the modal decision gate".
+//!
 //! OWNER: CHOICE (0515).
 
 use abstracttui::prelude::*;

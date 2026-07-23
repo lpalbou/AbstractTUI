@@ -423,7 +423,7 @@ fn foreign_push_of_a_future_source_key_heals_to_source_order() {
 mod sync_with;
 
 #[test]
-#[ignore]
+#[ignore = "perf: measured evidence, run explicitly in release (--ignored)"]
 fn perf_sync_burst_1k_into_10k() {
     let size = Size::new(40, 12);
     let m = crate::testing::time_median("sync burst 1k into 10k", 1, 5, 1, |_| {

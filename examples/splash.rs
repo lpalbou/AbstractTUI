@@ -12,6 +12,8 @@
 //!
 //! Try: `ABSTRACTTUI_THEME=catppuccin-mocha cargo run --example splash`
 //!
+//! Docs: docs/graphics-and-3d.md (the boot splash).
+//!
 //! OWNER: DESIGN.
 
 fn main() {

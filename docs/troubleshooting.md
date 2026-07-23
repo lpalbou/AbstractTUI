@@ -142,6 +142,62 @@ grid of every TUI. Keep the terminal's default width configuration, and
 prefer unambiguous glyphs (plain ASCII, box drawing, block elements) in
 structural chrome.
 
+## A row vanishes (or content overlaps) on a small terminal
+
+**Cause**: flex overflow pressure crushed a node to zero area — content
+demanded more rows/columns than the viewport has, and something had to
+give. The engine's guarantees at any size (0.2.15): a zero-area node is
+CLEAN ABSENCE — its draw closure never runs, so it can never smear onto a
+sibling's row; `Modal` and `Drawer` clamp into the viewport at open and
+re-clamp on every resize; tab strips window with overflow indicators; wide
+glyphs never tear at a clip edge. In debug builds every zero-collapse is
+named by a startup notice.
+
+**Fix**: two app-side recipes. Give incompressible chrome (title bars,
+button rows, status lines) an explicit `shrink(0.0)` so the oversized
+MIDDLE gives instead — or wrap that middle in a `Scroll`, whose default
+`basis(0)` exerts no pressure. And render `use_startup_notices` somewhere
+visible: the engine names every collapsed node into that lane, and a
+notice nobody renders is a debugging session someone else pays for. The
+full contract: [api.md § "Small terminals & content pressure"](api.md#small-terminals--content-pressure).
+
+## Double-click doesn't activate (in the app, or in a test)
+
+**Cause**: several honest ones, in likelihood order. In a `Table`, a SLOW
+second click is deliberate: activation needs a true double-click (second
+press within 400 ms, within 1 cell, on the already-selected row) —
+re-clicking a row to focus its pane must never open its editor. A second
+press that drifted onto a NEIGHBOR row only re-selects (fast click-walking
+is browsing, not commitment), and a wheel between clicks resets the chain
+(the content under the cell moved). In a HEADLESS TEST, a bare `ui::UiTree`
+has no time source, so every press deterministically counts 1 —
+double-click needs time to flow.
+
+**Fix**: in the app, none — Enter and Space always activate, and `List`'s
+click-on-selected gesture is timing-free. In tests, drive through the real
+`Driver` (it publishes its `set_clock`-injectable clock as the ambient
+event time each turn, so one injected clock scripts animations AND
+double-click timing), or opt a bare tree in with
+`ui::set_event_time(Some(t))`. Custom input paths outside tree dispatch
+embed their own `ui::ClickChain`. The full convention:
+[api.md § "Double-click"](api.md#double-click).
+
+## My screenshot shows a labeled veil where an image should be
+
+**Cause**: honesty, not loss. Cells under a kitty/iTerm2/sixel placement
+are not the picture — the terminal shows pixels the cell plane cannot see,
+so `Driver::screenshot()` stamps those placements into
+`Screenshot::pixel_regions()` and the SVG exporter draws a labeled
+placeholder veil instead of pretending. Text and ANSI exports stay
+cell-plane-verbatim; VT-model captures (headless tests) carry no regions
+at all — the rig counts protocol payloads without modeling their pixels.
+
+**Fix**: if the still must contain the picture, render the image through
+the unicode-mosaic path for the capture — mosaic images ARE cells and
+capture as themselves. Otherwise accept the veil: it marks exactly the
+region the terminal owned. See
+[api.md § "Screenshots & captures"](api.md#screenshots--captures).
+
 ## I can't select text with the mouse
 
 **Cause**: mouse capture. The engine enables SGR mouse reporting for

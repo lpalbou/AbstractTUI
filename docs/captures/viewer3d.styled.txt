@@ -1,31 +1,366 @@
-size=100x30 cursor=0,0 modes=[7,25,1049]
+size=100x30 cursor=0,29 modes=[7,25,1049]
   0|                                                                                                    |
-  1|                                                                                                    |
-  2|                                                                                                    |
-  3|                                                                                                    |
-  4|                                                                                                    |
-  5|                                                                                                    |
-  6|                                                                                                    |
-  7|                                                                                                    |
-  8|                                                                                                    |
-  9|                                                                                                    |
- 10|                                                                                                    |
- 11|                                                                                                    |
- 12|                                                                                                    |
- 13|                                                                                                    |
- 14|                                                                                                    |
- 15|                                                                                                    |
- 16|                                                                                                    |
- 17|                                                                                                    |
- 18|                                                                                                    |
- 19|                                                                                                    |
- 20|                                                                                                    |
- 21|                                                                                                    |
- 22|                                                                                                    |
- 23|                                                                                                    |
- 24|                                                                                                    |
- 25|                                                                                                    |
- 26|                                                                                                    |
- 27|                                                                                                    |
+  1| ┌ helmet.glb — 15452 triangles ──────────────────────────────────────────────────────────────────┐ |
+  2| │                                                                                                │ |
+  3| │                                                                                                │ |
+  4| │                                                                                                │ |
+  5| │                                                                                                │ |
+  6| │                                                                                                │ |
+  7| │                                                                                                │ |
+  8| │                                              ▀▀▀▀▀▀▀▀                                          │ |
+  9| │                                          ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                                       │ |
+ 10| │                                        ▀▀▀▀▀▀▀ ▀▀▀▀▀▀▀▀▀▀                                      │ |
+ 11| │                                        ▀▀▀▀▀▀▀▀▀▀ ▀▀▀▀▀▀▀                                      │ |
+ 12| │                                        ▀▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀                                     │ |
+ 13| │                                       ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀ ▀▀                                    │ |
+ 14| │                                       ▀▀▀▀▀▀▀ ▀▀▀▀▀▀▀▀▀▀▀▀▀                                    │ |
+ 15| │                                       ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                                      │ |
+ 16| │                                        ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀                                      │ |
+ 17| │                                       ▀▀▀▀▀▀▀▀▀▀▀▀ ▀▀▀                                         │ |
+ 18| │                                        ▀▀▀▀▀▀  ▀ ▀                                             │ |
+ 19| │                                       ▀▀▀▀▀▀                                                   │ |
+ 20| │                                                                                                │ |
+ 21| │                                                                                                │ |
+ 22| │                                                                                                │ |
+ 23| │                                                                                                │ |
+ 24| │                                                                                                │ |
+ 25| │ halfblock  ·  0 fps  ·  zoom 1.00x  ·  light 52°  ·  spinning                                  │ |
+ 26| └────────────────────────────────────────────────────────────────────────────────────────────────┘ |
+ 27| drag orbit · wheel zoom · space spin · 1-4 mode · l/L light · r reset · t theme · q quit           |
  28|                                                                                                    |
  29|                                                                                                    |
+styles:
+  0:0..100 fg=#eeeeee bg=#1a1a2e
+  1:0..1 fg=#eeeeee bg=#1a1a2e
+  1:1..2 fg=#3c3c4d bg=#1a1a2e
+  1:2..32 fg=#aaaaaa bg=#1a1a2e
+  1:32..99 fg=#3c3c4d bg=#1a1a2e
+  1:99..100 fg=#eeeeee bg=#1a1a2e
+  2:0..1 fg=#eeeeee bg=#1a1a2e
+  2:1..2 fg=#3c3c4d bg=#1a1a2e
+  2:2..98 fg=#1a1a2e bg=#1a1a2e
+  2:98..99 fg=#3c3c4d bg=#1a1a2e
+  2:99..100 fg=#eeeeee bg=#1a1a2e
+  3:0..1 fg=#eeeeee bg=#1a1a2e
+  3:1..2 fg=#3c3c4d bg=#1a1a2e
+  3:2..98 fg=#1a1a2e bg=#1a1a2e
+  3:98..99 fg=#3c3c4d bg=#1a1a2e
+  3:99..100 fg=#eeeeee bg=#1a1a2e
+  4:0..1 fg=#eeeeee bg=#1a1a2e
+  4:1..2 fg=#3c3c4d bg=#1a1a2e
+  4:2..98 fg=#1a1a2e bg=#1a1a2e
+  4:98..99 fg=#3c3c4d bg=#1a1a2e
+  4:99..100 fg=#eeeeee bg=#1a1a2e
+  5:0..1 fg=#eeeeee bg=#1a1a2e
+  5:1..2 fg=#3c3c4d bg=#1a1a2e
+  5:2..98 fg=#1a1a2e bg=#1a1a2e
+  5:98..99 fg=#3c3c4d bg=#1a1a2e
+  5:99..100 fg=#eeeeee bg=#1a1a2e
+  6:0..1 fg=#eeeeee bg=#1a1a2e
+  6:1..2 fg=#3c3c4d bg=#1a1a2e
+  6:2..98 fg=#1a1a2e bg=#1a1a2e
+  6:98..99 fg=#3c3c4d bg=#1a1a2e
+  6:99..100 fg=#eeeeee bg=#1a1a2e
+  7:0..1 fg=#eeeeee bg=#1a1a2e
+  7:1..2 fg=#3c3c4d bg=#1a1a2e
+  7:2..98 fg=#1a1a2e bg=#1a1a2e
+  7:98..99 fg=#3c3c4d bg=#1a1a2e
+  7:99..100 fg=#eeeeee bg=#1a1a2e
+  8:0..1 fg=#eeeeee bg=#1a1a2e
+  8:1..2 fg=#3c3c4d bg=#1a1a2e
+  8:2..48 fg=#1a1a2e bg=#1a1a2e
+  8:48..49 fg=#1a1a2e bg=#7e9ca3
+  8:49..50 fg=#1a1a2e bg=#899fa3
+  8:50..51 fg=#1a1a2e bg=#80a0a5
+  8:51..52 fg=#7a8d8e bg=#83a3aa
+  8:52..53 fg=#1a1a2e bg=#84a3ab
+  8:53..54 fg=#1a1a2e bg=#82a1a9
+  8:54..55 fg=#1a1a2e bg=#302e29
+  8:55..56 fg=#1a1a2e bg=#464949
+  8:56..98 fg=#1a1a2e bg=#1a1a2e
+  8:98..99 fg=#3c3c4d bg=#1a1a2e
+  8:99..100 fg=#eeeeee bg=#1a1a2e
+  9:0..1 fg=#eeeeee bg=#1a1a2e
+  9:1..2 fg=#3c3c4d bg=#1a1a2e
+  9:2..44 fg=#1a1a2e bg=#1a1a2e
+  9:44..45 fg=#1a1a2e bg=#ffffff
+  9:45..46 fg=#1a1a2e bg=#7c9aa1
+  9:46..47 fg=#79979d bg=#83a2a9
+  9:47..48 fg=#83a2aa bg=#86969a
+  9:48..49 fg=#93a2a6 bg=#86a6ad
+  9:49..50 fg=#85a5ac bg=#87a8ae
+  9:50..51 fg=#87a8af bg=#88a9b0
+  9:51..52 fg=#87a7af bg=#89a9b2
+  9:52..53 fg=#88a8af bg=#89a9b2
+  9:53..54 fg=#85a4ab bg=#83a4aa
+  9:54..55 fg=#5b6f73 bg=#525f60
+  9:55..56 fg=#545757 bg=#454746
+  9:56..57 fg=#aeb7ba bg=#d6e1e5
+  9:57..58 fg=#1a1a2e bg=#eaf7fc
+  9:58..59 fg=#1a1a2e bg=#c0c1c6
+  9:59..98 fg=#1a1a2e bg=#1a1a2e
+  9:98..99 fg=#3c3c4d bg=#1a1a2e
+  9:99..100 fg=#eeeeee bg=#1a1a2e
+  10:0..1 fg=#eeeeee bg=#1a1a2e
+  10:1..2 fg=#3c3c4d bg=#1a1a2e
+  10:2..42 fg=#1a1a2e bg=#1a1a2e
+  10:42..43 fg=#1a1a2e bg=#ffffff
+  10:43..44 fg=#ffffff bg=#79989d
+  10:44..45 fg=#7c9aa0 bg=#82a1a7
+  10:45..46 fg=#82a2a9 bg=#85a5ad
+  10:46..47 fg=#8ba1a7 bg=#86a6ae
+  10:47..48 fg=#87a8b0 bg=#89aab1
+  10:48..49 fg=#8aaab2 bg=#88aab0
+  10:49..50 fg=#89aab1 bg=#89aab1
+  10:50..51 fg=#88a8ae bg=#89aab1
+  10:51..52 fg=#88aab0 bg=#82a2a7
+  10:52..53 fg=#7f9da2 bg=#687776
+  10:53..54 fg=#72878a bg=#ffffff
+  10:54..55 fg=#27231b bg=#bfa3a3
+  10:55..56 fg=#f3ffff bg=#eaf0f4
+  10:56..57 fg=#f5ffff bg=#dae4e9
+  10:57..58 fg=#e8ebeb bg=#d9e4e9
+  10:58..59 fg=#dde8ee bg=#b1b1b6
+  10:59..60 fg=#1a1a2e bg=#898c8b
+  10:60..98 fg=#1a1a2e bg=#1a1a2e
+  10:98..99 fg=#3c3c4d bg=#1a1a2e
+  10:99..100 fg=#eeeeee bg=#1a1a2e
+  11:0..1 fg=#eeeeee bg=#1a1a2e
+  11:1..2 fg=#3c3c4d bg=#1a1a2e
+  11:2..42 fg=#1a1a2e bg=#1a1a2e
+  11:42..43 fg=#c8d1d4 bg=#7d9ba3
+  11:43..44 fg=#809fa7 bg=#82a1a9
+  11:44..45 fg=#86a5ae bg=#88a8b0
+  11:45..46 fg=#93a7ac bg=#89a9b2
+  11:46..47 fg=#89a9b1 bg=#8aaab3
+  11:47..48 fg=#89aab1 bg=#88a9b1
+  11:48..49 fg=#88aab1 bg=#89aab1
+  11:49..50 fg=#87a9b0 bg=#86a6ad
+  11:50..51 fg=#83a4a9 bg=#6b7e80
+  11:51..52 fg=#657574 bg=#ffffff
+  11:52..53 fg=#ffffff bg=#ffffff
+  11:53..54 fg=#807d7a bg=#ffffff
+  11:54..55 fg=#c5c9c9 bg=#ffffff
+  11:55..56 fg=#babcbb bg=#4a4644
+  11:56..57 fg=#a1a2a3 bg=#acb2b3
+  11:57..58 fg=#cfd9de bg=#d2d2d9
+  11:58..59 fg=#67655f bg=#7c7c7c
+  11:59..60 fg=#889194 bg=#1a1a2e
+  11:60..98 fg=#1a1a2e bg=#1a1a2e
+  11:98..99 fg=#3c3c4d bg=#1a1a2e
+  11:99..100 fg=#eeeeee bg=#1a1a2e
+  12:0..1 fg=#eeeeee bg=#1a1a2e
+  12:1..2 fg=#3c3c4d bg=#1a1a2e
+  12:2..42 fg=#1a1a2e bg=#1a1a2e
+  12:42..43 fg=#819fa5 bg=#85a1a7
+  12:43..44 fg=#83a2ab bg=#87a7af
+  12:44..45 fg=#89a5ab bg=#89a9b1
+  12:45..46 fg=#88a8b1 bg=#86a7b0
+  12:46..47 fg=#8aabb3 bg=#88aab1
+  12:47..48 fg=#87a7b0 bg=#87a8b1
+  12:48..49 fg=#89aab2 bg=#87a8b1
+  12:49..50 fg=#748e93 bg=#89a0a7
+  12:50..51 fg=#d7e0e4 bg=#929194
+  12:51..52 fg=#ffffff bg=#747474
+  12:52..53 fg=#24221d bg=#454240
+  12:53..54 fg=#ffffff bg=#9f9fa6
+  12:54..56 fg=#ffffff bg=#ffffff
+  12:56..57 fg=#afb7ba bg=#bdc8cc
+  12:57..58 fg=#ececf0 bg=#cfdae0
+  12:58..59 fg=#646464 bg=#767675
+  12:59..60 fg=#82827f bg=#9c9b94
+  12:60..61 fg=#1a1a2e bg=#ffffff
+  12:61..98 fg=#1a1a2e bg=#1a1a2e
+  12:98..99 fg=#3c3c4d bg=#1a1a2e
+  12:99..100 fg=#eeeeee bg=#1a1a2e
+  13:0..1 fg=#eeeeee bg=#1a1a2e
+  13:1..2 fg=#3c3c4d bg=#1a1a2e
+  13:2..41 fg=#1a1a2e bg=#1a1a2e
+  13:41..42 fg=#7a979e bg=#79959c
+  13:42..43 fg=#798f95 bg=#84a4ac
+  13:43..44 fg=#7b99a0 bg=#82a1a9
+  13:44..45 fg=#87a6af bg=#79969c
+  13:45..46 fg=#87a8b0 bg=#839da3
+  13:46..47 fg=#87a6af bg=#86a5ad
+  13:47..48 fg=#504e4f bg=#8bacb4
+  13:48..49 fg=#76929b bg=#8babb4
+  13:49..50 fg=#88a9b1 bg=#8eaab1
+  13:50..51 fg=#7f9599 bg=#ac8880
+  13:51..52 fg=#6a8289 bg=#7a959b
+  13:52..53 fg=#ececf6 bg=#f6f6ff
+  13:53..54 fg=#555250 bg=#615f5d
+  13:54..55 fg=#343431 bg=#5f5f5f
+  13:55..56 fg=#ffffff bg=#f1f1f6
+  13:56..57 fg=#c7d2d6 bg=#abb2b7
+  13:57..58 fg=#7f7f7f bg=#919191
+  13:58..59 fg=#e2e1e5 bg=#ffffff
+  13:59..60 fg=#ffffff bg=#ffffff
+  13:60..61 fg=#ffffff bg=#a6a6a5
+  13:61..62 fg=#a6a6a5 bg=#ffffff
+  13:62..98 fg=#1a1a2e bg=#1a1a2e
+  13:98..99 fg=#3c3c4d bg=#1a1a2e
+  13:99..100 fg=#eeeeee bg=#1a1a2e
+  14:0..1 fg=#eeeeee bg=#1a1a2e
+  14:1..2 fg=#3c3c4d bg=#1a1a2e
+  14:2..41 fg=#1a1a2e bg=#1a1a2e
+  14:41..42 fg=#6d8188 bg=#696867
+  14:42..43 fg=#85a4ac bg=#829da5
+  14:43..44 fg=#88a8b0 bg=#89a9b2
+  14:44..45 fg=#738e94 bg=#627a81
+  14:45..46 fg=#89a8b1 bg=#8bacb4
+  14:46..47 fg=#8bacb5 bg=#8cadb5
+  14:47..48 fg=#8bacb4 bg=#8cadb5
+  14:48..49 fg=#8babb4 bg=#8babb4
+  14:49..50 fg=#8aaab3 bg=#8aaab2
+  14:50..51 fg=#8ca5ac bg=#86a5ad
+  14:51..52 fg=#7d9da2 bg=#797878
+  14:52..53 fg=#a8a7ae bg=#bdbec2
+  14:53..54 fg=#bfbec9 bg=#c8ba93
+  14:54..55 fg=#ffffff bg=#575e63
+  14:55..56 fg=#afada8 bg=#c3c8cd
+  14:56..57 fg=#fdfdff bg=#ffffff
+  14:57..58 fg=#727273 bg=#696969
+  14:58..59 fg=#ffffff bg=#9a9a9a
+  14:59..60 fg=#ffffff bg=#b7b8b9
+  14:60..61 fg=#9f9f9f bg=#ffffff
+  14:61..62 fg=#bf9e49 bg=#1a1a2e
+  14:62..98 fg=#1a1a2e bg=#1a1a2e
+  14:98..99 fg=#3c3c4d bg=#1a1a2e
+  14:99..100 fg=#eeeeee bg=#1a1a2e
+  15:0..1 fg=#eeeeee bg=#1a1a2e
+  15:1..2 fg=#3c3c4d bg=#1a1a2e
+  15:2..41 fg=#1a1a2e bg=#1a1a2e
+  15:41..42 fg=#939496 bg=#d2d2d8
+  15:42..43 fg=#8da2a8 bg=#8fa3a8
+  15:43..44 fg=#87a7af bg=#84a4ac
+  15:44..45 fg=#3d3939 bg=#494447
+  15:45..46 fg=#8babb4 bg=#88a8b0
+  15:46..47 fg=#8bacb4 bg=#89a9b1
+  15:47..48 fg=#8babb4 bg=#88a8b0
+  15:48..49 fg=#89a9b2 bg=#aab398
+  15:49..50 fg=#8da9ac bg=#3d3c3c
+  15:50..51 fg=#adb190 bg=#2b3a42
+  15:51..52 fg=#6f673e bg=#ffffff
+  15:52..53 fg=#5c5c5c bg=#ebe8d8
+  15:53..54 fg=#9f9d94 bg=#99989e
+  15:54..55 fg=#ffffff bg=#52575a
+  15:55..56 fg=#c6cdd2 bg=#ffffff
+  15:56..57 fg=#ffffff bg=#d0d1d4
+  15:57..58 fg=#959599 bg=#1a1a2e
+  15:58..59 fg=#8c8c8c bg=#1a1a2e
+  15:59..60 fg=#19160f bg=#1c1911
+  15:60..98 fg=#1a1a2e bg=#1a1a2e
+  15:98..99 fg=#3c3c4d bg=#1a1a2e
+  15:99..100 fg=#eeeeee bg=#1a1a2e
+  16:0..1 fg=#eeeeee bg=#1a1a2e
+  16:1..2 fg=#3c3c4d bg=#1a1a2e
+  16:2..42 fg=#1a1a2e bg=#1a1a2e
+  16:42..43 fg=#7a969c bg=#8a8a8a
+  16:43..44 fg=#78949b bg=#779195
+  16:44..45 fg=#b7b8bb bg=#5f757a
+  16:45..46 fg=#84a3ab bg=#89a2a0
+  16:46..47 fg=#86a5ad bg=#a5ab89
+  16:47..48 fg=#c3bc81 bg=#a3a3a2
+  16:48..49 fg=#5f676c bg=#293943
+  16:49..50 fg=#2d3d45 bg=#625f3e
+  16:50..51 fg=#666240 bg=#867f55
+  16:51..52 fg=#53524f bg=#9a9a9a
+  16:52..53 fg=#bcb5a2 bg=#5c6266
+  16:53..54 fg=#24313a bg=#656b6e
+  16:54..55 fg=#d7e4e9 bg=#ffffff
+  16:55..56 fg=#ffffff bg=#838484
+  16:56..57 fg=#ffffff bg=#191712
+  16:57..58 fg=#25211a bg=#1b1811
+  16:58..59 fg=#1b1913 bg=#1c1913
+  16:59..60 fg=#211e16 bg=#1a1a2e
+  16:60..98 fg=#1a1a2e bg=#1a1a2e
+  16:98..99 fg=#3c3c4d bg=#1a1a2e
+  16:99..100 fg=#eeeeee bg=#1a1a2e
+  17:0..1 fg=#eeeeee bg=#1a1a2e
+  17:1..2 fg=#3c3c4d bg=#1a1a2e
+  17:2..41 fg=#1a1a2e bg=#1a1a2e
+  17:41..42 fg=#949595 bg=#1a1a2e
+  17:42..43 fg=#888887 bg=#b6b6b6
+  17:43..44 fg=#adadae bg=#d8d8d8
+  17:44..45 fg=#919191 bg=#afafaf
+  17:45..46 fg=#2e3942 bg=#6e6d6d
+  17:46..47 fg=#3b434a bg=#797578
+  17:47..48 fg=#30393d bg=#7c7a79
+  17:48..49 fg=#56543b bg=#7b7b7b
+  17:49..50 fg=#e2e2eb bg=#eaf3fa
+  17:50..51 fg=#706f70 bg=#ccd3d8
+  17:51..52 fg=#cad2d7 bg=#fbfaff
+  17:52..53 fg=#c9d4d9 bg=#fcfcff
+  17:53..54 fg=#ffffff bg=#ffffff
+  17:54..55 fg=#f5f6ff bg=#ffffff
+  17:55..56 fg=#ffffff bg=#1e1a13
+  17:56..57 fg=#0e0d07 bg=#12110d
+  17:57..98 fg=#1a1a2e bg=#1a1a2e
+  17:98..99 fg=#3c3c4d bg=#1a1a2e
+  17:99..100 fg=#eeeeee bg=#1a1a2e
+  18:0..1 fg=#eeeeee bg=#1a1a2e
+  18:1..2 fg=#3c3c4d bg=#1a1a2e
+  18:2..42 fg=#1a1a2e bg=#1a1a2e
+  18:42..43 fg=#eeeef6 bg=#f6d56a
+  18:43..44 fg=#9f9f9f bg=#dabe76
+  18:44..45 fg=#bcbcbc bg=#c2c2c2
+  18:45..46 fg=#747274 bg=#afa893
+  18:46..47 fg=#aba9a8 bg=#a4a4a4
+  18:47..48 fg=#b8b8bf bg=#888887
+  18:48..50 fg=#ffffff bg=#ffffff
+  18:50..51 fg=#ffffff bg=#c4c4c4
+  18:51..52 fg=#ffffff bg=#ffffff
+  18:52..53 fg=#27211e bg=#1a1a2e
+  18:53..98 fg=#1a1a2e bg=#1a1a2e
+  18:98..99 fg=#3c3c4d bg=#1a1a2e
+  18:99..100 fg=#eeeeee bg=#1a1a2e
+  19:0..1 fg=#eeeeee bg=#1a1a2e
+  19:1..2 fg=#3c3c4d bg=#1a1a2e
+  19:2..41 fg=#1a1a2e bg=#1a1a2e
+  19:41..42 fg=#a29564 bg=#1a1a2e
+  19:42..43 fg=#efd887 bg=#9f936a
+  19:43..44 fg=#b49c57 bg=#fce7a1
+  19:44..45 fg=#bebebe bg=#1a1a2e
+  19:45..46 fg=#969696 bg=#959595
+  19:46..47 fg=#878787 bg=#1a1a2e
+  19:47..98 fg=#1a1a2e bg=#1a1a2e
+  19:98..99 fg=#3c3c4d bg=#1a1a2e
+  19:99..100 fg=#eeeeee bg=#1a1a2e
+  20:0..1 fg=#eeeeee bg=#1a1a2e
+  20:1..2 fg=#3c3c4d bg=#1a1a2e
+  20:2..98 fg=#1a1a2e bg=#1a1a2e
+  20:98..99 fg=#3c3c4d bg=#1a1a2e
+  20:99..100 fg=#eeeeee bg=#1a1a2e
+  21:0..1 fg=#eeeeee bg=#1a1a2e
+  21:1..2 fg=#3c3c4d bg=#1a1a2e
+  21:2..98 fg=#1a1a2e bg=#1a1a2e
+  21:98..99 fg=#3c3c4d bg=#1a1a2e
+  21:99..100 fg=#eeeeee bg=#1a1a2e
+  22:0..1 fg=#eeeeee bg=#1a1a2e
+  22:1..2 fg=#3c3c4d bg=#1a1a2e
+  22:2..98 fg=#1a1a2e bg=#1a1a2e
+  22:98..99 fg=#3c3c4d bg=#1a1a2e
+  22:99..100 fg=#eeeeee bg=#1a1a2e
+  23:0..1 fg=#eeeeee bg=#1a1a2e
+  23:1..2 fg=#3c3c4d bg=#1a1a2e
+  23:2..98 fg=#1a1a2e bg=#1a1a2e
+  23:98..99 fg=#3c3c4d bg=#1a1a2e
+  23:99..100 fg=#eeeeee bg=#1a1a2e
+  24:0..1 fg=#eeeeee bg=#1a1a2e
+  24:1..2 fg=#3c3c4d bg=#1a1a2e
+  24:2..98 fg=#1a1a2e bg=#1a1a2e
+  24:98..99 fg=#3c3c4d bg=#1a1a2e
+  24:99..100 fg=#eeeeee bg=#1a1a2e
+  25:0..1 fg=#eeeeee bg=#1a1a2e
+  25:1..2 fg=#3c3c4d bg=#1a1a2e
+  25:2..3 fg=#1a1a2e bg=#1a1a2e
+  25:3..64 fg=#666666 bg=#1a1a2e
+  25:64..98 fg=#1a1a2e bg=#1a1a2e
+  25:98..99 fg=#3c3c4d bg=#1a1a2e
+  25:99..100 fg=#eeeeee bg=#1a1a2e
+  26:0..1 fg=#eeeeee bg=#1a1a2e
+  26:1..99 fg=#3c3c4d bg=#1a1a2e
+  26:99..100 fg=#eeeeee bg=#1a1a2e
+  27:0..100 fg=#eeeeee bg=#1a1a2e
+  28:0..100 fg=#eeeeee bg=#1a1a2e
+  29:0..100 fg=#eeeeee bg=#1a1a2e

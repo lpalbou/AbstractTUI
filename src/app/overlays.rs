@@ -228,6 +228,21 @@ impl Overlays {
         }
     }
 
+    /// Flip a tree overlay's MODAL input routing (crate-internal: the
+    /// drawer releases its trap the instant a close begins — the exit
+    /// slide is cosmetics, and keys pressed during it belong to the app
+    /// — and re-arms it when a reopen reverses the flight). No-op on
+    /// non-tree layers and removed layers. Input dispatch snapshots its
+    /// targets per event, so a flip lands on the NEXT event cleanly.
+    pub(crate) fn set_tree_modal(&self, handle: &LayerHandle, want: bool) {
+        let mut store = self.store.borrow_mut();
+        if let Some(i) = store.index_of(handle.id) {
+            if let OverlayContent::Tree { modal, .. } = &mut store.meta[i].content {
+                *modal = want;
+            }
+        }
+    }
+
     /// Highest z among live layers (the root layer's 0 when nothing
     /// else exists). THE additive engine delta backlog 0500 specifies
     /// for anchored popups: a panel opened over any modal stack

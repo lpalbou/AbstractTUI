@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" width="900" height="540" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="15" xml:space="preserve">
+<rect width="900" height="540" fill="#000000"/>
+<g shape-rendering="crispEdges">
+<rect x="0" y="0" width="900" height="18" fill="#1a1a2e"/>
+<rect x="0" y="18" width="900" height="18" fill="#1a1a2f"/>
+<rect x="0" y="36" width="900" height="18" fill="#1a1a2f"/>
+<rect x="0" y="54" width="900" height="18" fill="#1a1b30"/>
+<rect x="0" y="72" width="900" height="18" fill="#191b30"/>
+<rect x="0" y="90" width="900" height="18" fill="#191b31"/>
+<rect x="0" y="108" width="900" height="18" fill="#191b31"/>
+<rect x="0" y="126" width="900" height="18" fill="#191c32"/>
+<rect x="0" y="144" width="900" height="18" fill="#191c32"/>
+<rect x="0" y="162" width="900" height="18" fill="#191c33"/>
+<rect x="0" y="180" width="900" height="18" fill="#191c34"/>
+<rect x="0" y="198" width="900" height="18" fill="#181d34"/>
+<rect x="0" y="216" width="900" height="18" fill="#181d35"/>
+<rect x="0" y="234" width="900" height="18" fill="#181d35"/>
+<rect x="0" y="252" width="900" height="18" fill="#181d36"/>
+<rect x="0" y="270" width="900" height="18" fill="#181e36"/>
+<rect x="0" y="288" width="900" height="18" fill="#181e37"/>
+<rect x="0" y="306" width="900" height="18" fill="#181e37"/>
+<rect x="0" y="324" width="900" height="18" fill="#181e38"/>
+<rect x="0" y="342" width="900" height="18" fill="#171f38"/>
+<rect x="0" y="360" width="900" height="18" fill="#171f39"/>
+<rect x="0" y="378" width="900" height="18" fill="#171f3a"/>
+<rect x="0" y="396" width="900" height="18" fill="#171f3a"/>
+<rect x="0" y="414" width="900" height="18" fill="#17203b"/>
+<rect x="0" y="432" width="900" height="18" fill="#17203b"/>
+<rect x="0" y="450" width="900" height="18" fill="#17203c"/>
+<rect x="0" y="468" width="900" height="18" fill="#16203c"/>
+<rect x="0" y="486" width="900" height="18" fill="#16213d"/>
+<rect x="0" y="504" width="900" height="18" fill="#16213d"/>
+<rect x="0" y="522" width="900" height="18" fill="#16213e"/>
+</g>
+<text x="396" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#4c83c7">•</text>
+<text x="405" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#4b81c3">•</text>
+<text x="441" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">/\</text>
+<text x="486" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#563b6e">·</text>
+<text x="495" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#664582">◦</text>
+<text x="414" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#382647">·</text>
+<text x="432" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#c9538f">/</text>
+<text x="459" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#c9538f">\</text>
+<text x="486" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#2a476c">·</text>
+<text x="387" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#372647">·</text>
+<text x="423" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#9d6bc9">/</text>
+<text x="441" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#9d6bc9">/\</text>
+<text x="468" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#9d6bc9">\</text>
+<text x="486" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#523869">·</text>
+<text x="414" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#7a86e8">/</text>
+<text x="432" y="248" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#7a86e8">/--\</text>
+<text x="477" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#7a86e8">\</text>
+<text x="405" y="266" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">/_/</text>
+<text x="450" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#734e93">◦</text>
+<text x="468" y="266" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">\_\</text>
+<text x="702" y="536" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#666666">press any key to skip</text>
+</svg>

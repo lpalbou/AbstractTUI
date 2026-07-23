@@ -5,6 +5,118 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.18] - 2026-07-25
+
+### Added
+
+- widgets: canonical `.view(cx)` on every element-only widget —
+  Sparkline, LineChart, BarChart, Progress, Spinner, Badge, Separator,
+  RichTextView, CodeView, MarkdownView, Logo (api.md's "the canonical
+  build is `.view(cx)`" sentence was false for these eleven: they had
+  only `element(&tokens)`). Uniform shape: theme tokens resolve from
+  context; `element` stays the explicit-theming door. Pinned by
+  `wave11_review::canonical_view_builds_render_for_every_element_only_widget`.
+- reactive: `set_loop_clock(Option<Instant>)` is public — custom loop
+  authors driving `run_due_timers` publish their clock around user-code
+  phases exactly as the driver does automatically, so timer ARMS ride
+  the same injected timeline as fires; `None` restores real-time
+  arming for bare rigs.
+- examples: `activate` — selection vs activation on `List` and `Table`
+  side by side (Enter/Space always; the timing-free click-on-selected
+  picker gesture; `Table`'s true double-click), with one narrated
+  status line — the 0.2.16 double-click convention's smallest runnable
+  teacher. Referenced from api.md's Double-click section.
+- tests: ten new pty smoke cases (`tests/live_smoke.rs`, `--ignored`) —
+  feed, gallery, decide, drawers, shell, screenshot, caps plus the
+  extension examples workflow/network/mermaid: every example in the
+  repo now runs under the VT referee (the shared build is
+  `--workspace --examples`). Driver-level coverage fills in
+  `tests/wave11_review.rs`: live theme switching through the Driver
+  with a screenshot diff, and the first Viewport3D integration test
+  (render/orbit/zoom through real SGR input).
+
+### Fixed
+
+- reactive: timer arm/fire clock coherence — `after`/`interval` (and
+  `Connection` retry arms) measured their deadlines from a fresh
+  `Instant::now()` but FIRED against the loop's injectable clock, so
+  under an injected test clock on a loaded machine a zero-delay timer
+  could never come due (live symptom: the drawer feed-page scroll test
+  flaking in full-suite runs — the Scroll width probe's `after(0)`
+  never fired). Arms now measure from the LOOP's clock: the turn's
+  published time inside a driven turn (via the new `set_loop_clock`,
+  published/cleared by the driver around each turn), the fire-pass
+  clock inside a timer callback, real time outside any turn.
+- app: a closing modal `Drawer` released the keyboard only after the
+  slide finished — a key pressed during the ~160 ms closing flight
+  died in the focus-trapped dying panel (Esc-then-shortcut lost the
+  shortcut; found live by the new drawers pty smoke). A close now
+  releases the input trap the instant it begins (modal routing off
+  immediately; focus blurred on the next turn's phase U — Esc arrives
+  mid-dispatch of that very tree, so the blur cannot be synchronous);
+  a reopen reversing the flight re-arms the trap and re-establishes
+  initial focus.
+- widgets: `Viewport3D` shipped with a zero-height default layout — a
+  draw-only node with no intrinsic measure solves to zero rows, so an
+  un-`layout()`ed viewport silently rendered nothing and hit-tested
+  nothing (every in-repo call site was passing `.grow(1.0)` by hand).
+  The default is now grow-into-region, matching the Meter/AudioScope
+  family. Found by this widget's first driver-level integration test.
+- app: `Select` type-ahead read the wall clock for its prefix-jump
+  window instead of the ambient event time the click-chain doctrine
+  established. Now ambient-first with a real-time fallback — production
+  behavior unchanged; injected-clock tests can script the prefix window
+  deterministically.
+
+### Documentation (quality wave 11, docs seat)
+
+- api.md: the canvas custom-trace example now compiles (it called
+  `dyn_view(cx, |_| ...)` — the real signature is
+  `dyn_view(style, || ...)`); the Drawer install snippet is a complete
+  compilable function (it referenced free `Duration`/`cx` with no
+  imports); all 33 non-ignored api.md snippets are compile-verified.
+  Section order regrouped so the guide reads top-down again (PageHost
+  beside the widget library, canvas with the render family,
+  "Stability and limits" closing ahead of the extensions coda);
+  PageHost added to the widget catalog list; cross-links added
+  (double-click ↔ List/Table sections, testing ↔ screenshots &
+  captures, canvas ↔ graphs-and-diagrams).
+- getting-started: the first app is genuinely ONE import (the redundant
+  `use abstracttui::widgets::Button;` contradicted the "one import
+  covers the common path" line — `Button` rides the prelude); the
+  headless-testing section links the screenshot export recipe;
+  "Where next" gains the theming / graphics-and-3d / live-data guides.
+  README's first app gets the same one-import fix ("Fifteen lines").
+- examples/README.md restructured as a LEARNING PATH (first contact →
+  widgets → layout → interaction → content + live data → app shell →
+  graphics/3D → extensions → testing/capture) with a step table;
+  detail sections added for `activate`, `decide`, `caps`, and the
+  extension examples. Every example source header now carries a
+  `Docs:` pointer to the guide section it illustrates.
+- troubleshooting: three new entries for this week's field classes —
+  content vanishing on small terminals (the engine's any-size
+  guarantees + the `shrink(0.0)`/`Scroll` recipes), double-click not
+  activating (the deliberate Table timing rules + the ambient
+  event-time requirement in headless tests), and screenshot
+  pixel-region veils (honesty, and the mosaic recipe when the still
+  must contain the picture). faq: how to capture a screenshot; custom
+  vector graphics vs the extension crates.
+- architecture: the layer-map diagram gains the `canvas` module.
+- api.md, cycle-2 folds from the code seat's wave: the canonical-build
+  sentence's one honest exception documented (Meter/AudioScope are
+  `view(cx)`-only, with the why); the controlled-mode binding naming
+  convention stated (`value`/`selection`/`active`/`folded`/`offset_*` —
+  state names; `Drawer::bind` recorded as the historical outlier);
+  drawer close input semantics (keys route to the app the instant a
+  close begins); the one-clock story extended to timer arms
+  (`set_loop_clock` in the reactive section, cross-referenced from
+  Double-click); `Viewport3D`'s grow-into-region default; the
+  Tabs-index vs PageHost-id `on_change` rationale.
+- Stale counts fixed everywhere (22 runnable examples in `examples/`
+  plus 3 extension-crate examples; CONTRIBUTING example/test counts);
+  llms.txt / llms-full.txt regenerated at 0.2.17 (package facts said
+  crate 0.2.13).
+
 ## [0.2.17] - 2026-07-25
 
 ### Fixed
@@ -64,8 +176,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clock rule, the custom-row recipe with the same-logical-row guard) +
   a "Table — selection vs activation" section; List's sections updated
   (the "no double-click synthesis" claim is superseded by subsumption).
-
-
 
 ## [0.2.15] - 2026-07-24
 
@@ -1357,6 +1467,8 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.2.17...HEAD
+[0.2.18]: https://github.com/lpalbou/abstracttui/compare/v0.2.17...v0.2.18
 [0.2.17]: https://github.com/lpalbou/abstracttui/compare/v0.2.16...v0.2.17
 [0.2.16]: https://github.com/lpalbou/abstracttui/compare/v0.2.15...v0.2.16
 [0.2.15]: https://github.com/lpalbou/abstracttui/compare/v0.2.14...v0.2.15

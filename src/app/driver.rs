@@ -301,6 +301,21 @@ impl Driver {
         // synthesis alike. Events of one turn deliberately share a
         // timestamp — a burst-delivered double-click still chains.
         crate::ui::set_event_time(Some(now));
+        // And as the timer ARM clock: `after`/`interval` deadlines
+        // planted anywhere in this turn (event handlers, effects, draw
+        // probes) measure from THIS clock, not a fresh `Instant::now` —
+        // otherwise an injected test clock fires timers on a timeline
+        // real-time arming may sit unreachably ahead of (the wave-11
+        // drawer-feed flake). Turn-scoped: the guard clears it on every
+        // exit path, so nothing leaks across tests sharing a thread.
+        reactive::set_loop_clock(Some(now));
+        struct ClockGuard;
+        impl Drop for ClockGuard {
+            fn drop(&mut self) {
+                reactive::set_loop_clock(None);
+            }
+        }
+        let _clock_guard = ClockGuard;
         // One-shot timers (toast dismissal, debounce) fire here; the
         // outer loop sleeps until the earliest deadline, so a pending
         // timer costs zero wakeups until due.

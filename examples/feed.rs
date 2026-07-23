@@ -43,6 +43,8 @@
 //!
 //! Try: `cargo run --example feed`
 //!
+//! Docs: docs/live-data.md.
+//!
 //! OWNER: LIVEDATA.
 
 use std::sync::atomic::{AtomicBool, Ordering};

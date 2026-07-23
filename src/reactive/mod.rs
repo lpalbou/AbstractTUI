@@ -63,6 +63,7 @@ mod tests;
 
 pub use animate::{
     after, animate, frame_tasks_pending, next_timer_deadline, run_due_timers, run_frame_tasks,
+    set_loop_clock,
 };
 pub use connection::{connection, Backoff, ConnState, Connection, ConnectionEvents};
 pub use diag::{diagnostics, enter_draw_phase, take_worker_failures, Diagnostics, DrawPhase};

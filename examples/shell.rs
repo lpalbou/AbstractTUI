@@ -13,6 +13,8 @@
 //! g nav drawer · Tab focus · n raise an alert (watch the Overview
 //! badge) · Ctrl+T theme · q quit.
 //!
+//! Docs: docs/api.md § "widgets::PageHost — the page-level tab host" + § "app::Drawer — edge-anchored overlay panels".
+//!
 //! CO-OWNED: TABS (page host, this file's shell) + DRAWER (edge
 //! drawers — their regions are marked below; additions there stay
 //! append-shaped).

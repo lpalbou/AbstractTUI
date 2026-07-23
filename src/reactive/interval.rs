@@ -30,7 +30,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use super::animate::{arm_timer_at, cancel_timer, timer_fire_now};
+use super::animate::{arm_now, arm_timer_at, cancel_timer, timer_fire_now};
 use super::scheduler::request_frame;
 use super::scope::Scope;
 
@@ -125,7 +125,10 @@ pub fn interval(cx: Scope, period: Duration, f: impl FnMut() + 'static) -> Inter
     // FnMut shared between successive one-shot arms (each arm consumes
     // an FnOnce; the RefCell lets every generation borrow the same f).
     let callback: Rc<RefCell<dyn FnMut()>> = Rc::new(RefCell::new(f));
-    arm(state.clone(), callback, period, Instant::now() + period);
+    // First deadline from the LOOP's clock (arm_now): inside a driven
+    // turn that is the turn's published — possibly injected — time, so
+    // the first fire lands on the same timeline later fires re-arm on.
+    arm(state.clone(), callback, period, arm_now() + period);
     // Scope disposal is the safety net: a pane's interval dies with the
     // pane, cleanups run on the UI thread (LIFO, outside the borrow).
     {

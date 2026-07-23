@@ -187,7 +187,6 @@ impl App {
     ///
     /// ```no_run
     /// use abstracttui::prelude::*;
-    /// use abstracttui::widgets::Button;
     ///
     /// fn main() -> abstracttui::base::Result<()> {
     ///     App::simple(|cx| {

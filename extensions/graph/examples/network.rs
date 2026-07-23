@@ -10,6 +10,8 @@
 //! card for its tooltip · q quits.
 //!
 //! Try: `cargo run -p abstracttui-graph --example network`
+//!
+//! Docs: docs/graphs-and-diagrams.md.
 
 use abstracttui::prelude::*;
 use abstracttui::ui::{dyn_view_scoped, text};

@@ -133,6 +133,17 @@ pub(crate) struct Runtime {
     /// derive from the LOOP's clock — injected in tests — not from a
     /// fresh `Instant::now`). `None` outside a timer-fire pass.
     pub timer_now: Option<std::time::Instant>,
+    /// The loop's published TURN clock (`reactive::set_loop_clock`):
+    /// the arm-time authority for `after`/`interval` deadlines while a
+    /// turn runs, so one injected clock (`Driver::set_clock`) governs
+    /// both when timers are ARMED and when they FIRE. Arming against a
+    /// fresh `Instant::now` under an injected clock plants deadlines
+    /// the injected timeline may never reach (the wave-11 drawer-feed
+    /// flake: a loaded machine stretched real time between rig
+    /// creation and the width probe's `after(0)` arm while the test
+    /// clock advanced 12 ms — the probe never fired). `None` outside a
+    /// driven turn (bare rigs keep real-time arming).
+    pub clock_now: Option<std::time::Instant>,
     /// Scope-provided context values (`provide_context`/`use_context`):
     /// sparse side map (only providers pay), removed on dispose.
     pub contexts: std::collections::HashMap<Key, ContextEntries>,
@@ -164,6 +175,7 @@ impl Runtime {
             timers: Vec::new(),
             next_timer_id: 0,
             timer_now: None,
+            clock_now: None,
             contexts: std::collections::HashMap::new(),
         }
     }
@@ -638,6 +650,20 @@ pub(crate) fn clear_timer_now() {
     let _ = RT.try_with(|cell| {
         if let Ok(mut rt) = cell.try_borrow_mut() {
             rt.timer_now = None;
+        }
+    });
+}
+
+/// Panic-safe `clock_now` write for [`set_loop_clock`]'s turn guard —
+/// the driver publishes at turn start and clears on every turn exit
+/// path (RAII), so a panicking turn never strands a stale clock on the
+/// thread's runtime (test binaries reuse threads across tests).
+///
+/// [`set_loop_clock`]: crate::reactive::set_loop_clock
+pub(crate) fn write_clock_now(now: Option<std::time::Instant>) {
+    let _ = RT.try_with(|cell| {
+        if let Ok(mut rt) = cell.try_borrow_mut() {
+            rt.clock_now = now;
         }
     });
 }

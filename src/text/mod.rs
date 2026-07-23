@@ -215,7 +215,7 @@ mod tests {
     /// complexity than it saves; declined until a profile shows
     /// segmentation in a real hot path.
     #[test]
-    #[ignore]
+    #[ignore = "perf profile: report-only, run explicitly with --nocapture"]
     fn profile_segments_and_measure_per_keystroke_cost() {
         use std::time::Instant;
         let line = "let value = compute(width, \"héllo 世界 👍🏽 done\"); // trailing comment...";

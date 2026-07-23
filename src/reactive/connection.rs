@@ -55,9 +55,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use super::animate::{arm_timer_at, cancel_timer, timer_fire_now};
+use super::animate::{arm_now, arm_timer_at, cancel_timer};
 use super::scheduler::{request_frame, wake_handle, WakeHandle};
 use super::scope::Scope;
 use super::signal::Signal;
@@ -358,8 +358,10 @@ fn apply_report(
 
 /// Arm the retry one-shot. Rides the runtime timer heap (zero wakeups
 /// until due); the id is recorded for cancellation (close, disposal,
-/// retry-now). Inside a timer pass the injected clock stays
-/// authoritative (the interval precedent).
+/// retry-now). The deadline measures from the LOOP's clock (`arm_now`:
+/// fire-pass now inside a timer callback, the turn's published clock
+/// inside a driven turn, real time otherwise) so injected clocks stay
+/// authoritative at arm time too — the interval precedent, widened.
 fn arm_retry(
     state: Signal<ConnState>,
     core: Signal<Rc<RefCell<CoreUi>>>,
@@ -367,7 +369,7 @@ fn arm_retry(
     core_rc: &Rc<RefCell<CoreUi>>,
     next_in: Duration,
 ) {
-    let now = timer_fire_now().unwrap_or_else(Instant::now);
+    let now = arm_now();
     let timer_slot = core_rc.borrow().timer.clone();
     let id = arm_timer_at(now + next_in, move || {
         if shared.closed.load(Ordering::Acquire) || !state.is_alive() {

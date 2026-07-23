@@ -118,6 +118,15 @@ impl Sparkline {
         self
     }
 
+    /// Canonical one-call build: tokens resolve from the app's theme
+    /// context (a tracked read — building inside a `dyn_view`
+    /// re-renders on theme switch). `element(&tokens)` remains the
+    /// explicit-theming door.
+    pub fn view(self, cx: crate::reactive::Scope) -> crate::ui::View {
+        let t = crate::widgets::theme_tokens(cx);
+        self.element(&t).build()
+    }
+
     pub fn element(self, t: &TokenSet) -> Element {
         let color = t.chart(self.slot);
         let label_fg = t.text_faint;
@@ -223,6 +232,15 @@ impl LineChart {
     pub fn layout(mut self, layout: LayoutStyle) -> LineChart {
         self.layout = Some(layout);
         self
+    }
+
+    /// Canonical one-call build: tokens resolve from the app's theme
+    /// context (a tracked read — building inside a `dyn_view`
+    /// re-renders on theme switch). `element(&tokens)` remains the
+    /// explicit-theming door.
+    pub fn view(self, cx: crate::reactive::Scope) -> crate::ui::View {
+        let t = crate::widgets::theme_tokens(cx);
+        self.element(&t).build()
     }
 
     pub fn element(self, t: &TokenSet) -> Element {
@@ -393,6 +411,15 @@ impl BarChart {
     pub fn layout(mut self, layout: LayoutStyle) -> BarChart {
         self.layout = Some(layout);
         self
+    }
+
+    /// Canonical one-call build: tokens resolve from the app's theme
+    /// context (a tracked read — building inside a `dyn_view`
+    /// re-renders on theme switch). `element(&tokens)` remains the
+    /// explicit-theming door.
+    pub fn view(self, cx: crate::reactive::Scope) -> crate::ui::View {
+        let t = crate::widgets::theme_tokens(cx);
+        self.element(&t).build()
     }
 
     pub fn element(self, t: &TokenSet) -> Element {

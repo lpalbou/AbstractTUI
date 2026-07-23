@@ -151,8 +151,13 @@ pub fn frame_tasks_pending() -> usize {
 /// sleeps until [`next_timer_deadline`] and fires due timers in phase U
 /// (`run_due_timers`), so a pending timer costs zero wakeups until due.
 /// For a repeating, cancellable cadence use [`super::interval`].
+///
+/// The delay measures from the LOOP's clock (see [`set_loop_clock`]):
+/// inside a driven turn that is the turn's published time — injected
+/// in tests — so arm and fire share one timeline; outside any turn it
+/// is `Instant::now()`.
 pub fn after(delay: Duration, f: impl FnOnce() + 'static) {
-    let _ = arm_timer_at(Instant::now() + delay, f);
+    let _ = arm_timer_at(arm_now() + delay, f);
     // Wake a possibly-blocked loop so it recomputes its sleep deadline.
     request_frame();
 }
@@ -193,6 +198,29 @@ pub(crate) fn cancel_timer(id: u64) -> bool {
 /// deadline from this, so injected test clocks stay authoritative.
 pub(crate) fn timer_fire_now() -> Option<Instant> {
     with_rt(|rt| rt.timer_now)
+}
+
+/// Publish (or clear) the loop's TURN clock — the arm-time authority
+/// for [`after`]/[`super::interval`] deadlines. The driver sets this at every
+/// turn start from its own injectable clock (`Driver::set_clock`) and
+/// clears it when the turn ends, so timer ARM and timer FIRE read
+/// one timeline: a deadline planted from a fresh `Instant::now()`
+/// under an injected clock can sit unreachably far in the injected
+/// future (real time races ahead on a loaded machine — the wave-11
+/// drawer-feed flake). Custom loop authors driving
+/// [`run_due_timers`] with their own clock should publish the same
+/// value here around their user-code phases; `None` restores
+/// real-time arming (the bare-rig posture).
+pub fn set_loop_clock(now: Option<Instant>) {
+    super::runtime::write_clock_now(now);
+}
+
+/// The arm-time clock: the firing pass's clock inside a timer
+/// callback (an interval re-arm measures from its own fire), else the
+/// turn's published loop clock, else `Instant::now()` (outside any
+/// driven turn — bare rigs, mount-time code).
+pub(crate) fn arm_now() -> Instant {
+    with_rt(|rt| rt.timer_now.or(rt.clock_now)).unwrap_or_else(Instant::now)
 }
 
 /// Earliest pending timer deadline — the loop's idle sleep bound.

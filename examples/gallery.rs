@@ -12,6 +12,8 @@
 //! Keys: t / T next / prev theme · Tab focus · Enter/Space activate ·
 //! q quit.
 //!
+//! Docs: docs/theming.md.
+//!
 //! OWNER: DESIGN.
 
 mod common;

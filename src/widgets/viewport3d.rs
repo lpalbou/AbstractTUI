@@ -109,7 +109,15 @@ impl Viewport3D {
             double_sided: true,
             on_orbit: None,
             on_zoom: None,
-            layout: LayoutStyle::default(),
+            // Grow into the given region (the Meter/AudioScope family
+            // default): a 3D canvas has no intrinsic cell size, and the
+            // bare `LayoutStyle::default()` this shipped with solved to
+            // ZERO HEIGHT — a widget that silently renders nothing and
+            // hit-tests nothing until the caller remembers a layout
+            // (wave-11 finding: the first driver-level integration test
+            // ever written for this widget caught it; every in-repo
+            // call site was already passing `.grow(1.0)` by hand).
+            layout: LayoutStyle::default().grow(1.0),
         }
     }
 
@@ -196,6 +204,9 @@ impl Viewport3D {
         self
     }
 
+    /// Layout override (default: grow into the given region — a 3D
+    /// canvas has no intrinsic cell size, so an ungrown default would
+    /// solve to zero rows and render nothing).
     pub fn layout(mut self, style: LayoutStyle) -> Viewport3D {
         self.layout = style;
         self

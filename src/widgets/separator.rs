@@ -61,6 +61,15 @@ impl Separator {
         self
     }
 
+    /// Canonical one-call build: tokens resolve from the app's theme
+    /// context (a tracked read — building inside a `dyn_view`
+    /// re-renders on theme switch). `element(&tokens)` remains the
+    /// explicit-theming door.
+    pub fn view(self, cx: crate::reactive::Scope) -> crate::ui::View {
+        let t = crate::widgets::theme_tokens(cx);
+        self.element(&t).build()
+    }
+
     pub fn element(self, t: &TokenSet) -> Element {
         let stroke = t.border;
         let label_fg = t.text_muted;

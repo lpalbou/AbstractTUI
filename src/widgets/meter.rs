@@ -311,6 +311,13 @@ impl Meter {
     /// Build the reactive view: an input effect (instant attack +
     /// frame-task arming) and a `dyn_view` painting the ballistic
     /// state. Both are owned by `cx` and die with the component.
+    ///
+    /// There is deliberately no `element(&tokens)` form: the meter is
+    /// signal-driven and theme-reactive by construction — tokens
+    /// resolve TRACKED inside its own dyn region (a theme switch
+    /// restyles without a rebuild), and the root is that dyn node, so
+    /// a fixed-token `Element` would have to wrap it in an extra
+    /// layout node just to change the token source.
     pub fn view(self, cx: Scope) -> View {
         let span_db = self.db_floor.map(|f| -f).unwrap_or(60.0);
         let fall_per_s = self.decay_db_per_s / span_db;

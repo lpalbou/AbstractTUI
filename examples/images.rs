@@ -14,6 +14,8 @@
 //!
 //! Keys: d dither · p protocol placement · t theme · q quit.
 //!
+//! Docs: docs/graphics-and-3d.md (images end-to-end).
+//!
 //! OWNER: DESIGN.
 
 mod common;

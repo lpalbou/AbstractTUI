@@ -21,15 +21,17 @@ mosaic), software-rasterized 3D (GLB), themes, and animation.
 ## Reference material
 
 - [`../examples/README.md`](../examples/README.md) — the examples
-  catalog: nineteen runnable programs from a 53-line hello to a full ops
-  dashboard and an app shell (a `PageHost` tab bar hosting full pages,
-  with `Drawer` panels from both edges), each documented with keys,
-  requirements, and what it should
+  catalog, ordered as a learning path: twenty-two runnable programs from
+  a 53-line hello to a full ops dashboard and an app shell (a `PageHost`
+  tab bar hosting full pages, with `Drawer` panels from both edges),
+  plus three extension-crate examples (`workflow`/`network`/`mermaid`),
+  each documented with keys, requirements, and what it should
   look like. Every example exits cleanly without a tty, and
   `dashboard`/`viewer3d`/`images` take `--caps` to print the terminal
   capability report.
-- [`captures/`](captures/) — deterministic text "screenshots" of the
-  shipped examples (plain and style-annotated renders), plus in-process
+- [`captures/`](captures/) — deterministic "screenshots" of the
+  shipped examples (plain text, style-annotated, and rendered SVG via
+  `Screenshot::to_svg`), plus in-process
   stills of the app-layer surfaces (streaming transcript with the
   completion dropdown open, an open Select popup, a diff-tinted code
   pane, a scrolled feed, a doc-vocabulary reader table); regenerable

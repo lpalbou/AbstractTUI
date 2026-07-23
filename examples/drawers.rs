@@ -11,6 +11,8 @@
 //! Keys: i inspector · g nav · n add a feed line (live while open) ·
 //! Ctrl+T theme · q quit.
 //!
+//! Docs: docs/api.md § "app::Drawer — edge-anchored overlay panels".
+//!
 //! OWNER: DRAWER (0585).
 
 use std::time::Duration;

@@ -230,7 +230,7 @@ fn rich_blocks_render_in_fixed_box_mode() {
 /// cargo test --release --lib perf_rich_block_typeset -- --ignored --nocapture
 /// ```
 #[test]
-#[ignore]
+#[ignore = "perf: measured evidence, run explicitly in release (--ignored)"]
 fn perf_rich_block_typeset_1k_items() {
     let t = default_theme().tokens;
     let size = Size::new(40, 12);

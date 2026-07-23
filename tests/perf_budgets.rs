@@ -46,7 +46,7 @@ fn styled_frame(size: Size, tick: u8) -> Surface {
 
 /// CHARTER: full-screen 200x60 animated redraw, diff+present < 2 ms.
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_diff_present_200x60_full_change() {
     let size = Size::new(200, 60);
     let caps = PresentCaps::FULL;
@@ -73,7 +73,7 @@ fn perf_diff_present_200x60_full_change() {
 
 /// Input parser throughput: 1 MB of hostile soup < 50 ms.
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_parser_1mb_soup() {
     // Build ~1 MB of mixed hostile bytes from the standard corpus.
     let corpus = hostile_corpus(0x50f7, 4000);
@@ -100,7 +100,7 @@ fn perf_parser_1mb_soup() {
 /// surface: measure the growth policy and the interning cost; assert the
 /// documented cap behavior (never panic, labeled degradation once full).
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_pool_churn_100k_unique_clusters() {
     let mut pool = GlyphPool::default();
     let mut degraded = 0u32;
@@ -152,7 +152,7 @@ fn perf_pool_churn_100k_unique_clusters() {
 /// Link table churn: 70k unique URIs (past the u16 space) — cap behavior
 /// must be the documented "0 = no link" degradation, not a wrap.
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_link_churn_past_u16_space() {
     let mut s = Surface::new(Size::new(10, 2), Cell::EMPTY);
     let mut zero_returns = 0u32;
@@ -174,7 +174,7 @@ fn perf_link_churn_past_u16_space() {
 /// Full 200x60 frame WITH one active cell shader on the layer: flatten
 /// + diff + present < 3 ms release (the animated-effects budget).
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_frame_with_active_cell_shader_200x60() {
     use abstracttui::anim::shaders::Shimmer;
     use abstracttui::render::{Compositor, Layer};
@@ -217,7 +217,7 @@ fn perf_frame_with_active_cell_shader_200x60() {
 /// Splash 2D fallback frame at 100x30: render + diff + present < 2 ms
 /// release (the boot path must never feel slower than the app).
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_splash_fallback_frame_100x30() {
     use abstracttui::boot::fallback2d::FallbackSplash;
     use abstracttui::boot::player::SplashFrameSource;
@@ -242,7 +242,7 @@ fn perf_splash_fallback_frame_100x30() {
 
 /// 3D brandmark splash frame at 100x30 (release claim < 8 ms).
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_brandmark_3d_frame_100x30() {
     use abstracttui::boot::brandmark3d::identity_params;
     use abstracttui::three::brandmark::BrandmarkRenderer;
@@ -261,7 +261,7 @@ fn perf_brandmark_3d_frame_100x30() {
 /// release for a small interactive tree (charter: < 5 ms end-to-end;
 /// the loop's share must leave room for terminal I/O).
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_keystroke_to_frame_through_driver() {
     use abstracttui::app::{App, Driver, RunConfig};
     use abstracttui::layout::{Dimension, Style as LayoutStyle};
@@ -326,7 +326,7 @@ fn perf_keystroke_to_frame_through_driver() {
 /// scheduler jitter doesn't flap it, still tight enough to catch a real
 /// regression. No interner needed — the earlier concern was noise.
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_vt_model_referee_overhead() {
     use abstracttui::testing::VtScreen;
     let mut frame = Vec::new();
@@ -352,7 +352,7 @@ fn perf_vt_model_referee_overhead() {
 /// must stay well under a frame budget — layout is on the hot path of
 /// every resize and reactive remount.
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_grid_solve_large_tree() {
     use abstracttui::base::Rect;
     use abstracttui::layout::{solve, LayoutTree, Style, Track};
@@ -388,7 +388,7 @@ fn perf_grid_solve_large_tree() {
 /// (~1,000 lines of mixed headings/lists/quotes/fences/emphasis) must
 /// stay interactive — the markdown widget re-parses on content change.
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_markdown_parse_large_doc() {
     use abstracttui::render::md::{self, MdStyles};
 
@@ -421,7 +421,7 @@ fn perf_markdown_parse_large_doc() {
 /// Cycle-6 new: styled RichText WRAP of a large document is the
 /// per-resize cost of the markdown/richtext widgets.
 #[test]
-#[ignore]
+#[ignore = "perf: release-only budget, run explicitly (--ignored)"]
 fn perf_richtext_wrap_large_doc() {
     use abstracttui::render::md::{self, MdStyles};
 

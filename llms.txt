@@ -6,7 +6,9 @@
 > exactly the screen regions they own. Damage flows through a z-ordered compositor with
 > alpha blending and per-cell shaders, a frame diff, and a byte-economical ANSI presenter,
 > so an idle app emits zero bytes and allocates nothing. On top sit a 20+ widget library
-> arranged by a flexbox-style solver and a track-based grid, an app-shell vocabulary
+> arranged by a flexbox-style solver and a track-based grid (rows and tables follow one
+> convention: single click selects, Enter or engine-synthesized double-click activates),
+> an app-shell vocabulary
 > (a page-level tab host and edge-anchored drawer panels, both hosting full pages),
 > 26 built-in themes over 36
 > contrast-audited semantic design tokens, PNG/baseline-JPEG images drawn through the best
@@ -45,8 +47,12 @@
   frame lifecycle, the zero-cost idle guarantee and the tests that pin it, the terminal
   layer (capabilities, kitty keyboard, tmux, restore), the 3D pipeline, platform posture.
 - [API guide](docs/api.md): The public surface, module by module — prelude, reactive
-  (plus the `reactive::connection` lifecycle with jittered-backoff reconnect), ui, layout,
-  the widget catalog (`List` activation, masked `TextInput`, diff-aware `CodeView`,
+  (plus the `reactive::connection` lifecycle with jittered-backoff reconnect), ui
+  (including double-click synthesis: `click_count()`, the ambient event-time rule, and
+  the single-click-selects / double-click-activates convention), layout (with the
+  small-terminals & content-pressure guarantees and recipes),
+  the widget catalog (`List` and `Table` selection-vs-activation, masked `TextInput`,
+  diff-aware `CodeView`,
   `Feed` streaming/rich lines/sync/selection-by-key, chart history rings with time axes,
   `Meter`/`AudioScope` levels, the `PageHost` page-level tab host), the widget
   disposal-safety law, the `canvas` sub-cell vector layer (braille/quadrant dot grids,
@@ -98,10 +104,10 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, 0.2.17 (2026-07-25) the current one —
+  (2026-07-21) is the first public release, 0.2.18 (2026-07-25) the current one —
   released alongside the first extension-family crates (`abstracttui-graph` 0.1.0,
   `abstracttui-mermaid` 0.1.0, each with its own changelog under `extensions/`).
-- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,960 core tests; ~2,090
+- [Contributing](CONTRIBUTING.md): Building, the test suite (~2,015 core tests; ~2,140
   with the extension family via `--workspace`, the CI gate) and the explicitly-run suites
   (live pty, two release-mode perf-budget suites with byte-emission ratchets, plus the
   scheduled weekly `perf.yml` deep gate), golden snapshots, lint gates, the strict module
@@ -122,12 +128,14 @@
 - [src/lib.rs](src/lib.rs): Crate root with the layer map — `base`, `term`, `input`,
   `render`, `text`, `anim`, `reactive`, `layout`, `ui`, `canvas`, `widgets`, `gfx`,
   `three`, `theme`, `app`, `boot`, `testing`.
-- [examples/](examples/README.md): The catalog of the twenty-one runnable examples —
+- [examples/](examples/README.md): The catalog of the twenty-two runnable examples,
+  ordered as a learning path —
   `hello`,
-  `dashboard`, `shell`, `drawers`, `gallery`, `themes`, `widgets`, `effects`, `splash`,
-  `viewer3d`, `images`,
-  `components`, `grid`, `feed`, `transcript`, `reader`, `voice_mock`, `decide`,
-  `screenshot`, `caps`, `capture` — each
+  `widgets`, `components`, `gallery`, `themes`, `grid`, `activate`, `decide`, `feed`,
+  `transcript`, `reader`, `voice_mock`, `shell`, `drawers`, `dashboard`, `images`,
+  `effects`, `splash`, `viewer3d`,
+  `screenshot`, `caps`, `capture` — plus the extension-crate examples
+  (`workflow`/`network` in `extensions/graph`, `mermaid` in `extensions/mermaid`); each
   documented with keys and requirements; every one exits cleanly without a tty, and
   `dashboard`/`viewer3d`/`images` take `--caps`.
 - [docs/captures/](docs/captures/): Deterministic text "screenshots" of the shipped

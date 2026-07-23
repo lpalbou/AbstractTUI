@@ -2,31 +2,31 @@ size=100x30 cursor=0,29 modes=[7,25,1049]
   0|                                                                                                    |
   1|   deploy    ack alert    disabled                                                                  |
   2|                                                                                                    |
-  3| ╭───────────────────╮   ╭───────────────────╮   ╭───────────────────╮                              |
-  4| │deploys            │   │alerts             │   │uptime d           │                              |
-  5| │12                 │   │2                  │   │97                 │                              |
-  6| │▲                  │   │▼                  │   │→                  │                              |
-  7| ╰───────────────────╯   ╰───────────────────╯   ╰───────────────────╯                              |
+  3| ╭─────────────────────────────╮   ╭────────────────────────────╮   ╭────────────────────────────╮  |
+  4| │                             │   │                            │   │                            │  |
+  5| │▲                            │   │▼                           │   │→                           │  |
+  6| ╰─────────────────────────────╯   ╰────────────────────────────╯   ╰────────────────────────────╯  |
+  7|                                                                                                    |
   8|                                                                                                    |
-  9|                                                                                                    |
- 10| ┌ settings ─────────────────────────────────────────────────────────┐                              |
- 11| │name            ▐orion                         ▌                   │                              |
- 12| │                                                                   │                              |
- 13| │notifications   [x] page the on-call                               │                              |
- 14| │                                                                   │                              |
- 15| │channel         (•) stable                                         │                              |
- 16| │                ( ) beta                                           │                              |
- 17| │                                                                   │                              |
- 18| │channel select  ▐stable                   ▾▌                       │                              |
- 19| │                                                                   │                              |
- 20| │theme           ▐Dark (Abstract)          ▾▌                       │                              |
- 21| │                                                                   │                              |
- 22| │features        ▐enable features…         ▾▌                       │                              |
- 23| │                                                                   │                              |
- 24| │→ orion · notifications on · stable channel · 0 features           │                              |
- 25| └───────────────────────────────────────────────────────────────────┘                              |
- 26|                                                                                                    |
- 27|                                                                                                    |
+  9| ┌ settings ─────────────────────────────────────────────────────────────────────────────────────┐  |
+ 10| │                                                                                               │  |
+ 11| │                                                                                               │  |
+ 12| │channel         (•) stable                                                                     │  |
+ 13| │                ( ) beta                                                                       │  |
+ 14| │                                                                                               │  |
+ 15| │channel select  ▐stable                   ▾▌                                                   │  |
+ 16| │                                                                                               │  |
+ 17| │theme           ▐Dark (Abstract)          ▾▌                                                   │  |
+ 18| │                                                                                               │  |
+ 19| │features        ▐enable features…         ▾▌                                                   │  |
+ 20| │                                                                                               │  |
+ 21| │→ orion · notifications on · stable channel · 0 features                                       │  |
+ 22| └───────────────────────────────────────────────────────────────────────────────────────────────┘  |
+ 23|                                                                                                    |
+ 24|                                                                                                    |
+ 25|  toggle 3rd    ▾ welcome                    ▸ build log      14 lines    ▸ external                |
+ 26|                hello — this card starts                                                            |
+ 27|                open                                                                                |
  28| tab focus · enter/space activate · click cards · ctrl+t theme · q quit                             |
  29|                                                                                                    |
 styles:
@@ -34,220 +34,207 @@ styles:
   1:0..1 fg=#eeeeee bg=#1a1a2e
   1:1..25 fg=#eeeeee bg=#0f3460
   1:25..35 fg=#666666 bg=#0f3460
-  1:35..71 fg=#eeeeee bg=#0f3460
-  1:71..100 fg=#eeeeee bg=#1a1a2e
+  1:35..99 fg=#eeeeee bg=#0f3460
+  1:99..100 fg=#eeeeee bg=#1a1a2e
   2:0..100 fg=#eeeeee bg=#1a1a2e
   3:0..1 fg=#eeeeee bg=#1a1a2e
-  3:1..22 fg=#3c3c4d bg=#16213e
-  3:22..25 fg=#eeeeee bg=#1a1a2e
-  3:25..46 fg=#3c3c4d bg=#16213e
-  3:46..49 fg=#eeeeee bg=#1a1a2e
-  3:49..70 fg=#3c3c4d bg=#16213e
-  3:70..100 fg=#eeeeee bg=#1a1a2e
+  3:1..32 fg=#3c3c4d bg=#16213e
+  3:32..35 fg=#eeeeee bg=#1a1a2e
+  3:35..65 fg=#3c3c4d bg=#16213e
+  3:65..68 fg=#eeeeee bg=#1a1a2e
+  3:68..98 fg=#3c3c4d bg=#16213e
+  3:98..100 fg=#eeeeee bg=#1a1a2e
   4:0..1 fg=#eeeeee bg=#1a1a2e
   4:1..2 fg=#3c3c4d bg=#16213e
-  4:2..9 fg=#aaaaaa bg=#16213e
-  4:9..21 fg=#16213e bg=#16213e
-  4:21..22 fg=#3c3c4d bg=#16213e
-  4:22..23 fg=#10101d bg=#10101d
-  4:23..25 fg=#eeeeee bg=#1a1a2e
-  4:25..26 fg=#3c3c4d bg=#16213e
-  4:26..32 fg=#aaaaaa bg=#16213e
-  4:32..45 fg=#16213e bg=#16213e
-  4:45..46 fg=#3c3c4d bg=#16213e
-  4:46..47 fg=#10101d bg=#10101d
-  4:47..49 fg=#eeeeee bg=#1a1a2e
-  4:49..50 fg=#3c3c4d bg=#16213e
-  4:50..58 fg=#aaaaaa bg=#16213e
-  4:58..69 fg=#16213e bg=#16213e
-  4:69..70 fg=#3c3c4d bg=#16213e
-  4:70..71 fg=#10101d bg=#10101d
-  4:71..100 fg=#eeeeee bg=#1a1a2e
+  4:2..31 fg=#16213e bg=#16213e
+  4:31..32 fg=#3c3c4d bg=#16213e
+  4:32..33 fg=#10101d bg=#10101d
+  4:33..35 fg=#eeeeee bg=#1a1a2e
+  4:35..36 fg=#3c3c4d bg=#16213e
+  4:36..64 fg=#16213e bg=#16213e
+  4:64..65 fg=#3c3c4d bg=#16213e
+  4:65..66 fg=#10101d bg=#10101d
+  4:66..68 fg=#eeeeee bg=#1a1a2e
+  4:68..69 fg=#3c3c4d bg=#16213e
+  4:69..97 fg=#16213e bg=#16213e
+  4:97..98 fg=#3c3c4d bg=#16213e
+  4:98..99 fg=#10101d bg=#10101d
+  4:99..100 fg=#eeeeee bg=#1a1a2e
   5:0..1 fg=#eeeeee bg=#1a1a2e
   5:1..2 fg=#3c3c4d bg=#16213e
-  5:2..4 fg=#e94560 bg=#16213e
-  5:4..21 fg=#16213e bg=#16213e
-  5:21..22 fg=#3c3c4d bg=#16213e
-  5:22..23 fg=#10101d bg=#10101d
-  5:23..25 fg=#eeeeee bg=#1a1a2e
-  5:25..26 fg=#3c3c4d bg=#16213e
-  5:26..27 fg=#e94560 bg=#16213e
-  5:27..45 fg=#16213e bg=#16213e
-  5:45..46 fg=#3c3c4d bg=#16213e
-  5:46..47 fg=#10101d bg=#10101d
-  5:47..49 fg=#eeeeee bg=#1a1a2e
-  5:49..50 fg=#3c3c4d bg=#16213e
-  5:50..52 fg=#e94560 bg=#16213e
-  5:52..69 fg=#16213e bg=#16213e
-  5:69..70 fg=#3c3c4d bg=#16213e
-  5:70..71 fg=#10101d bg=#10101d
-  5:71..100 fg=#eeeeee bg=#1a1a2e
+  5:2..3 fg=#27ae60 bg=#16213e
+  5:3..31 fg=#16213e bg=#16213e
+  5:31..32 fg=#3c3c4d bg=#16213e
+  5:32..33 fg=#10101d bg=#10101d
+  5:33..35 fg=#eeeeee bg=#1a1a2e
+  5:35..36 fg=#3c3c4d bg=#16213e
+  5:36..37 fg=#e74c3c bg=#16213e
+  5:37..64 fg=#16213e bg=#16213e
+  5:64..65 fg=#3c3c4d bg=#16213e
+  5:65..66 fg=#10101d bg=#10101d
+  5:66..68 fg=#eeeeee bg=#1a1a2e
+  5:68..69 fg=#3c3c4d bg=#16213e
+  5:69..70 fg=#aaaaaa bg=#16213e
+  5:70..97 fg=#16213e bg=#16213e
+  5:97..98 fg=#3c3c4d bg=#16213e
+  5:98..99 fg=#10101d bg=#10101d
+  5:99..100 fg=#eeeeee bg=#1a1a2e
   6:0..1 fg=#eeeeee bg=#1a1a2e
-  6:1..2 fg=#3c3c4d bg=#16213e
-  6:2..3 fg=#27ae60 bg=#16213e
-  6:3..21 fg=#16213e bg=#16213e
-  6:21..22 fg=#3c3c4d bg=#16213e
-  6:22..23 fg=#10101d bg=#10101d
-  6:23..25 fg=#eeeeee bg=#1a1a2e
-  6:25..26 fg=#3c3c4d bg=#16213e
-  6:26..27 fg=#e74c3c bg=#16213e
-  6:27..45 fg=#16213e bg=#16213e
-  6:45..46 fg=#3c3c4d bg=#16213e
-  6:46..47 fg=#10101d bg=#10101d
-  6:47..49 fg=#eeeeee bg=#1a1a2e
-  6:49..50 fg=#3c3c4d bg=#16213e
-  6:50..51 fg=#aaaaaa bg=#16213e
-  6:51..69 fg=#16213e bg=#16213e
-  6:69..70 fg=#3c3c4d bg=#16213e
-  6:70..71 fg=#10101d bg=#10101d
-  6:71..100 fg=#eeeeee bg=#1a1a2e
-  7:0..1 fg=#eeeeee bg=#1a1a2e
-  7:1..22 fg=#3c3c4d bg=#16213e
-  7:22..23 fg=#10101d bg=#10101d
-  7:23..25 fg=#eeeeee bg=#1a1a2e
-  7:25..46 fg=#3c3c4d bg=#16213e
-  7:46..47 fg=#10101d bg=#10101d
-  7:47..49 fg=#eeeeee bg=#1a1a2e
-  7:49..70 fg=#3c3c4d bg=#16213e
-  7:70..71 fg=#10101d bg=#10101d
-  7:71..100 fg=#eeeeee bg=#1a1a2e
-  8:0..2 fg=#eeeeee bg=#1a1a2e
-  8:2..23 fg=#10101d bg=#10101d
-  8:23..26 fg=#eeeeee bg=#1a1a2e
-  8:26..47 fg=#10101d bg=#10101d
-  8:47..50 fg=#eeeeee bg=#1a1a2e
-  8:50..71 fg=#10101d bg=#10101d
-  8:71..100 fg=#eeeeee bg=#1a1a2e
-  9:0..100 fg=#eeeeee bg=#1a1a2e
+  6:1..32 fg=#3c3c4d bg=#16213e
+  6:32..33 fg=#10101d bg=#10101d
+  6:33..35 fg=#eeeeee bg=#1a1a2e
+  6:35..65 fg=#3c3c4d bg=#16213e
+  6:65..66 fg=#10101d bg=#10101d
+  6:66..68 fg=#eeeeee bg=#1a1a2e
+  6:68..98 fg=#3c3c4d bg=#16213e
+  6:98..99 fg=#10101d bg=#10101d
+  6:99..100 fg=#eeeeee bg=#1a1a2e
+  7:0..2 fg=#eeeeee bg=#1a1a2e
+  7:2..33 fg=#10101d bg=#10101d
+  7:33..36 fg=#eeeeee bg=#1a1a2e
+  7:36..66 fg=#10101d bg=#10101d
+  7:66..69 fg=#eeeeee bg=#1a1a2e
+  7:69..99 fg=#10101d bg=#10101d
+  7:99..100 fg=#eeeeee bg=#1a1a2e
+  8:0..100 fg=#eeeeee bg=#1a1a2e
+  9:0..1 fg=#eeeeee bg=#1a1a2e
+  9:1..2 fg=#3c3c4d bg=#16213e
+  9:2..12 fg=#aaaaaa bg=#16213e
+  9:12..98 fg=#3c3c4d bg=#16213e
+  9:98..100 fg=#eeeeee bg=#1a1a2e
   10:0..1 fg=#eeeeee bg=#1a1a2e
   10:1..2 fg=#3c3c4d bg=#16213e
-  10:2..12 fg=#aaaaaa bg=#16213e
-  10:12..70 fg=#3c3c4d bg=#16213e
-  10:70..100 fg=#eeeeee bg=#1a1a2e
+  10:2..97 fg=#16213e bg=#16213e
+  10:97..98 fg=#3c3c4d bg=#16213e
+  10:98..99 fg=#10101d bg=#10101d
+  10:99..100 fg=#eeeeee bg=#1a1a2e
   11:0..1 fg=#eeeeee bg=#1a1a2e
   11:1..2 fg=#3c3c4d bg=#16213e
-  11:2..6 fg=#aaaaaa bg=#16213e
-  11:6..18 fg=#16213e bg=#16213e
-  11:18..19 fg=#3c3c4d bg=#16213e
-  11:19..49 fg=#eeeeee bg=#16213e
-  11:49..50 fg=#3c3c4d bg=#16213e
-  11:50..69 fg=#16213e bg=#16213e
-  11:69..70 fg=#3c3c4d bg=#16213e
-  11:70..71 fg=#10101d bg=#10101d
-  11:71..100 fg=#eeeeee bg=#1a1a2e
+  11:2..97 fg=#16213e bg=#16213e
+  11:97..98 fg=#3c3c4d bg=#16213e
+  11:98..99 fg=#10101d bg=#10101d
+  11:99..100 fg=#eeeeee bg=#1a1a2e
   12:0..1 fg=#eeeeee bg=#1a1a2e
   12:1..2 fg=#3c3c4d bg=#16213e
-  12:2..69 fg=#16213e bg=#16213e
-  12:69..70 fg=#3c3c4d bg=#16213e
-  12:70..71 fg=#10101d bg=#10101d
-  12:71..100 fg=#eeeeee bg=#1a1a2e
+  12:2..9 fg=#aaaaaa bg=#16213e
+  12:9..18 fg=#16213e bg=#16213e
+  12:18..21 fg=#e94560 bg=#16213e
+  12:21..22 fg=#eeeeee bg=#16213e
+  12:22..28 fg=#e94560 bg=#16213e
+  12:28..29 fg=#eeeeee bg=#16213e
+  12:29..97 fg=#16213e bg=#16213e
+  12:97..98 fg=#3c3c4d bg=#16213e
+  12:98..99 fg=#10101d bg=#10101d
+  12:99..100 fg=#eeeeee bg=#1a1a2e
   13:0..1 fg=#eeeeee bg=#1a1a2e
   13:1..2 fg=#3c3c4d bg=#16213e
-  13:2..15 fg=#aaaaaa bg=#16213e
-  13:15..18 fg=#16213e bg=#16213e
-  13:18..38 fg=#eeeeee bg=#16213e
-  13:38..69 fg=#16213e bg=#16213e
-  13:69..70 fg=#3c3c4d bg=#16213e
-  13:70..71 fg=#10101d bg=#10101d
-  13:71..100 fg=#eeeeee bg=#1a1a2e
+  13:2..18 fg=#16213e bg=#16213e
+  13:18..29 fg=#eeeeee bg=#16213e
+  13:29..97 fg=#16213e bg=#16213e
+  13:97..98 fg=#3c3c4d bg=#16213e
+  13:98..99 fg=#10101d bg=#10101d
+  13:99..100 fg=#eeeeee bg=#1a1a2e
   14:0..1 fg=#eeeeee bg=#1a1a2e
   14:1..2 fg=#3c3c4d bg=#16213e
-  14:2..69 fg=#16213e bg=#16213e
-  14:69..70 fg=#3c3c4d bg=#16213e
-  14:70..71 fg=#10101d bg=#10101d
-  14:71..100 fg=#eeeeee bg=#1a1a2e
+  14:2..97 fg=#16213e bg=#16213e
+  14:97..98 fg=#3c3c4d bg=#16213e
+  14:98..99 fg=#10101d bg=#10101d
+  14:99..100 fg=#eeeeee bg=#1a1a2e
   15:0..1 fg=#eeeeee bg=#1a1a2e
   15:1..2 fg=#3c3c4d bg=#16213e
-  15:2..9 fg=#aaaaaa bg=#16213e
-  15:9..18 fg=#16213e bg=#16213e
-  15:18..21 fg=#e94560 bg=#16213e
-  15:21..22 fg=#eeeeee bg=#16213e
-  15:22..28 fg=#e94560 bg=#16213e
-  15:28..29 fg=#eeeeee bg=#16213e
-  15:29..69 fg=#16213e bg=#16213e
-  15:69..70 fg=#3c3c4d bg=#16213e
-  15:70..71 fg=#10101d bg=#10101d
-  15:71..100 fg=#eeeeee bg=#1a1a2e
+  15:2..16 fg=#aaaaaa bg=#16213e
+  15:16..18 fg=#16213e bg=#16213e
+  15:18..19 fg=#3c3c4d bg=#16213e
+  15:19..45 fg=#eeeeee bg=#16213e
+  15:45..46 fg=#3c3c4d bg=#16213e
+  15:46..97 fg=#16213e bg=#16213e
+  15:97..98 fg=#3c3c4d bg=#16213e
+  15:98..99 fg=#10101d bg=#10101d
+  15:99..100 fg=#eeeeee bg=#1a1a2e
   16:0..1 fg=#eeeeee bg=#1a1a2e
   16:1..2 fg=#3c3c4d bg=#16213e
-  16:2..18 fg=#16213e bg=#16213e
-  16:18..29 fg=#eeeeee bg=#16213e
-  16:29..69 fg=#16213e bg=#16213e
-  16:69..70 fg=#3c3c4d bg=#16213e
-  16:70..71 fg=#10101d bg=#10101d
-  16:71..100 fg=#eeeeee bg=#1a1a2e
+  16:2..97 fg=#16213e bg=#16213e
+  16:97..98 fg=#3c3c4d bg=#16213e
+  16:98..99 fg=#10101d bg=#10101d
+  16:99..100 fg=#eeeeee bg=#1a1a2e
   17:0..1 fg=#eeeeee bg=#1a1a2e
   17:1..2 fg=#3c3c4d bg=#16213e
-  17:2..69 fg=#16213e bg=#16213e
-  17:69..70 fg=#3c3c4d bg=#16213e
-  17:70..71 fg=#10101d bg=#10101d
-  17:71..100 fg=#eeeeee bg=#1a1a2e
+  17:2..7 fg=#aaaaaa bg=#16213e
+  17:7..18 fg=#16213e bg=#16213e
+  17:18..19 fg=#3c3c4d bg=#16213e
+  17:19..45 fg=#eeeeee bg=#16213e
+  17:45..46 fg=#3c3c4d bg=#16213e
+  17:46..97 fg=#16213e bg=#16213e
+  17:97..98 fg=#3c3c4d bg=#16213e
+  17:98..99 fg=#10101d bg=#10101d
+  17:99..100 fg=#eeeeee bg=#1a1a2e
   18:0..1 fg=#eeeeee bg=#1a1a2e
   18:1..2 fg=#3c3c4d bg=#16213e
-  18:2..16 fg=#aaaaaa bg=#16213e
-  18:16..18 fg=#16213e bg=#16213e
-  18:18..19 fg=#3c3c4d bg=#16213e
-  18:19..45 fg=#eeeeee bg=#16213e
-  18:45..46 fg=#3c3c4d bg=#16213e
-  18:46..69 fg=#16213e bg=#16213e
-  18:69..70 fg=#3c3c4d bg=#16213e
-  18:70..71 fg=#10101d bg=#10101d
-  18:71..100 fg=#eeeeee bg=#1a1a2e
+  18:2..97 fg=#16213e bg=#16213e
+  18:97..98 fg=#3c3c4d bg=#16213e
+  18:98..99 fg=#10101d bg=#10101d
+  18:99..100 fg=#eeeeee bg=#1a1a2e
   19:0..1 fg=#eeeeee bg=#1a1a2e
   19:1..2 fg=#3c3c4d bg=#16213e
-  19:2..69 fg=#16213e bg=#16213e
-  19:69..70 fg=#3c3c4d bg=#16213e
-  19:70..71 fg=#10101d bg=#10101d
-  19:71..100 fg=#eeeeee bg=#1a1a2e
+  19:2..10 fg=#aaaaaa bg=#16213e
+  19:10..18 fg=#16213e bg=#16213e
+  19:18..19 fg=#3c3c4d bg=#16213e
+  19:19..44 fg=#666666 bg=#16213e
+  19:44..45 fg=#eeeeee bg=#16213e
+  19:45..46 fg=#3c3c4d bg=#16213e
+  19:46..97 fg=#16213e bg=#16213e
+  19:97..98 fg=#3c3c4d bg=#16213e
+  19:98..99 fg=#10101d bg=#10101d
+  19:99..100 fg=#eeeeee bg=#1a1a2e
   20:0..1 fg=#eeeeee bg=#1a1a2e
   20:1..2 fg=#3c3c4d bg=#16213e
-  20:2..7 fg=#aaaaaa bg=#16213e
-  20:7..18 fg=#16213e bg=#16213e
-  20:18..19 fg=#3c3c4d bg=#16213e
-  20:19..45 fg=#eeeeee bg=#16213e
-  20:45..46 fg=#3c3c4d bg=#16213e
-  20:46..69 fg=#16213e bg=#16213e
-  20:69..70 fg=#3c3c4d bg=#16213e
-  20:70..71 fg=#10101d bg=#10101d
-  20:71..100 fg=#eeeeee bg=#1a1a2e
+  20:2..97 fg=#16213e bg=#16213e
+  20:97..98 fg=#3c3c4d bg=#16213e
+  20:98..99 fg=#10101d bg=#10101d
+  20:99..100 fg=#eeeeee bg=#1a1a2e
   21:0..1 fg=#eeeeee bg=#1a1a2e
   21:1..2 fg=#3c3c4d bg=#16213e
-  21:2..69 fg=#16213e bg=#16213e
-  21:69..70 fg=#3c3c4d bg=#16213e
-  21:70..71 fg=#10101d bg=#10101d
-  21:71..100 fg=#eeeeee bg=#1a1a2e
+  21:2..58 fg=#eeeeee bg=#16213e
+  21:58..97 fg=#16213e bg=#16213e
+  21:97..98 fg=#3c3c4d bg=#16213e
+  21:98..99 fg=#10101d bg=#10101d
+  21:99..100 fg=#eeeeee bg=#1a1a2e
   22:0..1 fg=#eeeeee bg=#1a1a2e
-  22:1..2 fg=#3c3c4d bg=#16213e
-  22:2..10 fg=#aaaaaa bg=#16213e
-  22:10..18 fg=#16213e bg=#16213e
-  22:18..19 fg=#3c3c4d bg=#16213e
-  22:19..44 fg=#666666 bg=#16213e
-  22:44..45 fg=#eeeeee bg=#16213e
-  22:45..46 fg=#3c3c4d bg=#16213e
-  22:46..69 fg=#16213e bg=#16213e
-  22:69..70 fg=#3c3c4d bg=#16213e
-  22:70..71 fg=#10101d bg=#10101d
-  22:71..100 fg=#eeeeee bg=#1a1a2e
-  23:0..1 fg=#eeeeee bg=#1a1a2e
-  23:1..2 fg=#3c3c4d bg=#16213e
-  23:2..69 fg=#16213e bg=#16213e
-  23:69..70 fg=#3c3c4d bg=#16213e
-  23:70..71 fg=#10101d bg=#10101d
-  23:71..100 fg=#eeeeee bg=#1a1a2e
-  24:0..1 fg=#eeeeee bg=#1a1a2e
-  24:1..2 fg=#3c3c4d bg=#16213e
-  24:2..58 fg=#eeeeee bg=#16213e
-  24:58..69 fg=#16213e bg=#16213e
-  24:69..70 fg=#3c3c4d bg=#16213e
-  24:70..71 fg=#10101d bg=#10101d
-  24:71..100 fg=#eeeeee bg=#1a1a2e
+  22:1..98 fg=#3c3c4d bg=#16213e
+  22:98..99 fg=#10101d bg=#10101d
+  22:99..100 fg=#eeeeee bg=#1a1a2e
+  23:0..2 fg=#eeeeee bg=#1a1a2e
+  23:2..99 fg=#10101d bg=#10101d
+  23:99..100 fg=#eeeeee bg=#1a1a2e
+  24:0..100 fg=#eeeeee bg=#1a1a2e
   25:0..1 fg=#eeeeee bg=#1a1a2e
-  25:1..70 fg=#3c3c4d bg=#16213e
-  25:70..71 fg=#10101d bg=#10101d
-  25:71..100 fg=#eeeeee bg=#1a1a2e
-  26:0..2 fg=#eeeeee bg=#1a1a2e
-  26:2..71 fg=#10101d bg=#10101d
-  26:71..100 fg=#eeeeee bg=#1a1a2e
-  27:0..100 fg=#eeeeee bg=#1a1a2e
+  25:1..13 fg=#eeeeee bg=#0f3460
+  25:13..15 fg=#eeeeee bg=#1a1a2e
+  25:15..16 fg=#eeeeee bg=#0f3460
+  25:16..17 fg=#e94560 bg=#0f3460
+  25:17..42 fg=#eeeeee bg=#0f3460
+  25:42..44 fg=#eeeeee bg=#1a1a2e
+  25:44..45 fg=#eeeeee bg=#0f3460
+  25:45..46 fg=#e94560 bg=#0f3460
+  25:46..62 fg=#eeeeee bg=#0f3460
+  25:62..70 fg=#aaaaaa bg=#0f3460
+  25:70..71 fg=#eeeeee bg=#0f3460
+  25:71..73 fg=#eeeeee bg=#1a1a2e
+  25:73..74 fg=#eeeeee bg=#0f3460
+  25:74..75 fg=#e94560 bg=#0f3460
+  25:75..99 fg=#eeeeee bg=#0f3460
+  25:99..100 fg=#eeeeee bg=#1a1a2e
+  26:0..15 fg=#eeeeee bg=#1a1a2e
+  26:15..16 fg=#eeeeee bg=#16213e
+  26:16..21 fg=#eeeeee bg=#16213e attrs=B
+  26:21..40 fg=#eeeeee bg=#16213e
+  26:40..41 fg=#16213e bg=#16213e
+  26:41..42 fg=#eeeeee bg=#16213e
+  26:42..100 fg=#eeeeee bg=#1a1a2e
+  27:0..15 fg=#eeeeee bg=#1a1a2e
+  27:15..40 fg=#eeeeee bg=#16213e
+  27:40..41 fg=#16213e bg=#16213e
+  27:41..42 fg=#eeeeee bg=#16213e
+  27:42..100 fg=#eeeeee bg=#1a1a2e
   28:0..100 fg=#eeeeee bg=#1a1a2e
   29:0..100 fg=#eeeeee bg=#1a1a2e

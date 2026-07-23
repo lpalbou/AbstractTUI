@@ -41,6 +41,7 @@ graph BT
     ui["ui<br/>element tree, event routing, focus"]
 
     subgraph content["content layer"]
+        canvas["canvas<br/>sub-cell dot grids, vector strokes"]
         widgets["widgets<br/>built-in library"]
         gfx["gfx<br/>bitmaps, mosaic, pixel protocols"]
         three["three<br/>GLB loading, 3D rasterizer"]

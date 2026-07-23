@@ -12,6 +12,8 @@
 //! Keys: d dissolve replay · m cycle transform · n toast · p pause ·
 //! q quit.
 //!
+//! Docs: docs/architecture.md (the compositor); docs/api.md § "render — surfaces and paint".
+//!
 //! OWNER: DESIGN.
 
 mod common;

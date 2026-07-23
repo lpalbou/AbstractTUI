@@ -8,6 +8,8 @@
 //! Keys: Tab/Shift+Tab focus · Enter/Space activate · arrows in list/tabs
 //! · Ctrl+T cycle theme · F2 spin · q quit (Ctrl+C always).
 //!
+//! Docs: docs/api.md § "widgets — the built-in library".
+//!
 //! OWNER: DESIGN (gallery); interactive widgets are REACT's, visual ones
 //! DESIGN's — this file exercises both through the public API only.
 

@@ -9,6 +9,8 @@
 //!
 //! Keys: g cycle grid recipe · t theme · q quit.
 //!
+//! Docs: docs/api.md § "layout — flex and grid".
+//!
 //! OWNER: DESIGN.
 
 mod common;

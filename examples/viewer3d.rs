@@ -14,6 +14,8 @@
 //! (half/quadrant/sextant/braille) · l/L light · r reset · t theme ·
 //! q quit.
 //!
+//! Docs: docs/graphics-and-3d.md (the 3D pipeline).
+//!
 //! OWNER: DESIGN.
 
 mod common;
@@ -191,7 +193,8 @@ fn main() -> abstracttui::base::Result<()> {
                             .on_zoom(move |steps| {
                                 zoom.update(|z| *z = (*z * (1.0 - steps * 0.1)).clamp(0.25, 6.0))
                             })
-                            .layout(LayoutStyle::default().grow(1.0))
+                            // No .layout() needed: Viewport3D grows into its
+                            // region by default (wave 11).
                             .element(&t)
                             .build(),
                     )

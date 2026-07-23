@@ -10,6 +10,8 @@
 //!
 //! Try: `cargo run -p abstracttui-mermaid --example mermaid`
 //! Or:  `cargo run -p abstracttui-mermaid --example mermaid -- file.mmd`
+//!
+//! Docs: docs/graphs-and-diagrams.md.
 
 use abstracttui::prelude::*;
 use abstracttui::ui::{dyn_view_scoped, text};

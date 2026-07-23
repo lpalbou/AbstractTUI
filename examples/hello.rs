@@ -2,10 +2,10 @@
 //!
 //! A themed panel, a reactive line bound to a signal, quit on q or
 //! Ctrl+C. The whole engine — raw terminal, damage-driven rendering,
-//! fine-grained reactivity, design tokens — one prelude import, under
-//! fifty lines.
+//! fine-grained reactivity, themes — one import, under fifty lines.
 //!
 //! Try: `ABSTRACTTUI_THEME=rose-pine cargo run --example hello`
+//! Docs: docs/getting-started.md § "Your first app".
 //!
 //! OWNER: DESIGN.
 

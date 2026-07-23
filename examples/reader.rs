@@ -10,6 +10,8 @@
 //! via anchor rows) · arrows/PgUp/PgDn/Home/End + wheel scroll ·
 //! Ctrl+T theme · `q` quit.
 //!
+//! Docs: docs/api.md § "render::md — the doc vocabulary and the markdown reader surface".
+//!
 //! OWNER: READER.
 
 use abstracttui::prelude::*;

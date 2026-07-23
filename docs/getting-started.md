@@ -19,7 +19,6 @@ native library to install and no GPU requirement.
 
 ```rust
 use abstracttui::prelude::*;
-use abstracttui::widgets::Button;
 
 fn main() -> abstracttui::base::Result<()> {
     App::simple(|cx| {
@@ -39,7 +38,8 @@ fn main() -> abstracttui::base::Result<()> {
 Line by line:
 
 - **`use abstracttui::prelude::*;`** — one import covers the common path:
-  widgets, layout vocabulary, signals, hooks, and `App` itself.
+  widgets (`Button` included), layout vocabulary, signals, hooks, and `App`
+  itself.
 - **`App::simple(|cx| ...)`** — builds the app, mounts your root component,
   enters the raw terminal, and runs the event loop until quit. The `cx`
   parameter is your `Scope`: the handle you create reactive state with. A panic
@@ -295,19 +295,31 @@ you can skip the driver entirely: mount into a `ui::UiTree`, dispatch events,
 and draw into a `ui::BufferCanvas` — every widget suite in the crate is written
 that way.
 
+When a test (or a bug report) needs to show what the screen looked like,
+capture it as a value and export plain text, replayable ANSI, or an SVG —
+see [the API guide's "Screenshots & captures"](api.md#screenshots--captures)
+and `cargo run --example screenshot`, which demos both the key-binding and
+the headless-test recipe.
+
 ## Where next
 
 - [Architecture](architecture.md) — signals, the damage contract, the
   compositor, and the render pipeline.
 - [API guide](api.md) — the public surface, module by module.
+- [Theming](theming.md) — the token model, custom themes, contrast floors.
+- [Graphics and 3D](graphics-and-3d.md) — images end-to-end, the GLB
+  pipeline, the boot splash.
+- [Live data](live-data.md) — background threads into the UI, bounded and
+  honest.
 - [Graphs and diagrams](graphs-and-diagrams.md) — the extension
   family: graph auto-layout + `GraphView` (`abstracttui-graph`) and
   the honest mermaid subset (`abstracttui-mermaid`), installed only
   when you need them.
 - [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
-- [Examples catalog](../examples/README.md) — nineteen runnable programs, from
-  the 53-line `hello` to the full `dashboard`, with the keys each answers to.
-  For content-heavy apps start with `transcript` (streaming markdown chat),
-  `reader` (tables, images, TOC, search), and `voice_mock` (push-to-talk and
-  live meters, no audio required); for app chrome start with `shell` (full
-  pages behind a `PageHost` tab bar plus `Drawer` panels from both edges).
+- [Examples catalog](../examples/README.md) — twenty-two runnable programs
+  ordered as a learning path, from the 53-line `hello` to the full
+  `dashboard`, with the keys each answers to. For content-heavy apps start
+  with `transcript` (streaming markdown chat), `reader` (tables, images,
+  TOC, search), and `voice_mock` (push-to-talk and live meters, no audio
+  required); for app chrome start with `shell` (full pages behind a
+  `PageHost` tab bar plus `Drawer` panels from both edges).

@@ -529,9 +529,15 @@ fn select_popup_content(
                     Key::Enter => commit(),
                     Key::Char(c) if !c.is_control() => {
                         // Type-ahead: prefix jump / same-char cycle.
+                        // Time is the AMBIENT event timestamp (the
+                        // click-chain rule): the driver publishes its
+                        // injectable clock each turn, so scripted tests
+                        // drive the prefix window deterministically.
+                        // Real time only when nothing published.
+                        let now = crate::ui::event_time().unwrap_or_else(std::time::Instant::now);
                         let target = {
                             let mut s = session.borrow_mut();
-                            let buf = s.type_ahead.push(c, std::time::Instant::now());
+                            let buf = s.type_ahead.push(c, now);
                             type_ahead_target(&options, &disp, buf, h)
                         };
                         if let Some(p) = target {

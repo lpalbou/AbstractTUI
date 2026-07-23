@@ -18,6 +18,8 @@
 //! the idle log-tick damage economy is byte-identical with the panel
 //! closed.
 //!
+//! Docs: docs/api.md § "widgets — the built-in library"; docs/live-data.md.
+//!
 //! OWNER: DESIGN.
 
 #[path = "../common/mod.rs"]

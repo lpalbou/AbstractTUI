@@ -52,6 +52,16 @@ module: `animate(cx, source, easing, duration)` returns a signal following
 `after(delay, f)` runs a one-shot closure on the UI thread, costing zero
 wakeups until due.
 
+Timers arm AND fire against the loop's clock, never a stray wall-clock
+read: inside a driven turn the driver publishes its (injectable) clock,
+so one injected test clock scripts `after`/`interval` deadlines end to
+end (an `after(0)` armed under an injected timeline comes due on that
+timeline, even when real time has raced ahead). Custom loop authors
+driving `run_due_timers(now)` publish the same value around their
+user-code phases with `reactive::set_loop_clock(Some(now))` — the
+driver does this automatically — and `None` restores real-time arming
+for bare rigs.
+
 ## reactive::connection — lifecycle + jittered reconnect
 
 `connection(cx, backoff, dial)` owns what every networked app
@@ -143,10 +153,12 @@ it). Every mouse-Down handler can read the press's chain position via
 press, 3 = a triple's third. Both presses deliver normally — nothing is
 delayed waiting for a second click — so the convention is one `if` in a
 press handler: **single-click selects, double-click activates** (click 1
-did the selecting; click 2 additionally commits). `Table::on_activate`
-ships exactly that; `List`'s click-on-selected picker gesture subsumes
-it without a timer. The recipe for hand-rolled rows (custom cards,
-graph nodes):
+did the selecting; click 2 additionally commits).
+[`Table::on_activate`](#table--selection-vs-activation) ships exactly
+that; [`List`](#list--selection-vs-activation)'s click-on-selected
+picker gesture subsumes it without a timer (`examples/activate.rs`
+shows both side by side). The recipe for hand-rolled rows (custom
+cards, graph nodes):
 
 ```rust
 use abstracttui::ui::{MouseButton, MouseKind, UiEvent};
@@ -167,7 +179,10 @@ if let UiEvent::Mouse(m) = ev {
 Counts flow only where time flows: the driver publishes its
 (`set_clock`-injectable) clock as the ambient event time each turn, so
 apps under `App::run` get counts for free and tests script double-click
-timing through the same injected clock animations use. A bare `UiTree`
+timing through the same injected clock animations use — and, since the
+wave-11 timer fix, the same clock timer deadlines ARM against
+(`reactive::set_loop_clock` is the custom-loop half of that one-clock
+story; see the reactive section). A bare `UiTree`
 driven directly has no time source and every press deterministically
 counts 1 — harnesses opt in with `ui::set_event_time(Some(t))`. Custom
 input paths outside tree dispatch can embed their own `ui::ClickChain`
@@ -223,7 +238,16 @@ Every widget is built from the same public `ui` + `layout` + `theme` surface
 user code has — widgets hold no engine privileges. They consume design
 tokens only, never raw colors; the canonical build is `.view(cx)` (theme
 from context), with an `element` form for explicit tokens — stateless
-widgets take just `&TokenSet`, no `Scope`. The catalog:
+widgets take just `&TokenSet`, no `Scope`. One honest exception:
+`Meter` and `AudioScope` are `view(cx)`-only (signal-driven — their
+tokens resolve TRACKED inside their own reactive region, so a
+fixed-token `element` form would need a wrapper node just to change the
+token source; the deliberate absence is documented in their rustdoc).
+Controlled-mode bindings are named after the STATE they bind: `value`
+(`Select`/`Combobox`), `selection` (`List`/`Table`), `active`
+(`PageHost`), `folded` (`Disclosure`), `offset_x`/`offset_y`
+(`Scroll`) — new widgets follow the state-name rule; the one historical
+outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 
 - **Block** — the bordered panel primitive: title, fill, focus ring, `BorderKind`.
 - **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
@@ -233,6 +257,7 @@ widgets take just `&TokenSet`, no `Scope`. The catalog:
 - **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
+- **PageHost** — the page-level tab host: N FULL pages behind one themed tab bar, exactly one mounted (see [its own section](#widgetspagehost--the-page-level-tab-host) below).
 - **Disclosure** — the fold/unfold card: a one-row title header (glyph + truncating title + muted detail slot) that expands a body in place. Click or Enter/Space toggles; `max_body_rows` caps the body behind a scrollbar; state is widget-internal (`initially_folded`) or app-owned (`folded(Signal<bool>)`).
 - **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override) and can be read back through `extent_signal`; `follow_tail` binds the pinned-to-bottom idiom; `scrollbar_auto_hide` hides the bar while content fits.
 - **Checkbox** — `[x] label` bound to a `Signal<bool>`.
@@ -246,7 +271,7 @@ widgets take just `&TokenSet`, no `Scope`. The catalog:
   history-rings section below).
 - **Grid** — container widget over `Display::Grid`; spans ride each child's own style.
 - **Image** — bitmap display through the mosaic pipeline (`ImageFit`; `Bitmap` re-exported beside it). Measures as its native cell footprint, so it holds real space in `Auto`-sized rows/panels.
-- **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals.
+- **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals. Grows into its region by default (a draw widget has no intrinsic size — the old zero-height default rendered nothing without an explicit `.layout`).
 - **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code.
 - **Meter / AudioScope** — live level rendering: dB meter with real ballistics (instant attack, timed decay, peak hold) and a rolling braille waveform — see the live-levels section below.
 - **Logo** — the AbstractTUI wordmark for headers, about screens, empty states.
@@ -635,6 +660,13 @@ scope's ring (with honest drop accounting riding along). The scope owns
 no clock — when the data stops, the last frame stays and nothing
 re-renders.
 
+Both are `view(cx)`-only — the catalog's one exception to the
+`element(&tokens)` form. They are signal-driven by construction, and
+their theme tokens resolve tracked inside the same reactive region
+that follows the level data; a fixed-token `element` build would need
+a wrapper node just to change where tokens come from, so it is a
+deliberate absence, not an oversight.
+
 `examples/voice_mock.rs` composes all of it — push-to-talk, meters,
 scope, a fake transcription feed — with no audio and no network (the
 capture gesture itself is `app::PushToTalk`, described with the app
@@ -862,6 +894,81 @@ fn command_picker(cx: Scope) -> (View, SelectHandle) {
 }
 ```
 
+## widgets::PageHost — the page-level tab host
+
+Full complex pages behind one themed tab bar (app-kits 0545 — "a
+global tab system... higher-level containers able to contain full
+complex pages"). `Tabs` remains the small in-content strip; the
+navigation-kit `FilterTabs` (0550, proposed) filters one surface
+without panels. A `PageHost` is the app-shell container: N pages
+addressed by id, exactly one mounted.
+
+```rust
+use abstracttui::prelude::*;
+
+fn shell(cx: Scope, alerts: Signal<u32>) -> View {
+    PageHost::new()
+        .page("overview", "Overview", move |gcx| overview(gcx))
+        .page("reader", "Reader", move |gcx| reader(gcx))
+        .page("settings", "Settings", move |gcx| settings(gcx))
+        .badge("overview", move || {
+            let n = alerts.get();
+            (n > 0).then(|| n.to_string())
+        })
+        .number_jump(true) // opt-in: plain digits 1-9 jump
+        .view(cx)
+}
+```
+
+- **Pages are builders** (`FnMut(Scope) -> View`) receiving a
+  per-activation GENERATION scope: only the active page is mounted;
+  switching disposes the outgoing page's scope (signals, effects,
+  timers, focus) and builds the incoming one fresh.
+- **No keep-alive, by design**: a hidden-but-mounted page's timers
+  would keep ticking — the zero-idle law forbids it. Durable page
+  state lives in app-owned signals created OUTSIDE the builders (the
+  compose store pattern); builders re-read them on remount. Demo:
+  `examples/shell.rs` (type into Settings, leave, return).
+- **Controlled or uncontrolled**: `.active(Signal<String>)` hands the
+  app the navigation signal (the cycle-7 router ruling: navigation
+  state IS a signal — external writes switch pages, `on_change` does
+  not fire for them); otherwise the host owns an internal signal and
+  `.initial(id)` picks the start page. Unknown ids fold to the first
+  page. `on_change(|id|)` fires after the active write on host-driven
+  switches (disposal-safe, the 0297 law). It hands you the page ID
+  where `Tabs::on_change` hands an index — deliberate, not drift: a
+  `Tabs` strip is positional (its panels are an ordered list), while
+  `PageHost` pages are id-addressed identities that navigation state
+  (`active(Signal<String>)`) names directly.
+- **Tab bar**: two rows (titles + the `border_focus` cell strip);
+  active `text`+BOLD, idle `text_muted`, badges `info`, ground
+  `surface`. Badges are reactive getters — a count change repaints
+  the bar only. Overflow WINDOWS the strip around the active tab
+  (sticky window start; `‹`/`›` indicators are prev/next click
+  targets); oversized titles truncate with an ellipsis. Clicks
+  hit-test the bar plan AS DRAWN — the pixels on screen — so a model
+  change landing between a draw and a press (a badge widening) can
+  never shift a tab under the pointer; nothing to configure. One tab
+  stop, `Role::Tabs`, access value `"Title (i/N) [badge]"`.
+- **Chords** (default Ctrl+PgUp/PgDn; `.chords(prev, next)` replaces,
+  and EMPTY sets disarm the interceptor entirely — the reserved keys
+  return to the content) are CONTAINER-RESERVED: intercepted at
+  Capture phase on the host root, because scrollable widgets match
+  PageUp/PageDown modifier-blind and would eat a bubble-layer chord;
+  plain PgUp/PgDn always stay with the content. Matching is
+  normalized — both wire spellings of a shifted letter fire. Chords
+  are live while focus is anywhere inside the host; with nothing
+  focused, keys target the tree root, so a host mounted AS the root
+  element answers from frame one (otherwise establish focus:
+  click/Tab/`focus_first` — inside a MODAL overlay, a `Modal` or a
+  modal `Drawer`, `focus_init` lands on the bar and chords answer
+  with no ritual). A chord/digit switch re-anchors focus on the host
+  root so the next chord is never dead after the focused node died
+  with its page.
+- **Digit jumps** ride the shortcut table (never capture): a focused
+  text input keeps its digits; declared labels surface in
+  keymap-help.
+
 ## The widget disposal-safety law
 
 **Every widget completes its own bookkeeping — every write to its
@@ -1086,16 +1193,22 @@ chat/inspector panel, translated to cells. Install once, then drive it
 through the handle or a bound signal:
 
 ```rust
-let inspector = Drawer::new(DrawerEdge::Right)
-    .size(DrawerSize::Percent(0.4))     // or Cells(n); cross axis fills
-    .title("Inspector")                  // themed header + esc hint + ✕
-    .motion(Duration::from_millis(160)) // Duration::ZERO = instant mode
-    // (ZERO is also the deterministic-test mode: in a wall-time-less
-    // headless harness a timed slide never advances, so the panel
-    // renders nothing until real frames elapse — console-tui field note)
-    .on_close(|why| { /* DrawerCloseReason::{Api, Escape, ..} */ })
-    .install(cx, |mount| inspector_page(mount));
-inspector.toggle();                      // open / close / is_open too
+use std::time::Duration;
+use abstracttui::prelude::*;
+
+fn wire_inspector(cx: Scope, page: impl Fn(Scope) -> View + 'static) -> DrawerHandle {
+    let inspector = Drawer::new(DrawerEdge::Right)
+        .size(DrawerSize::Percent(0.4))     // or Cells(n); cross axis fills
+        .title("Inspector")                  // themed header + esc hint + ✕
+        .motion(Duration::from_millis(160)) // Duration::ZERO = instant mode
+        // (ZERO is also the deterministic-test mode: in a wall-time-less
+        // headless harness a timed slide never advances, so the panel
+        // renders nothing until real frames elapse — console-tui field note)
+        .on_close(|why| { /* DrawerCloseReason::{Api, Escape, ..} */ })
+        .install(cx, move |mount| page(mount));
+    inspector.toggle();                      // open / close / is_open too
+    inspector
+}
 ```
 
 Focus modes: `DrawerFocus::Modal` (default) is a focus-trapped tree —
@@ -1105,7 +1218,12 @@ the page with the theme's `overlay` token. The titled header's ✕ is a
 MOUSE-ONLY affordance (deliberately not focusable — chrome must never
 steal a modal's initial focus from the content it frames, so
 `focus_init` lands on the page and a hosted `PageHost`'s chords answer
-from frame one); Esc is the keyboard close. `DrawerFocus::Passive` is
+from frame one); Esc is the keyboard close. Closing releases the
+keyboard the INSTANT it begins: keys pressed during the closing slide
+route to the app (the departing panel is display-only — Esc-then-
+shortcut works at any typing speed), and a reopen that reverses the
+flight re-arms the trap and re-establishes initial focus.
+`DrawerFocus::Passive` is
 glanceable: keys stay with the main surface until the user clicks into
 the panel (the focused-overlay key rule); no scrim ever — dimming
 content that stays interactive would lie. The default diverges from the
@@ -1132,7 +1250,10 @@ re-solves, surfaces resize, an in-flight slide continues toward the
 fresh resting place) — unlike `Popup`, which dismisses, a drawer's
 anchor is the edge itself and never goes stale. `bind(Signal<bool>)` is
 the controlled mode: external writes open/close, handle verbs write
-back — one truth. See `examples/shell.rs` (the 'i'/'g' drawers) and
+back — one truth. (Naming note: `bind` is the one departure from the
+state-name binding convention in the widgets intro — its state word
+would be "open", which reads like a verb; renaming would be breaking
+and is not planned.) See `examples/shell.rs` (the 'i'/'g' drawers) and
 `examples/drawers.rs`.
 
 ## app::keys — key press/release state (held keys)
@@ -1465,6 +1586,85 @@ underlying text↔cells mapping (byte offset ↔ column, both directions)
 is the shared substrate content selection (backlog 0160) will consume.
 `examples/reader.rs` composes all of it into an mdpad-class reader.
 
+## canvas — Canvas & vector strokes
+
+The sub-cell vector layer (extensions 0420): the dot-grid math the
+charts always used privately, promoted to public API so diagram
+extensions (`abstracttui-graph`, mermaid) and app draw closures stop
+re-deriving it. `Sparkline`/`LineChart` lines, `BarChart` bars and
+`Progress` fills all draw through this layer today — the promotion
+kept their rendered cells byte-identical (test-pinned).
+
+```rust
+use abstracttui::base::Point;
+use abstracttui::canvas::DotCanvas;
+use abstracttui::prelude::*;
+
+fn trace(cx: Scope, samples: Signal<Vec<(f32, f32)>>) -> View {
+    let t = use_theme(cx).get().tokens;
+    let ink = t.chart(0); // resolve tokens at build time, as always
+    dyn_view(LayoutStyle::default().grow(1.0), move || {
+        let pts = samples.get();
+        Element::new()
+            .style(LayoutStyle::fill())
+            .draw(move |canvas, rect| {
+                let mut dots = DotCanvas::braille(rect.w, rect.h);
+                for w in pts.windows(2) {
+                    let c = (0.5 * (w[0].0 + w[1].0), 0.5 * (w[0].1 + w[1].1));
+                    dots.bezier_quad(w[0], c, w[1], 0.25);
+                }
+                dots.blit(canvas, Point::new(rect.x, rect.y), ink);
+            })
+            .build()
+    })
+}
+```
+
+- **The dot-space model**: a `DotCanvas` covers a cell rect with a
+  finer grid — `DotMode::Braille` is 2x4 dots per cell (a WxH panel =
+  a 2Wx4H dot canvas), `DotMode::Quadrant` 2x2 (universal glyph
+  coverage where braille fonts are unreliable — the same degradation
+  rationale as the image mosaic; the mode enum is `#[non_exhaustive]`,
+  sextant is a known candidate). Dot (0,0) is top-left; strokes clip
+  at the grid edge, never panic.
+- **Primitives**: `set`/`clear`/`get`, `line` (Bresenham — far
+  off-grid endpoints are pre-clipped so a panned diagram edge costs
+  O(grid), never O(length)), `polyline`, `bezier_quad`/`bezier_cubic`
+  (adaptive flattening to a flatness tolerance in dot units, depth-
+  bounded at 4096 segments per curve), `ellipse_arc`
+  (parameter-stepped, ≤ 2048 segments). All deterministic — same
+  inputs, same dots, on every platform (arcs use an in-crate
+  polynomial sin/cos instead of the platform libm) — and non-finite
+  inputs draw nothing, the chart sample-skip contract.
+- **The cell-color rule (documented z-order)**: a terminal cell
+  carries ONE fg and ONE glyph, so `blit(canvas, origin, color)`
+  paints every non-empty cell in one stroke color and SKIPS empty
+  cells. Overlapping grids therefore compose at cell granularity:
+  later blits win overlapping cells — glyph and color both, dots
+  never merge across grids. Multi-color pictures = one grid per
+  color, blitted back-to-front (exactly how `LineChart` layers its
+  series). `blit_styled` takes a full `render::Style` patch instead
+  of a bare color, so a stroke can carry attributes and a link id.
+- **Composition is free**: blits go through `ui::Canvas`/
+  `ui::StyledCanvas`, so `ClippedCanvas` clipping and damage tracking
+  apply — a blit into a damaged region repaints only that region.
+  `clear_all()` keeps the allocation; the whole stroke + blit steady
+  state allocates nothing (pinned in `tests/alloc_budget.rs`).
+- **Eighth-block fills**: `fill_v`/`fill_h` draw partial gauge/bar
+  fills at 8 steps per cell (the `BarChart`/`Progress` vocabulary);
+  the glyph ramps `V_EIGHTHS`/`H_EIGHTHS`, the quadrant table and
+  `braille_bit` are exported for callers building their own cell
+  vocabularies.
+- **Colors are caller-resolved** `Rgba` (the widget token rule):
+  resolve theme tokens — `t.chart(i)`, `t.accent` — at view-build
+  time and pass the values; the canvas layer invents no colors.
+
+This layer is what the extension family draws its diagram edges with —
+for node-and-edge graphs and mermaid sources, use the sibling crates
+instead of hand-stroking (see
+[the extensions section](#extensions-family--sibling-crates-on-this-api)
+and [graphs-and-diagrams.md](graphs-and-diagrams.md)).
+
 ## gfx — images
 
 `gfx::decode_image(bytes)` sniffs the magic bytes (containers lie, bytes do
@@ -1608,7 +1808,11 @@ Input is fed as the terminal would send it, so every dispatch, focus, and
 damage path is the real one. For pure component tests, skip the driver: mount
 into a `ui::UiTree`, dispatch events, draw into a `ui::BufferCanvas`.
 Golden-snapshot assertions and deterministic fuzz helpers round out the
-module.
+module. When a test needs to EXPORT what the screen looked like — as
+evidence in a failure report or a docs artifact — capture it as a value
+and write text/ANSI/SVG: that is the
+[Screenshots & captures](#screenshots--captures) section, and both of
+its capture surfaces work headlessly.
 
 ## Screenshots & captures
 
@@ -1736,150 +1940,6 @@ Plain statements of current behavior:
   host, but it has not yet run on a live Windows machine; treat a first
   Windows deployment as a beta event. macOS and Linux are the live-verified
   platforms.
-
-## widgets::PageHost — the page-level tab host
-
-Full complex pages behind one themed tab bar (app-kits 0545 — "a
-global tab system... higher-level containers able to contain full
-complex pages"). `Tabs` remains the small in-content strip; the
-navigation-kit `FilterTabs` (0550, proposed) filters one surface
-without panels. A `PageHost` is the app-shell container: N pages
-addressed by id, exactly one mounted.
-
-```rust
-use abstracttui::prelude::*;
-
-fn shell(cx: Scope, alerts: Signal<u32>) -> View {
-    PageHost::new()
-        .page("overview", "Overview", move |gcx| overview(gcx))
-        .page("reader", "Reader", move |gcx| reader(gcx))
-        .page("settings", "Settings", move |gcx| settings(gcx))
-        .badge("overview", move || {
-            let n = alerts.get();
-            (n > 0).then(|| n.to_string())
-        })
-        .number_jump(true) // opt-in: plain digits 1-9 jump
-        .view(cx)
-}
-```
-
-- **Pages are builders** (`FnMut(Scope) -> View`) receiving a
-  per-activation GENERATION scope: only the active page is mounted;
-  switching disposes the outgoing page's scope (signals, effects,
-  timers, focus) and builds the incoming one fresh.
-- **No keep-alive, by design**: a hidden-but-mounted page's timers
-  would keep ticking — the zero-idle law forbids it. Durable page
-  state lives in app-owned signals created OUTSIDE the builders (the
-  compose store pattern); builders re-read them on remount. Demo:
-  `examples/shell.rs` (type into Settings, leave, return).
-- **Controlled or uncontrolled**: `.active(Signal<String>)` hands the
-  app the navigation signal (the cycle-7 router ruling: navigation
-  state IS a signal — external writes switch pages, `on_change` does
-  not fire for them); otherwise the host owns an internal signal and
-  `.initial(id)` picks the start page. Unknown ids fold to the first
-  page. `on_change(|id|)` fires after the active write on host-driven
-  switches (disposal-safe, the 0297 law).
-- **Tab bar**: two rows (titles + the `border_focus` cell strip);
-  active `text`+BOLD, idle `text_muted`, badges `info`, ground
-  `surface`. Badges are reactive getters — a count change repaints
-  the bar only. Overflow WINDOWS the strip around the active tab
-  (sticky window start; `‹`/`›` indicators are prev/next click
-  targets); oversized titles truncate with an ellipsis. Clicks
-  hit-test the bar plan AS DRAWN — the pixels on screen — so a model
-  change landing between a draw and a press (a badge widening) can
-  never shift a tab under the pointer; nothing to configure. One tab
-  stop, `Role::Tabs`, access value `"Title (i/N) [badge]"`.
-- **Chords** (default Ctrl+PgUp/PgDn; `.chords(prev, next)` replaces,
-  and EMPTY sets disarm the interceptor entirely — the reserved keys
-  return to the content) are CONTAINER-RESERVED: intercepted at
-  Capture phase on the host root, because scrollable widgets match
-  PageUp/PageDown modifier-blind and would eat a bubble-layer chord;
-  plain PgUp/PgDn always stay with the content. Matching is
-  normalized — both wire spellings of a shifted letter fire. Chords
-  are live while focus is anywhere inside the host; with nothing
-  focused, keys target the tree root, so a host mounted AS the root
-  element answers from frame one (otherwise establish focus:
-  click/Tab/`focus_first` — inside a MODAL overlay, a `Modal` or a
-  modal `Drawer`, `focus_init` lands on the bar and chords answer
-  with no ritual). A chord/digit switch re-anchors focus on the host
-  root so the next chord is never dead after the focused node died
-  with its page.
-- **Digit jumps** ride the shortcut table (never capture): a focused
-  text input keeps its digits; declared labels surface in
-  keymap-help.
-
-## canvas — Canvas & vector strokes
-
-The sub-cell vector layer (extensions 0420): the dot-grid math the
-charts always used privately, promoted to public API so diagram
-extensions (`abstracttui-graph`, mermaid) and app draw closures stop
-re-deriving it. `Sparkline`/`LineChart` lines, `BarChart` bars and
-`Progress` fills all draw through this layer today — the promotion
-kept their rendered cells byte-identical (test-pinned).
-
-```rust
-use abstracttui::base::Point;
-use abstracttui::canvas::DotCanvas;
-use abstracttui::prelude::*;
-
-fn trace(cx: Scope, samples: Signal<Vec<(f32, f32)>>) -> View {
-    let t = use_theme(cx).get().tokens;
-    let ink = t.chart(0); // resolve tokens at build time, as always
-    dyn_view(cx, move |_| {
-        let pts = samples.get();
-        Element::new()
-            .style(LayoutStyle::default().grow(1.0))
-            .draw(move |canvas, rect| {
-                let mut dots = DotCanvas::braille(rect.w, rect.h);
-                for w in pts.windows(2) {
-                    let c = (0.5 * (w[0].0 + w[1].0), 0.5 * (w[0].1 + w[1].1));
-                    dots.bezier_quad(w[0], c, w[1], 0.25);
-                }
-                dots.blit(canvas, Point::new(rect.x, rect.y), ink);
-            })
-            .build()
-    })
-}
-```
-
-- **The dot-space model**: a `DotCanvas` covers a cell rect with a
-  finer grid — `DotMode::Braille` is 2x4 dots per cell (a WxH panel =
-  a 2Wx4H dot canvas), `DotMode::Quadrant` 2x2 (universal glyph
-  coverage where braille fonts are unreliable — the same degradation
-  rationale as the image mosaic; the mode enum is `#[non_exhaustive]`,
-  sextant is a known candidate). Dot (0,0) is top-left; strokes clip
-  at the grid edge, never panic.
-- **Primitives**: `set`/`clear`/`get`, `line` (Bresenham — far
-  off-grid endpoints are pre-clipped so a panned diagram edge costs
-  O(grid), never O(length)), `polyline`, `bezier_quad`/`bezier_cubic`
-  (adaptive flattening to a flatness tolerance in dot units, depth-
-  bounded at 4096 segments per curve), `ellipse_arc`
-  (parameter-stepped, ≤ 2048 segments). All deterministic — same
-  inputs, same dots, on every platform (arcs use an in-crate
-  polynomial sin/cos instead of the platform libm) — and non-finite
-  inputs draw nothing, the chart sample-skip contract.
-- **The cell-color rule (documented z-order)**: a terminal cell
-  carries ONE fg and ONE glyph, so `blit(canvas, origin, color)`
-  paints every non-empty cell in one stroke color and SKIPS empty
-  cells. Overlapping grids therefore compose at cell granularity:
-  later blits win overlapping cells — glyph and color both, dots
-  never merge across grids. Multi-color pictures = one grid per
-  color, blitted back-to-front (exactly how `LineChart` layers its
-  series). `blit_styled` takes a full `render::Style` patch instead
-  of a bare color, so a stroke can carry attributes and a link id.
-- **Composition is free**: blits go through `ui::Canvas`/
-  `ui::StyledCanvas`, so `ClippedCanvas` clipping and damage tracking
-  apply — a blit into a damaged region repaints only that region.
-  `clear_all()` keeps the allocation; the whole stroke + blit steady
-  state allocates nothing (pinned in `tests/alloc_budget.rs`).
-- **Eighth-block fills**: `fill_v`/`fill_h` draw partial gauge/bar
-  fills at 8 steps per cell (the `BarChart`/`Progress` vocabulary);
-  the glyph ramps `V_EIGHTHS`/`H_EIGHTHS`, the quadrant table and
-  `braille_bit` are exported for callers building their own cell
-  vocabularies.
-- **Colors are caller-resolved** `Rgba` (the widget token rule):
-  resolve theme tokens — `t.chart(i)`, `t.accent` — at view-build
-  time and pass the values; the canvas layer invents no colors.
 
 ## Extensions family — sibling crates on this API
 

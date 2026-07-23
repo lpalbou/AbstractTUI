@@ -119,6 +119,24 @@ note per ADR-0001 §2. Additive work never needs this list.
    window opens; the additive surface is complete without it (entry-4
    posture).
 
+7. **`app::drawer::DrawerSize` → `#[non_exhaustive]` — CANDIDATE, not
+   committed** (wave-11 API-consistency audit, 2026-07-25). The enum
+   is a consumer-constructed extent vocabulary (`Cells`/`Percent`)
+   that plausibly grows (`Auto` = size-to-content is the natural next
+   variant), and the family precedent already chose defensiveness:
+   `abstracttui-graph`'s `GraphAlgo` — the same "select one of a
+   growable set" shape — was BORN `#[non_exhaustive]` for exactly this
+   reason, while `DrawerSize` shipped exhaustive at 0.2.12. Adding the
+   attribute now is `enum_now_non_exhaustive`-class MAJOR (downstream
+   exhaustive matches break), so it can only ride a budgeted window.
+   Enters only if a third variant is actually wanted by then — if
+   `Cells`/`Percent` still cover every consumer, the honest move is to
+   leave it exhaustive and drop this entry (`DrawerEdge`/`DrawerFocus`
+   stay exhaustive deliberately: four edges and two focus policies are
+   closed vocabularies by design, ADR-0003 §3). Migration note if
+   taken: downstream `match size` gains a `_` arm; construction is
+   unaffected.
+
 ## Enforcement
 
 - The `semver` CI job (`.github/workflows/ci.yml`, wired 2026-07-22)

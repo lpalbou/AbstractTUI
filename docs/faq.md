@@ -71,6 +71,31 @@ assert on rendered text (or raw bytes) with every dispatch, focus, and
 damage path being the real one. For pure component tests, skip the driver:
 mount into a `ui::UiTree`, dispatch events, draw into a buffer canvas.
 
+## How do I capture a screenshot of my app?
+
+Capture the screen as a plain value and export it: `Screenshot` (in the
+prelude) exports deterministic plain text (`to_text`), replayable ANSI you
+can `cat` back into a terminal (`to_ansi`), and a GitHub-renderable SVG
+(`to_svg`). Three capture surfaces: `driver.screenshot()` for embedders
+and tests (the frame as last presented), `app::request_screenshot(cb)`
+from any key handler (bind your own key — there is deliberately no engine
+default), and `term.screen().screenshot()` in headless tests (what the
+emitted bytes actually produced). One honesty rule: pixel-protocol image
+regions export as labeled veils, never as fake cells. See
+[api.md § "Screenshots & captures"](api.md#screenshots--captures) and
+`cargo run --example screenshot`.
+
+## Can I draw custom vector graphics — or render graphs and diagrams?
+
+For hand-rolled traces, the public sub-cell canvas (`DotCanvas`, in the
+prelude) gives you braille/quadrant dot grids with line/bezier/arc strokes
+and eighth-block fills — the same layer the shipped charts draw through
+([api.md § canvas](api.md#canvas--canvas--vector-strokes)). For
+node-and-edge diagrams, don't hand-stroke: the sibling crates
+`abstracttui-graph` (auto-layout + `GraphView`) and `abstracttui-mermaid`
+(honest mermaid subset) install only when you need them — see
+[graphs-and-diagrams.md](graphs-and-diagrams.md).
+
 ## Can I embed AbstractTUI in an existing event loop?
 
 Yes. `App::run` is a convenience, not a requirement. `Driver::turn` runs

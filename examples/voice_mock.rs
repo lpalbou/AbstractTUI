@@ -28,6 +28,8 @@
 //!
 //! Try: `cargo run --example voice_mock`
 //!
+//! Docs: docs/api.md § "app::keys" + § "app::PushToTalk" + § "Meter and AudioScope — live levels".
+//!
 //! OWNER: INPUTAV (wave 3).
 
 use std::time::Duration;

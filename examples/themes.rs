@@ -7,6 +7,8 @@
 //!
 //! Keys: arrows move · Enter applies · q quits.
 //!
+//! Docs: docs/theming.md.
+//!
 //! OWNER: DESIGN.
 
 mod common;
