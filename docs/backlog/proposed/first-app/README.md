@@ -9,14 +9,13 @@ item records the workaround so the engine fix can delete it.
 
 | ID | Title | Class |
 | --- | --- | --- |
-| 0250 | `List::on_select` fires on arrow movement — no activation concept | footgun/API |
 | 0260 | Disclosure widget — graphical per-item fold/unfold (maintainer ask) | feature |
 | 0280 | Feed custom blocks cannot host widgets — protocol images degrade to mosaic | capability gap |
-| 0290 | Selection region lingers after the release-copy — `c`/Enter keep being swallowed | footgun/UX |
+| 0281 | Scroll never re-clamps a bound offset when content shrinks under it | API gap |
+| 0282 | `FeedState::sync` source shape too narrow — fold-shaped stores cannot adopt (borrow-based `sync_with` ask) | API gap |
+| 0283 | Capped preview blocks — width-aware `max_rows` + honest overflow marker on Text/Rich feed blocks (+ hang-indent, tight-rhythm notes) | capability gap |
 | 0292 | Completion triggers fire on any mid-text token — no position policy (renumbered from 0300: band collision with control-plane) | API gap |
 | 0294 | Anchored panel places short lists over the chrome below instead of flipping up (renumbered from 0310) | UX defect |
-| 0297 | Disposal safety engine-wide — the 0250 ruling stopped at List/Table; Button's post-callback write forces the consumer's one-tick retire deferral (FIELD §3.1, filed convergence cycle 2) | footgun/API |
-| 0298 | Stale frame band above the live frame after a workflow-picker close (resize suspected) | rendering bug |
 
 Completed (moved to `../../completed/first-app/`, 2026-07-21 wave cycle 1):
 
@@ -41,3 +40,9 @@ Completed 2026-07-23 (0.2.6 field wave):
 | --- | --- | --- |
 | 0291 | Placeholder while focused-and-empty — `TextArea::placeholder_while_focused` + `TextInput` parity; autofocused composers paint their teaching beside the caret (default OFF, decision in-item) | API gap |
 | 0299 | Public full-redraw verb — `app::request_full_redraw()` + opt-in `set_redraw_on_focus_gained`; per-channel image re-place folded into `resync_unknown_screen` (heals suspend-resume too) | API gap |
+
+Table reconciliation (2026-07-23, by the consumer while filing 0281-0283):
+the open table above had gone stale against the directory — 0250 (fixed
+0.2.0), 0290 (0.2.2), 0297 (0.2.3) and 0298 all live in
+`../../completed/first-app/`; their rows are removed from the open table.
+The directory is the truth.

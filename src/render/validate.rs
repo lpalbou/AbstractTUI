@@ -8,15 +8,18 @@ use super::surface::Surface;
 impl Surface {
     /// Structural oracle for property tests (RT1-4): checks every
     /// invariant the pipeline leans on and names the first violation.
-    /// Available in tests and debug builds; release builds compile it out
-    /// (call sites gate themselves).
+    /// Available in ALL builds: the old `cfg(any(test, debug_assertions))`
+    /// gate made every integration test calling it fail to COMPILE under
+    /// `cargo test --release` — `cfg(test)` applies only to the library's
+    /// own unit-test build, never to external test binaries linking the
+    /// release lib (caught live by the scheduled perf workflow's release
+    /// prebuild, 2026-07-23). Costs nothing unless called.
     ///
     /// Checks: wide pairs intact (leader immediately followed by a
     /// continuation mirroring its full style, `ul` included; no orphan
     /// continuation; no leader in the last column), pooled glyph ids
     /// resolve in THIS surface's pool, link ids resolve in THIS surface's
     /// table.
-    #[cfg(any(test, debug_assertions))]
     pub fn debug_validate(&self) -> Result<(), String> {
         for y in 0..self.height() {
             let mut x = 0;
