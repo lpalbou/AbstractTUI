@@ -1,11 +1,11 @@
-# Prompt: upgrade abstractcode-tui to AbstractTUI 0.2.3
+# Prompt: upgrade abstractcode-tui to AbstractTUI 0.2.4
 
 Copy everything below the line into the abstractcode-tui session.
 
 ---
 
 Your project `~/tmp/abstractframework/abstractcode-tui` is built against
-`abstracttui = "0.2.1"`. **AbstractTUI 0.2.3 is released** (crates.io +
+`abstracttui = "0.2.1"`. **AbstractTUI 0.2.4 is released** (crates.io +
 https://github.com/lpalbou/AbstractTUI, ~1,640 tests green; 0.2.2 shipped
 yesterday, so you are two releases behind). Your open filings moved:
 0290/0293/0295/0296 landed in 0.2.2, 0297 in 0.2.3; your Card system and
@@ -14,9 +14,9 @@ hand-roll is the named example in the new `reactive::connection` module
 doc. Upgrade and delete app-side machinery where the engine now
 owns the job — with the honest caveats below where it does NOT.
 
-**Dependency first**: set `abstracttui = "0.2.3"` in `Cargo.toml` (path
+**Dependency first**: set `abstracttui = "0.2.4"` in `Cargo.toml` (path
 dep `{ path = "../abstracttui" }` if the index lags). No breaking API
-changes 0.2.1 → 0.2.3 (`cargo semver-checks` clean both hops); MSRV stays
+changes 0.2.1 → 0.2.4 (`cargo semver-checks` clean both hops); MSRV stays
 1.87, so your `rust-version` comment only needs the version string
 updated. ONE behavior change can move your screens: Feed markdown items
 now typeset the full doc vocabulary (see item 2) — any test fixture whose
