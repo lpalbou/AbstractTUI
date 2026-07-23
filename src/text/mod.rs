@@ -22,11 +22,13 @@
 //!   their East Asian width, matching the majority of terminals which
 //!   ignore VS15 for width purposes.
 
+pub mod data;
 pub mod diff;
 pub mod highlight;
 mod truncate;
 mod wrap;
 
+pub use data::{DataKind, JsonLexer, YamlLexer};
 pub use diff::{DiffKind, DiffLexer};
 pub use highlight::{CLikeLexer, Highlighter, TokenKind};
 pub use truncate::truncate_ellipsis;

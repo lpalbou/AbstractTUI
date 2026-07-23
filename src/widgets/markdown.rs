@@ -20,16 +20,19 @@
 //!
 //! OWNER: DESIGN.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::base::{Point, Rgba};
 use crate::layout::Style as LayoutStyle;
 use crate::render::md::{self, Block, Marker, MdStyles};
 use crate::render::rich::{RichLine, RichText, Span};
 use crate::render::{Attrs, Style};
-use crate::text::{CLikeLexer, DiffLexer};
+use crate::text::{CLikeLexer, DiffLexer, JsonLexer, YamlLexer};
 use crate::theme::TokenSet;
 use crate::ui::{Element, StyledCanvas};
 
-use super::code::{code_token_color, diff_rich_line};
+use super::code::{code_token_color, data_rich_line, diff_rich_line};
 
 /// Doc-vocabulary typesetting (0142): tables (column solving shared
 /// with the Table widget), task items, and the doc layout fold with
@@ -66,6 +69,11 @@ pub(crate) struct Row {
     pub(crate) image: Option<imageflow::MdImageSlice>,
 }
 
+/// The width-keyed typeset cache one `MarkdownView` element shares
+/// between its intrinsic measure and its draw closure: `(width, rows)`
+/// of the last layout; either side recomputes on a width change.
+type TypesetCache = Rc<RefCell<Option<(i32, Vec<Row>)>>>;
+
 impl Row {
     pub(crate) fn plain(line: RichLine) -> Row {
         Row {
@@ -83,14 +91,26 @@ impl Row {
 /// tables with alignment, task lists, quotes, fences, in-flow images —
 /// the reader vocabulary in one widget.
 ///
-/// It typesets at draw time (cached per width) and scrolls by ROW
-/// OFFSET: pass [`scroll_offset`](MarkdownView::scroll_offset) from an
-/// app signal rather than wrapping it in a generic scroller (a draw
-/// widget has no intrinsic measure for `Scroll` to read).
+/// It typesets at draw time (cached per width) and carries an INTRINSIC
+/// MEASURE (wave 13): height answers as the typeset row count at the
+/// offered width, so `Scroll::new(view)` scrolls the real document out
+/// of the box and content-sized panels hug it — the scrolling markdown
+/// pane is a one-liner:
+///
+/// ```ignore
+/// Scroll::new(MarkdownView::new(doc).view(cx)).view(cx)
+/// ```
+///
+/// [`scroll_offset`](MarkdownView::scroll_offset) remains the
+/// app-managed row-offset door (transcript tails, TOC jumps against
+/// [`MarkdownView::rows`] — the same fold, so clamps never drift).
 /// [`outline_rows`](MarkdownView::outline_rows) feeds a TOC;
 /// [`find`](MarkdownView::find) powers search highlights — the reader
 /// example composes all of it. The canonical build is `.view(cx)`; see
-/// the [module docs](crate::widgets::markdown).
+/// the [module docs](crate::widgets::markdown). Very long documents
+/// paint whole-extent under a `Scroll` (cells clip per-frame); for
+/// unbounded transcripts prefer [`Feed`](super::Feed), which
+/// virtualizes rows.
 pub struct MarkdownView {
     source: String,
     scroll_offset: i32,
@@ -212,29 +232,79 @@ impl MarkdownView {
         let source = self.source;
         let highlights = self.highlights;
         let current = self.current_match;
-        let layout = self
-            .layout
-            .unwrap_or_else(|| LayoutStyle::default().grow(1.0));
-        // Draw-time typesetting, cached per width (resize re-lays-out;
-        // steady-state repaints reuse).
-        let mut cache: Option<(i32, Vec<Row>)> = None;
-        Element::new().style(layout).draw(move |canvas, rect| {
-            if rect.w <= 1 || rect.h <= 0 {
-                return;
-            }
-            let rows = match &mut cache {
-                Some((w, rows)) if *w == rect.w => rows,
-                slot => {
-                    let rows = doc::layout_doc(&source, &tokens, rect.w).rows;
-                    &mut slot.insert((rect.w, rows)).1
+        // basis 0 beside grow: in a definite flex parent the view takes
+        // LEFTOVER space exactly as before the measure landed — the
+        // intrinsic height must never become overflow pressure that
+        // crushes fixed siblings (the 0240 modal-overflow class; same
+        // default as `Scroll`).
+        let layout = self.layout.unwrap_or_else(|| {
+            LayoutStyle::default()
+                .grow(1.0)
+                .basis(crate::layout::Dimension::Cells(0))
+        });
+        // ONE width-keyed typeset cache shared by the intrinsic measure
+        // and the draw: whichever runs first at a width pays the
+        // layout, the other reuses it (measure runs during solving,
+        // draw during paint — never concurrently).
+        let cache: TypesetCache = Rc::new(RefCell::new(None));
+        let measure_cache = Rc::clone(&cache);
+        let measure_source = source.clone();
+        Element::new()
+            .style(layout)
+            // The measure seam (wave 13, the "doesn't scroll" fix): an
+            // Auto-sized axis sees the TYPESET extent — height is the
+            // row count at the offered width (the same fold the draw
+            // renders, so a Scroll clamp can never drift from the
+            // pixels), width is the widest typeset text row (rules and
+            // image mosaics follow the granted rect instead). With
+            // this, `Scroll::new(view)` measures the real document and
+            // content-sized panels hug it — no `content_size` hint, no
+            // app-managed offset needed.
+            .measure(move |avail| {
+                if avail.w <= 1 {
+                    return crate::base::Size::ZERO;
                 }
-            };
-            let offset = offset.min(rows.len().saturating_sub(1));
-            draw_rows(canvas, rect, &tokens, &rows[offset..]);
-            if !highlights.is_empty() {
-                search::draw_highlights(canvas, rect, &tokens, rows, offset, &highlights, current);
-            }
-        })
+                let mut slot = measure_cache.borrow_mut();
+                let rows = match &mut *slot {
+                    Some((w, rows)) if *w == avail.w => rows,
+                    slot => {
+                        let rows = doc::layout_doc(&measure_source, &tokens, avail.w).rows;
+                        &mut slot.insert((avail.w, rows)).1
+                    }
+                };
+                let widest = rows
+                    .iter()
+                    .map(|r| r.indent + r.line.width())
+                    .max()
+                    .unwrap_or(0);
+                crate::base::Size::new(widest.min(avail.w), rows.len() as i32)
+            })
+            .draw(move |canvas, rect| {
+                if rect.w <= 1 || rect.h <= 0 {
+                    return;
+                }
+                let mut slot = cache.borrow_mut();
+                let rows = match &mut *slot {
+                    Some((w, rows)) if *w == rect.w => rows,
+                    slot => {
+                        let rows = doc::layout_doc(&source, &tokens, rect.w).rows;
+                        &mut slot.insert((rect.w, rows)).1
+                    }
+                };
+                let offset = offset.min(rows.len().saturating_sub(1));
+                draw_rows(canvas, rect, &tokens, &rows[offset..]);
+                if !highlights.is_empty() {
+                    search::draw_highlights(
+                        canvas,
+                        rect,
+                        &tokens,
+                        rows,
+                        offset,
+                        &highlights,
+                        current,
+                    );
+                }
+            })
     }
 }
 
@@ -262,6 +332,8 @@ pub(crate) struct BlockTypesetter {
     styles: MdStyles,
     lexer: CLikeLexer,
     diff: DiffLexer,
+    json: JsonLexer,
+    yaml: YamlLexer,
     code_base: Style,
     t: TokenSet,
 }
@@ -272,6 +344,8 @@ impl BlockTypesetter {
             styles: md_styles(t),
             lexer: CLikeLexer::default(),
             diff: DiffLexer::new(),
+            json: JsonLexer::new(),
+            yaml: YamlLexer::new(),
             code_base: Style::new().fg(t.text),
             t: *t,
         }
@@ -302,6 +376,17 @@ impl BlockTypesetter {
                     _ => Style::new().fg(t.text).attrs(Attrs::BOLD),
                 };
                 let mut line = RichLine::new();
+                // Level legibility from H3 down (wave 13, ported from
+                // mdpad): L1/L2 are told apart by ink and the L1
+                // underline, but L3..L6 all render body+BOLD — a faint
+                // hash prefix keeps the depth readable exactly where
+                // the ink stops differentiating.
+                if *level >= 3 {
+                    line.push(Span::new(
+                        format!("{} ", "#".repeat(*level as usize)),
+                        Style::new().fg(t.text_faint),
+                    ));
+                }
                 for span in &content.spans {
                     line.push(Span::new(span.text.clone(), span.style.merge(ink)));
                 }
@@ -376,13 +461,21 @@ impl BlockTypesetter {
             }
             Block::CodeFence { lang, lines } => {
                 blank(out);
-                // Fence labels route the lexer (0140's diff slice):
-                // ```diff / ```patch tint through the diff mapping; every
-                // other label keeps the C-like lexer as before.
+                // Fence labels route the lexer (0140's diff slice +
+                // wave 13's data slice): ```diff / ```patch tint
+                // through the diff mapping, ```json / ```yaml (and
+                // dialects) through the data mapping; every other
+                // label keeps the C-like lexer as before.
                 let diff_fence = DiffLexer::matches_lang(lang);
+                let json_fence = JsonLexer::matches_lang(lang);
+                let yaml_fence = YamlLexer::matches_lang(lang);
                 for code_line in lines {
                     let rich = if diff_fence {
                         diff_rich_line(code_line, &self.diff, self.code_base, t)
+                    } else if json_fence {
+                        data_rich_line(code_line, self.json.spans(code_line), self.code_base, t)
+                    } else if yaml_fence {
+                        data_rich_line(code_line, self.yaml.spans(code_line), self.code_base, t)
                     } else {
                         RichLine::from_highlighted(code_line, &self.lexer, self.code_base, |k| {
                             Style::new().fg(code_token_color(k, t))
@@ -480,101 +573,11 @@ pub(crate) fn draw_rows(
     }
 }
 
+/// Scroll/panel composition tests (wave 13): the measure seam.
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::base::Size;
-    use crate::theme::default_theme;
-    use crate::widgets::test_util::{draw_into, row};
+#[path = "markdown_scroll_tests.rs"]
+mod scroll_composition_tests;
 
-    const DOC: &str = "# Title\n\nBody with `code` inline.\n\n- first\n- second\n\n> wisdom\n\n```\nfn main() {}\n```\n";
-
-    fn cell_of(row: &str, needle: &str) -> i32 {
-        let byte = row.find(needle).unwrap();
-        row[..byte].chars().count() as i32
-    }
-
-    #[test]
-    fn heading_list_quote_and_fence_chrome() {
-        let t = default_theme().tokens;
-        let c = draw_into(MarkdownView::new(DOC).element(&t), Size::new(28, 14));
-        // Level-1 heading in accent + underline rule beneath.
-        let title_y = 0;
-        assert!(row(&c, title_y).starts_with("Title"));
-        assert_eq!(c.cell(Point::new(0, title_y)).unwrap().1, t.accent);
-        assert!(row(&c, title_y + 1).starts_with('─'));
-        assert_eq!(c.cell(Point::new(0, title_y + 1)).unwrap().1, t.border);
-
-        // Inline code chip ground.
-        let body_y = (0..14).find(|y| row(&c, *y).contains("code")).unwrap();
-        let cx = cell_of(&row(&c, body_y), "code");
-        assert_eq!(c.cell(Point::new(cx, body_y)).unwrap().2, t.surface_raised);
-
-        // List marker ink.
-        let li_y = (0..14).find(|y| row(&c, *y).contains("• first")).unwrap();
-        let mx = cell_of(&row(&c, li_y), "•");
-        assert_eq!(c.cell(Point::new(mx, li_y)).unwrap().1, t.accent_alt);
-
-        // Blockquote bar + muted prose.
-        let q_y = (0..14).find(|y| row(&c, *y).contains("wisdom")).unwrap();
-        assert_eq!(c.cell(Point::new(0, q_y)).unwrap().0, '▎');
-        let wx = cell_of(&row(&c, q_y), "wisdom");
-        assert_eq!(c.cell(Point::new(wx, q_y)).unwrap().1, t.text_muted);
-
-        // Code fence: raised ground + keyword ink.
-        let f_y = (0..14).find(|y| row(&c, *y).contains("fn main")).unwrap();
-        let fx = cell_of(&row(&c, f_y), "fn");
-        let (_, fg, bg) = c.cell(Point::new(fx, f_y)).unwrap();
-        assert_eq!(fg, t.syntax_keyword);
-        assert_eq!(bg, t.surface_raised);
-    }
-
-    #[test]
-    fn outline_rows_and_scroll_share_the_fold() {
-        let t = default_theme().tokens;
-        assert_eq!(
-            MarkdownView::outline(DOC, &t),
-            vec![(1, "Title".to_string())]
-        );
-        let total = MarkdownView::rows(DOC, &t, 28);
-        assert!(total >= 10, "typeset rows: {total}");
-        // Scrolling by one hides the title row.
-        let c = draw_into(
-            MarkdownView::new(DOC).scroll_offset(1).element(&t),
-            Size::new(28, 6),
-        );
-        assert!(!row(&c, 0).contains("Title"));
-    }
-
-    #[test]
-    fn diff_fences_tint_added_removed_and_plain_fences_stay_clike() {
-        let t = default_theme().tokens;
-        let doc = "```diff\n-old line\n+new line\n```\n\n```\nfn main() {}\n```\n";
-        let c = draw_into(MarkdownView::new(doc).element(&t), Size::new(28, 10));
-        // Diff fence: removed line in error ink, added in ok, on the
-        // fence's raised ground.
-        let minus_y = (0..10).find(|y| row(&c, *y).contains("-old")).unwrap();
-        let mx = cell_of(&row(&c, minus_y), "-old");
-        let (_, fg, bg) = c.cell(Point::new(mx, minus_y)).unwrap();
-        assert_eq!(fg, t.error);
-        assert_eq!(bg, t.surface_raised);
-        let plus_y = (0..10).find(|y| row(&c, *y).contains("+new")).unwrap();
-        let px = cell_of(&row(&c, plus_y), "+new");
-        assert_eq!(c.cell(Point::new(px, plus_y)).unwrap().1, t.ok);
-        // The unlabeled fence still renders the C-like keyword ink.
-        let fn_y = (0..10).find(|y| row(&c, *y).contains("fn main")).unwrap();
-        let fx = cell_of(&row(&c, fn_y), "fn");
-        assert_eq!(c.cell(Point::new(fx, fn_y)).unwrap().1, t.syntax_keyword);
-    }
-
-    #[test]
-    fn wrapping_and_tiny_rects_never_panic() {
-        let t = default_theme().tokens;
-        let long = "paragraph with quite a few words that must wrap around";
-        let c = draw_into(MarkdownView::new(long).element(&t), Size::new(12, 8));
-        assert!(row(&c, 0).trim_end().len() <= 12);
-        for size in [Size::new(0, 0), Size::new(2, 1), Size::new(5, 2)] {
-            let _ = draw_into(MarkdownView::new(DOC).element(&t), size);
-        }
-    }
-}
+#[cfg(test)]
+#[path = "markdown_view_tests.rs"]
+mod tests;

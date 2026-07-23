@@ -273,7 +273,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Grid** — container widget over `Display::Grid`; spans ride each child's own style.
 - **Image** — bitmap display through the mosaic pipeline (`ImageFit`; `Bitmap` re-exported beside it). Measures as its native cell footprint, so it holds real space in `Auto`-sized rows/panels.
 - **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals. Grows into its region by default (a draw widget has no intrinsic size to grow from, so the default layout claims the available space).
-- **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code.
+- **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables with the crush-honesty ladder, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code (C-like, diff, json/yaml lexers). Both content views carry an intrinsic measure (wave 13): `Scroll::new(view)` scrolls the true extent out of the box, and content-sized panels hug the document instead of collapsing it to zero.
 - **Meter / AudioScope** — live level rendering: dB meter with real ballistics (instant attack, timed decay, peak hold) and a rolling braille waveform — see the live-levels section below.
 - **Logo** — the AbstractTUI wordmark for headers, about screens, empty states.
 
@@ -337,7 +337,7 @@ pages, `Drawer` overlays (screen-space clicks translate to the layer),
 and `Scroll`ed columns mid-scroll — all test-pinned — and parked
 closable blocks cost zero idle bytes.
 
-### Code and diffs — lexers and their theme mappings
+### Code, diffs and data — lexers and their theme mappings
 
 `CodeView` tints through the pluggable `text::Highlighter` seam (byte
 ranges + `TokenKind`; the built-in `CLikeLexer` is honest demo-grade),
@@ -351,11 +351,28 @@ maps it onto the SEMANTIC inks — added `ok`, removed `error`, hunk
 headers `info`, chrome `text_muted` — readable on the `surface_raised`
 code ground in every built-in theme (measured, test-pinned).
 
+Structured data follows the same shape (wave 13): JSON and YAML live on
+the KEY-vs-VALUE distinction, which the C-like vocabulary cannot
+express, so `text::JsonLexer`/`text::YamlLexer` emit the dedicated
+`DataKind` vocabulary (`Key`, `String`, `Number`, `Literal`, `Comment`,
+`Punct`, `Tag` — `#[non_exhaustive]` like `DiffKind`), and
+`widgets::data_token_color` maps it in one place: keys `syntax_func`,
+strings `syntax_string`, numbers `syntax_number`, `true`/`false`/`null`
+(plus the YAML 1.1 bools and `~`) `syntax_keyword`, comments
+`syntax_comment`, punctuation `syntax_punct`, YAML anchors/aliases/tags
+and document markers `syntax_type`. Bare YAML scalars stay body ink —
+prose is prose. Key detection is the space-after-colon rule in YAML
+(`10:30:00` stays a plain scalar) and the plain-colon rule in JSON
+(minified `{"a":1}` tints like pretty-printed); JSONC/JSON5 comments
+tint so config dialects render instead of degrading.
+
 Routing is by language label, best effort: `CodeView::lang("diff")`
-(also `"patch"`/`"udiff"`; `"rust"`/`"c"` pick C-like presets; unknown
-labels change nothing), and markdown/Feed code fences labeled
-` ```diff ` route automatically — one shared recipe, so a fence and a
-`CodeView` can never tint the same patch differently:
+(also `"patch"`/`"udiff"`), `lang("json")` (also
+`"jsonc"`/`"json5"`/`"jsonl"`/`"ndjson"`), `lang("yaml")` (also
+`"yml"`); `"rust"`/`"c"` pick C-like presets; unknown labels change
+nothing. Markdown/Feed code fences labeled ` ```diff `, ` ```json ` or
+` ```yaml ` route automatically — one shared recipe per vocabulary, so
+a fence and a `CodeView` can never tint the same text differently:
 
 ```rust
 use abstracttui::widgets::CodeView;
@@ -363,12 +380,18 @@ use abstracttui::widgets::CodeView;
 fn patch_pane(patch: &str, t: &abstracttui::theme::TokenSet) -> abstracttui::ui::Element {
     CodeView::new(patch).lang("diff").element(t)
 }
+
+fn payload_pane(body: &str, t: &abstracttui::theme::TokenSet) -> abstracttui::ui::Element {
+    CodeView::new(body).lang("json").element(t)
+}
 ```
 
 Classification is stateless per line (scroll-position-invariant by
 design) and approximate by contract: a removed line whose content
 begins `-- ` reads as a file header (the classic highlighter
-resolution), and prose between hunks stays untinted.
+resolution), prose between hunks stays untinted, YAML multi-line quoted
+scalars mis-tint from the second line on, and block-scalar bodies
+render untinted (which for prose bodies is the right look anyway).
 
 ### List — selection vs activation
 
@@ -1773,15 +1796,38 @@ with the typeset ROW its text starts at (the TOC jump target), and
 `MarkdownView` AND `Feed` markdown items render the full doc
 vocabulary (one shared typeset recipe — a feed item and a reader pane
 can never typeset the same source differently): tables typeset
-through the Table widget's own column solver (one width policy —
-natural widths when they fit, proportional flex + per-cell ellipsis
-when they don't); images render as MOSAIC rows in the flow — sized from
+through the Table widget's own column solver when they fit (one width
+policy), and under overflow walk the wave-13 honesty ladder — every
+column floors at `min(natural, 3)` cells and grows toward natural
+proportionally to need (per-cell ellipsis, columns are never crushed
+to zero), and when even the floors overflow the width, the grid
+degrades to a RECORD layout (`Header: value` lines per row, labels
+bold, records blank-separated — honest words, never vanished
+columns). Numeric columns with no written alignment marker
+right-align automatically (bare `---` only; an explicit `:--` is
+honored — `TableBlock::declared` carries the distinction). Headings
+keep depth readable: H3+ carry a faint hash prefix (`### ` in
+`text_faint`) where the heading inks stop differentiating. Images
+render as MOSAIC rows in the flow — sized from
 a header-only probe (`gfx::probe_dimensions`) at typeset, DECODED
 LAZILY on first draw and cached by (path, size), with alt-text captions
 and labeled decode-failure states (pixel-protocol images in scrollable
 flow are deliberately out of scope; mosaic cells are cell-safe in any
 scroll context). Streaming feed items ride `md::DocStreamSession`
 (see "Feed — streaming transcripts" above).
+
+Scrolling composes out of the box (wave 13): `MarkdownView` measures
+its typeset row count at the offered width and `CodeView` its
+line count × longest line, so
+`Scroll::new(MarkdownView::new(doc).view(cx)).view(cx)` is a complete
+scrolling markdown pane — no `content_size` hint, no app-managed
+offset (wheel, keys and the scrollbar just work; both views keep the
+`basis(0)+grow` default, so definite flex layouts are byte-stable and
+fixed siblings are never crushed). `scroll_offset` remains the
+app-managed door for transcript tails and TOC jumps
+(`MarkdownView::rows` is the same fold, so clamps never drift). Very
+long documents paint whole-extent under a `Scroll`; unbounded
+transcripts belong in `Feed`, which virtualizes.
 
 Find-in-document: `MarkdownView::find(source, &tokens, width, query,
 case_insensitive)` returns `MdSearchMatch { row, bytes, cells }` over

@@ -1,13 +1,25 @@
 # AbstractTUI backlog — overview
 
 Planning memory for AbstractTUI (the Rust terminal-UI engine, published as
-`abstracttui` — 0.2.8 as of 2026-07-23). The engine itself is complete and shipped; this backlog
-tracks the work that turns it from "a proven engine" into "a foundation people
-build long-lived, networked applications on." It is organized around one
-honest observation: nobody has yet built a networked, long-lived app on
-AbstractTUI, it ships no async/HTTP/WebSocket story, and its text input is
-single-line. The two evaluations in `reviews/cycle11/` are the evidence base;
-every item cites concrete engine code.
+`abstracttui` — 0.2.22 as of 2026-07-25). The engine itself is complete and
+shipped — content widgets (Feed/TextArea/MarkdownView + the doc vocabulary),
+app-shell chrome (PageHost, Drawer, ChoicePrompt, ThemeSwitcher), the
+live-data lane with connection lifecycle, key-state/PTT, attachments, the
+canvas layer, and the sibling extension family (`abstracttui-graph`,
+`abstracttui-mermaid`) are all in `completed/`. Four validator applications
+have now been built on it (abstractcode-tui, agora-tui, the gateway
+console, and the abstractcore console launched 2026-07-25), and the
+pending work has shifted shape accordingly: it is dominated by FIELD
+FINDINGS (four `field-*`/`first-app` tracks of reproduced engine defects
+with app-side workarounds to delete), the wave-12 pixel-review engine
+items (filed 2026-07-25, this pass), the remaining roadmap tracks
+(control-plane, the app-kits remainder, the ports epics, the 0050
+transport ADR), and the maintenance ledger (wave11's file-size splits).
+Still true from the original observation: the engine ships no
+HTTP/WebSocket transport — that decision (0050) deliberately waits on the
+watcher evidence. The original evidence base lives in `reviews/cycle11/`;
+the current evidence base is the field tracks and the per-wave handoffs
+under `reviews/wave*/`.
 
 ## Design principles
 
@@ -21,45 +33,65 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | State | Count |
 | --- | --- |
 | Planned | 5 |
-| Proposed | 65 |
-| Completed | 51 |
+| Proposed | 82 |
+| Completed | 60 |
 | Deprecated | 0 |
 | Recurrent | 0 |
 
-(2026-07-24 double-click fold: app-kits/0535 filed directly in
-completed/ — same-wave delivery of the gateway-console double-click
-request; completed 50→51.)
+Counting rule: `NNNN_*.md` files on disk under each lifecycle directory
+(topic subfolders included). The completed ledger below additionally
+lists one unnumbered integrator row (the Feed/md-vocabulary adoption,
+recorded in a handoff, no item file) — it is not in the count.
 
-(Counted from the filesystem 2026-07-23, 0.2.6 field-wave fold:
-`[0-9]*.md` files under planned/, proposed/, completed/. This fold
-moves first-app/0291 + first-app/0299 proposed→completed — the two
-consumer-requested items shipped as the 0.2.6 field wave (rows below);
-proposed 50→48, completed 34→36. The prior cycle-2 fold recorded the
-builder wave's moves (0102/0104/0190 + 0142/0144/0146/0148 to
-completed/app-widgets/, 0610/0620/0650 to completed/media-av/, 0700 to
-completed/games/), 0180 planned→completed (REVIEWER's scheduled-gates
-leg), 0297 + 0040 proposed→completed (FIXNET), and the 0299 filing.
-Renumber note (wave-3 CLOSER, cycle-3 close): that filing landed as
-first-app/0300 — colliding with control-plane/0300 — and was renumbered
-to 0299 per the cycle-2 review demand; a second mid-close filing landed
-as first-app/0310 — colliding with control-plane/0310 — and was
-renumbered to 0291 the same way.)
+(Counted from the filesystem 2026-07-25, wave-13 hygiene pass — the
+count reconciles with `find <state> -name '[0-9]*.md' | wc -l`. This
+pass: +8 wave-12 pixel-review filings (0135/0175/0185/0380/0445/0455/
+0555/0615), +1 renumber (proposed first-app 0290 → 0274, collision with
+completed 0290), and 6 completed items that were on disk but missing
+from the ledger below (0273, 0370, 0420, 0440, 0450, 0605) added to it.
+Prior notes preserved: the 2026-07-24 double-click fold filed app-kits
+0535 directly in completed/; the 2026-07-23 0.2.6 field-wave fold moved
+first-app 0291 + 0299 to completed/ and recorded the 0299/0291 renumber
+precedent.)
+
+## Known number collisions (flagged, not renumbered)
+
+Global `NNNN` uniqueness is broken in five places today. Renumbering is
+the item owners' call (the wave11 precedent: record visibly, don't
+silently rename ids that external app repos may cite); one same-track
+collision WAS renumbered this pass (proposed first-app 0290 → 0274 —
+zero inbound references existed).
+
+- `field-agora/0900` vs `field-gateway/0900` (different tracks — the
+  field-agora band overflowed into field-gateway's 0900–0990 range
+  before the overflow rule existed)
+- `field-agora/0905` vs `field-gateway/0905` (same cause)
+- `field-agora/0910` vs `field-gateway/0910` (same cause)
+- `wave11/0990` vs `field-gateway/0990` (recorded in wave11/README.md
+  at filing)
+
+Rule going forward (stated in `proposed/field-core/README.md`): a full
+band continues at the NEXT FREE FIFTY and says so in its README —
+field-gateway continues at 1000–1050, field-core owns 1100–1190,
+1200+ is taken by the wave-13 architecture/md-lane filings.
 
 ## Topic tracks
 
 | Track | Dir | State | Purpose |
 | --- | --- | --- | --- |
 | live-data | `planned/live-data/`, `proposed/live-data/` | Mixed | Network-driven reactivity: async-source→signal binding, bounded ingestion, reconnect, the transport decision, and the read-only watcher milestone. |
-| app-widgets | `planned/app-widgets/`, `proposed/app-widgets/` | Mixed | The content-widget layer real apps need (feed/transcript, streaming markdown, multiline composer, follow-tail scroll, lexers) + the API-stability and platform-accuracy passes. |
+| app-widgets | `planned/app-widgets/`, `proposed/app-widgets/` | Mixed | The content-widget layer real apps need (feed/transcript, streaming markdown, multiline composer, follow-tail scroll, lexers) + the API-stability and platform-accuracy passes — now also home to the wave-12 measure/crush findings (0135/0175/0185). |
 | ports | `planned/ports/`, `proposed/ports/` | Mixed | The application epics that consume both tracks: a coding-agent console, an a2a chat TUI, and the gateway configuration wizard (0215, planned — validator app #2). |
-| first-app | `proposed/first-app/`, `completed/first-app/` | Mixed | Bug/footgun reports from the first shipped application (`abstractcode-tui`, 2026-07-21): reproduced engine defects with field workarounds to delete. |
-| control-plane | `proposed/control-plane/` | Proposed | Making running apps observable and drivable from outside their own keyboard: lifecycle events, an automation bus + opt-in JSONL control server (MCP-bridgeable), declared-keys persistence with crash-resume, and headless serve with terminal attach/detach. |
-| extensions | `proposed/extensions/` | Proposed | Modularity architecture (two feature classes + the `abstracttui-*` sibling family, ADR-ready) and the diagram-class capability lane: core vector canvas + link-registration seam, node-graph widgets, mermaid subset, mdpad-reader enablement, and the standing web-rendering verdict. |
-| app-kits | `proposed/app-kits/`, `completed/app-kits/` | Mixed | The application-kit layer over the content widgets: anchored-popup substrate + choice controls, form kit + wizard, rich data tables, chip/count vocabulary, navigation (sidebar + filter tabs), header/banners, tree view, split panes + panel rail — proven by three in-repo reference validators (admin console, setup wizard, triage shell). |
-| media-av | `proposed/media-av/`, `completed/media-av/` | Mixed | MEDIA's band (0600–0690): voice/AV UI plumbing (push-to-talk contract, meter/scope widgets, speaking highlight, external-process pattern, the no-audio mock demo) + image-path follow-ups from the study-2 truth audit (`reviews/study2/media-images-truth.md`). |
-| games | `proposed/games/`, `completed/games/` | Mixed | Retro-games feasibility band (0700–0790, `reviews/study2/field-games.md`): four general-need gaps a cell game exposes — key press/release state, public frame tasks + fixed-timestep helper, sprite/tile toolkit (masked blit, sheets, palette swap), board-grid math (square + hex). Audio defers to media-av; saves to control-plane 0340; strokes to extensions 0420. |
-| field-gateway | `proposed/field-gateway/` | Proposed | Bug/footgun reports from the second-wave validator build (`abstractgateway/console-tui`, the 0215 gateway config wizard): reproduced engine defects with field workarounds to delete — the form/wizard/table field evidence for app-kits 0510/0520/0530. |
-| field-agora | `proposed/field-agora/` | Proposed | Bug/footgun reports from the second-wave validator build (`agora-tui`, the 0060 read-only multi-channel hub watcher): reproduced engine defects with field workarounds to delete — the first networked field evidence for live-data 0010/0020/0040 and the input 0050's transport ADR waits on. |
+| first-app | `proposed/first-app/`, `completed/first-app/` | Mixed | Bug/footgun reports from the first shipped application (`abstractcode-tui`, 2026-07-21): reproduced engine defects with field workarounds to delete. 26 completed, 4 open. |
+| control-plane | `proposed/control-plane/`, `completed/control-plane/` | Mixed | Making running apps observable and drivable from outside their own keyboard: lifecycle events, an automation bus + opt-in JSONL control server (MCP-bridgeable), declared-keys persistence with crash-resume, headless serve with attach/detach — plus the shipped observe primitives (0370 screenshots; 0380 files the damage-visualizer knob). |
+| extensions | `proposed/extensions/`, `completed/extensions/` | Mixed | Modularity architecture (ADR-0004, executed: the `abstracttui-*` sibling family is live) and the diagram-class capability lane: canvas layer (0420) + graph view (0440) + mermaid subset (0450) SHIPPED; editor (0430), reader enablement (0460), link seam (0480) and the wave-12 polish items (0445/0455) remain. |
+| app-kits | `proposed/app-kits/`, `completed/app-kits/` | Mixed | The application-kit layer over the content widgets: anchored-popup substrate + choice controls (0500/0515 shipped), PageHost (0545), Drawer (0585), double-click (0535), theme switcher (0595), panel ✕ (0605) — form kit, wizard, tables, chips, nav, tree, split panes remain, with the field-gateway track as their live evidence. |
+| media-av | `proposed/media-av/`, `completed/media-av/` | Mixed | Voice/AV UI plumbing (PTT contract, meters/scope, speaking highlight, external-process pattern) + image-path follow-ups from the study-2 truth audit. |
+| games | `proposed/games/`, `completed/games/` | Mixed | Retro-games feasibility band: key press/release state SHIPPED (0700); tick/sprites/board-grid remain. |
+| field-gateway | `proposed/field-gateway/` | Proposed | Bug/footgun reports from the second-wave validator build (`abstractgateway/console-tui`, the 0215 gateway config wizard): 15 open items — the form/wizard/table field evidence for app-kits 0510/0520/0530. Band 0900–0990, overflow 1000–1050. |
+| field-agora | `proposed/field-agora/` | Mixed | Bug/footgun reports from the second-wave validator build (`agora-tui`, the 0060 read-only multi-channel hub watcher): 14 open, 1 completed (0850) — the first networked field evidence for live-data 0010/0020/0040 and the 0050 transport ADR. Band 0800–0890, overflow 0895–0910. |
+| field-core | `proposed/field-core/` | Proposed | Feedback band for the third-wave validator (`abstractcore-console`, launched 2026-07-25 on 0.2.22). Band 1100–1190. Empty at this count — findings expected as that build proceeds. |
+| wave11 | `proposed/wave11/` | Proposed | Maintenance items from the wave-11 adversarial quality audit: one item (0990 file-size budget reconciliation — 12 splits done in wave 12, 15 files still >600 lines re-counted 2026-07-25). |
 
 ## Planned ledger
 
@@ -67,15 +99,16 @@ renumbered to 0291 the same way.)
 | --- | --- | --- |
 | 0001 | Roadmap: general capability classes, milestone bands, validation vehicles (canonical) | roadmap |
 | 0002 | The 0.3 breaking budget (Role/TokenKind non_exhaustive, content_size deprecation) — Accepted-pending-maintainer; enforced by the CI semver gate | governance |
-| 0060 | Milestone: read-only a2a/agora multi-channel watcher — MAINTAINER GREEN-LIT 2026-07-23 (validator app #1); validates 0010/0020/0040 live, feeds 0050's transport ADR | live-data |
-| 0215 | EPIC: gateway configuration wizard — MAINTAINER-CHOSEN validator app #2 ("gateway/console but improved"); promotion trigger for app-kits 0510/0520 | ports |
-| 0150 | Terminal verbs (notify/bell/title) reachable from components — clipboard leg SHIPPED with the selection wave | app-widgets |
+| 0060 | Milestone: read-only a2a/agora multi-channel watcher — MAINTAINER GREEN-LIT 2026-07-23 (validator app #1); `agora-tui` is that build (field-agora is its findings track); validates 0010/0020/0040 live, feeds 0050's transport ADR | live-data |
+| 0215 | EPIC: gateway configuration wizard — MAINTAINER-CHOSEN validator app #2 ("gateway/console but improved"); `abstractgateway/console-tui` is that build (field-gateway is its findings track); promotion trigger for app-kits 0510/0520 | ports |
+| 0150 | Terminal verbs (notify/bell/title) reachable from components — clipboard leg SHIPPED with the selection wave; the notify leg now has its first named consumer (first-app 0274 — execute together) | app-widgets |
 
 ## Completed ledger
 
 Each file carries a dated completion report with test names and measured
 numbers (2026-07-21: the Content + Live-data wave; 2026-07-22: the
-composer wave).
+composer wave; 2026-07-23/24: the content/reader/extensions/app-shell
+waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 
 | ID | Title | Final path |
 | --- | --- | --- |
@@ -106,47 +139,59 @@ composer wave).
 | 0144 | Markdown images: in-flow mosaic rows, header-only sizing (`gfx::probe_dimensions`), lazy decode cached across rebuilds; `Image::from_path` widened to PNG+JPEG — completed 2026-07-23 (reader wave) | completed/app-widgets/ |
 | 0146 | Heading anchors + TOC: `render::md::outline`/`slugify` (GitHub-compatible ids) + `MarkdownView::outline_rows`/`resolve_anchor` — completed 2026-07-23 (reader wave) | completed/app-widgets/ |
 | 0148 | Search-highlight overlay: `MarkdownView::find` + `.highlights` (case-folded, grapheme-snapped, selection-tone patch; row-local text↔cells mapping shared with 0160) — completed 2026-07-23 (reader wave) | completed/app-widgets/ |
-| 0700 | Key press/release state (held keys): `app::keys` — `use_key_state`/`key_state` → `KeyState` (`is_down`/`keys_down`/`pressed`/`pressed_chord`/`released`/`focus_cleared`), `KeyFidelity::{Full,Degraded}`, `hold_gesture_label`; driver pre-conversion tap, per-turn edge sealing, fidelity re-published at the 0293 probe upgrade — completed 2026-07-23 (input/AV wave). Scope notes: legacy repeat-timeout approximation DROPPED by ruling; opt-in release routing for widgets deferred in-item | completed/games/ |
-| 0610 | Push-to-talk input contract: `app::PushToTalk` (`bind`/`on_start`/`on_stop(StopReason)`/`state()`/`mode()`/`gesture_label()`/`cancel()`); Hold on Full fidelity, labeled Latch on Degraded, FocusLost stops capture in every mode — completed 2026-07-23 (input/AV wave; closes the 0293→0700→0610 chain: fidelity flips Degraded→Full live at the probe upgrade and the gesture label follows) | completed/media-av/ |
-| 0620 | Meter + AudioScope widgets: `widgets::Meter` (ballistics: instant attack, frame-clocked decay 20 dB/s default, peak hold ~1.5 s; dB mapping; mono h/v + band bars; ok/warn/error token zones) + `widgets::AudioScope` (braille strip over a `Signal<Vec<f32>>` window); THE IDLE LAW pinned (fixpoint drops the frame task; zero frames + zero allocs on unchanged input) — completed 2026-07-23 (input/AV wave) | completed/media-av/ |
-| 0650 | voice mock example: `examples/voice_mock.rs` (PTT on Space + truthful fidelity footer, fake mic → dB meter + 8-band spectrum + scope, fake transcription into Feed) + `live_voice_mock` smoke case — completed 2026-07-23 (input/AV wave). Does NOT consume 0630 (speaking highlight) or 0640 (`--mock-recorder`); both stay Proposed | completed/media-av/ |
-| 0180 | Platform claims + CI gates — CLOSED by the scheduled-gates leg (earlier legs 2026-07-22: MSRV 1.87 + semver/msrv/live-pty jobs): `.github/workflows/perf.yml` (weekly + dispatch: perf suites w/ retry-once load policy, fuzz_big, soak, measurements artifact); byte RATCHETS in perf_app_surfaces (baseline × 1.5, assert in every profile); red-budget dry run executed locally; first hosted green pending push — completed 2026-07-23 (wave 3, REVIEWER) | completed/app-widgets/ |
-| — | Feed adopts the md doc vocabulary (handoff-named seam, no backlog id — closes 0142's named follow-up): `FeedItem::markdown` → `parse_doc`; streams → `DocStreamSession`; tables/images/tasks/strike in Feed; streamed table = open region (cost-pinned); captures byte-identical on core sources — completed 2026-07-23 (wave 3, INTEGRATOR) | reviews/wave3/integrator-handoff.md |
-| 0297 | Disposal-safety law engine-wide (the 0250 ruling stated as law): Button mouse-Up fixed (`pressed` cleared before `on_click`), TextArea post-callback caret publish fixed (callbacks owed, fired LAST) — audit table of every callback site in-item; disposal test pinned per site (Button/Checkbox/Radio/Tabs/TextInput/TextArea/Table-sort/Select-commit); law stated in api.md; consumer may now delete its one-tick retire deferral — completed 2026-07-23 (fix wave 3, FIXNET) | completed/first-app/ |
-| 0040 | Connection lifecycle + jittered reconnect: `reactive::connection`/`ConnState`/`Connection`/`ConnectionEvents` (state as signals, retries on the timer heap, generation-stamped reporters, zero cost when Closed — pinned) + `reactive::Backoff` (FULL jitter, base 500ms ×2 cap 30s, seeded tests); engine does NO I/O — dial fn is the 0050 seam; docs/live-data.md state diagram — completed 2026-07-23 (fix wave 3, FIXNET; graduated directly from proposed/ on the fired trigger, per the in-item evidence section) | completed/live-data/ |
-| 0291 | Placeholder-while-focused opt-in: `TextArea::placeholder_while_focused` + `TextInput` parity (hint one cell past the caret, `text_faint` ink, caret block stays visible; default OFF — byte-stability for existing apps, decision in-item) — autofocused composers finally paint their teaching — completed 2026-07-23 (0.2.6 field wave) | completed/first-app/ |
-| 0299 | Public full-redraw verb: `app::request_full_redraw()` (thread-local drain → `resync_unknown_screen`: prev poison + presenter invalidate + damage-all + per-channel image re-place) + opt-in `set_redraw_on_focus_gained` (FocusGained heal; RunConfig field rejected — literal-constructible struct, semver-major); image re-place fixed for suspend-resume too (dirty alone read `Unchanged` from the session) — completed 2026-07-23 (0.2.6 field wave) | completed/first-app/ |
+| 0700 | Key press/release state (held keys): `app::keys` — `use_key_state`/`key_state` → `KeyState`, `KeyFidelity::{Full,Degraded}`, `hold_gesture_label`; driver pre-conversion tap, per-turn edge sealing, fidelity re-published at the 0293 probe upgrade — completed 2026-07-23 (input/AV wave) | completed/games/ |
+| 0610 | Push-to-talk input contract: `app::PushToTalk` (Hold on Full fidelity, labeled Latch on Degraded, FocusLost stops capture in every mode) — completed 2026-07-23 (input/AV wave) | completed/media-av/ |
+| 0620 | Meter + AudioScope widgets (ballistics, dB mapping, token zones; THE IDLE LAW pinned) — completed 2026-07-23 (input/AV wave) | completed/media-av/ |
+| 0650 | voice mock example (`examples/voice_mock.rs` + `live_voice_mock` smoke) — completed 2026-07-23 (input/AV wave) | completed/media-av/ |
+| 0180 | Platform claims + CI gates — CLOSED by the scheduled-gates leg (MSRV 1.87 + semver/msrv/live-pty jobs; `perf.yml` weekly deep gate; byte RATCHETS in perf_app_surfaces) — completed 2026-07-23 (wave 3, REVIEWER) | completed/app-widgets/ |
+| — | Feed adopts the md doc vocabulary (handoff-named seam, no backlog id — closes 0142's named follow-up): `FeedItem::markdown` → `parse_doc`; streams → `DocStreamSession`; tables/images/tasks/strike in Feed — completed 2026-07-23 (wave 3, INTEGRATOR) | reviews/wave3/integrator-handoff.md |
+| 0297 | Disposal-safety law engine-wide (audit table of every callback site; per-site disposal pins; law stated in api.md) — completed 2026-07-23 (fix wave 3, FIXNET) | completed/first-app/ |
+| 0040 | Connection lifecycle + jittered reconnect: `reactive::connection`/`Backoff` (FULL jitter; engine does NO I/O — dial fn is the 0050 seam) — completed 2026-07-23 (fix wave 3, FIXNET) | completed/live-data/ |
+| 0291 | Placeholder-while-focused opt-in: `TextArea::placeholder_while_focused` + `TextInput` parity (default OFF) — completed 2026-07-23 (0.2.6 field wave) | completed/first-app/ |
+| 0299 | Public full-redraw verb: `app::request_full_redraw()` + opt-in `set_redraw_on_focus_gained` (RunConfig field rejected — literal-constructible struct, semver-major) — completed 2026-07-23 (0.2.6 field wave) | completed/first-app/ |
 | 0281 | Scroll offset repair on content shrink (clamp on extent/viewport change; culled-probe exemption) — completed 2026-07-23 | completed/first-app/ |
 | 0282 | `FeedState::sync_with` borrow-based source (fold-shaped stores; shared drain core) — completed 2026-07-23 | completed/first-app/ |
 | 0283 | Capped preview blocks: `FeedItem::max_rows` + overflow marker (post-wrap, width-aware) — completed 2026-07-23 | completed/first-app/ |
 | 0284 | Placeholder clipping fix (both widgets, both branches; right stroke untouchable) — completed 2026-07-23 | completed/first-app/ |
 | 0292 | Completion trigger position policy (`trigger_at` + TriggerPosition) — completed 2026-07-23 | completed/first-app/ |
 | 0294 | Anchored-panel placement bias (`PanelPlacement`, AbovePreferred for bottom composers) — completed 2026-07-23 | completed/first-app/ |
-| 0515 | `ChoicePrompt`/`ChoiceSequence` — the modal decision gate (options + multiple + Other free-text + shortcut letters + danger tint + must-choose mode; charter-verified SHIP) — completed 2026-07-23 | completed/app-kits/ |
-| 0545 | `PageHost` — the page-level tab host (full pages behind a themed windowed tab bar; capture-reserved chords, opt-in digit jumps, reactive badges, no keep-alive by design; the console-tui "global tab system" brief) — completed 2026-07-24 | completed/app-kits/ |
-| 0285 | Selection click-through: the layer claims only once the gesture DRAGS (plain clicks reach widgets; dismissal click consumed) + pointer-capture heal (press re-render no longer strands the capture) — completed 2026-07-23 | completed/first-app/ |
-| 0286 | KeyChord shifted-letter dual-spelling folded at every chord-match site (`KeyChord::normalized`; tree shortcuts, Actions, `pressed_chord`) — completed 2026-07-23 | completed/first-app/ |
+| 0515 | `ChoicePrompt`/`ChoiceSequence` — the modal decision gate (charter-verified SHIP) — completed 2026-07-23 | completed/app-kits/ |
+| 0545 | `PageHost` — the page-level tab host (full pages behind a themed windowed tab bar; capture-reserved chords, opt-in digit jumps, reactive badges) — completed 2026-07-24 | completed/app-kits/ |
+| 0285 | Selection click-through (layer claims only once the gesture DRAGS) + pointer-capture heal — completed 2026-07-23 | completed/first-app/ |
+| 0286 | KeyChord shifted-letter dual-spelling folded at every chord-match site (`KeyChord::normalized`) — completed 2026-07-23 | completed/first-app/ |
 | 0287 | ChoicePrompt `.body(view)` slot — structured/scrollable/reactive display region; options-first height budget — completed 2026-07-23 | completed/first-app/ |
-| 0288 | ChoicePrompt `option_key` uppercase dead on kitty — letter matcher folds both wire spellings (`KeyEvent::means_char`) — completed 2026-07-23 | completed/first-app/ |
-| 0271 | ChoicePrompt approval-gate adoption gaps: `body_width` (body joins the panel measure), `dismiss_label` (defer-honest vocabulary), `handle.retire()` (host close without resolving) — completed 2026-07-23 | completed/first-app/ |
-| 0260 | Disclosure card widget — fold/unfold title row, configurable initial state, capped body with scrollbar (`widgets::Disclosure`) — completed 2026-07-24 | completed/first-app/ |
-| 0850 | Feed message-card enablers — `Feed::on_item_press` + `item_at_row`, `Scroll::extent_signal`/`scrollbar_auto_hide`, the documented card recipe (Feed-native kind stays behind 0280) — completed 2026-07-24 | completed/field-agora/ |
-| 0585 | Global drawer system — `app::Drawer` edge-anchored overlay panels hosting full pages (Modal/Passive focus modes, scrim, slide via `animate` with the idle-zero pin, per-edge z slots below `MODAL_Z`, one-per-edge replace, resize re-clamp, bound-signal controlled mode) + the `animate` mid-flight disposal guard — completed 2026-07-24 | completed/app-kits/ |
-| 0535 | Double-click: engine click-chain synthesis (tree-embedded `ui::ClickChain`, ambient event clock off `Driver::set_clock`, `EventCtx::click_count()`) + `Table::on_activate` (Enter/Space when bound + double-click on the selected row; single/slow clicks only select) — List's picker gesture unchanged (subsumes double-click); delivers 0530 §3's activation slice — completed 2026-07-24 | completed/app-kits/ |
-| 0595 | Theme modes + `ThemeSwitcher` — `ThemeMode` (closed Dark/Light) + `Theme::mode()` + `themes_by_mode` (curated house-first order), `app::toggle_mode()` (remembered choice per mode, fed by `set_theme`), and the drop-in one-cell `☾`/`☼` control: grouped Dark/Light popup over the select core + owned-popup substrate (live preview, type-ahead, Esc-restore, SCREEN anchors inside modals), toggle face for one-click flips; abstractuic survey re-run: strict superset, zero drift, zero value churn — completed 2026-07-25 | completed/app-kits/ |
+| 0288 | ChoicePrompt `option_key` uppercase dead on kitty — letter matcher folds both wire spellings — completed 2026-07-23 | completed/first-app/ |
+| 0271 | ChoicePrompt approval-gate adoption gaps: `body_width`, `dismiss_label`, `handle.retire()` — completed 2026-07-23 | completed/first-app/ |
+| 0260 | Disclosure card widget — fold/unfold title row, capped body with scrollbar (`widgets::Disclosure`) — completed 2026-07-24 | completed/first-app/ |
+| 0850 | Feed message-card enablers — `Feed::on_item_press` + `item_at_row`, `Scroll::extent_signal`/`scrollbar_auto_hide`, the documented card recipe — completed 2026-07-24 | completed/field-agora/ |
+| 0585 | Global drawer system — `app::Drawer` edge-anchored overlay panels hosting full pages + the `animate` mid-flight disposal guard — completed 2026-07-24 | completed/app-kits/ |
+| 0535 | Double-click: engine click-chain synthesis (`EventCtx::click_count()`) + `Table::on_activate` — completed 2026-07-24 | completed/app-kits/ |
+| 0370 | Screenshot capture + exporters: `render::Screenshot` (deterministic `to_text`, replayable `to_ansi`, GitHub-renderable `to_svg`); three capture surfaces (driver, `app::request_screenshot`, testing rig); labeled protocol-image veils — completed 2026-07-24 (ledger row added 2026-07-25) | completed/control-plane/ |
+| 0420 | Canvas/vector layer in core: `crate::canvas` (braille/quadrant dot grids, line/bezier/arc strokes, eighth-block fills); chart refactor goldens byte-identical — completed 2026-07-24, extensions wave (ledger row added 2026-07-25) | completed/extensions/ |
+| 0440 | `abstracttui-graph`: auto-layout (`GraphDesc -> Layout`, layered/force/grid) + `GraphView` (cards/strokes/selection/pan/tooltips); first workspace sibling crate — completed 2026-07-24, extensions wave (ledger row added 2026-07-25) | completed/extensions/ |
+| 0450 | `abstracttui-mermaid`: spelling-exact subset parser, flowcharts/flat-state compiled onto the graph crate, solverless sequence diagrams, atomic fallback + mermaid.live fragment link; 30-fixture corpus — completed 2026-07-24, extensions wave (ledger row added 2026-07-25) | completed/extensions/ |
+| 0595 | Theme modes + `ThemeSwitcher` — `ThemeMode` + `toggle_mode()` (remembered choice per mode) + the drop-in ☾/☼ control; abstractuic survey re-run: strict superset, zero drift — completed 2026-07-25 | completed/app-kits/ |
+| 0605 | Block close affordance: `Block::on_close` panel ✕ (mouse-only, never focusable; title-yields-first truncation ladder; disposal-safe) — completed 2026-07-25 (ledger row added 2026-07-25) | completed/app-kits/ |
+| 0273 | File-attachment surfaces: `TextInput`/`TextArea` `on_paste` intercept (`PasteAction`), `input::paste::classify` cross-terminal drop classifier, `FilePicker` over the `FileSource` seam + `examples/attachments.rs` — completed 2026-07-25, attachments wave (ledger row added 2026-07-25) | completed/first-app/ |
 
-## Proposed ledger
+## Proposed ledger — general bands
 
 | ID | Title | Track | Promotion trigger |
 | --- | --- | --- | --- |
-| 0050 | Transport story: HTTP/WebSocket/TLS dependency decision (first ADR) | live-data | Decide only after the watcher's evidence (0060); do not settle from the armchair. 0040 shipped meanwhile — the dial-fn seam is where the transport plugs in. |
-| 0140 | Stateful cross-line lexers (python/js/toml) — diff lexer SHIPPED 2026-07-22 (`text::DiffLexer`, additive); stateful seam + language presets remain | app-widgets | A consumer needing real language tinting; the stateful-seam design note in the item gates python. |
+| 0050 | Transport story: HTTP/WebSocket/TLS dependency decision (ADR) | live-data | Decide only after the watcher's evidence (0060 — agora-tui now EXISTS and field-agora holds its findings; the ADR should fold them). 0040 shipped meanwhile — the dial-fn seam is where the transport plugs in. |
+| 0135 | Scroll over a measureless PLAIN element tree collapses to a bar-only strip — the REMAINDER after ADR-0005 fixed the content views (wave-12 §2) | app-widgets | The fix-or-document ruling (code seat accepted the lane); or the 0185 solver investigation touching the same seam. |
+| 0140 | Stateful cross-line lexers (python/js/toml) — diff lexer SHIPPED 2026-07-22; JSON/YAML lexers SHIPPED with the ADR-0005 wave; stateful seam + language presets remain | app-widgets | A consumer needing real language tinting; the stateful-seam design note in the item gates python. |
 | 0160 | Content selection + copy — screen-level v1 SHIPPED via 0270; remaining scope = logical widget-content mapping (copy markdown source, unwrap soft-wraps) shared with 0148 | app-widgets | A consumer needing source-text copy (screen-text copy ships today). |
 | 0165 | Hyperlink/reference hit-testing through the event path | app-widgets | A dogfood app reaching its "activate a reference" phase. |
-| 0170 | 1.0-track API stability pass — PARTIALLY EXECUTED: ADRs 0001-0003 landed + `Capabilities`/`GraphicsCaps` now `#[non_exhaustive]`; the full 1.0 audit (prelude criteria, public-api gate, breaking budget enforcement) stays open | app-widgets | The remaining audit rides the 0.3 window (budget doc: planned/0002). |
-| 0200 | EPIC: coding-agent console over `abstractcode serve` JSONL | ports | Its widget + live-data dependencies land (Feed/stream/follow-tail + TextArea 0120 DONE — widget deps complete). |
-| 0210 | EPIC: a2a chat TUI over the agora hub | ports | Its widget + live-data dependencies land (Feed + TextArea 0120 DONE; lifecycle 0040/0050 remain). |
-| 0280 | Feed custom blocks cannot host widgets; protocol images degrade to mosaic in Feed | first-app | Filed 2026-07-22 (0.2.0 adoption wave); design with Feed's item model + the 0144 protocol-images-in-flow question. |
+| 0170 | 1.0-track API stability pass — PARTIALLY EXECUTED: ADRs 0001-0003 + `#[non_exhaustive]` on Capabilities/GraphicsCaps; the full 1.0 audit stays open | app-widgets | The remaining audit rides the 0.3 window (budget doc: planned/0002). |
+| 0175 | `Block::shadow` consumes a row/col of the block's own slot; under interior crush the FIRST child dies, order-dependently (wave-12 §1b) | app-widgets | The chrome-yields-vs-document ruling in-item; the order-dependence half rides the 0185 investigation. |
+| 0185 | Measure inflation around Tabs: fixed-height siblings crushed while grow slack exists (wave-12 §1) | app-widgets | ALREADY ACCEPTED by the code seat as "the top engine investigation for the next wave" — needs the failing-test pin first. |
+| 0200 | EPIC: coding-agent console over `abstractcode serve` JSONL | ports | Its widget + live-data dependencies land (widget deps complete). |
+| 0210 | EPIC: a2a chat TUI over the agora hub | ports | Its widget + live-data dependencies land (Feed + TextArea DONE; lifecycle 0040 done, 0050 remains). |
+| 0272 | ChoicePrompt aux-key vocabulary — non-option key surface, hint row open to callers (split out of 0271) | first-app | The consumer's `f` cards↔JSON toggle ask recurring, or the next ChoicePrompt wave. |
+| 0274 | `app::notify()` — presenter-custody emitter for the detected OSC 9/99 notification channels (RENUMBERED from 0290 this pass) | first-app | Execute WITH planned 0150 (the notify leg, same emission path); first consumer named (abstractcode-tui run-conclusion ping). |
+| 0280 | Feed custom blocks cannot host widgets; protocol images degrade to mosaic in Feed | first-app | Design with Feed's item model + the 0144 protocol-images-in-flow question. |
+| 0289 | Typed uppercase inserts lowercase on kitty-spelling wires (`convert_event` drops the kitty `text` field) | first-app | Next input wave (bug — should not wait long). |
 | 0300 | App lifecycle events (boot/ready/resize/caps/focus/suspend/resume/quit + custom) — the band foundation | control-plane | Scheduling any of 0310/0340/0350, or the first app needing suspend/flush hooks. |
 | 0310 | Automation bus: inject input, query semantic tree + screen text, invoke named actions, subscribe to events | control-plane | 0300 + a driving consumer (port harness, embedder, or 0320). |
 | 0320 | JSONL control protocol + opt-in serve seam (default-OFF `control-server` feature; socket perms = auth) | control-plane | 0310 + the JSON-promotion precondition (with extensions 0410); closes only with the protocol ADR. |
@@ -154,190 +199,231 @@ composer wave).
 | 0340 | Persist registry: declared keys, atomic phase-boundary snapshots, crash marker, restore-on-start | control-plane | 0300, or app-kits 0520 starting (its accepted first consumer). |
 | 0350 | Background serve + attach/detach design (VirtualTerm, conservative serve caps, attach = caps upgrade) | control-plane | Maintainer security/ownership review; builds only after 0360's report folds back. |
 | 0360 | Milestone: attach proof — one headless app, one client, fixed caps (~2-4 days, report-first) | control-plane | 0350 review + 0320 socket seam. |
-| 0400 | Extension architecture: two feature classes (default-ON trim / default-OFF opt-in) + sibling-crate family; ADR skeleton ready | extensions | Maintainer sign-off; ADR lands before/with the first 04xx packaging execution. |
-| 0410 | Feature-gate `three`/`jpeg`/`proto` (default-on trim; gltf_json promotion coordinated with 0320) | extensions | 0400's ADR + integrator Cargo.toml sign-off; batch with the 0.2 window (0170). |
-| 0420 | Canvas/vector layer in core: dot canvas, bezier/arc, styled blit; chart refactor gated on byte-identical goldens | extensions | First diagram consumer scheduled (0440/0450) — or standalone on the chart-dedup merit. |
-| 0430 | `abstracttui-graph`: interactive node-graph editor (cards/ports/edges/pan/drag/tooltips), staged M1-M3, keyboard-first | extensions | 0420 + 0440 landed; a named dataflow-editor consumer; family launch gate (0170) holds. |
-| 0440 | `abstracttui-graph`: read-only auto-layout view — layered v1 (DAG-class), designed force v1.5 (KG-class) | extensions | 0420 + a named DAG-view consumer; v1.5 on the first knowledge-graph consumer. |
-| 0450 | `abstracttui-mermaid`: spelling-exact flowchart/sequence subset, atomic per-diagram fallback | extensions | 0420 + 0440 landed; the mdpad rebuild reaching its diagram phase. |
-| 0460 | mdpad-class reader enablement: parity dashboard + four core-gap seeds (0142-0148) | extensions | Maintainer green-light on the rebuild; seeds promote individually. |
+| 0380 | Debug-damage toggle under `App::run` — app-level knob to `Compositor::set_debug_damage` (wave-12 §5) | control-plane | Ride the driver.rs split (wave11/0990's last entry — the code seat's named landing moment); verb/env shape decision in-item (RunConfig field is semver-major, the 0299 lesson). |
+| 0400 | Extension architecture — EXECUTED: ADR-0004 Accepted 2026-07-23; item retained for the decision record | extensions | Done in substance; close formally on the next extensions wave. |
+| 0410 | Feature-gate `three`/`jpeg`/`proto` (default-on trim; gltf_json promotion coordinated with 0320) | extensions | ADR-0004 landed; integrator Cargo.toml sign-off; batch with the 0.2/0.3 window (0170). |
+| 0430 | `abstracttui-graph`: interactive node-graph editor (cards/ports/edges/pan/drag/tooltips), staged M1-M3, keyboard-first | extensions | 0420 + 0440 landed (both DONE); a named dataflow-editor consumer remains the gate. |
+| 0445 | GraphView: force layouts open mostly off-view — first-render bbox centering / `.center()` (wave-12 §4) | extensions | Small; agreed by the code seat ("next wave"); bound offsets keep app ownership. |
+| 0455 | mermaid fallback live-link as an OSC-8 hyperlink — clipped URL must stay whole (wave-12 §3) | extensions | Small; agreed by the code seat ("next wave"); caps-off shape = wrap, never mid-URL ellipsis. |
+| 0460 | mdpad-class reader enablement: parity dashboard + four core-gap seeds (0142-0148 all SHIPPED; ADR-0005 folded the mdpad survey — table wrap + nesting now live in the 1200-band filings) | extensions | Reassess against ADR-0005's decision 4: the remaining scope may be discharged or superseded by the 1200-band items. |
 | 0470 | Web/HTML feasibility — verdict: full web NEVER; readable-subset slice gated on four criteria | extensions | All four criteria met — else the verdict stands. |
-| 0480 | Core seam: `StyledCanvas::register_link` (producer half of the link channel; OSC 8 works pre-0165) | extensions | Any canvas-link consumer (0430 M3, 0450) or 0165's scheduling; may merge into 0165. |
-| 0510 | Form kit: field rows, form state signals, validation, submit gating, masked input — `TextInput::masked` engine delta SHIPPED 2026-07-22 (draw + access_value redaction) | app-kits | 0520 or a second settings form; remaining engine delta: subtree focus step. |
-| 0520 | Wizard flow: multi-step container on the form kit; crash-resume via 0340 (its first consumer) | app-kits | 0510 landing. |
-| 0530 | Table upgrades: rich cells, badges, row actions, activation event, row identity | app-kits | Admin-console validator scheduling. |
+| 0480 | Core seam: `StyledCanvas::register_link` (producer half of the link channel; OSC 8 works pre-0165) | extensions | Any canvas-link consumer (0430 M3, 0455's generalization) or 0165's scheduling; may merge into 0165. |
+| 0510 | Form kit: field rows, form state signals, validation, submit gating — `TextInput::masked` SHIPPED | app-kits | 0520 or a second settings form; field-gateway 0930/0935/0990 are its live evidence. |
+| 0520 | Wizard flow: multi-step container on the form kit; crash-resume via 0340 (its first consumer) | app-kits | 0510 landing; field-gateway 0920/1010 are its live evidence. |
+| 0530 | Table upgrades: rich cells, badges, row actions, activation event, row identity | app-kits | Admin-console validator scheduling; field-gateway 0900/0970/0980 are its live evidence; builds ON 0535's activation. |
 | 0540 | Chips, counts, and tag-input vocabulary | app-kits | First consumer among 0500/0550/smart-note-class apps. |
 | 0550 | Navigation kit: NavList (sidebar + unread badges) + FilterTabs | app-kits | Validators or 0210's room list. |
-| 0560 | Header bar + persistent banners (existing tokens only; banner-ground = theme-lane follow-up) | app-kits | Admin-console validator. |
-| 0570 | Tree view (outline/file-tree; Role variants ride the 0.2 batch) | app-kits | Triage-shell outline or a file-manager consumer. |
+| 0555 | PageHost default layout: hug → grow-into-region (wave-12 §6; the Viewport3D default precedent) | app-kits | BEHAVIOR CHANGE — its own wave slot + changelog line (code seat); acceptance = the shell example deletes its explicit `.layout(...)`. |
+| 0560 | Header bar + persistent banners (existing tokens only) | app-kits | Admin-console validator. |
+| 0570 | Tree view (outline/file-tree; Role variants ride the 0.3 batch) | app-kits | Triage-shell outline or a file-manager consumer. |
 | 0580 | Split panes + collapsible panel rail | app-kits | Triage-shell validator. |
-| 0590 | Reference validators: admin console, setup wizard, triage shell (in-repo; no item completes unvalidated) | app-kits | Grows a slice with each landing app-kits item. |
+| 0590 | Reference validators: admin console, setup wizard, triage shell (in-repo) | app-kits | Grows a slice with each landing app-kits item. |
+| 0615 | `gesture_label` composition contract — document the `"{action}: {label}"` template (wave-12 §6) | media-av | Docs-only smallest shape; parts-based labels only on a named localizing consumer. |
 | 0630 | Speaking-highlight primitive (Signal<Range> → cells; shares 0148/0160's text↔cells mapping) | media-av | A voice-reader consumer; builds WITH the 0148 substrate. |
-| 0640 | External audio-process lifecycle pattern (docs + example; verified no engine code needed) | media-av | Ships with 0650's successor or the first voice app (0650 itself shipped WITHOUT it — validation stays open). |
-| 0660 | Images inside Feed/Markdown via protocol placement (rect-follow, clip, eviction) | media-av | A feed with image attachments, or app-widgets 0144. |
+| 0640 | External audio-process lifecycle pattern (docs + example; verified no engine code needed) | media-av | Ships with 0650's successor or the first voice app. |
+| 0660 | Images inside Feed/Markdown via protocol placement (rect-follow, clip, eviction) | media-av | A feed with image attachments (0144's in-flow mosaic shipped; protocol placement remains). |
 | 0665 | Animated image sessions (kitty a=f zero-steady-state-bytes; labeled timer fallback) | media-av | An animated-content consumer; decoder dep needs a ruling. |
 | 0670 | Cell-pixel-size refresh on resize (font zoom re-scales sixel/3D) | media-av | First sixel field report or the next driver-images wave. |
-| 0675 | Scroll shift × live images: kitty re-place restores the scroll byte win (plain-diff guard shipped 2026-07-22) | media-av | A log app keeping a persistent image. |
+| 0675 | Scroll shift × live images: kitty re-place restores the scroll byte win | media-av | A log app keeping a persistent image. |
 | 0680 | Sixel bottom-row honesty: last-row clamp + DECSET 8452 probe | media-av | First sixel validation pass of the images-truth recipe. |
-| 0688 | Detection/transport robustness: strict kitty-probe reply parse; >1 MiB single-frame payloads under tmux (iTerm2 multipart; sixel labeled refusal) | media-av | Next caps/probe wave or a tmux+iTerm2 field report. |
-| 0710 | Game tick: public per-frame tasks + fixed-timestep helper | games | First real-time game example, or the second in-tree consumer hand-rolling an `after`-recursion clock (effects example is the first). |
-| 0720 | Sprite/tile toolkit: masked blit, sprite sheets, cell-art palette swap | games | First game example reaching its render phase, or a second consumer hand-rolling cell-by-cell sprite copies. |
-| 0730 | Board-grid math: square + hex coordinates, range, line, aspect-corrected projection | games | First grid-mapped surface in any dogfood app or game example. Placement (core vs sibling) routes through extensions 0400's classification. |
+| 0688 | Detection/transport robustness: strict kitty-probe reply parse; >1 MiB single-frame payloads under tmux | media-av | Next caps/probe wave or a tmux+iTerm2 field report. |
+| 0710 | Game tick: public per-frame tasks + fixed-timestep helper | games | First real-time game example, or the second in-tree consumer hand-rolling an `after`-recursion clock. |
+| 0720 | Sprite/tile toolkit: masked blit, sprite sheets, cell-art palette swap | games | First game example reaching its render phase. |
+| 0730 | Board-grid math: square + hex coordinates, range, line, aspect-corrected projection | games | First grid-mapped surface in any dogfood app; placement routes through ADR-0004's classification. |
+
+## Proposed ledger — field findings + maintenance
+
+One row per open finding (each file carries the evidence, the app-side
+workaround, and what the engine fix deletes). Severities: P1 blocked
+the build / P2 cost real time, workaround holds / P3 paper cut.
+
+| Track | ID | Title | Class | Sev |
+| --- | --- | --- | --- | --- |
+| field-agora | 0800 | use_startup_notices carries unbounded mid-session diagnostics | API gap | P3 |
+| field-agora | 0810 | List rows are plain strings — no badge slot | capability gap | P3 |
+| field-agora | 0820 | Connection has no app-initiated re-dial verb | API gap | P3 |
+| field-agora | 0830 | Reconnect countdown needs app-side deadline bookkeeping | API gap | P3 |
+| field-agora | 0840 | Layout docs: grow vs intrinsic basis for content-heavy panes | docs | P3 |
+| field-agora | 0860 | RichTextView/MarkdownView no intrinsic measure — invisible in Scroll (MarkdownView half FIXED by the ADR-0005 wave; RichTextView + the general class remain — see 0135) | footgun | P3 |
+| field-agora | 0870 | FeedItem headline single-row/nowrap mode | capability gap | P3 |
+| field-agora | 0880 | FeedItem body max-measure for wide terminals | capability gap | P3 |
+| field-agora | 0885 | Disclosure title needs a rich-span slot (folded cards lose identity color) | capability gap | P2 |
+| field-agora | 0890 | Disclosure capped body under-measures rich feed items (rows clip) | bug | P2 |
+| field-agora | 0895 | Bound `Scroll::offset_y(Signal)` ignored inside Drawer pages | bug | P1 |
+| field-agora | 0900 | Completion panel occludes the row above a bottom-docked composer | API gap | P2 |
+| field-agora | 0905 | Drawer needs vertical insets so docked chrome stays visible | API gap | P3 |
+| field-agora | 0910 | Scroll of widgets: no ensure-visible / child-offset verb | API gap | P2 |
+| field-gateway | 0900 | Table: oversubscribed fixed columns silently starve the Flex column to zero | footgun | P2 |
+| field-gateway | 0905 | Select/Combobox same-value re-commit unobservable | API gap | P2 |
+| field-gateway | 0910 | Shortcuts on elements outside the focus path silently never fire | footgun | P2 |
+| field-gateway | 0920 | Wizard/tab navigation needs an input-immune key lane (0520 evidence) | capability gap | P3 |
+| field-gateway | 0930 | Widget `disabled` is build-time only — validation gating forces focus-dropping rebuilds (0510 evidence) | API gap | P2 |
+| field-gateway | 0935 | Dirty-form tracking is hand-rolled per form (0510 evidence) | capability gap | P3 |
+| field-gateway | 0940 | Modal::open builds content before the Modal exists — self-closing forms need an external-slot dance | API gap | P3 |
+| field-gateway | 0945 | ChoicePrompt shares MODAL_Z with app modals — no stacking policy, no introspection | footgun/API gap | P2 |
+| field-gateway | 0950 | reactive::connection assumes a persistent transport — probe-shaped clients cannot adopt it | API-fit evidence | P3 |
+| field-gateway | 0960 | Element::draw closures paint past their own rect | footgun | P2 |
+| field-gateway | 0970 | Table never clamps a bound selection when rows shrink | API gap | P2 |
+| field-gateway | 0980 | Table consumes `s` (sort cycling) even without a sort handler | footgun | P3 |
+| field-gateway | 0990 | No engine pattern for routing one-shot write completions back to forms (0510 evidence) | capability gap | P3 |
+| field-gateway | 1000 | Dead-keys WINDOW when a modal's only focusables mount after an async load (extends 0230) | footgun | P1 |
+| field-gateway | 1010 | PageHost: no per-tab locked/disabled affordance for gated (wizard) flows | capability gap | P3 |
+| wave11 | 0990 | File-size budget reconciliation — 12 splits DONE (wave 12); 15 files still >600 re-counted 2026-07-25 (driver.rs 1115 last; acceptance.rs test-only non-goal → 14 actionable) | maintenance | P3 |
+
+(field-core 1100–1190: no items yet — the abstractcore-console build
+launched 2026-07-25; expect filings.)
 
 ## Next recommended work
 
-(Updated 2026-07-22, cycle-3 synthesis. Evidence base: the six study-2
-reports in `reviews/study2/`; full three-horizon plan with efforts in
-`reviews/study2/ACTION-PLAN.md`. The former list is discharged: 0120, the
-0.2 budget batch, and 0500 are DONE; 0300 moves to the horizon-3 queue
-(control-plane) — still the band foundation, no longer ahead of the
-consumer-earned items below.)
+(Updated 2026-07-25, wave-13 backlog pass. Evidence base: the wave-12
+pixel-review handoffs — `reviews/wave12/visual-to-code-handoff.md` +
+`code-to-visual-handoff.md` — the four field tracks, ADR-0005, and the
+per-item verification done for this pass. The former list is fully
+discharged: the 0.2.2 patch, 0102/0104, 0040, 0297, and 0700 are all in
+completed/.)
 
-1. **The 0.2.2 patch (shipping now)** — the image-lifecycle fixes (five
-   bug classes, `reviews/study2/media-images-truth.md`, adversarially
-   re-reviewed in `quality-on-media.md`) + first-app
-   0290/0293/0295/0296/0298. WHY: 0290 has NO app-side workaround (the
-   selection layer eats `c`/Enter before dispatch), and 0293 heads the
-   key-state chain while fixing Shift+Enter on the majority macOS
-   terminals. (Progress 2026-07-22, fix wave cycle 3: 0293/0295/0296 —
-   and media-av 0685 with them — are DONE; 0290/0298 remain this
-   patch's open items.) (DISCHARGED: 0.2.2 shipped 2026-07-22 with
-   0290/0298 in it — all five items in completed/.)
-2. **0102 `FeedBlock::Rich` + 0104 `FeedState::sync`** — WHY: the first
-   consumer's #1 tension and its twin (~137-line Card system + ~180-line
-   sync machinery, `field-consumer-tensions.md` §4.1/§3.6); additive;
-   unblocks the log/chat/entity classes (`field-app-classes.md` classes
-   3/5). One block-vocabulary pass with 0280/0660 — the enum grows once.
-   (DONE 2026-07-23, content wave — both in completed/app-widgets/ with
-   0190; the vocabulary pass landed as the crate-private `ItemBlock`
-   with the public fold-back budgeted in planned/0002 entry 5.)
-3. **0040 promotion (jittered reconnect)** — WHY: the trigger fired with
-   two studies' evidence — the consumer hand-rolled SSE +
-   reconnect/backoff WITHOUT jitter (`field-consumer-tensions.md` §3.5)
-   and entity monitors multiply it (`field-app-classes.md` class 4);
-   dated evidence section in-item. (DONE 2026-07-23, fix wave 3 —
-   `reactive::connection` + `Backoff` in completed/live-data/; the
-   consumer migration off its hand-roll is the named follow-up.)
-4. **0297 disposal law engine-wide** — WHY: tension #2
-   (`field-consumer-tensions.md` §3.1) — Button's post-callback write
-   forces a one-tick retire deferral in every modal-closing consumer;
-   acceptance = the consumer deletes it. (DONE 2026-07-23, fix wave 3 —
-   Button + a second offender the audit found (TextArea) fixed, law
-   stated in api.md, per-site disposal pins; the consumer's deferral
-   deletion is the named follow-up.)
-5. **0700 key press/release state** — WHY: the games+voice shared
-   primitive (`field-games.md` §2, `media-voice-plumbing.md` §2), now
-   unblocked by 0293 in the patch; real-time games stay blocked until it
-   lands. (DONE 2026-07-23, input/AV wave — `app::keys` in
-   completed/games/ with 0610/0620/0650 behind it.)
-6. **The 0.3 budget execution when the maintainer signs**
-   (`planned/0002`) — WHY: Role/TokenKind `non_exhaustive` +
-   `content_size` deprecation batch in one window; the semver CI gate
-   enforces additive-only meanwhile.
+1. **0185 measure inflation (+ 0175, + 0135's remainder)** — the
+   measure/crush family the wave-12 pixel review exposed. WHY: 0185 is
+   the code seat's OWN named "top engine investigation for the next
+   wave" (a crushed fixed-height row while grow slack exists is silent
+   content loss in every shell); 0175 (shadow eats a slot + first child
+   dies order-dependently) and 0135 (Scroll over plain trees collapses
+   to a bar) are the same solver seam. The ADR-0005 wave already took
+   the content-view half (MarkdownView/CodeView intrinsic measure) —
+   the pattern to extend. Precondition on all three: failing-test pins
+   first.
+2. **The two field P1s** — field-gateway 1000 (dead-keys window on
+   async-mounting modals: silent, looks like a wedge, cost a night
+   hour to diagnose; the ask is a structural focus fallback) and
+   field-agora 0895 (bound `Scroll::offset_y` dead inside Drawer
+   pages: keyboard-first drawer pages — the 0.2.12 headline use case —
+   re-derive windowing by hand). Both verified still open 2026-07-25.
+3. **The P2 field cluster that feeds app-kits** — field-agora
+   0885/0890/0900/0910 (Disclosure rich titles + capped-body measure,
+   completion-panel reserved rows, ensure-visible) and field-gateway
+   0900/0905/0910/0930/0945/0960/0970 — these are simultaneously bug
+   fixes AND the live evidence 0510/0520/0530 build on. Verified still
+   open 2026-07-25 (no title_rich/margin_rows/inset/ensure-visible
+   surfaces exist in 0.2.22).
+4. **The small shipped-crate polish batch** — extensions 0445 + 0455
+   (both sized "small, next wave" by the code seat), media-av 0615
+   (docs-only), first-app 0289 (a real input bug). One short wave
+   clears four items.
+5. **0555 PageHost default-grow** — needs its OWN wave slot (behavior
+   change + changelog, per the code seat); acceptance is the shell
+   example deleting its workaround.
+6. **wave11/0990 remaining splits + 0380** — 15 files still >600 lines
+   (re-counted 2026-07-25; three grew since filing). driver.rs (1115)
+   goes last with the phase structure as the seam — and 0380 (the
+   debug-damage knob) lands in that same touch by the code seat's own
+   note.
+7. **Completion follow-ups already named in completed items** (read
+   before scheduling adjacent work): 0595's — Select's short-viewport
+   window cap, themes-table.md mode column next regen, upstream theme
+   name coordination; 0605's — Drawer ✕ activation parity (still
+   fire-on-Down, predates the 0.2.20 press-release lesson),
+   `title_action` slot if a second title action is commissioned,
+   hover-heal under stationary pointers (tree-side if ever).
+8. **Standing gates** — planned/0002 (the 0.3 breaking budget) executes
+   when the maintainer signs; 0050 (transport ADR) now HAS its
+   evidence source (agora-tui runs live against the hub — fold
+   field-agora 0820/0830/0950 into the decision); 0060/0215 close when
+   their epics' owners declare the validators done.
 
 ## Sequencing (load-bearing)
 
 - **live-data is one-directional**: 0010 before 0020/0030; 0010+0020 before
-  the watcher (0060) — hand-rolling their gaps inside the watcher would
-  un-validate the track. **0060 before closing 0050**: the transport ADR
-  waits on the watcher's experience report as its evidence.
-- **0100 is the widget trunk**: 0110 feeds its streaming tail, 0130 is how it
-  composes with `Scroll` (design together), 0140 tints its blocks. 0170 gates
-  the public shapes of 0100/0130.
-- **Ports depend on both tracks**: 0200 (console) ← 0100/0110/0120/0130/0140/0150
-  + live-data 0010/0020/0030 (subprocess pipe, no network — not 0040/0050).
-  0210 (chat) ← 0100/0120/0130/0150 + live-data 0010/0020/0030/0040/0050; its
-  read-only phase 1 IS the 0060 milestone (adopt, don't restart).
-- The read-only watcher (0060) needs **nothing** from app-widgets (its scope
-  is a hand-windowed read-only view); a full chat client is the first thing
-  requiring both tracks.
-
-### Cross-track edges from the 2026-07-21 study (load-bearing)
-
+  the watcher (0060). **0060 before closing 0050**: the transport ADR
+  waits on the watcher's experience report — the watcher exists now
+  (agora-tui); its transport findings are field-agora 0820/0830/0950.
+- **The wave-12 measure family is one investigation**: 0185 (solver
+  measure/shrink) is the trunk; 0175's order-dependence half and
+  0135's plain-tree half hang off the same seam — pin failing tests
+  first, fix once, re-verify all three plus field-agora 0860/0890
+  (the same class seen from the field). The ADR-0005 wave's
+  content-view fix (intrinsic measure + `basis(Cells(0))`) is the
+  established pattern.
+- **Ports depend on both tracks**: 0200 (console) ← app-widgets +
+  live-data 0010/0020/0030 (subprocess pipe, no network). 0210 (chat)
+  ← both + 0040/0050; its read-only phase 1 IS the 0060 milestone.
 - **0300 before everything in its band** — 0310/0320/0340/0350 all consume
-  the lifecycle surface.
-- **0320 ↔ 0410**: whichever ships first must promote `gltf_json` to a
-  neutral home (with a `three`-feature re-export) or the second is stranded.
-- **0340 ↔ 0520**: the wizard is the persist registry's accepted first
-  consumer; 0520's crash-resume journey is 0340's restore-ordering evidence.
-- **0360 → 0350/0320-ADR**: the attach proof's experience report folds back
-  before the attach design or the protocol ADR freezes (the 0060→0050
-  evidence-first pattern).
-- **0500's popup substrate before its consumers**: 0120's completion
-  dropdown (passive-panel mode), 0530's action menus, extensions 0430's
-  tooltips all consume it; the `Overlays::top_z` engine delta rides the
-  0.2 window.
-- **0420 before 0430/0440/0450**; **0440 before 0430**; the link seam
-  (0480, mergeable into 0165) before 0430's activation milestone.
-- **The 0250 ruling** (selection follows movement; activation = Enter /
-  click-when-selected; commit-on-move per-widget opt-in, default off) is
-  recorded in `reviews/study/platform-on-appkits.md` and encoded by
-  0530/0550/0570; the List/Table engine fixes cite it. AMENDED
-  2026-07-24 by 0535: the ruling's "no double-click synthesis anywhere"
-  clause is retired — the engine synthesizes click counts
-  (`EventCtx::click_count`), `Table::on_activate` consumes them (timed
-  double-click; slow click-on-selected deliberately does NOT activate
-  on a table), and List's timing-free picker gesture stands unchanged
-  (it subsumes double-click). 0530's remaining scope (cells, actions,
-  identity, multi-select) builds ON 0535's activation event.
+  the lifecycle surface. **0310 before 0320**; **0320 ↔ 0410** (JSON
+  promotion); **0340 ↔ 0520** (the wizard is the persist registry's
+  accepted first consumer); **0360 → 0350/0320-ADR** (evidence before
+  freeze).
+- **0380 rides the driver.rs split** (wave11/0990's deliberately-last
+  entry) — the code seat's named landing moment for the knob.
+- **0555 is a behavior change**: own wave slot, changelog line,
+  acceptance-battery re-run — never batched silently with fixes.
+- **0530's remaining scope builds ON 0535's activation event** (the
+  0250 ruling as AMENDED 2026-07-24: engine click-chain synthesis is
+  in; List's timing-free picker gesture stands).
+- **0500's popup substrate before its consumers** — shipped; 0530's
+  action menus and extensions 0430's tooltips consume it as public API.
+- **0420 before 0430/0440/0450** — all shipped except 0430, which now
+  waits only on a named dataflow-editor consumer.
 - **Sibling extension crates inherit the dependency posture** (std +
   abstracttui + hand-rolled parsing); the TLS-class exception is not
   granted here — it rides live-data 0050's transport ADR.
-- **The key-state chain (convergence cycle 2)**: first-app 0293 (push
-  kitty flags after the probe proves the protocol) → games 0700 (the
-  key press/release state service + fidelity honesty) → media-av 0610
-  (push-to-talk consumes it). 0700's service lands independently but
-  runs repeat-approximated on iTerm2/VS Code/Warp until 0293; 0610
-  adds no key-state machinery of its own. **Chain head SHIPPED
-  2026-07-22 (fix wave cycle 3)**: 0293 is completed —
-  `REPORT_EVENT_TYPES` now reaches probe-proven terminals, so 0700
-  starts unblocked at full fidelity.
-- **The Feed-block family (convergence cycle 2)**: app-widgets 0102
-  (`FeedBlock::Rich`), media-av 0660 (images in Feed), and first-app
-  0280 (widget-hosting blocks) all extend the same `FeedBlock` enum —
-  one block-vocabulary design pass, owned by whichever executes first,
-  reviewed by the other two; the enum grows once.
-- **0730's home is a 0400 classification** (core module vs a
-  games-domain sibling crate) — the item argues both precedents
-  (0420-core vs 0440-sibling-layout) and promotes only with a recorded
-  ruling.
-- **Same-z Modal stacking hazard (0500 follow-up 2, verified in code
-  2026-07-22)**: two `Modal::open` calls both mount at `MODAL_Z =
-  1000`; paint order is stable ascending-z (ties keep mount order —
-  the SECOND-mounted renders on top) while key dispatch sorts
-  `Reverse(z)` stably (ties keep mount order — the FIRST-mounted wins
-  keys): visually-top and key-owner DISAGREE for stacked modals. The
-  0500 owned popup is immune (`Overlays::top_z() + 1` is strictly
-  above). Whoever ships stacked-dialog UX (0510/0520 forms, 0530 row
-  actions, the 0590 validators) must give `Modal` a z-or-`top_z` story
-  first — details in `completed/app-kits/0500_select_combobox_family.md`
-  "Follow-ups revealed".
+- **The key-state chain shipped end-to-end** (0293 → 0700 → 0610);
+  0615 is its wording follow-up, docs-only.
+- **The Feed-block family**: app-widgets 0102 shipped the crate-private
+  `ItemBlock` vocabulary; media-av 0660 and first-app 0280 still extend
+  the same enum — one design pass when either schedules; the public
+  fold-back is budgeted in planned/0002 entry 5.
+- **Same-z Modal stacking hazard** (verified in code 2026-07-22): two
+  `Modal::open` calls both mount at `MODAL_Z = 1000`; visually-top and
+  key-owner DISAGREE for stacked modals. Whoever ships stacked-dialog
+  UX (0510/0520 forms, 0530 row actions, the 0590 validators) must
+  give `Modal` a z-or-`top_z` story first — field-gateway 0945 is the
+  field sighting of the same hazard; details in
+  `completed/app-kits/0500_select_combobox_family.md` "Follow-ups
+  revealed".
+- **0730's home is an ADR-0004 classification** (core module vs a
+  games-domain sibling crate) — promotes only with a recorded ruling.
 
 ## ADR state
 
-`docs/adr/` exists: **0001** (API stability policy toward 0.2/1.0),
-**0002** (two-`Style` ruling), **0003** (struct extensibility) landed
-2026-07-21. Still owed: the **extension-architecture ADR** (skeleton ready
-in `reviews/study/extensions-cycle3.md` §1c — lands before/with the first
-04xx packaging execution), the **0320 control-protocol ADR**, the **0340
+`docs/adr/` holds five accepted ADRs: **0001** (API stability policy),
+**0002** (two-`Style` ruling), **0003** (struct extensibility) — all
+2026-07-21; **0004** (extension packaging: features vs sibling crates —
+the extension-architecture ADR the 0400 track owed, executed
+2026-07-23); **0005** (content rendering responsibilities: markdown/
+code/diff/JSON/YAML are CORE; `abstracttui[md]` rejected; extensions own
+diagram-class content; mdpad is the quality bar — 2026-07-25). Still
+owed: the **0320 control-protocol ADR**, the **0340
 persistence-container ADR**, and the **0050 transport ADR** (waits on
-0060's evidence). The a11y-completeness + redaction-at-source clause
-(drafted in `reviews/study/platform-cycle3.md`) joins the next ADR pass.
+0060's evidence — now collectable from field-agora). The
+a11y-completeness + redaction-at-source clause (drafted in
+`reviews/study/platform-cycle3.md`) still joins the next ADR pass.
 
 ## Process
 
-- New item: scan every lifecycle dir + topic folder for the next unused global
-  `NNNN`, add it under the right state, and update this overview's counts,
-  ledgers, and sequencing in the same pass.
-- Completion: append a `## Completion report` (final path, date, outcome, key
-  validation), move to `completed/`, update the ledgers here.
-- Deprecation: append a `## Deprecation report` with the reason, move to
-  `deprecated/`, update this overview.
-- Bands: live-data owns 0010–0090, app-widgets owns 0100–0190, ports own
-  0200–0290 (0200/0210 = port epics; 0220–0298 = first-app findings),
-  control-plane owns 0300–0390, extensions owns 0400–0490, app-kits owns
-  0500–0590, media-av owns 0600–0690, games owns 0700–0790. Leave gaps
-  for insertion.
-  field-gateway (findings from the 0215 gateway-console build) owns
-  0900–0990.
-  field-agora (findings from the 0060 agora-watcher build) owns 0800–0890.
+- New item: scan every lifecycle dir + topic folder for the next unused
+  global `NNNN` (mind the collision list above — treat a number as
+  taken if ANY track uses it), add it under the right state, and update
+  this overview's counts, ledgers, and sequencing in the same pass.
+  Update the owning track README's table in the same pass too — four
+  track tables had drifted from their directories when this pass
+  audited them (field-gateway missing 1000/1010; field-agora missing
+  0895–0910; first-app missing 0273/0274; this ledger missing six
+  completed rows). The directory is the truth; the tables must follow.
+- Completion: append a `## Completion report` (final path, date,
+  outcome, key validation), move to `completed/`, update the ledgers
+  here. Same-wave deliveries may file directly in `completed/` (the
+  0535/0595/0605/0273 precedent) — but the ledger row lands in the
+  same pass.
+- Deprecation: append a `## Deprecation report` with the reason, move
+  to `deprecated/`, update this overview.
+- Bands: live-data owns 0010–0090, app-widgets 0100–0190, ports
+  0200–0290 (0200/0210/0215 = port epics; 0220–0299 = first-app
+  findings), control-plane 0300–0390, extensions 0400–0490, app-kits
+  0500–0590 (spilled to 0595/0605 — recorded, the numbers are unique),
+  media-av 0600–0690 (0605 inside this range is an app-kits spill —
+  unique, flagged),
+  games 0700–0790, field-agora 0800–0890 (overflowed 0895–0910),
+  field-gateway 0900–0990 (overflowed 1000–1050), field-core
+  1100–1190, wave-13 architecture/md-lane filings 1200+. Full bands
+  continue at the next free fifty and record it in their README
+  (`proposed/field-core/README.md` states the rule). Leave gaps for
+  insertion.

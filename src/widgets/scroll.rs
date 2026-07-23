@@ -15,13 +15,14 @@
 //! query the module's v1 honesty note used to file as a request.
 //! Content that carries an intrinsic height answers exactly: text
 //! leaves (wrap-aware measurement at the viewport width), element trees
-//! of them, and widgets with an explicit reactive extent ([`Feed`]'s
+//! of them, widgets with an explicit reactive extent ([`Feed`]'s
 //! content-sized mode answers O(1) through its `total_rows` height
-//! style — the transcript recipe). A widget that only paints into its
-//! rect (a bare `MarkdownView`) has no intrinsic height; wrap it in a
-//! one-item [`Feed`] or keep the explicit hint (`MarkdownView::rows` is
-//! its exact fold). `content_size(w, h)` remains as the override — when
-//! given it WINS and nothing is measured.
+//! style — the transcript recipe), and the content views
+//! (`MarkdownView` answers its typeset row count at the viewport
+//! width, `CodeView` its line count — wave 13, so
+//! `Scroll::new(MarkdownView::new(doc).view(cx))` scrolls out of the
+//! box). `content_size(w, h)` remains as the override — when given it
+//! WINS and nothing is measured.
 //!
 //! ## Follow-tail (0130)
 //!

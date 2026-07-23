@@ -15,3 +15,9 @@ with field workarounds to delete, in the house grammar of
   app-side workaround shipped meanwhile, what the engine should own.
 - Findings about AbstractCore itself (the Python side) do NOT belong
   here — they go to the core seat via the app's reports.
+
+## Findings
+
+| # | Title | Severity | Class | Status |
+| --- | --- | --- | --- | --- |
+| 1100 | TextInput: no cursor-at-end / select-all on open — prefilled editors insert at position 0 | P3 | API gap | proposed |

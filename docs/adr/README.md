@@ -26,3 +26,4 @@ supersession discipline). Conventions:
 | [0002](0002-two-style-types.md) | The two `Style` types stay distinct; `LayoutStyle` is the documented spelling | Accepted |
 | [0003](0003-struct-extensibility.md) | Struct extensibility: `non_exhaustive` capability structs, FRU style structs | Accepted |
 | [0004](0004-extension-packaging.md) | Extension packaging: feature classes, sibling-crate family, dependency inheritance | Accepted |
+| [0005](0005-content-rendering-responsibilities.md) | Content rendering responsibilities: markdown/code/data text is core | Accepted |

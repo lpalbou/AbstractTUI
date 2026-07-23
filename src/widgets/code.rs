@@ -35,7 +35,9 @@ use crate::base::{Point, Rgba};
 use crate::layout::Style as LayoutStyle;
 use crate::render::rich::{RichLine, Span};
 use crate::render::{Attrs, Style};
-use crate::text::{CLikeLexer, DiffKind, DiffLexer, Highlighter, TokenKind};
+use crate::text::{
+    CLikeLexer, DataKind, DiffKind, DiffLexer, Highlighter, JsonLexer, TokenKind, YamlLexer,
+};
 use crate::theme::TokenSet;
 use crate::ui::Element;
 
@@ -73,6 +75,29 @@ pub fn diff_token_color(kind: DiffKind, t: &TokenSet) -> Rgba {
     }
 }
 
+/// The theming of structured data (wave 13): [`DataKind`] -> theme
+/// ink, beside its two siblings so kinds become colors in exactly one
+/// place. Keys ride `syntax_func` (a key is a member NAME — the ink
+/// [`code_token_color`]'s docs held ready for a richer lexer) and YAML
+/// tags/anchors ride `syntax_type` (type annotations by grammar);
+/// literals are the grammar's reserved words (`syntax_keyword`);
+/// strings/numbers/comments/punctuation match the code mapping.
+/// `DataKind` is `#[non_exhaustive]`; FOREIGN matches need a `_` arm —
+/// render unknown kinds as body text (never invisible).
+pub fn data_token_color(kind: DataKind, t: &TokenSet) -> Rgba {
+    match kind {
+        DataKind::Key => t.syntax_func,
+        DataKind::String => t.syntax_string,
+        DataKind::Number => t.syntax_number,
+        DataKind::Literal => t.syntax_keyword,
+        DataKind::Comment => t.syntax_comment,
+        DataKind::Punct => t.syntax_punct,
+        DataKind::Tag => t.syntax_type,
+        // In-crate the match stays exhaustive so the compiler walks
+        // every new kind through here.
+    }
+}
+
 /// One diff line -> themed spans: the crate-shared recipe both
 /// `CodeView` (lang "diff") and diff-labeled markdown fences render
 /// through, mirroring `RichLine::from_highlighted`'s gap-filling
@@ -99,12 +124,42 @@ pub(crate) fn diff_rich_line(line: &str, lexer: &DiffLexer, base: Style, t: &Tok
     out
 }
 
+/// One JSON/YAML line -> themed spans (the gap-filling recipe, data
+/// vocabulary): the crate-shared path for `CodeView` lang
+/// `"json"`/`"yaml"` and the same-labeled markdown fences.
+pub(crate) fn data_rich_line(
+    line: &str,
+    spans: Vec<(std::ops::Range<usize>, DataKind)>,
+    base: Style,
+    t: &TokenSet,
+) -> RichLine {
+    let mut out = RichLine::new();
+    let mut cursor = 0;
+    for (range, kind) in spans {
+        if range.start > cursor {
+            out.push(Span::new(&line[cursor..range.start], base));
+        }
+        out.push(Span::new(
+            &line[range.clone()],
+            Style::new().fg(data_token_color(kind, t)),
+        ));
+        cursor = range.end;
+    }
+    if cursor < line.len() {
+        out.push(Span::new(&line[cursor..], base));
+    }
+    out
+}
+
 /// How a `CodeView` tints lines: a token lexer behind the
-/// [`Highlighter`] seam, or the line-oriented diff lexer (a different
-/// span vocabulary, so a different arm — see `text::diff`).
+/// [`Highlighter`] seam, the line-oriented diff lexer, or a
+/// structured-data lexer (different span vocabularies, so different
+/// arms — see `text::diff` and `text::data`).
 enum Tinter {
     Syntax(Rc<dyn Highlighter>),
     Diff(DiffLexer),
+    Json(JsonLexer),
+    Yaml(YamlLexer),
 }
 
 /// A syntax-tinted code block on the raised code ground: line-lexed
@@ -112,9 +167,14 @@ enum Tinter {
 /// line numbers and wrap-or-clip control.
 ///
 /// [`lang`](CodeView::lang) picks the lexer by name — including
-/// `"diff"`, which maps added/removed/hunk/meta lines onto
-/// `ok`/`error`/`info`/muted inks (the review surface). The canonical
-/// build is `.view(cx)`; see the [module docs](crate::widgets::code).
+/// `"diff"` (added/removed/hunk/meta lines onto `ok`/`error`/`info`/
+/// muted inks — the review surface) and `"json"`/`"yaml"` (the
+/// structured-data lexers: keys/literals/strings/numbers/comments onto
+/// the `syntax_*` inks through [`data_token_color`]). The view carries
+/// an intrinsic measure (lines × gutter+longest-line), so
+/// `Scroll::new(view)` scrolls the true extent on both axes out of the
+/// box. The canonical build is `.view(cx)`; see the
+/// [module docs](crate::widgets::code).
 pub struct CodeView {
     source: String,
     tinter: Tinter,
@@ -143,14 +203,20 @@ impl CodeView {
 
     /// Pick the built-in lexer by language label (best effort, the same
     /// labels markdown fences carry): `"diff"`/`"patch"`/`"udiff"` route
-    /// to the diff lexer ([`diff_token_color`] inks), `"rust"`/`"rs"`
-    /// and `"c"` pick the matching [`CLikeLexer`] preset, anything else
-    /// keeps the default C-like lexer — unknown labels never change
-    /// today's rendering.
+    /// to the diff lexer ([`diff_token_color`] inks),
+    /// `"json"`/`"jsonc"`/`"json5"`/`"jsonl"`/`"ndjson"` and
+    /// `"yaml"`/`"yml"` route to the structured-data lexers
+    /// ([`data_token_color`] inks, wave 13), `"c"` picks the C
+    /// [`CLikeLexer`] preset, anything else keeps the default C-like
+    /// lexer — unknown labels never change today's rendering.
     pub fn lang(mut self, label: &str) -> CodeView {
         let first = label.split_whitespace().next().unwrap_or("");
         self.tinter = if DiffLexer::matches_lang(first) {
             Tinter::Diff(DiffLexer::new())
+        } else if JsonLexer::matches_lang(first) {
+            Tinter::Json(JsonLexer::new())
+        } else if YamlLexer::matches_lang(first) {
+            Tinter::Yaml(YamlLexer::new())
         } else if first.eq_ignore_ascii_case("c") {
             Tinter::Syntax(Rc::new(CLikeLexer::c()))
         } else {
@@ -200,57 +266,92 @@ impl CodeView {
         let line_numbers = self.line_numbers;
         let offset = self.scroll_offset as usize;
         let lines: Vec<String> = self.source.lines().map(|s| s.to_string()).collect();
-        let layout = self
-            .layout
-            .unwrap_or_else(|| LayoutStyle::default().grow(1.0));
+        // basis 0 beside grow: leftover space in definite flex parents,
+        // exactly the pre-measure geometry (the 0240 modal-overflow
+        // class; same default as `Scroll` and `MarkdownView`).
+        let layout = self.layout.unwrap_or_else(|| {
+            LayoutStyle::default()
+                .grow(1.0)
+                .basis(crate::layout::Dimension::Cells(0))
+        });
 
-        Element::new().style(layout).draw(move |canvas, rect| {
-            if rect.w <= 0 || rect.h <= 0 {
-                return;
-            }
-            canvas.fill(rect, ' ', tokens.text, ground);
-            let total = lines.len();
-            let gutter_w = if line_numbers {
-                (digits(total) + 1).min(rect.w - 2)
-            } else {
-                0
-            };
-            let offset = offset.min(total.saturating_sub(1));
-            for (row, line) in lines.iter().skip(offset).enumerate() {
-                let y = rect.y + row as i32;
-                if y >= rect.bottom() {
-                    break;
+        // The measure seam (wave 13): code never wraps, so the
+        // intrinsic answer is static — height = source lines, width =
+        // gutter + the longest line (char-per-cell, the draw's v1 width
+        // model). `Scroll::new(view)` reads the true extent on both
+        // axes (horizontal panning of long lines included).
+        let total = lines.len();
+        let natural_w = {
+            let gutter = if line_numbers { digits(total) + 3 } else { 0 };
+            let longest = lines
+                .iter()
+                .map(|l| l.chars().count() as i32)
+                .max()
+                .unwrap_or(0);
+            gutter + longest
+        };
+
+        Element::new()
+            .style(layout)
+            .measure(move |avail| {
+                if avail.w <= 0 {
+                    return crate::base::Size::ZERO;
                 }
-                let mut x = rect.x;
-                if gutter_w > 0 {
-                    let num = format!("{:>w$} ", offset + row + 1, w = (gutter_w - 1) as usize);
-                    x += canvas.print(Point::new(x, y), &num, gutter_fg, ground);
-                    canvas.put(Point::new(x, y), '│', rule_fg, ground);
-                    x += 2;
+                crate::base::Size::new(natural_w.min(avail.w), total as i32)
+            })
+            .draw(move |canvas, rect| {
+                if rect.w <= 0 || rect.h <= 0 {
+                    return;
                 }
-                let rich = match &tinter {
-                    Tinter::Syntax(lexer) => {
-                        RichLine::from_highlighted(line, &**lexer, base, |kind| {
-                            Style::new().fg(code_token_color(kind, &tokens))
-                        })
-                    }
-                    Tinter::Diff(lexer) => diff_rich_line(line, lexer, base, &tokens),
+                canvas.fill(rect, ' ', tokens.text, ground);
+                let total = lines.len();
+                let gutter_w = if line_numbers {
+                    (digits(total) + 1).min(rect.w - 2)
+                } else {
+                    0
                 };
-                for span in &rich.spans {
-                    x += crate::widgets::richtext::print_span_clipped(
-                        canvas,
-                        x,
-                        y,
-                        rect.right(),
-                        &span.text,
-                        &span.style,
-                    );
-                    if x >= rect.right() {
+                let offset = offset.min(total.saturating_sub(1));
+                for (row, line) in lines.iter().skip(offset).enumerate() {
+                    let y = rect.y + row as i32;
+                    if y >= rect.bottom() {
                         break;
                     }
+                    let mut x = rect.x;
+                    if gutter_w > 0 {
+                        let num = format!("{:>w$} ", offset + row + 1, w = (gutter_w - 1) as usize);
+                        x += canvas.print(Point::new(x, y), &num, gutter_fg, ground);
+                        canvas.put(Point::new(x, y), '│', rule_fg, ground);
+                        x += 2;
+                    }
+                    let rich = match &tinter {
+                        Tinter::Syntax(lexer) => {
+                            RichLine::from_highlighted(line, &**lexer, base, |kind| {
+                                Style::new().fg(code_token_color(kind, &tokens))
+                            })
+                        }
+                        Tinter::Diff(lexer) => diff_rich_line(line, lexer, base, &tokens),
+                        Tinter::Json(lexer) => {
+                            data_rich_line(line, lexer.spans(line), base, &tokens)
+                        }
+                        Tinter::Yaml(lexer) => {
+                            data_rich_line(line, lexer.spans(line), base, &tokens)
+                        }
+                    };
+                    for span in &rich.spans {
+                        x += crate::widgets::richtext::print_span_clipped(
+                            canvas,
+                            x,
+                            y,
+                            rect.right(),
+                            &span.text,
+                            &span.style,
+                        );
+                        if x >= rect.right() {
+                            break;
+                        }
+                    }
                 }
-            }
-        })
+            })
     }
 }
 
@@ -370,6 +471,59 @@ mod tests {
         assert_eq!(c.cell(Point::new(ctx_x, 4)).unwrap().1, t.text);
         let nn_x = cell_of(&row(&c, 5), "\\ No newline");
         assert_eq!(c.cell(Point::new(nn_x, 5)).unwrap().1, t.text_muted);
+    }
+
+    /// Wave 13: the structured-data mapping — kinds become colors in
+    /// exactly one place, and the json/yaml lang routes render through
+    /// the real draw path with key/value/literal distinction.
+    #[test]
+    fn data_kinds_map_to_syntax_inks() {
+        let t = default_theme().tokens;
+        assert_eq!(data_token_color(DataKind::Key, &t), t.syntax_func);
+        assert_eq!(data_token_color(DataKind::String, &t), t.syntax_string);
+        assert_eq!(data_token_color(DataKind::Number, &t), t.syntax_number);
+        assert_eq!(data_token_color(DataKind::Literal, &t), t.syntax_keyword);
+        assert_eq!(data_token_color(DataKind::Comment, &t), t.syntax_comment);
+        assert_eq!(data_token_color(DataKind::Punct, &t), t.syntax_punct);
+        assert_eq!(data_token_color(DataKind::Tag, &t), t.syntax_type);
+    }
+
+    #[test]
+    fn lang_json_and_yaml_render_key_value_inks_through_the_draw_path() {
+        let t = default_theme().tokens;
+        let json = "{\n  \"name\": \"Ada\",\n  \"age\": 36\n}";
+        let c = draw_into(
+            CodeView::new(json)
+                .lang("json")
+                .line_numbers(false)
+                .element(&t),
+            Size::new(24, 4),
+        );
+        let kx = cell_of(&row(&c, 1), "\"name\"");
+        let (_, fg, bg) = c.cell(Point::new(kx, 1)).unwrap();
+        assert_eq!(fg, t.syntax_func, "json keys ride the member ink");
+        assert_eq!(bg, t.surface_raised);
+        let vx = cell_of(&row(&c, 1), "\"Ada\"");
+        assert_eq!(c.cell(Point::new(vx, 1)).unwrap().1, t.syntax_string);
+        let nx = cell_of(&row(&c, 2), "36");
+        assert_eq!(c.cell(Point::new(nx, 2)).unwrap().1, t.syntax_number);
+
+        let yaml = "service: web # edge\nready: true\ntag: !!str x";
+        let c = draw_into(
+            CodeView::new(yaml)
+                .lang("yaml")
+                .line_numbers(false)
+                .element(&t),
+            Size::new(26, 3),
+        );
+        let kx = cell_of(&row(&c, 0), "service");
+        assert_eq!(c.cell(Point::new(kx, 0)).unwrap().1, t.syntax_func);
+        let cx = cell_of(&row(&c, 0), "# edge");
+        assert_eq!(c.cell(Point::new(cx, 0)).unwrap().1, t.syntax_comment);
+        let lx = cell_of(&row(&c, 1), "true");
+        assert_eq!(c.cell(Point::new(lx, 1)).unwrap().1, t.syntax_keyword);
+        let tx = cell_of(&row(&c, 2), "!!str");
+        assert_eq!(c.cell(Point::new(tx, 2)).unwrap().1, t.syntax_type);
     }
 
     #[test]

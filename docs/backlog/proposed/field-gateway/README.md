@@ -19,6 +19,8 @@ engine fix can delete it. One file per finding
 bug / footgun / API gap / capability gap / UX defect / feature.
 
 Band: **0900–0990** (this track owns it; leave gaps for insertion).
+Overflow: the band filled and continued into **1000–1050** (rule
+recorded in `../field-core/README.md`; field-core starts at 1100).
 Each item carries a severity in its Metadata and in the row here:
 **P1** blocked the build / **P2** cost real time, workaround holds /
 **P3** paper cut.
@@ -38,3 +40,12 @@ Each item carries a severity in its Metadata and in the row here:
 | 0970 | Table never clamps a bound selection when rows shrink — stale selection goes silently dead | API gap | P2 |
 | 0980 | Table consumes `s` (sort cycling) even when no sort handler is registered | footgun | P3 |
 | 0990 | No engine pattern for routing one-shot write completions back to forms (0510 evidence) | capability gap | P3 |
+| 1000 | Dead-keys WINDOW when a modal's only focusables mount after an async load (extends first-app 0230 with the async variant) | footgun | P1 |
+| 1010 | PageHost: no per-tab locked/disabled affordance for gated (wizard) flows | capability gap | P3 |
+
+(Ledger repair 2026-07-25: the 1000/1010 rows were missing here —
+both files existed since the 0.2.9/0.2.12 console builds. Number
+collision on record: 0900/0905/0910 also exist in `../field-agora/`
+— that track's overflow entered this band before the overflow rule
+was written down; track+number is the working key, renumbering is the
+owners' call — the wave11/0990 precedent.)

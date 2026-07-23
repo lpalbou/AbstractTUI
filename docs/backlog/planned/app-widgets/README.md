@@ -48,6 +48,10 @@ applications can trust.
   claim), scheduled perf/fuzz/soak gates, MSRV declaration.
 
 ## Related items (proposed/, same band)
+- `../../proposed/app-widgets/0135_scroll_zero_width_collapse_over_measureless_trees.md`
+  — Scroll over a measureless PLAIN element tree collapses to a
+  bar-only strip (wave-12 pixel review §2; the content-view half was
+  fixed by the ADR-0005 wave — this is the remainder).
 - `../../proposed/app-widgets/0140_language_lexers.md` — stateful cross-line
   lexers (python/js/toml + diff) behind the `Highlighter` seam.
 - `../../proposed/app-widgets/0160_content_selection_copy.md` — content
@@ -59,6 +63,14 @@ applications can trust.
 - `../../proposed/app-widgets/0170_api_stability_pass.md` — 1.0-track API
   audit: `#[non_exhaustive]` coverage, the two-`Style` collision, prelude
   curation, a written breaking-change budget for 0.2.
+- `../../proposed/app-widgets/0175_block_shadow_consumes_its_own_slot.md`
+  — `Block::shadow` takes a row/col of the block's own slot and the
+  FIRST child eats the crush, order-dependently (wave-12 pixel review
+  §1b).
+- `../../proposed/app-widgets/0185_tabs_measure_inflation_crushes_fixed_siblings.md`
+  — fixed-height siblings crushed while grow slack exists (measure
+  inflation around Tabs; wave-12 pixel review §1 — the code seat's
+  named top engine investigation).
 - `../../proposed/ports/` — the two port epics (0200 coding console, 0210
   a2a chat TUI) that consume this track and the live-data track.
 

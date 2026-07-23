@@ -76,6 +76,7 @@ Restated from `planned/0001_roadmap.md` and binding here:
 | 0350 | Background mode + attach/detach — design | core **v1-able-with-design** (conservative serve caps); caps re-negotiation + ImageSession reset **needs-design**; multi-viewer, windows **research** |
 | 0360 | Milestone: attach/detach proof (serve example + attach client) | **v1-able** as scoped (single session, single client, fixed no-graphics caps) |
 | 0370 | Screenshot capture + exporters (text / ANSI / SVG) | **SHIPPED 2026-07-24** (`completed/control-plane/0370`) — the observe primitive, landed ahead of 0310/0320 with zero dependency on them; the bus/wire observe verb serializes `render::Screenshot` exports |
+| 0380 | Debug-damage toggle under `App::run` — an app-level knob (verb/env; RunConfig field is semver-major, the 0299 lesson) reaching the driver-owned `Compositor::set_debug_damage` | **v1-able** (small; the visualizer exists and is test-covered — only the switch is missing; wave-12 pixel review §5, code seat: land it when driver.rs is split — wave11/0990's last entry) |
 
 ## Sequencing (load-bearing; final, cycle 3)
 - **0300 before 0310/0320**: the bus and the wire protocol both carry

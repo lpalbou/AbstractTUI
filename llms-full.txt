@@ -1249,7 +1249,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Grid** — container widget over `Display::Grid`; spans ride each child's own style.
 - **Image** — bitmap display through the mosaic pipeline (`ImageFit`; `Bitmap` re-exported beside it). Measures as its native cell footprint, so it holds real space in `Auto`-sized rows/panels.
 - **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals. Grows into its region by default (a draw widget has no intrinsic size to grow from, so the default layout claims the available space).
-- **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code.
+- **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables with the crush-honesty ladder, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code (C-like, diff, json/yaml lexers). Both content views carry an intrinsic measure (wave 13): `Scroll::new(view)` scrolls the true extent out of the box, and content-sized panels hug the document instead of collapsing it to zero.
 - **Meter / AudioScope** — live level rendering: dB meter with real ballistics (instant attack, timed decay, peak hold) and a rolling braille waveform — see the live-levels section below.
 - **Logo** — the AbstractTUI wordmark for headers, about screens, empty states.
 
@@ -1313,7 +1313,7 @@ pages, `Drawer` overlays (screen-space clicks translate to the layer),
 and `Scroll`ed columns mid-scroll — all test-pinned — and parked
 closable blocks cost zero idle bytes.
 
-### Code and diffs — lexers and their theme mappings
+### Code, diffs and data — lexers and their theme mappings
 
 `CodeView` tints through the pluggable `text::Highlighter` seam (byte
 ranges + `TokenKind`; the built-in `CLikeLexer` is honest demo-grade),
@@ -1327,11 +1327,28 @@ maps it onto the SEMANTIC inks — added `ok`, removed `error`, hunk
 headers `info`, chrome `text_muted` — readable on the `surface_raised`
 code ground in every built-in theme (measured, test-pinned).
 
+Structured data follows the same shape (wave 13): JSON and YAML live on
+the KEY-vs-VALUE distinction, which the C-like vocabulary cannot
+express, so `text::JsonLexer`/`text::YamlLexer` emit the dedicated
+`DataKind` vocabulary (`Key`, `String`, `Number`, `Literal`, `Comment`,
+`Punct`, `Tag` — `#[non_exhaustive]` like `DiffKind`), and
+`widgets::data_token_color` maps it in one place: keys `syntax_func`,
+strings `syntax_string`, numbers `syntax_number`, `true`/`false`/`null`
+(plus the YAML 1.1 bools and `~`) `syntax_keyword`, comments
+`syntax_comment`, punctuation `syntax_punct`, YAML anchors/aliases/tags
+and document markers `syntax_type`. Bare YAML scalars stay body ink —
+prose is prose. Key detection is the space-after-colon rule in YAML
+(`10:30:00` stays a plain scalar) and the plain-colon rule in JSON
+(minified `{"a":1}` tints like pretty-printed); JSONC/JSON5 comments
+tint so config dialects render instead of degrading.
+
 Routing is by language label, best effort: `CodeView::lang("diff")`
-(also `"patch"`/`"udiff"`; `"rust"`/`"c"` pick C-like presets; unknown
-labels change nothing), and markdown/Feed code fences labeled
-` ```diff ` route automatically — one shared recipe, so a fence and a
-`CodeView` can never tint the same patch differently:
+(also `"patch"`/`"udiff"`), `lang("json")` (also
+`"jsonc"`/`"json5"`/`"jsonl"`/`"ndjson"`), `lang("yaml")` (also
+`"yml"`); `"rust"`/`"c"` pick C-like presets; unknown labels change
+nothing. Markdown/Feed code fences labeled ` ```diff `, ` ```json ` or
+` ```yaml ` route automatically — one shared recipe per vocabulary, so
+a fence and a `CodeView` can never tint the same text differently:
 
 ```rust
 use abstracttui::widgets::CodeView;
@@ -1339,12 +1356,18 @@ use abstracttui::widgets::CodeView;
 fn patch_pane(patch: &str, t: &abstracttui::theme::TokenSet) -> abstracttui::ui::Element {
     CodeView::new(patch).lang("diff").element(t)
 }
+
+fn payload_pane(body: &str, t: &abstracttui::theme::TokenSet) -> abstracttui::ui::Element {
+    CodeView::new(body).lang("json").element(t)
+}
 ```
 
 Classification is stateless per line (scroll-position-invariant by
 design) and approximate by contract: a removed line whose content
 begins `-- ` reads as a file header (the classic highlighter
-resolution), and prose between hunks stays untinted.
+resolution), prose between hunks stays untinted, YAML multi-line quoted
+scalars mis-tint from the second line on, and block-scalar bodies
+render untinted (which for prose bodies is the right look anyway).
 
 ### List — selection vs activation
 
@@ -2749,15 +2772,38 @@ with the typeset ROW its text starts at (the TOC jump target), and
 `MarkdownView` AND `Feed` markdown items render the full doc
 vocabulary (one shared typeset recipe — a feed item and a reader pane
 can never typeset the same source differently): tables typeset
-through the Table widget's own column solver (one width policy —
-natural widths when they fit, proportional flex + per-cell ellipsis
-when they don't); images render as MOSAIC rows in the flow — sized from
+through the Table widget's own column solver when they fit (one width
+policy), and under overflow walk the wave-13 honesty ladder — every
+column floors at `min(natural, 3)` cells and grows toward natural
+proportionally to need (per-cell ellipsis, columns are never crushed
+to zero), and when even the floors overflow the width, the grid
+degrades to a RECORD layout (`Header: value` lines per row, labels
+bold, records blank-separated — honest words, never vanished
+columns). Numeric columns with no written alignment marker
+right-align automatically (bare `---` only; an explicit `:--` is
+honored — `TableBlock::declared` carries the distinction). Headings
+keep depth readable: H3+ carry a faint hash prefix (`### ` in
+`text_faint`) where the heading inks stop differentiating. Images
+render as MOSAIC rows in the flow — sized from
 a header-only probe (`gfx::probe_dimensions`) at typeset, DECODED
 LAZILY on first draw and cached by (path, size), with alt-text captions
 and labeled decode-failure states (pixel-protocol images in scrollable
 flow are deliberately out of scope; mosaic cells are cell-safe in any
 scroll context). Streaming feed items ride `md::DocStreamSession`
 (see "Feed — streaming transcripts" above).
+
+Scrolling composes out of the box (wave 13): `MarkdownView` measures
+its typeset row count at the offered width and `CodeView` its
+line count × longest line, so
+`Scroll::new(MarkdownView::new(doc).view(cx)).view(cx)` is a complete
+scrolling markdown pane — no `content_size` hint, no app-managed
+offset (wheel, keys and the scrollbar just work; both views keep the
+`basis(0)+grow` default, so definite flex layouts are byte-stable and
+fixed siblings are never crushed). `scroll_offset` remains the
+app-managed door for transcript tails and TOC jumps
+(`MarkdownView::rows` is the same fold, so clamps never drift). Very
+long documents paint whole-extent under a `Scroll`; unbounded
+transcripts belong in `Feed`, which virtualizes.
 
 Find-in-document: `MarkdownView::find(source, &tokens, width, query,
 case_insensitive)` returns `MdSearchMatch { row, bytes, cells }` over
@@ -4365,6 +4411,54 @@ short-lived form, simpler designs are fine; AbstractTUI is built for
 long-running, composed, animated applications that should still cost
 nothing when nothing happens.
 
+## How does AbstractTUI compare to ratatui, Textual, Bubble Tea, notcurses, and Ink?
+
+They all build full-screen terminal UIs; the architectural split is how
+updates reach the screen. Most established libraries are immediate-mode or
+reconciliation-based: the application (or a component layer above it)
+rebuilds its view every frame or every state change, and the library diffs
+the result before writing bytes. AbstractTUI is neither — state lives in
+fine-grained signals, a write re-runs exactly the computations that read
+it, and those re-renders damage only the screen regions they own, flowing
+through a z-ordered compositor (alpha blending, per-cell shaders), a frame
+diff, and a byte-economical presenter. There is no per-frame rebuild and
+no tree reconciliation, and the idle cost is exactly zero — an unchanged
+app emits zero bytes and allocates nothing, enforced by tests
+([architecture.md](architecture.md#the-damage-promise)).
+
+| Library | Language | Update and rendering model |
+| --- | --- | --- |
+| ratatui | Rust | Immediate mode: rebuild the widget tree each frame into a buffer, diff at present time. The largest Rust TUI ecosystem; event loop and async are yours to bring. |
+| Textual | Python | Retained DOM-like widget tree with CSS styling and reactive attributes on an asyncio loop; apps can also be served to a browser. |
+| Bubble Tea | Go | The Elm Architecture: messages update a model, the view renders text, the runtime diffs frames; bubbles/lipgloss supply components and styling. |
+| notcurses | C | Imperative stacked planes with best-in-class terminal media (images, video, sixel/kitty); bindings for many languages; a thin widget layer. |
+| Ink | JS/TS | React for the terminal: components and hooks reconciled through a virtual DOM onto Yoga flexbox; strongest in Node CLI tooling. |
+| AbstractTUI | Rust | Fine-grained signals drive damage into a layered compositor, then a frame diff and presenter; layout is a flexbox-style solver plus a track grid. |
+
+Two other differences are structural rather than stylistic. First, media:
+images (kitty/iTerm2/sixel/unicode-mosaic ladder), software-rasterized GLB
+3D, and a sub-cell vector canvas are in the core crate with hand-rolled
+decoders — five small dependencies total; in the ecosystems above,
+comparable capability is external (ratatui-image), C-library-bound
+(notcurses), or absent. Second, testing: the headless harness drives the
+production pipeline — real dispatch, focus, damage, and emitted bytes —
+against an in-memory terminal with a VT interpreter, and `Screenshot`
+exports deterministic text, replayable ANSI, or SVG for goldens and
+round-trips, without a pty.
+
+The honest limits, stated plainly: this is a young project (first public
+release 2026-07-21) with a small ecosystem next to ratatui's, one core
+crate plus two extension crates, and few third-party widgets. Windows is
+compile-checked and unit-tested but not yet exercised on live hardware
+(macOS and Linux are the verified platforms). Accessibility roles and
+labels exist in the semantic tree, but no screen-reader bridge consumes
+them yet. There is no async-runtime integration — background work crosses
+on threads via wake handles, which is deliberate but means no built-in
+HTTP/WebSocket client. If you need battle-tested breadth today, ratatui
+(Rust) or Textual (Python) are the mature choices; AbstractTUI's case is
+compositor-grade rendering, zero idle cost, and built-in media in one
+audit-in-a-sitting dependency graph.
+
 ## Does it work over SSH?
 
 Yes. Everything the engine does travels as bytes over the pty, which is
@@ -4913,7 +5007,7 @@ timeouts, and no sleeps.
 ===== PACKAGE FACTS =====
 
 - Crate: `abstracttui` 0.2.22 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.2.22 (2026-07-25).
+  (0.1.0); current release 0.2.23 (2026-07-25).
 - Extension family (sibling crates in the repo workspace, installed only when needed;
   ADR-0004 — public core API only, same MIT license and dependency discipline):
   - `abstracttui-graph` 0.1.0 — graph auto-layout (`GraphDesc -> Layout`: layered /

@@ -1,7 +1,16 @@
-# 0290 — app::notify(): a presenter-custody emitter for the detected OSC 9/99 channels
+# 0274 — app::notify(): a presenter-custody emitter for the detected OSC 9/99 channels
 
 - Status: proposed
 - Born: 2026-07-25 (abstractcode-tui visibility wave, review P2-6)
+- Renumber note (2026-07-25, backlog hygiene): filed as first-app/0290,
+  colliding with `../../completed/first-app/0290_selection_copy_keys_linger…`
+  — renumbered to 0274 per the 0299/0291 precedent (zero inbound
+  references at the time of the move).
+- Relation: this is the NOTIFY leg of planned app-widgets **0150**
+  ("terminal verbs — notify/bell/title reachable from components";
+  clipboard leg already shipped) with its first named consumer —
+  execute them as one design (the presenter-custody emission path is
+  shared).
 - Owner ask: first consumer is abstractcode-tui's run-conclusion notification
 
 ## The gap

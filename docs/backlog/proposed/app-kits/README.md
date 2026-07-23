@@ -46,6 +46,7 @@ header, banners, split panes, panel rails — all hand-rolled today,
 | 0540 | Chip & count vocabulary: interactive chips, count badges, tag input | status columns, unread counts, tags, multi-select rendering |
 | 0545 | PageHost: the page-level tab host (SHIPPED same-day 2026-07-24 — completed/app-kits/) | app shells: full pages behind one tab bar (console-tui's screens) |
 | 0550 | Navigation kit: sidebar nav + filter tab strip with counts | admin nav, channel lists, triage filters, places rails |
+| 0555 | PageHost default layout: hug → grow-into-region (wave-12 pixel review §6; the Viewport3D default precedent; BEHAVIOR CHANGE — own wave slot + changelog) | every full-page shell (0545's charter); deletes the shell example's explicit `.layout(column().grow(1.0))` |
 | 0560 | App header + banner primitives | account chip/sign-out headers, attention + context banners |
 | 0570 | Tree view (virtualized, keyed, lazy children) | file browse, outline/notes, grouped entities |
 | 0580 | Workspace chrome: split panes + collapsible panel rail | master-detail (tree+list+preview), chat right rail, inspectors |

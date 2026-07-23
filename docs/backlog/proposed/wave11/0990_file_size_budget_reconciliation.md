@@ -53,7 +53,11 @@ DONE (wave 12):
 - src/three/brandmark.rs — 670 → DONE (brandmark.rs 495;
   brandmark_tests.rs 180)
 
-REMAINING (next maintenance window; original counts):
+REMAINING (next maintenance window; original counts — wave-13 hygiene
+re-count 2026-07-25: all 15 still exceed 600 lines; three GREW since
+filing (textarea.rs 643→693, input.rs 639→707, image.rs 627→638 — the
+attachments wave), driver.rs unchanged at 1115, everything else within
+a few lines of the filed number; nothing below is discharged):
 - src/app/driver.rs — 1115 (deliberately LAST: damage-contract phases
   live in the turn loop; the phase structure is the natural seam)
 - src/app/selection.rs — 688

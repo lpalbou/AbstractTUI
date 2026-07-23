@@ -80,6 +80,91 @@ fn table_inline_spans_keep_their_styles_in_cells() {
     );
 }
 
+/// Wave 13 crush honesty, step 1: under overflow every column floors at
+/// `min(natural, 3)` — the old fair-share/Flex mix crushed later
+/// columns to ZERO width ("betas" rendered as a bare `…`, or nothing),
+/// which read as "the table doesn't render".
+#[test]
+fn crushed_columns_floor_instead_of_zeroing() {
+    let doc = format!(
+        "| alpha | betas | {c} |\n|---|---|---|\n| aaaaa | bbbbb | {c} |",
+        c = "c".repeat(30)
+    );
+    // Naturals [5, 5, 30] at width 14: usable 12 < 40. The old solver
+    // gave [2, 1, 9] (col1 = one cell = a lone ellipsis); the floor
+    // ladder gives every column >= 3, so each cell keeps two clusters
+    // + ellipsis.
+    let rows = rows_plain(&doc, 14);
+    assert!(
+        rows[0].contains("al…") && rows[0].contains("be…"),
+        "floored header cells stay identifiable: {rows:?}"
+    );
+    assert!(
+        rows[2].contains("aa…") && rows[2].contains("bb…"),
+        "floored body cells stay identifiable: {rows:?}"
+    );
+}
+
+/// Wave 13 crush honesty, step 2: when even the floors overflow, the
+/// grid is abandoned for the RECORD layout — every cell's words render
+/// (wrapped), nothing silently vanishes.
+#[test]
+fn unfittable_table_degrades_to_records() {
+    let doc = format!(
+        "| a | b | c |\n|---|---|---|\n| one | two | {c} |\n| uno | dos | tres |",
+        c = "c".repeat(30)
+    );
+    // Width 8: gaps 2, usable 6 < floors 3+3+3 — no honest grid exists.
+    let rows = rows_plain(&doc, 8);
+    assert!(
+        rows.iter().any(|r| r.starts_with("a: one")),
+        "record lines carry header + value: {rows:?}"
+    );
+    assert!(
+        rows.iter().any(|r| r.starts_with("b: two")),
+        "the column the old solver zeroed renders: {rows:?}"
+    );
+    assert!(
+        rows.iter().any(|r| r.trim_end() == "c:"),
+        "long values open their labeled record line: {rows:?}"
+    );
+    assert!(
+        rows.iter().any(|r| r.starts_with("cccccccc")),
+        "the long value word-wraps below its label, nothing dropped: {rows:?}"
+    );
+    assert!(
+        rows.iter().any(|r| r.starts_with("b: dos")),
+        "second record renders after a blank separator: {rows:?}"
+    );
+    let first_rec = rows.iter().position(|r| r.starts_with("a: one")).unwrap();
+    let second_rec = rows.iter().position(|r| r.starts_with("a: uno")).unwrap();
+    assert!(
+        (first_rec..second_rec).any(|i| rows[i].trim().is_empty()),
+        "records separate with a blank row: {rows:?}"
+    );
+}
+
+/// Wave 13 (mdpad port): numeric columns with NO written alignment
+/// marker right-align; an explicit `:--` is honored verbatim.
+#[test]
+fn numeric_columns_right_align_only_when_undeclared() {
+    let auto = "| item | qty |\n|------|-----|\n| ap | 10 |\n| pe | 5 |";
+    let rows = rows_plain(auto, 20);
+    assert_eq!(rows[2], "ap    10", "bare --- + numbers = right-aligned");
+    assert_eq!(rows[3], "pe     5", "{rows:?}");
+
+    let declared = "| item | qty |\n|------|:----|\n| ap | 10 |\n| pe | 5 |";
+    let rows = rows_plain(declared, 20);
+    assert_eq!(rows[2], "ap   10 ", "explicit :-- stays left-aligned");
+
+    let words = "| item | note |\n|------|------|\n| ap | 10 up |\n| pe | 5 |";
+    let rows = rows_plain(words, 20);
+    assert!(
+        rows[2].starts_with("ap   10 up"),
+        "a word-shaped cell keeps the column left: {rows:?}"
+    );
+}
+
 #[test]
 fn zero_and_tiny_widths_never_panic() {
     for w in [0, 1, 2, 3, 5] {
@@ -156,12 +241,23 @@ tail paragraph
             last = entry.row;
             // The pointed row IS the heading's text row (headings
             // typeset as one unwrapped row; draw truncates overwide).
-            assert_eq!(
-                fold.rows[entry.row].line.plain(),
-                entry.heading.text,
-                "width {width}, anchor {}",
-                entry.heading.anchor_id
+            // H3+ carries the faint level prefix (wave 13), so the
+            // row ENDS with the heading text rather than equaling it.
+            let plain = fold.rows[entry.row].line.plain();
+            assert!(
+                plain.ends_with(&entry.heading.text),
+                "width {width}, anchor {}: {plain:?} vs {:?}",
+                entry.heading.anchor_id,
+                entry.heading.text
             );
+            if entry.heading.level >= 3 {
+                assert!(
+                    plain.starts_with(&"#".repeat(entry.heading.level as usize)),
+                    "H3+ rows carry the level prefix: {plain:?}"
+                );
+            } else {
+                assert_eq!(plain, entry.heading.text);
+            }
         }
     }
 }

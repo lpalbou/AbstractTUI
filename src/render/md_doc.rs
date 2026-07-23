@@ -63,14 +63,23 @@ pub enum CellAlign {
 }
 
 /// A parsed GFM table. Invariant (enforced by [`TableBlock::new`]):
-/// `header.len() == align.len()`, and every row in `rows` has exactly
-/// `align.len()` cells. Cell content carries inline styles
-/// (bold/code/links) like any other line.
+/// `header.len() == align.len() == declared.len()`, and every row in
+/// `rows` has exactly `align.len()` cells. Cell content carries inline
+/// styles (bold/code/links) like any other line.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct TableBlock {
     /// Per-column alignment, from the delimiter row.
     pub align: Vec<CellAlign>,
+    /// Was the alignment WRITTEN (`:--`/`:-:`/`--:`) or defaulted
+    /// (bare `---`)? `CellAlign` is exhaustive-by-contract and folds
+    /// both spellings of left into [`CellAlign::Left`], so this bit
+    /// carries the author's intent beside it (wave 13): typesetters
+    /// may auto-right-align NUMERIC columns only where nothing was
+    /// declared — an explicit `:--` is never overridden.
+    /// [`TableBlock::new`] derives it (`Left` = undeclared);
+    /// [`parse_doc`] records the delimiter's truth.
+    pub declared: Vec<bool>,
     /// Header cells (one per column).
     pub header: Vec<RichLine>,
     /// Body rows, each padded/truncated to the column count.
@@ -81,7 +90,9 @@ impl TableBlock {
     /// Builds a table, normalizing `header` and every row to
     /// `align.len()` cells (missing cells pad empty, extra cells drop —
     /// the GFM row rule, applied uniformly so consumers never index
-    /// out of bounds).
+    /// out of bounds). `declared` derives from the alignments (`Left`
+    /// counts as undeclared — the bare-`---` reading); use
+    /// [`TableBlock::with_declared`] to state explicit-left columns.
     pub fn new(align: Vec<CellAlign>, header: Vec<RichLine>, rows: Vec<Vec<RichLine>>) -> Self {
         let n = align.len();
         let fit = |mut cells: Vec<RichLine>| -> Vec<RichLine> {
@@ -91,11 +102,22 @@ impl TableBlock {
             }
             cells
         };
+        let declared = align.iter().map(|a| *a != CellAlign::Left).collect();
         TableBlock {
             align,
+            declared,
             header: fit(header),
             rows: rows.into_iter().map(fit).collect(),
         }
+    }
+
+    /// Replaces the declared-alignment bits (padded/truncated to the
+    /// column count; missing entries count as undeclared).
+    pub fn with_declared(mut self, mut declared: Vec<bool>) -> Self {
+        declared.truncate(self.align.len());
+        declared.resize(self.align.len(), false);
+        self.declared = declared;
+        self
     }
 
     /// Column count.
@@ -238,8 +260,9 @@ pub fn parse_doc(src: &str, styles: &MdStyles) -> Vec<DocBlock> {
                     .is_some_and(|next| table_opens(trimmed, next)) =>
             {
                 flush(&mut core, &mut out, styles);
-                let align = delimiter_alignments(lines[i + 1].trim_end().trim_start())
+                let spec = delimiter_alignments(lines[i + 1].trim_end().trim_start())
                     .expect("table_opens verified the delimiter");
+                let (align, declared): (Vec<CellAlign>, Vec<bool>) = spec.into_iter().unzip();
                 let header = split_row_cells(trimmed)
                     .into_iter()
                     .map(|c| parse_inline(&c, styles, styles.base))
@@ -255,7 +278,9 @@ pub fn parse_doc(src: &str, styles: &MdStyles) -> Vec<DocBlock> {
                     );
                     i += 1;
                 }
-                out.push(DocBlock::Table(TableBlock::new(align, header, rows)));
+                out.push(DocBlock::Table(
+                    TableBlock::new(align, header, rows).with_declared(declared),
+                ));
             }
             // Pipe line without a delimiter next, or any core line:
             // core markdown.
@@ -408,10 +433,11 @@ fn next_char_boundary(s: &str, start: usize) -> usize {
 }
 
 /// Parses a delimiter row (`| :-- | :-: | --: |` shapes). Returns the
-/// per-column alignments, or `None` when the line is not a delimiter.
-/// Requires at least one unescaped `|` (so `---` stays a rule) and
-/// every cell to be `:?-+:?`.
-pub(super) fn delimiter_alignments(trimmed: &str) -> Option<Vec<CellAlign>> {
+/// per-column `(alignment, declared)` pairs — `declared` is whether the
+/// cell carried any `:` marker (bare `---` = defaulted left) — or
+/// `None` when the line is not a delimiter. Requires at least one
+/// unescaped `|` (so `---` stays a rule) and every cell to be `:?-+:?`.
+pub(super) fn delimiter_alignments(trimmed: &str) -> Option<Vec<(CellAlign, bool)>> {
     if !has_unescaped_pipe(trimmed) {
         return None;
     }
@@ -428,11 +454,12 @@ pub(super) fn delimiter_alignments(trimmed: &str) -> Option<Vec<CellAlign>> {
         if dashes.is_empty() || !dashes.bytes().all(|b| b == b'-') {
             return None;
         }
-        out.push(match (left, right) {
+        let align = match (left, right) {
             (true, true) => CellAlign::Center,
             (false, true) => CellAlign::Right,
             _ => CellAlign::Left,
-        });
+        };
+        out.push((align, left || right));
     }
     Some(out)
 }

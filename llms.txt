@@ -104,7 +104,9 @@
   (`reactive::connection` + full-jitter `Backoff`, with a state diagram and a
   worker-thread example), the Feed + follow-tail rendering pattern, and back-pressure
   honesty.
-- [FAQ](docs/faq.md): Real questions — design rationale, SSH, which terminals support
+- [FAQ](docs/faq.md): Real questions — design rationale, an honest architectural
+  comparison with ratatui/Textual/Bubble Tea/notcurses/Ink (update models, media,
+  testing, maturity limits), SSH, which terminals support
   images, wide-character widths, headless testing, screenshots, letting users switch
   themes (`ThemeSwitcher`), attaching files dropped onto the terminal, embedding in an
   existing event loop,
@@ -120,7 +122,7 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, 0.2.22 (2026-07-25) the current one —
+  (2026-07-21) is the first public release, 0.2.23 (2026-07-25) the current one —
   released alongside the first extension-family crates (`abstracttui-graph` 0.1.0,
   `abstracttui-mermaid` 0.1.0, each with its own changelog under `extensions/`).
 - [Contributing](CONTRIBUTING.md): Building, the test suite (~2,120 core tests; ~2,245

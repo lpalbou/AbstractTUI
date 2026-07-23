@@ -16,6 +16,7 @@ Media capabilities the engine owes applications, in two families:
 
 | ID | Title | Family |
 | --- | --- | --- |
+| 0615 | `gesture_label` composition contract — document the `"{action}: {label}"` template (label = complete clause, never an infinitive's object; wave-12 pixel review §6, voice_mock's double-verb) | voice |
 | 0630 | Speaking-highlight primitive (offset-driven, shares 0148's text↔cells mapping) | voice |
 | 0640 | External audio-process lifecycle pattern (docs + example; engine code NOT needed — verified) | voice |
 | 0660 | Images inside `Feed`/content widgets via protocol placement | image |

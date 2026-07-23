@@ -15,6 +15,54 @@ short-lived form, simpler designs are fine; AbstractTUI is built for
 long-running, composed, animated applications that should still cost
 nothing when nothing happens.
 
+## How does AbstractTUI compare to ratatui, Textual, Bubble Tea, notcurses, and Ink?
+
+They all build full-screen terminal UIs; the architectural split is how
+updates reach the screen. Most established libraries are immediate-mode or
+reconciliation-based: the application (or a component layer above it)
+rebuilds its view every frame or every state change, and the library diffs
+the result before writing bytes. AbstractTUI is neither — state lives in
+fine-grained signals, a write re-runs exactly the computations that read
+it, and those re-renders damage only the screen regions they own, flowing
+through a z-ordered compositor (alpha blending, per-cell shaders), a frame
+diff, and a byte-economical presenter. There is no per-frame rebuild and
+no tree reconciliation, and the idle cost is exactly zero — an unchanged
+app emits zero bytes and allocates nothing, enforced by tests
+([architecture.md](architecture.md#the-damage-promise)).
+
+| Library | Language | Update and rendering model |
+| --- | --- | --- |
+| ratatui | Rust | Immediate mode: rebuild the widget tree each frame into a buffer, diff at present time. The largest Rust TUI ecosystem; event loop and async are yours to bring. |
+| Textual | Python | Retained DOM-like widget tree with CSS styling and reactive attributes on an asyncio loop; apps can also be served to a browser. |
+| Bubble Tea | Go | The Elm Architecture: messages update a model, the view renders text, the runtime diffs frames; bubbles/lipgloss supply components and styling. |
+| notcurses | C | Imperative stacked planes with best-in-class terminal media (images, video, sixel/kitty); bindings for many languages; a thin widget layer. |
+| Ink | JS/TS | React for the terminal: components and hooks reconciled through a virtual DOM onto Yoga flexbox; strongest in Node CLI tooling. |
+| AbstractTUI | Rust | Fine-grained signals drive damage into a layered compositor, then a frame diff and presenter; layout is a flexbox-style solver plus a track grid. |
+
+Two other differences are structural rather than stylistic. First, media:
+images (kitty/iTerm2/sixel/unicode-mosaic ladder), software-rasterized GLB
+3D, and a sub-cell vector canvas are in the core crate with hand-rolled
+decoders — five small dependencies total; in the ecosystems above,
+comparable capability is external (ratatui-image), C-library-bound
+(notcurses), or absent. Second, testing: the headless harness drives the
+production pipeline — real dispatch, focus, damage, and emitted bytes —
+against an in-memory terminal with a VT interpreter, and `Screenshot`
+exports deterministic text, replayable ANSI, or SVG for goldens and
+round-trips, without a pty.
+
+The honest limits, stated plainly: this is a young project (first public
+release 2026-07-21) with a small ecosystem next to ratatui's, one core
+crate plus two extension crates, and few third-party widgets. Windows is
+compile-checked and unit-tested but not yet exercised on live hardware
+(macOS and Linux are the verified platforms). Accessibility roles and
+labels exist in the semantic tree, but no screen-reader bridge consumes
+them yet. There is no async-runtime integration — background work crosses
+on threads via wake handles, which is deliberate but means no built-in
+HTTP/WebSocket client. If you need battle-tested breadth today, ratatui
+(Rust) or Textual (Python) are the mature choices; AbstractTUI's case is
+compositor-grade rendering, zero idle cost, and built-in media in one
+audit-in-a-sitting dependency graph.
+
 ## Does it work over SSH?
 
 Yes. Everything the engine does travels as bytes over the pty, which is

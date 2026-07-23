@@ -205,13 +205,16 @@ fn cell_lexer_edges() {
     // trailing empty accumulator drops (escape parity is walk state).
     assert_eq!(split_row_cells("a\\\\|"), vec!["a\\\\"]);
     assert_eq!(split_row_cells("世|界"), vec!["世", "界"]);
+    // Alignment + the DECLARED bit (wave 13): bare `---` is a
+    // defaulted left, `:--` an explicit one — typesetters may only
+    // auto-align the former.
     assert_eq!(
         delimiter_alignments("|:--|:-:|--:|---|"),
         Some(vec![
-            CellAlign::Left,
-            CellAlign::Center,
-            CellAlign::Right,
-            CellAlign::Left
+            (CellAlign::Left, true),
+            (CellAlign::Center, true),
+            (CellAlign::Right, true),
+            (CellAlign::Left, false)
         ])
     );
     assert_eq!(delimiter_alignments("---"), None, "no pipe, no delimiter");

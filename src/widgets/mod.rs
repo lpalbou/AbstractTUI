@@ -74,6 +74,8 @@ pub use textarea::{SubmitPolicy, TextArea, TextAreaState};
 pub use viewport3d::Viewport3D;
 // Appended (0140 diff slice): the diff twin of `code_token_color`.
 pub use code::diff_token_color;
+// Appended (wave 13 data slice): the structured-data sibling.
+pub use code::data_token_color;
 // Appended (0104): the Signal<Vec<T>> -> keyed-feed diffing bridge.
 pub use feed::SyncSpec;
 // Appended (0190): the chart history ring + its reactive handle.

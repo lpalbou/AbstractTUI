@@ -105,9 +105,16 @@ impl BlockTypesetter {
         }
     }
 
-    /// Table recipe: natural column widths, the SHARED solver, per-cell
-    /// ellipsis truncation, alignment, a bold header and a border-ink
-    /// separator rule. Cells never wrap (0142 non-goal).
+    /// Table recipe: natural column widths, the SHARED solver when the
+    /// table fits, per-cell ellipsis truncation, alignment (numeric
+    /// columns auto-right-align when nothing was declared — the mdpad
+    /// rule), a bold header and a border-ink separator rule. Grid cells
+    /// never wrap (0142 non-goal); the honest-degradation ladder at
+    /// crush widths (wave 13) is: floor every column at
+    /// `min(natural, 3)` and grow toward natural proportionally to
+    /// need, and when even the floors overflow, degrade to the RECORD
+    /// layout ([`push_records`](Self::push_records)) — a table that
+    /// cannot fit shows honest words, never silently vanished columns.
     fn push_table(&self, out: &mut Vec<Row>, table: &TableBlock, width: i32, separate: bool) {
         if separate && !out.is_empty() {
             out.push(Row::plain(RichLine::new()));
@@ -127,28 +134,37 @@ impl BlockTypesetter {
                 natural[i] = natural[i].max(cell.width());
             }
         }
-        // Shared solver: columns that fit keep their natural size
-        // (`Cells`); when the table overflows, columns beyond the fair
-        // share flex proportionally to their natural width and truncate.
+        let align = effective_alignments(table);
         let gaps = (n as i32 - 1).max(0);
         let usable = (width - gaps).max(0);
         let total_natural: i32 = natural.iter().sum();
-        let widths: Vec<ColWidth> = if total_natural <= usable {
-            natural.iter().map(|w| ColWidth::Cells(*w)).collect()
+        let cols: Vec<i32> = if total_natural <= usable {
+            // Fits: natural sizes through the shared solver (the
+            // 1-cell-gap contract with the Table widget).
+            let widths: Vec<ColWidth> = natural.iter().map(|w| ColWidth::Cells(*w)).collect();
+            solve_columns(&widths, width.max(1))
         } else {
-            let fair = usable / n as i32;
-            natural
+            // Overflow: floor first, then grow toward natural
+            // proportionally to remaining need (largest-remainder
+            // tiling — the browser algorithm in miniature). The old
+            // fair-share/Flex mix let first-come fixed columns starve
+            // the rightmost ones to ZERO width, which rendered as
+            // silently missing cells — the operator's "tables don't
+            // render in panels" crush shape.
+            let floors: Vec<i32> = natural.iter().map(|w| (*w).min(MIN_COL_FLOOR)).collect();
+            let floor_sum: i32 = floors.iter().sum();
+            if floor_sum > usable {
+                self.push_records(out, table, width);
+                return;
+            }
+            let need: Vec<f64> = natural
                 .iter()
-                .map(|w| {
-                    if *w <= fair {
-                        ColWidth::Cells(*w)
-                    } else {
-                        ColWidth::Flex(*w as f32)
-                    }
-                })
-                .collect()
+                .zip(&floors)
+                .map(|(nat, fl)| (nat - fl) as f64)
+                .collect();
+            let grow = crate::layout::distribute(usable - floor_sum, &need);
+            floors.iter().zip(&grow).map(|(f, g)| f + g).collect()
         };
-        let cols = solve_columns(&widths, width.max(1));
         let table_w = cols.iter().sum::<i32>() + gaps;
 
         // Header: bold over the cell's own inline styles.
@@ -162,7 +178,7 @@ impl BlockTypesetter {
             for span in &cell.spans {
                 emboldened.push(Span::new(span.text.clone(), span.style.merge(bold)));
             }
-            push_cell(&mut header, &emboldened, cols[i], table.align[i]);
+            push_cell(&mut header, &emboldened, cols[i], align[i]);
         }
         out.push(Row::plain(header));
 
@@ -180,9 +196,58 @@ impl BlockTypesetter {
                 if i > 0 {
                     line.push(Span::new(" ", Style::EMPTY));
                 }
-                push_cell(&mut line, cell, cols[i], table.align[i]);
+                push_cell(&mut line, cell, cols[i], align[i]);
             }
             out.push(Row::plain(line));
+        }
+    }
+
+    /// The record fallback (wave 13, ported from mdpad): when even
+    /// per-column floors overflow the width, any grid would be vertical
+    /// confetti — render each body row as a `Header: value` list
+    /// (labels bold, records separated by a blank row) instead. Nothing
+    /// is dropped; long values wrap at the panel width. A header-only
+    /// table lists its labels.
+    fn push_records(&self, out: &mut Vec<Row>, table: &TableBlock, width: i32) {
+        let bold = Style::new().attrs(Attrs::BOLD);
+        if table.rows.is_empty() {
+            for cell in &table.header {
+                if cell.width() == 0 {
+                    continue;
+                }
+                let mut line = RichLine::new();
+                for span in &cell.spans {
+                    line.push(Span::new(span.text.clone(), span.style.merge(bold)));
+                }
+                for wrapped in wrap_line(line, width) {
+                    out.push(Row::plain(wrapped));
+                }
+            }
+            return;
+        }
+        for (r, row) in table.rows.iter().enumerate() {
+            if r > 0 {
+                out.push(Row::plain(RichLine::new()));
+            }
+            for (i, cell) in row.iter().enumerate() {
+                let label = &table.header[i];
+                if label.width() == 0 && cell.width() == 0 {
+                    continue; // nothing to say for this field
+                }
+                let mut line = RichLine::new();
+                if label.width() > 0 {
+                    for span in &label.spans {
+                        line.push(Span::new(span.text.clone(), span.style.merge(bold)));
+                    }
+                    line.push(Span::new(": ", Style::EMPTY));
+                }
+                for span in &cell.spans {
+                    line.push(span.clone());
+                }
+                for wrapped in wrap_line(line, width) {
+                    out.push(Row::plain(wrapped));
+                }
+            }
         }
     }
 
@@ -208,6 +273,61 @@ impl BlockTypesetter {
             });
         }
     }
+}
+
+/// The per-column width floor under overflow: two clusters + the
+/// ellipsis — the narrowest cell a reader can still identify. Below
+/// this the recipe abandons the grid for the record layout.
+const MIN_COL_FLOOR: i32 = 3;
+
+/// Per-column EFFECTIVE alignment (wave 13, the mdpad rule): a column
+/// with no written alignment marker (`declared[i] == false`, bare
+/// `---`) whose body cells are ALL numeric right-aligns — the way a
+/// human lays out a numbers column. Explicit `:--`/`:-:`/`--:` is
+/// always honored verbatim; header cells are labels and never vote;
+/// empty cells abstain; an all-empty column stays left.
+fn effective_alignments(table: &TableBlock) -> Vec<CellAlign> {
+    (0..table.columns())
+        .map(|i| {
+            let declared = table.declared.get(i).copied().unwrap_or(false);
+            if declared || table.align[i] != CellAlign::Left {
+                return table.align[i];
+            }
+            let mut any = false;
+            for row in &table.rows {
+                let text = row[i].plain();
+                let cell = text.trim();
+                if cell.is_empty() {
+                    continue;
+                }
+                if !looks_numeric(cell) {
+                    return CellAlign::Left;
+                }
+                any = true;
+            }
+            if any {
+                CellAlign::Right
+            } else {
+                CellAlign::Left
+            }
+        })
+        .collect()
+}
+
+/// Conservatively numeric: at least one ASCII digit and nothing but
+/// digits, sign/decimal/grouping punctuation, percent and common
+/// currency marks. Anything word-shaped disqualifies the cell (a
+/// false "left" costs nothing; a false "right" would look deranged).
+fn looks_numeric(cell: &str) -> bool {
+    let mut digit = false;
+    for c in cell.chars() {
+        match c {
+            '0'..='9' => digit = true,
+            '+' | '-' | '.' | ',' | '_' | '%' | '$' | '€' | '£' | '¥' | ' ' | '(' | ')' => {}
+            _ => return false,
+        }
+    }
+    digit
 }
 
 /// Append one table cell to `line`: content truncated to `w` with an

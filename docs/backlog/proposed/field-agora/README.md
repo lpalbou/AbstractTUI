@@ -44,6 +44,17 @@ gap the same session.
 | 0880 | FeedItem body max-measure for wide terminals | capability gap | P3 |
 | 0885 | Disclosure title needs a rich-span slot (folded cards lose identity color) | capability gap | P2 |
 | 0890 | Disclosure capped body under-measures rich feed items (rows clip) | bug | P2 |
+| 0895 | Bound `Scroll::offset_y(Signal)` is ignored inside Drawer pages (keyboard-scrolled drawer pages re-derive windowing) | bug | P1 |
+| 0900 | Completion panel occludes the row above a bottom-docked composer (needs a reserved-rows/offset knob) | API gap | P2 |
+| 0905 | Drawer needs vertical insets so docked chrome stays visible | API gap | P3 |
+| 0910 | Scroll of widgets: no ensure-visible / child-offset verb (consumers hand-roll height models) | API gap | P2 |
+
+(Ledger repair 2026-07-25: the 0895–0910 rows were missing here — the
+band overflowed past 0890 before the overflow rule existed. Number
+collision on record: 0900/0905/0910 duplicate ids in
+`../field-gateway/` (their own band) — track+number is the working
+key; renumbering is the owners' call, the wave11/0990 precedent.
+field-gateway continues at 1000–1050; field-core owns 1100–1190.)
 
 Completed 2026-07-24 (disclosure wave, moved to
 `../../completed/field-agora/`):

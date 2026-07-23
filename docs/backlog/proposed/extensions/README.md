@@ -41,7 +41,9 @@ Two ideas structure the track:
 | 0420 | Canvas/vector layer in core: sub-cell dot canvas + stroke primitives | v1-able | none (0400 informs naming) |
 | 0430 | Interactive node-graph editor widget (`abstracttui-graph`), staged M1-M3 | needs-design | 0400, 0420; 0480 + 0165 (link channel — synergy, documented fallback); 0500 popup (M3 tooltips) |
 | 0440 | Read-only auto-layout graph view (layered v1; designed force v1.5; `GraphDesc -> Layout` contract) | needs-design | 0400, 0420 |
+| 0445 | GraphView: force layouts open mostly off-view — first-render bbox centering / `.center()` (wave-12 pixel review §4) | v1-able (small) | 0440 (shipped) |
 | 0450 | `abstracttui-mermaid`: honest-subset diagram rendering (spelling-exact table, atomic fallback) | needs-design | 0400, 0420, 0440 |
+| 0455 | mermaid fallback live-link as OSC-8 hyperlink (clipped URL is dead text today — wave-12 pixel review §3) | v1-able (small) | 0450 (shipped) |
 | 0460 | mdpad-class markdown reader enablement (core gap list) | v1-able per gap | 0160/0165 (band 0100), 0450 |
 | 0470 | Web/HTML readable-subset renderer: feasibility verdict | research (verdict recorded) | 0400, 0460 |
 | 0480 | Link registration from draw closures (`StyledCanvas::register_link`) — CORE seam, producer half of 0165's channel | v1-able (small, additive) | none (0165 is the consumer half, either lands first) |
@@ -163,3 +165,9 @@ Recorded here so no item re-litigates them; 0400 carries the rationale.
   holding). Remaining in this band: 0430 (editor), 0460 (reader
   enablement), 0480 (link seam) — 0450's in-feed link activation
   still waits on 0480 + 0165 as documented in the item.
+- **2026-07-25 (wave-12 pixel-review fold)**: two small field findings
+  against the SHIPPED crates filed as 0445 (GraphView force-layout
+  initial centering) and 0455 (mermaid fallback live-link as an OSC-8
+  hyperlink; never mid-URL ellipsis) — evidence in
+  `reviews/wave12/visual-to-code-handoff.md` §3/§4, both sized "small,
+  next wave" by the code seat.

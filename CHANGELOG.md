@@ -5,7 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.22] - 2026-07-25
+## [0.2.23] - 2026-07-25
+
+### Documentation
+
+- faq.md: new entry "How does AbstractTUI compare to ratatui, Textual,
+  Bubble Tea, notcurses, and Ink?" — the architectural comparison
+  (update/rendering models side by side, the structural differences in
+  media and headless testing, and the honest maturity limits: young
+  ecosystem, Windows compile-checked only, a11y roles without a
+  screen-reader bridge, no async-runtime integration), cross-linked to
+  architecture.md. llms.txt/llms-full.txt re-spliced.
+
+### Added
+
+- tests: the modal-over-page honesty net (`tests/wave_modal_bg.rs` +
+  `wave_modal_bg_parts/fixture.rs`) — the gateway-console field report
+  "that modal crashes the background" (operator screenshot 2026-07-25)
+  investigated repro-first: the console's exact screen shape (PageHost
+  chrome, review page with grow/pinned blocks, the 76x18 sandbox
+  modal) driven through the real `Driver`/`CaptureTerm` across the
+  whole operator session — open (store reset riding the open's own
+  batch), Select popup over the modal, toast raised + expired over the
+  modal, typing, page dyn re-renders UNDER the open panel, busy-line
+  ticking, resize ladders incl. width- and height-clamped panels and a
+  page in clean-absence crush, close — at seven sizes with two oracles
+  at every step (forced-full-redraw equality; byte integrity outside
+  the panel ∪ legit bands). All green at HEAD: the incremental
+  pipeline is honest for this class; the screenshot decodes as the
+  DESIGNED composition of an oversized, undressed translucent panel
+  over a dark page (console-side fix, one chokepoint —
+  `reviews/wave13/modal-bg-diagnosis.md`, consumed by the gateway
+  seat). No engine code changed.
 
 ### Added
 
@@ -34,6 +65,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   blocks cost zero idle bytes (all Driver-level test-pinned).
   `examples/widgets.rs` gained a closable-panels row (restore button
   included); docs/api.md gained the Block close-affordance section.
+
+### Added (content rendering — wave 13, ADR-0005)
+
+- adr: ADR-0005 "Content rendering responsibilities" — markdown / code /
+  diff / JSON / YAML text rendering IS core (pure cell math, zero
+  dependency pressure, every app class needs it; the `abstracttui[md]`
+  feature idea is rejected per ADR-0004's classification); diagram-class
+  content stays extension territory (mermaid); mdpad remains an app and
+  the quality bar. Driven by the operator's console complaint ("the
+  markdown viewer is absolutely terrible and it doesn't even scroll …
+  not rendering tables either in panels"); the console's own bare-text
+  rendering is reported to the gateway seat in
+  `reviews/wave13/console-md-adoption.md`.
+- widgets: `MarkdownView` and `CodeView` carry an INTRINSIC MEASURE —
+  markdown answers its typeset row count at the offered width (one
+  width-keyed cache shared with the draw, so clamps can never drift
+  from pixels), code answers lines × (gutter + longest line).
+  `Scroll::new(view)` now scrolls the true extent out of the box (the
+  wave-12 "Scroll over measureless content collapses to zero" class,
+  fixed in the engine), and content-sized panels hug the document
+  instead of rendering NOTHING (the vanished-table-in-a-Modal repro).
+  Both defaults gained `basis(Cells(0))` beside `grow(1.0)`, so
+  definite flex layouts are byte-stable and fixed siblings are never
+  crushed (the 0240 modal-overflow class, guarded by test).
+- text: `JsonLexer` + `YamlLexer` + the `DataKind` vocabulary
+  (`#[non_exhaustive]`, the `DiffKind` precedent — keys are not a
+  `TokenKind` the frozen C-like vocabulary can express), and
+  `widgets::data_token_color` — the ONE data-kind→ink mapping: keys
+  `syntax_func`, strings `syntax_string`, numbers `syntax_number`,
+  literals `syntax_keyword`, comments `syntax_comment`, punctuation
+  `syntax_punct`, YAML tags/anchors/doc-markers `syntax_type`.
+  `CodeView::lang("json"|"jsonc"|"json5"|"jsonl"|"ndjson"|"yaml"|"yml")`
+  routes; ` ```json `/` ```yaml ` markdown/Feed fences tint through the
+  same recipe. Stateless per line, total over hostile bytes
+  (goldens + a mixed-UTF-8 corpus pinned).
+- render/md: `TableBlock.declared` (+ `with_declared`) — records
+  whether each column's alignment was WRITTEN (`:--`) or defaulted
+  (bare `---`); `parse_doc` fills it from the delimiter row. Enables
+  the numeric auto-alignment below without ever overriding an
+  explicit marker.
+
+### Changed (content rendering — wave 13)
+
+- widgets/markdown tables: the overflow ladder is now HONEST. Under
+  crush the old fair-share/Flex mix clamped columns to zero in
+  first-come order (rightmost cells silently vanished — the operator's
+  "tables don't render in panels" shape). Now every column floors at
+  `min(natural, 3)` and grows toward natural proportionally to need
+  (largest-remainder tiling, the shared `distribute`); when even the
+  floors overflow, the grid degrades to a RECORD layout — `Header:
+  value` lines per row, labels bold, records blank-separated, long
+  values wrapped. Nothing is ever silently dropped (repro tests:
+  `crushed_columns_floor_instead_of_zeroing`,
+  `unfittable_table_degrades_to_records`).
+- widgets/markdown tables: numeric columns with NO written alignment
+  marker auto-right-align (the mdpad rule — "the way a human would lay
+  them out"); explicit `:--`/`:-:`/`--:` are honored verbatim; a
+  word-shaped cell keeps the column left; conservative numeric test
+  (digits + sign/grouping/percent/currency only).
+- widgets/markdown headings: H3+ carry a faint hash prefix (`### ` in
+  `text_faint`, ported from mdpad) — L1/L2 stay clean (ink-differentiated),
+  deeper levels stay tellable apart where the inks stop
+  differentiating. The outline fold points at the same rows (anchor
+  test updated deliberately: heading rows now END with the heading
+  text at H3+).
 
 ## [0.2.21] - 2026-07-25
 
@@ -1613,6 +1709,7 @@ First public release.
   theme browser, and 3D viewer.
 
 [Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.2.17...HEAD
+[0.2.23]: https://github.com/lpalbou/abstracttui/compare/v0.2.22...v0.2.23
 [0.2.22]: https://github.com/lpalbou/abstracttui/compare/v0.2.21...v0.2.22
 [0.2.21]: https://github.com/lpalbou/abstracttui/compare/v0.2.20...v0.2.21
 [0.2.20]: https://github.com/lpalbou/abstracttui/compare/v0.2.19...v0.2.20

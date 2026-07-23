@@ -10,6 +10,7 @@ item records the workaround so the engine fix can delete it.
 | ID | Title | Class |
 | --- | --- | --- |
 | 0272 | ChoicePrompt aux-key vocabulary — no non-option key surface, hint row closed to callers (split out of 0271 at its completion; the `f` cards↔JSON toggle ask) | API gap |
+| 0274 | `app::notify()` — presenter-custody emitter for the detected OSC 9/99 notification channels (the notify leg of planned 0150, first consumer named; RENUMBERED from 0290 2026-07-25 — collided with completed 0290) | API gap |
 | 0280 | Feed custom blocks cannot host widgets — protocol images degrade to mosaic | capability gap |
 | 0289 | Typed uppercase inserts lowercase on kitty-spelling wires — `convert_event` drops the kitty `text` field; TextInput inserts the base char (found during the 0286/0288 verification) | bug |
 
@@ -56,6 +57,13 @@ Completed 2026-07-23 (choice-0271 wave):
 | ID | Title | Class |
 | --- | --- | --- |
 | 0271 | ChoicePrompt approval-gate adoption gaps — `body_width(cols)` (body participates in the panel's measure), `dismiss_label(label)` (button + hint + advertised Esc follow the caller's vocabulary; outcome stays `Cancelled`), `handle.retire()` (host close without resolving — distinct from user-Esc). The aux-key gap (gap 2) was split out UNSHIPPED to 0272 above. | API gap |
+
+Completed 2026-07-25 (attachments wave — filed directly in completed/,
+the 0535 precedent):
+
+| ID | Title | Class |
+| --- | --- | --- |
+| 0273 | File-attachment surfaces — `TextInput`/`TextArea` `on_paste` intercept (`PasteAction`), `input::paste::classify` cross-terminal drop classifier, `FilePicker` over the `FileSource` seam (+ `examples/attachments.rs`, api.md drop-reality table) | feature |
 
 Completed 2026-07-24 (disclosure wave, jointly with field-agora 0850):
 
