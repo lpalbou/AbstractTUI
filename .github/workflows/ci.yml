@@ -1,10 +1,14 @@
-# CI for AbstractTUI — a pure-Rust library crate.
+# CI for AbstractTUI — a pure-Rust library crate plus its sibling-crate
+# extension family (ADR-0004 §3: extensions/* are workspace members so
+# they ride CI against core HEAD; coupling breaks surface at PR time,
+# not release time).
 #
-# Gates: build + full test suite on Linux/macOS, lib tests on Windows,
-# clippy (zero warnings) and rustdoc (zero warnings) on Linux, the live
-# pty suite on Linux (backlog 0180), MSRV check at the declared
-# `rust-version`, and a semver gate against the latest published release
-# (ADR-0001: additive-only between budgeted breaking windows).
+# Gates: build + full test suite for the WHOLE WORKSPACE on Linux/macOS,
+# lib tests on Windows, clippy (zero warnings, workspace) and rustdoc
+# (zero warnings, workspace) on Linux, the live pty suite on Linux
+# (backlog 0180), MSRV check at the declared `rust-version`, and a
+# semver gate against the latest published release (ADR-0001:
+# additive-only between budgeted breaking windows).
 #
 # Deliberate omissions (see .github/SETUP.md "Follow-ups"):
 #   - perf/fuzz/soak remain #[ignore]d here and gate on the SCHEDULED
@@ -42,13 +46,14 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Build (all targets)
-        run: cargo build --all-targets
-      - name: Test
+      - name: Build (workspace, all targets)
+        run: cargo build --workspace --all-targets
+      - name: Test (workspace)
         # `cargo test` already includes the doctest pass — no separate
         # `cargo test --doc` step (cycle-2 review F13 nit: it ran the
-        # doctests twice).
-        run: cargo test
+        # doctests twice). `--workspace` runs the extension family
+        # against core HEAD (ADR-0004 §3).
+        run: cargo test --workspace
 
   test-windows:
     # The integration-test harness drives real terminals through a unix pty
@@ -78,12 +83,12 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Format check
-        run: cargo fmt --check
-      - name: Clippy (deny warnings)
-        run: cargo clippy --all-targets -- -D warnings
-      - name: Rustdoc (deny warnings)
-        run: cargo doc --no-deps
+      - name: Format check (workspace)
+        run: cargo fmt --all --check
+      - name: Clippy (deny warnings, workspace)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Rustdoc (deny warnings, workspace)
+        run: cargo doc --no-deps --workspace
         env:
           RUSTDOCFLAGS: -D warnings
 
@@ -144,3 +149,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: cargo-semver-checks
         uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          # Core only: workspace members under extensions/ are
+          # UNPUBLISHED sibling crates with no registry baseline yet.
+          # Per ADR-0004 ("the semver gate covers the family once
+          # published"), each family crate joins this gate when its
+          # first release lands on crates.io.
+          package: abstracttui

@@ -4,13 +4,30 @@ version = 4
 
 [[package]]
 name = "abstracttui"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
+ "abstracttui-graph",
+ "abstracttui-mermaid",
  "libc",
  "miniz_oxide",
  "unicode-segmentation",
  "unicode-width",
  "windows-sys",
+]
+
+[[package]]
+name = "abstracttui-graph"
+version = "0.1.0"
+dependencies = [
+ "abstracttui",
+]
+
+[[package]]
+name = "abstracttui-mermaid"
+version = "0.1.0"
+dependencies = [
+ "abstracttui",
+ "abstracttui-graph",
 ]
 
 [[package]]

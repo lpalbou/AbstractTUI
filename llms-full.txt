@@ -22,9 +22,12 @@
 > key press/release state with honest fidelity (push-to-talk, level meters, and a
 > waveform scope for voice surfaces), text selection with OSC 52 clipboard copy, an
 > optional boot splash, and a headless testing harness that drives the production
-> pipeline without a pty. One crate,
-> five small dependencies (unicode-width, unicode-segmentation, miniz_oxide, plus libc on
-> unix / windows-sys on Windows). MIT licensed.
+> pipeline without a pty. A public sub-cell vector canvas (braille/quadrant dot grids,
+> lines, beziers, arcs, eighth-block fills) underlies the charts and an opt-in sibling
+> extension family: `abstracttui-graph` (graph auto-layout + a GraphView widget) and
+> `abstracttui-mermaid` (honest-subset mermaid rendering with atomic fallback). One core
+> crate, five small dependencies (unicode-width, unicode-segmentation, miniz_oxide, plus
+> libc on unix / windows-sys on Windows). MIT licensed.
 
 This file aggregates the full AbstractTUI documentation verbatim: the README followed by
 every guide under docs/, each introduced by a `===== FILE: <path> =====` separator, with
@@ -132,6 +135,12 @@ through ordinary reactivity.*
   `TERM=dumb`.
 - **Headless testing** — drive the production pipeline against a captured
   terminal and assert on the rendered screen. No pty required.
+- **Vector strokes + an extension family** — a public sub-cell canvas
+  (braille/quadrant dot grids, lines, beziers, arcs, eighth-block
+  fills) in core, and diagram-class capability as opt-in sibling
+  crates: `abstracttui-graph` (auto-layout + graph widget) and
+  `abstracttui-mermaid` (honest-subset mermaid). See
+  [docs/graphs-and-diagrams.md](docs/graphs-and-diagrams.md).
 
 ## Your first app
 
@@ -171,6 +180,15 @@ Rust 2021 edition. The dependency policy is deliberately austere — `unicode-wi
 Windows, and nothing else. ANSI emission, input parsing, the layout solver, the
 signals runtime, PNG/JPEG decoding, glTF parsing, and the 3D rasterizer are all
 implemented in-crate.
+
+The extension family installs only when you need it (same MIT license,
+same dependency discipline, public core API only —
+[ADR-0004](docs/adr/0004-extension-packaging.md)):
+
+```sh
+cargo add abstracttui-graph      # 0.1 — graph auto-layout + GraphView
+cargo add abstracttui-mermaid    # 0.1 — mermaid subset renderer
+```
 
 ## Run the examples
 
@@ -235,10 +253,11 @@ aspirations, with the honest split stated.
 - [Getting started](docs/getting-started.md) — install to first pixels, step by step.
 - [Architecture](docs/architecture.md) — signals, damage, the compositor, the render pipeline.
 - [API guide](docs/api.md) — the public surface, module by module.
+- [Graphs and diagrams](docs/graphs-and-diagrams.md) — the extension family: graph layout, `GraphView`, the mermaid subset.
 - [Live data](docs/live-data.md) — background threads into the UI, bounded and honest.
 - [FAQ](docs/faq.md) and [Troubleshooting](docs/troubleshooting.md).
 - [Examples catalog](examples/README.md) — what each demo proves and the keys it answers to.
-- API reference on [docs.rs](https://docs.rs/abstracttui).
+- API reference on [docs.rs](https://docs.rs/abstracttui) (family crates: [abstracttui-graph](https://docs.rs/abstracttui-graph), [abstracttui-mermaid](https://docs.rs/abstracttui-mermaid)).
 
 ## License
 
@@ -548,6 +567,10 @@ that way.
 - [Architecture](architecture.md) — signals, the damage contract, the
   compositor, and the render pipeline.
 - [API guide](api.md) — the public surface, module by module.
+- [Graphs and diagrams](graphs-and-diagrams.md) — the extension
+  family: graph auto-layout + `GraphView` (`abstracttui-graph`) and
+  the honest mermaid subset (`abstracttui-mermaid`), installed only
+  when you need them.
 - [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
 - [Examples catalog](../examples/README.md) — nineteen runnable programs, from
   the 53-line `hello` to the full `dashboard`, with the keys each answers to.
@@ -632,6 +655,21 @@ The engine is deliberately standalone. Runtime dependencies are limited to
 parsing, the flexbox solver, the signals runtime, JSON parsing (for glTF),
 PNG chunking and defiltering, base64, sixel encoding, and the 3D math and
 rasterizer are all implemented in-crate.
+
+Above the crate sits one more deliberate layer: the **sibling-crate
+extension family** ([ADR-0004](adr/0004-extension-packaging.md)).
+Genuinely new domains — graph layout + rendering
+(`abstracttui-graph`), mermaid diagrams (`abstracttui-mermaid`) —
+ship as separate crates in an in-repo cargo workspace
+(`extensions/*`), built and tested against core HEAD in CI but
+installed by downstreams only when needed. Extensions consume the
+PUBLIC API exclusively (the same "no private engine privileges" rule
+the built-in widgets live under); a capability an extension needs and
+cannot reach is, by definition, a core backlog item. They inherit the
+dependency posture (hand-rolled parsers, std + the family), the token
+discipline, and the honest-degradation principle; publish order is
+core first, family the same day. The family guide is
+[graphs-and-diagrams.md](graphs-and-diagrams.md).
 
 ## Pillar 1: fine-grained reactivity
 
@@ -2528,6 +2566,100 @@ fn shell(cx: Scope, alerts: Signal<u32>) -> View {
   text input keeps its digits; declared labels surface in
   keymap-help.
 
+## canvas — Canvas & vector strokes
+
+The sub-cell vector layer (extensions 0420): the dot-grid math the
+charts always used privately, promoted to public API so diagram
+extensions (`abstracttui-graph`, mermaid) and app draw closures stop
+re-deriving it. `Sparkline`/`LineChart` lines, `BarChart` bars and
+`Progress` fills all draw through this layer today — the promotion
+kept their rendered cells byte-identical (test-pinned).
+
+```rust
+use abstracttui::base::Point;
+use abstracttui::canvas::DotCanvas;
+use abstracttui::prelude::*;
+
+fn trace(cx: Scope, samples: Signal<Vec<(f32, f32)>>) -> View {
+    let t = use_theme(cx).get().tokens;
+    let ink = t.chart(0); // resolve tokens at build time, as always
+    dyn_view(cx, move |_| {
+        let pts = samples.get();
+        Element::new()
+            .style(LayoutStyle::default().grow(1.0))
+            .draw(move |canvas, rect| {
+                let mut dots = DotCanvas::braille(rect.w, rect.h);
+                for w in pts.windows(2) {
+                    let c = (0.5 * (w[0].0 + w[1].0), 0.5 * (w[0].1 + w[1].1));
+                    dots.bezier_quad(w[0], c, w[1], 0.25);
+                }
+                dots.blit(canvas, Point::new(rect.x, rect.y), ink);
+            })
+            .build()
+    })
+}
+```
+
+- **The dot-space model**: a `DotCanvas` covers a cell rect with a
+  finer grid — `DotMode::Braille` is 2x4 dots per cell (a WxH panel =
+  a 2Wx4H dot canvas), `DotMode::Quadrant` 2x2 (universal glyph
+  coverage where braille fonts are unreliable — the same degradation
+  rationale as the image mosaic; the mode enum is `#[non_exhaustive]`,
+  sextant is a known candidate). Dot (0,0) is top-left; strokes clip
+  at the grid edge, never panic.
+- **Primitives**: `set`/`clear`/`get`, `line` (Bresenham — far
+  off-grid endpoints are pre-clipped so a panned diagram edge costs
+  O(grid), never O(length)), `polyline`, `bezier_quad`/`bezier_cubic`
+  (adaptive flattening to a flatness tolerance in dot units, depth-
+  bounded at 4096 segments per curve), `ellipse_arc`
+  (parameter-stepped, ≤ 2048 segments). All deterministic — same
+  inputs, same dots, on every platform (arcs use an in-crate
+  polynomial sin/cos instead of the platform libm) — and non-finite
+  inputs draw nothing, the chart sample-skip contract.
+- **The cell-color rule (documented z-order)**: a terminal cell
+  carries ONE fg and ONE glyph, so `blit(canvas, origin, color)`
+  paints every non-empty cell in one stroke color and SKIPS empty
+  cells. Overlapping grids therefore compose at cell granularity:
+  later blits win overlapping cells — glyph and color both, dots
+  never merge across grids. Multi-color pictures = one grid per
+  color, blitted back-to-front (exactly how `LineChart` layers its
+  series). `blit_styled` takes a full `render::Style` patch instead
+  of a bare color, so a stroke can carry attributes and a link id.
+- **Composition is free**: blits go through `ui::Canvas`/
+  `ui::StyledCanvas`, so `ClippedCanvas` clipping and damage tracking
+  apply — a blit into a damaged region repaints only that region.
+  `clear_all()` keeps the allocation; the whole stroke + blit steady
+  state allocates nothing (pinned in `tests/alloc_budget.rs`).
+- **Eighth-block fills**: `fill_v`/`fill_h` draw partial gauge/bar
+  fills at 8 steps per cell (the `BarChart`/`Progress` vocabulary);
+  the glyph ramps `V_EIGHTHS`/`H_EIGHTHS`, the quadrant table and
+  `braille_bit` are exported for callers building their own cell
+  vocabularies.
+- **Colors are caller-resolved** `Rgba` (the widget token rule):
+  resolve theme tokens — `t.chart(i)`, `t.accent` — at view-build
+  time and pass the values; the canvas layer invents no colors.
+
+## Extensions family — sibling crates on this API
+
+Diagram-class capability ships OUTSIDE the core crate as sibling
+crates built on the public API above (ADR-0004: install only when
+needed, no cargo features, no private hooks). Each crate carries its
+own rustdoc — this guide does not duplicate it; the family guide with
+selection advice and worked examples is
+[graphs-and-diagrams.md](graphs-and-diagrams.md).
+
+- [`abstracttui-graph`](https://docs.rs/abstracttui-graph) — graph
+  auto-layout (`GraphDesc -> Layout`: `layered` sugiyama-lite,
+  `force` bounded seeded placement, `grid` labeled fallback; honesty
+  markers for broken cycles and degradations) and `GraphView` (cards,
+  canvas-stroke edges, selection/pan/tooltips, zero idle).
+- [`abstracttui-mermaid`](https://docs.rs/abstracttui-mermaid) —
+  honest-subset mermaid: an exhaustive spelling table (the contract,
+  shipped verbatim in the crate docs), flowcharts/flat-state compiled
+  onto `abstracttui-graph`, solverless sequence diagrams, atomic
+  fallback to the verbatim code fence with a named reason and a
+  mermaid.live escape link.
+
 ===== FILE: docs/theming.md =====
 
 # Theming
@@ -3131,6 +3263,199 @@ Reproduce on your machine:
 cargo test --release -- --ignored perf_three_envelope --nocapture
 cargo test --release -- --ignored perf_mosaic_200x60 --nocapture
 ```
+
+===== FILE: docs/graphs-and-diagrams.md =====
+
+# Graphs and diagrams — the extension family
+
+Core stays lean; diagram-class capability ships as sibling crates you
+install only when needed ([ADR-0004](adr/0004-extension-packaging.md)):
+
+- **`abstracttui-graph`** — graph auto-layout (`GraphDesc -> Layout`:
+  layered, force and grid passes) plus `GraphView`, a read-only graph
+  widget with selection, pan, tooltips and canvas-stroke edges.
+- **`abstracttui-mermaid`** — honest-subset mermaid rendering:
+  flowcharts and flat state diagrams compile onto `abstracttui-graph`,
+  sequence diagrams render through a deterministic solverless plan,
+  and everything outside the subset falls back atomically.
+
+Both are ordinary crates on the public core API — no private hooks, no
+cargo features, the same dependency posture as core (std + the family;
+the mermaid parser is hand-rolled).
+
+## Installing
+
+```toml
+[dependencies]
+abstracttui = "0.2"
+abstracttui-graph = "0.1"    # graph layout + GraphView
+abstracttui-mermaid = "0.1"  # mermaid subset (depends on -graph)
+```
+
+## The one data contract: `GraphDesc -> Layout`
+
+You describe the graph; a layout pass returns positions. Every pass
+shares the same input and output types — consumers select the
+ALGORITHM, never a different contract:
+
+```rust
+use abstracttui_graph::{layered, GraphDesc, LayeredOpts};
+
+let desc = GraphDesc::new()
+    .node("fetch", 9, 3)          // id, card width/height in cells
+    .node("build", 9, 3)
+    .edge("fetch", "build");
+let layout = layered(&desc, &LayeredOpts::default());
+// layout.nodes: Rect + rank per node; layout.edges: waypoint
+// polylines; layout.bounds: the content size a Scroll advertises.
+```
+
+Honesty markers ride the output: cycle-broken edges are MARKED
+(`EdgeLayout::broken`, `Layout::broken_edges()`), and
+`Layout::fallback` names every degradation (node cap exceeded,
+duplicate ids dropped, unresolvable edges skipped, grid placement) —
+`None` means the requested algorithm ran cleanly. Every pass is
+deterministic (same input, identical `Layout`, golden-pinned; float
+arithmetic avoids transcendentals so goldens hold across platforms)
+and bounded (sweep counts, node caps, iteration budgets — documented
+on the option types).
+
+## Picking a pass
+
+| Pass | Use for | Shape |
+| --- | --- | --- |
+| `layered(&desc, &LayeredOpts)` | workflows, dependency/build graphs, pipelines, state machines — DAG-shaped data (cycles get broken and marked) | sugiyama-lite: longest-path ranks, bounded median crossing-reduction sweeps, aligned-median coordinates, waypoints through rank gaps; directions TD/LR/BT/RL |
+| `force(&desc, &ForceOpts)` | knowledge graphs, networks — cyclic, dense, non-hierarchical data that defeats layering | seeded, alpha-cooled repulsion + edge springs + optional `rank_bias`; a bounded ACT that freezes on settle (never an idle animation — cache the `Layout`, re-render from the cache) |
+| `grid(&desc)` | the honest fallback | near-square row-major placement, always labeled |
+
+The grid is also what `layered` degrades TO: past the node cap
+(default 512) it returns the grid placement with the cap named in
+`Layout::fallback` — a labeled grid beats a hung solver at terminal
+scale. Measured on a dev machine (unoptimized profile): 500 nodes /
+718 edges lay out in ~14 ms (`layered`) and ~30 ms (`force`, budget
+64).
+
+## GraphView
+
+`GraphView` renders a `Layout`: node cards (title on the border, an
+optional kind-tinted left accent, a reactive badge slot), edges as
+sub-cell canvas strokes (smoothed beziers through the waypoints,
+arrowheads, dotted/thick styles from `EdgeDesc::style`, cycle-broken
+edges dotted in their own ink), the fallback label as a non-scrolling
+notice line, and pan via `Scroll`.
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui_graph::{GraphDesc, GraphStyle, GraphView, NodeDesc};
+
+// Inside a view builder (cx: Scope), colors caller-resolved from the
+// active theme per the widget token rule:
+let t = use_theme(cx).get().tokens;
+let style = GraphStyle::from_tokens(&t)
+    .kind_accent("ok", t.ok)
+    .kind_accent("error", t.error);
+let view = GraphView::new(
+    GraphDesc::new()
+        .with_node(NodeDesc::new("a", 12, 3).label("Fetch").kind("ok"))
+        .with_node(NodeDesc::new("b", 12, 3).label("Parse").kind("error"))
+        .edge("a", "b"),
+)
+.style(style)
+.badges(|id| (id == "a").then(|| "3".to_string()))
+.tooltips(std::time::Duration::from_millis(300))
+.on_node_press(|id| eprintln!("pressed {id}"))
+.view(cx);
+```
+
+Interaction is ONE focus stop: arrows pan until a node is selected;
+Enter selects the first node, then arrows move the selection
+spatially (aligned-first, deterministic tiebreaks), Enter presses it
+(`on_node_press`), Escape deselects. Clicking a card selects and
+presses; hovering shows a tooltip when enabled. Layout runs at
+view-build time (an act): rebuild the view (`dyn_view` over your data
+signal) to relayout — a parked `GraphView` costs zero idle,
+test-pinned. Algorithm selection: `.algo(GraphAlgo::Force(opts))`, or
+`.with_layout(layout)` to render positions you computed (or dragged)
+yourself.
+
+Run the crate examples: `cargo run -p abstracttui-graph --example
+workflow` (layered pipeline with a marked retry cycle) and `--example
+network` (force-directed).
+
+## Mermaid: the honest subset
+
+Mermaid has no spec grammar, and "faithful" is the wrong bar for a
+terminal. `abstracttui-mermaid` renders an exhaustive, tested subset
+natively and falls back ATOMICALLY on everything else. The table
+below is the contract, verbatim from the backlog item that ruled it
+(0450); the YES rows enumerate accepted SPELLINGS, and any spelling
+outside them triggers the fallback naming the first unrecognized
+line — unknown syntax is safe by construction:
+
+| Mermaid | v1 | Accepted spellings (exhaustive) | Behavior |
+| --- | --- | --- | --- |
+| `flowchart` / `graph` TD/TB/LR/BT/RL | YES | header keyword + direction token only | 0440 layered layout (BT/RL as transposes) |
+| Node shapes | YES | `id`, `id[text]`, `id(text)`, `id{text}`, `id([text])`; quoted `"text"` inside brackets | box glyph variants |
+| Edges | YES | `-->`, `---`, `-.->`, `==>`; label as `--\|label\|` postfix form only (the `--label-->` infix form and `&`-chaining are v2 — fallback) | 0420 strokes; dotted/thick as glyph styles |
+| `subgraph` | NO (v2, needs 0440 clusters) | — | atomic fallback |
+| `sequenceDiagram` | YES | `participant id [as alias]`; messages `->>`, `-->>`, `->`, `-->` with `:` text; `Note left of/right of/over` | deterministic columns/rows — no graph solver |
+| sequence `loop`/`alt`/`par`/activations (`+`/`-`, `activate`) | NO (v2) | — | atomic fallback |
+| `stateDiagram-v2` (flat states + transitions) | STRETCH | `[*]`, `id`, `id : label`, `-->` with `:` labels | flowchart engine reuse; else fallback |
+| `classDiagram`, `erDiagram`, `gantt`, `pie`, `journey`, `mindmap`, `timeline`, `gitGraph` | NO | — | atomic fallback |
+| Styling directives (`classDef`, `style`, `%%` comments, themes) | IGNORED (parsed, dropped with notice; comments silently) | recognized-and-dropped list enumerated in docs | render proceeds |
+
+The STRETCH row shipped: flat `stateDiagram-v2` parses as a third
+front end to the flowchart IR (`[*]` becomes synthetic start/end
+nodes). Cell-honest shape mapping: terminal cards do not rotate into
+diamonds — a shape arrives as the card's accent kind plus a badge
+sigil (`id{..}` → `decision` + ◆, `id(..)` → `rounded` + ○,
+`id([..])` → `stadium` + ◎). Lexical notes (normalization, not new
+constructs): `;` is a statement terminator, `%%` comments strip to
+end of line (quote-aware).
+
+### The atomic fallback
+
+If a diagram contains ANY construct outside the table (styling
+directives excepted), the WHOLE diagram renders as the code fence it
+already is — verbatim source, monospace — plus one notice naming the
+first unsupported construct and line, plus an optional
+[mermaid.live](https://mermaid.live) link (`live_link_url`): the
+diagram travels in the URL FRAGMENT, never to a server; nothing is
+shared until the user opens the link. Partial rendering of a
+half-understood diagram misleads; the code block never lies.
+
+### Usage
+
+```rust
+use abstracttui_mermaid::MermaidView;
+
+// In a view builder:
+let view = MermaidView::new(
+    "graph TD\n  A[Start] --> B{Ship?}\n  B -->|yes| C(Done)",
+)
+.view(cx);
+
+// Pure-data entry points for other consumers:
+// parse(&str) -> Result<Diagram, Unsupported>   (IR or named reason)
+// to_graph(&FlowchartIr) -> (GraphDesc, LayeredOpts)
+// live_link_url(&str) -> String                  (the escape hatch)
+```
+
+Run the demo: `cargo run -p abstracttui-mermaid --example mermaid`
+(four embedded samples including an honest fallback; or pass a `.mmd`
+path).
+
+## Honest limits (v1)
+
+- Open links (`---`) carry the `open` style hint and render as
+  arrowless strokes in `GraphView` (mermaid's undirected reading).
+- Sequence gaps size to ADJACENT-pair message labels; long labels
+  between distant columns truncate with an ellipsis.
+- Edge chaining (`A --> B --> C`), infix labels, `&`-chaining and
+  `subgraph` are named fallbacks, not silent acceptance — growth is
+  new table rows with tests.
+- Force layouts report `rank` 0 for every node (no hierarchy is
+  computed — honest, not missing data).
 
 ===== FILE: docs/live-data.md =====
 
@@ -3876,15 +4201,22 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.2.12 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.2.12 (2026-07-24).
+- Crate: `abstracttui` 0.2.13 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.2.13 (2026-07-24).
+- Extension family (sibling crates in the repo workspace, installed only when needed;
+  ADR-0004 — public core API only, same MIT license and dependency discipline):
+  - `abstracttui-graph` 0.1.0 — graph auto-layout (`GraphDesc -> Layout`: layered /
+    force / grid passes) + the `GraphView` widget. Depends on `abstracttui` 0.2.
+  - `abstracttui-mermaid` 0.1.0 — honest-subset mermaid rendering (atomic fallback).
+    Depends on `abstracttui` 0.2 and `abstracttui-graph` 0.1.
 - Description: a reactive, compositor-grade terminal UI engine — fine-grained signals,
   layered rendering with damage tracking, streaming transcripts and live-data ingestion,
   text selection with OSC 52 copy, images (kitty/iTerm2/sixel/mosaic),
-  software-rasterized 3D (GLB), themes and animation.
+  software-rasterized 3D (GLB), a sub-cell vector canvas, themes and animation.
 - License: MIT.
 - Repository / homepage: https://github.com/lpalbou/abstracttui
-- API reference: https://docs.rs/abstracttui
+- API reference: https://docs.rs/abstracttui (family: https://docs.rs/abstracttui-graph,
+  https://docs.rs/abstracttui-mermaid)
 - Dependencies (std plus this minimal set; everything else is implemented in-crate):
   - `unicode-width` 0.2 — cell-width measurement
   - `unicode-segmentation` 1 — grapheme segmentation
@@ -3892,8 +4224,10 @@ timeouts, and no sleeps.
   - `libc` 0.2 — Unix terminal FFI (unix targets only)
   - `windows-sys` 0.61 — Windows console FFI (windows targets only)
 - Test invocation (from CONTRIBUTING.md):
-  - `cargo test` — the whole suite (~1,910 tests: unit tests, integration suites under
+  - `cargo test` — the core suite (~1,940 tests: unit tests, integration suites under
     `tests/`, and doctests).
+  - `cargo test --workspace` — core plus the extension family (~2,060 tests; the CI
+    gate).
   - `cargo test --test live_smoke -- --ignored --test-threads=1` — live pty smoke tests
     (spawn a real terminal session; run serially).
   - `cargo test --test perf_budgets --release -- --ignored --test-threads=1` —
@@ -3904,6 +4238,6 @@ timeouts, and no sleeps.
     composer keystroke, diff scroll, startup time-to-first-frame (release, serial).
   - `UPDATE_GOLDENS=1 cargo test` — deliberately (re)mint golden snapshots under
     `tests/goldens/`.
-  - Lint gates before submitting: `cargo fmt --all` and `cargo clippy --all-targets`
-    (zero warnings expected).
+  - Lint gates before submitting: `cargo fmt --all` and
+    `cargo clippy --workspace --all-targets` (zero warnings expected).
   - Windows cross-check: `cargo check --target x86_64-pc-windows-msvc`.

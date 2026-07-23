@@ -1,0 +1,22 @@
+[package]
+name = "abstracttui-mermaid"
+version = "0.1.0"
+edition = "2021"
+# Same MSRV floor as core (see the root manifest's MSRV note).
+rust-version = "1.87"
+license = "MIT"
+authors = ["Laurent-Philippe Albou <contact@abstractframework.ai>"]
+description = "Honest-subset mermaid diagram rendering for AbstractTUI: hand-rolled parser, flowcharts through abstracttui-graph layout, solverless sequence diagrams, atomic fallback with a named reason."
+repository = "https://github.com/lpalbou/abstracttui"
+homepage = "https://github.com/lpalbou/abstracttui"
+documentation = "https://docs.rs/abstracttui-mermaid"
+readme = "README.md"
+categories = ["command-line-interface", "visualization"]
+keywords = ["tui", "mermaid", "diagram", "flowchart", "terminal"]
+
+# Dependency posture per ADR-0004 §4: std + the family only; the
+# mermaid parser is hand-rolled (no parser dependency). Dual-form
+# spelling (version + path) per ADR-0004 §3.
+[dependencies]
+abstracttui = { version = "0.2", path = "../.." }
+abstracttui-graph = { version = "0.1", path = "../graph" }

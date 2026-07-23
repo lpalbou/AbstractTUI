@@ -300,6 +300,10 @@ that way.
 - [Architecture](architecture.md) — signals, the damage contract, the
   compositor, and the render pipeline.
 - [API guide](api.md) — the public surface, module by module.
+- [Graphs and diagrams](graphs-and-diagrams.md) — the extension
+  family: graph auto-layout + `GraphView` (`abstracttui-graph`) and
+  the honest mermaid subset (`abstracttui-mermaid`), installed only
+  when you need them.
 - [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
 - [Examples catalog](../examples/README.md) — nineteen runnable programs, from
   the 53-line `hello` to the full `dashboard`, with the keys each answers to.

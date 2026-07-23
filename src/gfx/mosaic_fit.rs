@@ -36,14 +36,13 @@
 use crate::base::Rgba;
 use crate::gfx::mosaic::MosaicCell;
 
-/// Quadrant glyphs indexed by fg pattern bits (bit i = subpixel i is
-/// fg; subpixels row-major: 0=UL, 1=UR, 2=LL, 3=LR).
-pub(crate) const QUADRANT_CHARS: [char; 16] = [
-    ' ', '\u{2598}', '\u{259D}', '\u{2580}', // -, UL, UR, upper half
-    '\u{2596}', '\u{258C}', '\u{259E}', '\u{259B}', // LL, left half, anti-diag, no-LR
-    '\u{2597}', '\u{259A}', '\u{2590}', '\u{259C}', // LR, diag, right half, no-LL
-    '\u{2584}', '\u{2599}', '\u{259F}', '\u{2588}', // lower half, no-UR, no-UL, full
-];
+// Quadrant glyphs + braille dot bits are the CANVAS layer's canonical
+// vocabulary (src/canvas/glyphs.rs, backlog 0420 dedup: tables, not
+// fitters) — re-exported here so the mosaic orchestration keeps its
+// import path. The sextant table below stays local: no stroke mode
+// uses it, so this is its only home.
+use crate::canvas::braille_bit;
+pub(crate) use crate::canvas::QUADRANT_CHARS;
 
 /// Sextant glyphs indexed by fg pattern bits (bit i = subpixel i,
 /// row-major 2x3: 0=UL, 1=UR, 2=ML, 3=MR, 4=LL, 5=LR). Unicode names
@@ -56,12 +55,6 @@ pub(crate) const SEXTANT_CHARS: [char; 64] = [
     '🬤', '🬥', '🬦', '🬧', '▐', '🬨', '🬩', '🬪', '🬫', '🬬', '🬭', '🬮', '🬯', '🬰', '🬱', '🬲', '🬳', '🬴', '🬵',
     '🬶', '🬷', '🬸', '🬹', '🬺', '🬻', '█',
 ];
-
-/// Braille dot bit for subpixel (x, y): U+2800 + OR of lit bits.
-/// Dots are numbered column-first (1-3,7 left; 4-6,8 right) with the
-/// bottom row split out historically — hence the irregular bit table.
-pub(crate) const BRAILLE_BITS: [[u32; 2]; 4] =
-    [[0x01, 0x08], [0x02, 0x10], [0x04, 0x20], [0x40, 0x80]];
 
 /// HalfBlock: exact by construction — `▀` paints the top half with fg.
 /// A uniform pair canonicalizes to space + bg (SGR-run economy; the
@@ -275,7 +268,9 @@ pub(crate) fn fit_braille(sub: &[Rgba]) -> MosaicCell {
         // Strictly above the mean: a uniform cell lights no dots and
         // falls through to blank-braille + background color.
         if lum[i] > mean {
-            bits |= BRAILLE_BITS[i / 2][i % 2];
+            // Subpixels arrive row-major over the 2x4 cell: row i/2,
+            // col i%2 — the canvas layer's canonical dot-bit mapping.
+            bits |= u32::from(braille_bit((i % 2) as i32, (i / 2) as i32));
             lit_w += w;
             lit_a += p.a as u32;
             lit_n += 1;
@@ -357,12 +352,13 @@ mod tests {
 
     #[test]
     fn braille_bit_table_covers_all_dots() {
+        // The fitter's subpixel->dot mapping (row-major i over a 2x4
+        // cell) must reach all 8 canonical bits exactly once.
         let mut all = 0u32;
-        for row in BRAILLE_BITS {
-            for b in row {
-                assert_eq!(all & b, 0, "duplicate bit");
-                all |= b;
-            }
+        for i in 0..8usize {
+            let b = u32::from(braille_bit((i % 2) as i32, (i / 2) as i32));
+            assert_eq!(all & b, 0, "duplicate bit");
+            all |= b;
         }
         assert_eq!(all, 0xFF);
     }

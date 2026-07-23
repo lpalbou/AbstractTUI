@@ -600,6 +600,62 @@ fn idle_turns_with_parked_meter_scope_and_key_state_allocate_nothing() {
     assert!(term.bytes().is_empty(), "idle turns wrote bytes");
 }
 
+// ---------------------------------------------------------------------------
+// Canvas layer (extensions 0420): the stroke + blit steady state is
+// allocation-free. A DotCanvas allocates ONCE at construction; every
+// primitive (Bresenham, adaptive bezier flattening, param-stepped
+// arcs, fills) works in-place or on the stack, and `clear_all()`
+// keeps the allocation — so a per-frame redraw of a custom trace
+// costs zero heap traffic, per the vision charter.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dot_canvas_stroke_and_blit_paths_allocate_nothing() {
+    use abstracttui::base::{Point, Rect};
+    use abstracttui::canvas::{fill_h, fill_v, DotCanvas};
+    use abstracttui::ui::BufferCanvas;
+
+    let _serial = serial();
+    let mut dots = DotCanvas::braille(40, 12); // 80x48 dots, allocated here
+    let mut out = BufferCanvas::new(Size::new(40, 12));
+    let ink = Rgba::rgb(240, 170, 40);
+
+    let (allocs, reallocs, bytes) = alloc_delta(|| {
+        for frame in 0..8 {
+            dots.clear_all(); // reuse, never realloc
+            dots.line((0, frame), (79, 47 - frame));
+            dots.polyline(&[(0, 40), (20, 8), (40, 30), (79, 2)]);
+            dots.bezier_quad((0.0, 47.0), (40.0, -20.0), (79.0, 47.0), 0.25);
+            dots.bezier_cubic((0.0, 2.0), (30.0, 60.0), (50.0, -12.0), (79.0, 40.0), 0.25);
+            dots.ellipse_arc((40.0, 24.0), 30.0, 18.0, 0.0, std::f32::consts::TAU);
+            // Far off-grid segment: pre-clipped, bounded, still free.
+            dots.line((-1_000_000, 24), (1_000_000, 24));
+            dots.blit(&mut out, Point::new(0, 0), ink);
+            fill_v(
+                &mut out,
+                Rect::new(0, 0, 4, 12),
+                0.6,
+                ink,
+                Rgba::TRANSPARENT,
+            );
+            fill_h(
+                &mut out,
+                Rect::new(0, 11, 40, 1),
+                0.4,
+                ink,
+                Rgba::TRANSPARENT,
+            );
+        }
+        std::hint::black_box(&out);
+    });
+    assert_eq!(
+        (allocs, reallocs),
+        (0, 0),
+        "the stroke/blit steady state allocated: \
+         {allocs} allocs / {reallocs} reallocs / {bytes} B over 8 frames"
+    );
+}
+
 #[test]
 fn jpeg_hostile_corpus_allocation_is_bounded() {
     let _serial = serial();

@@ -17,12 +17,10 @@
 //! OWNER: DESIGN.
 
 use crate::base::Point;
+use crate::canvas::fill_h;
 use crate::layout::{Dimension, Style as LayoutStyle};
 use crate::theme::TokenSet;
 use crate::ui::Element;
-
-/// Eighth-block fill glyphs, index = eighths (1..=7).
-const EIGHTHS: [char; 7] = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'];
 
 pub struct Progress {
     fraction: f32,
@@ -95,21 +93,16 @@ impl Progress {
             for x in rect.x..rect.right() {
                 canvas.put(Point::new(x, y), ' ', track, track);
             }
-            // 320 steps on a 40-cell bar: whole cells + one eighth cell.
-            let eighths_total = (fraction * (rect.w * 8) as f32).round() as i32;
-            let full = eighths_total / 8;
-            let part = eighths_total % 8;
-            for x in 0..full {
-                canvas.put(Point::new(rect.x + x, y), '█', fill, track);
-            }
-            if part > 0 && full < rect.w {
-                canvas.put(
-                    Point::new(rect.x + full, y),
-                    EIGHTHS[(part - 1) as usize],
-                    fill,
-                    track,
-                );
-            }
+            // 320 steps on a 40-cell bar: whole cells + one eighth
+            // cell, via the shared canvas layer's horizontal fill
+            // (same rounding: w*8 steps; backlog 0420 refactor).
+            fill_h(
+                canvas,
+                crate::base::Rect::new(rect.x, y, rect.w, 1),
+                fraction,
+                fill,
+                track,
+            );
         })
     }
 }

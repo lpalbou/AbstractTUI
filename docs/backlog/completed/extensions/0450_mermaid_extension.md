@@ -2,10 +2,11 @@
 
 ## Metadata
 - Created: 2026-07-22
-- Status: Proposed (needs-design; sibling crate; consumes 0420 strokes
-  + 0440 layout)
+- Status: Completed (cycle 2 by GRAPH — workspace member
+  `abstracttui-mermaid` over `abstracttui-graph` + core; the subset
+  table shipped verbatim as the crate-docs contract)
 - Track: extensions
-- Completed: N/A
+- Completed: 2026-07-24
 
 ## ADR status
 - Governing ADRs: 0400's ADR (sibling crate; also rules whether the
@@ -147,9 +148,71 @@ a mermaid parser.
   house style).
 
 ## Progress checklist
-- [ ] 0400 ruled; 0420/0440 landed (hard deps)
-- [ ] Subset parser + IR + unsupported-reason reporting
-- [ ] Flowchart rendering over 0440/0420
-- [ ] Sequence rendering (deterministic, solverless)
-- [ ] Atomic fallback + notice + live-link affordance
-- [ ] Corpus + goldens + fuzz; docs with the table
+- [x] 0400 ruled; 0420/0440 landed (hard deps)
+- [x] Subset parser + IR + unsupported-reason reporting
+- [x] Flowchart rendering over 0440/0420 (compiled, not re-rendered)
+- [x] Sequence rendering (deterministic, solverless)
+- [x] Atomic fallback + notice + live-link affordance
+- [x] Corpus + goldens + fuzz; docs with the table
+
+## Completion report
+
+### 2026-07-24 — SHIPPED (`extensions/mermaid`, cycle 2, GRAPH seat)
+
+`abstracttui-mermaid` 0.1.0: hand-rolled parser (ADR-0004 §4 — deps
+are exactly `abstracttui` + `abstracttui-graph`, dual-form spelled),
+38 crate tests green, `cargo package` verifies.
+
+- **Parser architecture**: lexical normalizer (`lines.rs`: quote-aware
+  `%%` stripping, `;` statement splitting, 1-based line numbers) under
+  three statement classifiers (flowchart / sequence / state-flat), one
+  arm per accepted spelling. `parse() -> Result<Diagram, Unsupported>`
+  is total: the first non-classifying statement IS the verdict (line
+  number + verbatim line + named reason) — atomicity by construction,
+  no partial IR type exists. Known v2 constructs get targeted reasons
+  (subgraph, infix labels, `&`-chaining, edge chaining, activations,
+  sequence blocks, composite states); the IGNORED row (`classDef`,
+  `style`, `%%{init}`) accumulates notices and proceeds.
+- **stateDiagram-v2 flat SHIPPED (stretch)**: it is a third front end
+  to `FlowchartIr` (~130 lines): transitions -> edges, `[*]` ->
+  synthetic `[*]start`/`[*]end` ids (brackets are outside the user id
+  charset — collision-proof), rendering rides the flowchart engine
+  unchanged. Composite states fall back named.
+- **Compiler, not renderer**: `to_graph(&FlowchartIr) -> (GraphDesc,
+  LayeredOpts)` is public pure data; `MermaidView` instantiates
+  `GraphView::new(desc).algo(Layered(opts))`. Shapes map to the view's
+  real vocabulary: kind accents (`decision`/`rounded`/`stadium`) +
+  badge sigils (◆ ○ ◎); edges to the `dotted`/`thick` style hints
+  (`---` carries an `open` hint — documented v1 limit: the view has no
+  arrowless stroke vocabulary yet, so open links draw an arrowhead).
+- **Sequence**: solverless integer plan (`seq_layout`: columns from
+  participant order, gaps from box halves + adjacent-pair labels; rows
+  from source order; left-overflowing notes shift the picture, never
+  clip) + cell-glyph painter (`seq_render`: lifelines, solid/dashed
+  runs, filled/open heads, self-message loops, note boxes, boxes on
+  top). Golden-pinned rows (`sequence_golden_alice_john`).
+- **Fallback + escape hatch**: unsupported sources render the verbatim
+  code fence + one notice naming the first construct + the
+  mermaid.live link — `#base64:` URL-safe-base64 state (verified
+  against the live editor's own serde.ts); the code travels in the URL
+  fragment only. `live_link(false)` opts out.
+- **Corpus** (`fixtures/`, docs pin 2026-07-24, mermaid v11 docs): 11
+  `accept_*` fixtures covering every YES-row spelling, 19 `fallback_*`
+  covering every NO row + known v2 spellings; `tests/corpus.rs` makes
+  the naming convention the assertion, counts pinned as minimums.
+- **BT/RL geometry fixture** (`compile_graph.rs`): card height 3
+  makes every band extent odd (fractional dummy centers); pinned
+  BT == exact cell mirror of TD (rects `H-(y+h)`, waypoints `H-1-y`)
+  and RL of LR, with no waypoint inside any card — regression-locking
+  the cycle-2 `map_point` cell-interval fix from the consumer side.
+- **Fuzz** (decode_image house style): 3000 byte soups + 2000 token
+  soups + full truncation sweeps parse without panic; truncated real
+  sources also build + draw views.
+- **Tests (38)**: corpus 1; flowchart parser 8; sequence/state parser
+  8; compiler + BT/RL 4; render/fallback 5 (incl. the pinned sequence
+  golden and the atomic-fence proof); fuzz 4; unit 7 (normalizer,
+  seq plan, base64/json/live-link); plus 1 doctest.
+- **Follow-ups revealed** (graph-crate lane, filed in the wave
+  report): arrowless stroke vocabulary for `---`; per-edge stroke
+  styling of parallel edges; a `GraphView` seam for edge-label
+  positioning if mermaid ever needs non-midpoint labels.

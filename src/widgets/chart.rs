@@ -25,6 +25,7 @@
 //! OWNER: DESIGN.
 
 use crate::base::{Point, Rgba};
+use crate::canvas::{fill_v, DotCanvas};
 use crate::layout::{Dimension, Style as LayoutStyle};
 use crate::theme::TokenSet;
 use crate::ui::Element;
@@ -35,90 +36,13 @@ use crate::ui::Element;
 mod time;
 pub use time::{TimeSeries, TimeSeriesState};
 
-/// Braille dot bit for (col in 0..2, row in 0..4) — Unicode braille
-/// bit order (dots 1-8).
-const fn braille_bit(col: i32, row: i32) -> u8 {
-    match (col, row) {
-        (0, 0) => 0x01,
-        (0, 1) => 0x02,
-        (0, 2) => 0x04,
-        (0, 3) => 0x40,
-        (1, 0) => 0x08,
-        (1, 1) => 0x10,
-        (1, 2) => 0x20,
-        _ => 0x80, // (1, 3)
-    }
-}
-
-/// A dot grid over a cell rect: 2 columns x 4 rows of dots per cell.
-/// Accumulates bits per cell, then emits braille chars.
-struct BrailleGrid {
-    cells_w: i32,
-    cells_h: i32,
-    bits: Vec<u8>,
-}
-
-impl BrailleGrid {
-    fn new(cells_w: i32, cells_h: i32) -> BrailleGrid {
-        let n = (cells_w.max(0) * cells_h.max(0)) as usize;
-        BrailleGrid {
-            cells_w,
-            cells_h,
-            bits: vec![0; n],
-        }
-    }
-
-    fn dots_w(&self) -> i32 {
-        self.cells_w * 2
-    }
-
-    fn dots_h(&self) -> i32 {
-        self.cells_h * 4
-    }
-
-    fn set(&mut self, x: i32, y: i32) {
-        if x < 0 || y < 0 || x >= self.dots_w() || y >= self.dots_h() {
-            return;
-        }
-        let idx = ((y / 4) * self.cells_w + x / 2) as usize;
-        self.bits[idx] |= braille_bit(x % 2, y % 4);
-    }
-
-    /// Bresenham segment on the dot grid.
-    fn line(&mut self, a: (i32, i32), b: (i32, i32)) {
-        let (mut x0, mut y0) = a;
-        let (x1, y1) = b;
-        let dx = (x1 - x0).abs();
-        let dy = -(y1 - y0).abs();
-        let sx = if x0 < x1 { 1 } else { -1 };
-        let sy = if y0 < y1 { 1 } else { -1 };
-        let mut err = dx + dy;
-        loop {
-            self.set(x0, y0);
-            if x0 == x1 && y0 == y1 {
-                break;
-            }
-            let e2 = 2 * err;
-            if e2 >= dy {
-                err += dy;
-                x0 += sx;
-            }
-            if e2 <= dx {
-                err += dx;
-                y0 += sy;
-            }
-        }
-    }
-
-    fn cell_char(&self, cx: i32, cy: i32) -> Option<char> {
-        let bits = self.bits[(cy * self.cells_w + cx) as usize];
-        if bits == 0 {
-            None
-        } else {
-            char::from_u32(0x2800 + bits as u32)
-        }
-    }
-}
+// The braille grid, Bresenham and eighth-block plumbing that lived
+// here privately were PROMOTED to `crate::canvas` (backlog 0420) —
+// charts now draw through the shared layer, byte-identically
+// (chart_tests.rs pins it). The dot-order test reaches the canonical
+// bit table through this re-import.
+#[cfg(test)]
+use crate::canvas::braille_bit;
 
 /// Min/max over finite samples; `None` when nothing is drawable.
 fn finite_range(series: &[Vec<f32>]) -> Option<(f32, f32)> {
@@ -215,7 +139,7 @@ impl Sparkline {
                 Some(r) => r,
                 None => return,
             };
-            let mut grid = BrailleGrid::new(rect.w, 1);
+            let mut grid = DotCanvas::braille(rect.w, 1);
             let cols = grid.dots_w();
             let n = data.len() as i32;
             let mut prev: Option<(i32, i32)> = None;
@@ -233,16 +157,7 @@ impl Sparkline {
                 }
                 prev = Some((c, y));
             }
-            for cx in 0..rect.w {
-                if let Some(ch) = grid.cell_char(cx, 0) {
-                    canvas.put(
-                        Point::new(rect.x + cx, rect.y),
-                        ch,
-                        color,
-                        Rgba::TRANSPARENT,
-                    );
-                }
-            }
+            grid.blit(canvas, Point::new(rect.x, rect.y), color);
             // Label row below the trend, when opted in and there is room.
             if let Some(span) = span {
                 if rect.h >= 2 {
@@ -388,7 +303,7 @@ impl LineChart {
                 if data.is_empty() {
                     continue;
                 }
-                let mut grid = BrailleGrid::new(plot.w, plot.h);
+                let mut grid = DotCanvas::braille(plot.w, plot.h);
                 let cols = grid.dots_w();
                 let rows = grid.dots_h();
                 let n = data.len() as i32;
@@ -408,18 +323,7 @@ impl LineChart {
                     prev = Some((c, y));
                 }
                 let color = colors[si.min(colors.len() - 1)];
-                for cy in 0..plot.h {
-                    for cx in 0..plot.w {
-                        if let Some(ch) = grid.cell_char(cx, cy) {
-                            canvas.put(
-                                Point::new(plot.x + cx, plot.y + cy),
-                                ch,
-                                color,
-                                Rgba::TRANSPARENT,
-                            );
-                        }
-                    }
-                }
+                grid.blit(canvas, Point::new(plot.x, plot.y), color);
             }
         })
     }
@@ -454,9 +358,6 @@ pub struct BarChart {
     gap: i32,
     layout: Option<LayoutStyle>,
 }
-
-/// Vertical eighth blocks, index = eighths filled (1..=8).
-const V_EIGHTHS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
 impl BarChart {
     pub fn new(values: Vec<f32>) -> BarChart {
@@ -537,27 +438,16 @@ impl BarChart {
                     continue;
                 }
                 let norm = ((v - lo) / span).clamp(0.0, 1.0);
-                let eighths = (norm * (rect.h * 8) as f32).round() as i32;
                 let color = colors[i % colors.len()];
-                let (full, part) = (eighths / 8, eighths % 8);
-                for col in 0..bar_w.min(rect.right() - x) {
-                    for row in 0..full {
-                        canvas.put(
-                            Point::new(x + col, rect.bottom() - 1 - row),
-                            '█',
-                            color,
-                            Rgba::TRANSPARENT,
-                        );
-                    }
-                    if part > 0 && full < rect.h {
-                        canvas.put(
-                            Point::new(x + col, rect.bottom() - 1 - full),
-                            V_EIGHTHS[(part - 1) as usize],
-                            color,
-                            Rgba::TRANSPARENT,
-                        );
-                    }
-                }
+                // One bar = one eighth-block column fill from the
+                // shared canvas layer (same rounding: h*8 steps).
+                fill_v(
+                    canvas,
+                    crate::base::Rect::new(x, rect.y, bar_w.min(rect.right() - x), rect.h),
+                    norm,
+                    color,
+                    Rgba::TRANSPARENT,
+                );
                 x += bar_w + gap;
             }
         })

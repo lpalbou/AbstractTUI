@@ -1,0 +1,22 @@
+[package]
+name = "abstracttui-graph"
+version = "0.1.0"
+edition = "2021"
+# Same MSRV floor as core (see the root manifest's MSRV note); this crate
+# uses nothing newer than core's own std surface.
+rust-version = "1.87"
+license = "MIT"
+authors = ["Laurent-Philippe Albou <contact@abstractframework.ai>"]
+description = "Graph auto-layout for AbstractTUI: layered (sugiyama-lite), force-directed and grid passes over one GraphDesc -> Layout contract, deterministic and honesty-labeled."
+repository = "https://github.com/lpalbou/abstracttui"
+homepage = "https://github.com/lpalbou/abstracttui"
+documentation = "https://docs.rs/abstracttui-graph"
+readme = "README.md"
+categories = ["command-line-interface", "visualization"]
+keywords = ["tui", "graph", "layout", "sugiyama", "terminal"]
+
+# Dependency posture per ADR-0004 §4: std + abstracttui only. Dual-form
+# spelling (version + path) per ADR-0004 §3 so the crate builds against
+# core HEAD in-repo and against the published crate from crates.io.
+[dependencies]
+abstracttui = { version = "0.2", path = "../.." }

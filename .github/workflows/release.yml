@@ -1,12 +1,43 @@
-# Release pipeline for the `abstracttui` crate.
+# Release pipeline for the `abstracttui` crate family.
 #
 # Triggers:
-#   - push of a v* tag (e.g. v0.1.0): verify -> publish to crates.io -> GitHub Release.
+#   - push of a v* tag (e.g. v0.2.13): verify -> publish core to
+#     crates.io -> publish the extension family -> GitHub Release.
 #   - workflow_dispatch: verify only by default (a release rehearsal);
-#     set the `publish` input to true to actually publish from the ref you run it on.
+#     set the `publish` input to true to actually publish from the ref
+#     you run it on.
 #
-# Publishing authenticates via crates.io Trusted Publishing (OIDC) — no
-# long-lived token stored in the repo. One-time setup lives in .github/SETUP.md.
+# FAMILY SHAPE (ADR-0004 §3: publish order core-first, family the same
+# day). The family publishes in the SAME v* tag flow, as a separate
+# job AFTER core, chosen over a second tag scheme so one tag stays one
+# release event and the core path cannot regress:
+#   - `publish` (core) is byte-for-byte the pre-family job — it neither
+#     knows nor waits for the family.
+#   - `publish-family` runs after it and publishes abstracttui-graph,
+#     then abstracttui-mermaid (mermaid DEPENDS on graph, so the order
+#     is load-bearing; `cargo publish` blocks until the just-published
+#     crate is visible in the index, and a belt retry covers slow
+#     index propagation).
+#   - Every family publish is SKIPPED when that exact version is
+#     already on the index, so a core-only release (family versions
+#     unchanged) re-runs green instead of failing on "already
+#     published". Bump a family crate's version to release it.
+#   - `github-release` depends only on core publish: a family failure
+#     is visible (red job) but never blocks the core release record.
+#
+# AUTH + FIRST PUBLISH OF NEW CRATE NAMES: publishing authenticates
+# with the classic API token in the CARGO_REGISTRY_TOKEN repository
+# secret (set once by the maintainer). For the FIRST publish of the
+# family crates (new names on crates.io) that token must have the
+# "publish-new" scope — verify on crates.io/settings/tokens before
+# tagging, or publish the two 0.1.0s locally once
+# (`cargo publish -p abstracttui-graph && cargo publish -p
+# abstracttui-mermaid`) and let this workflow cover every release
+# after. If the repo later switches to crates.io Trusted Publishing
+# (OIDC), EACH family crate needs its own trust configuration — for
+# not-yet-existing names use crates.io's "pending publisher" flow —
+# then restore rust-lang/crates-io-auth-action here and drop the
+# secret.
 
 name: Release
 
@@ -37,58 +68,103 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Build (all targets)
-        run: cargo build --all-targets
-      - name: Test
-        run: cargo test
+      - name: Build (all targets, whole workspace)
+        run: cargo build --workspace --all-targets
+      # A red family blocks the tag on purpose — the same-day family
+      # release rides it (ADR-0004).
+      - name: Test (whole workspace)
+        run: cargo test --workspace
       - name: Doc tests
-        run: cargo test --doc
+        run: cargo test --workspace --doc
       - name: Clippy (deny warnings)
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Rustdoc (deny warnings)
-        run: cargo doc --no-deps
+        run: cargo doc --workspace --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
-      - name: Assert tag matches Cargo.toml version
-        # Only meaningful on tag pushes; a workflow_dispatch run has no tag.
+      - name: Assert tag matches core Cargo.toml version
+        # Only meaningful on tag pushes; a workflow_dispatch run has no
+        # tag. Select core BY NAME: under the workspace, package order
+        # in `cargo metadata` is not core-first.
         if: github.ref_type == 'tag'
         run: |
-          crate_version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
+          crate_version="$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "abstracttui") | .version')"
           tag_version="${GITHUB_REF_NAME#v}"
           if [ "$tag_version" != "$crate_version" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match Cargo.toml version ${crate_version}"
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match core version ${crate_version}"
             exit 1
           fi
-          echo "Tag ${GITHUB_REF_NAME} matches Cargo.toml version ${crate_version}"
-      - name: Package contents sanity check
-        run: cargo package --no-verify --list
-      - name: Publish dry run
-        run: cargo publish --dry-run
+          echo "Tag ${GITHUB_REF_NAME} matches core version ${crate_version}"
+      - name: Package contents sanity check (core + graph)
+        # mermaid is deliberately absent here: its packaged form
+        # resolves abstracttui-graph from the index, which only works
+        # once graph is published — the family job handles it in order.
+        run: |
+          cargo package -p abstracttui --no-verify --list
+          cargo package -p abstracttui-graph --no-verify --list
+      - name: Publish dry run (core)
+        run: cargo publish -p abstracttui --dry-run
 
   publish:
-    name: publish to crates.io
+    name: publish core to crates.io
     needs: verify
     # Publish on tag pushes, or on manual dispatch when publish=true.
     if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.publish)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # The environment is part of the Trusted Publishing trust config on
-    # crates.io and lets you attach required-reviewer protection rules.
+    # The environment is part of the publishing trust config and lets
+    # you attach required-reviewer protection rules.
     environment: crates-io
     permissions:
       contents: read
-      id-token: write # OIDC token exchange for crates.io Trusted Publishing
+      id-token: write # OIDC token exchange if Trusted Publishing is adopted
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - name: cargo publish
-        run: cargo publish
+      - name: cargo publish (core)
+        run: cargo publish -p abstracttui
         env:
-          # Classic API token from the repository secrets (set once by the
-          # maintainer). To switch to crates.io Trusted Publishing later:
-          # add the trust config on the crate page, restore the
-          # rust-lang/crates-io-auth-action@v1 step here (id: auth) and use
-          # `${{ steps.auth.outputs.token }}` instead of the secret.
+          # Classic API token from the repository secrets (set once by
+          # the maintainer). See the header comment for the Trusted
+          # Publishing migration path.
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  publish-family:
+    name: publish extension family
+    needs: publish
+    if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.publish)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish family crates in dependency order (skip already-published versions)
+        run: |
+          publish_if_absent() {
+            crate="$1"
+            version="$(cargo metadata --no-deps --format-version 1 \
+              | jq -r ".packages[] | select(.name == \"$crate\") | .version")"
+            # Sparse-index probe: names >= 4 chars live at <a><b>/<c><d>/<name>.
+            prefix="$(printf '%s' "$crate" | cut -c1-2)/$(printf '%s' "$crate" | cut -c3-4)"
+            index="$(curl -sSL "https://index.crates.io/${prefix}/${crate}" || true)"
+            if printf '%s' "$index" | grep -q "\"vers\":\"${version}\""; then
+              echo "${crate} ${version} already on crates.io — skipping (bump the version to release)"
+              return 0
+            fi
+            echo "Publishing ${crate} ${version}"
+            # cargo publish blocks until the new version is visible in
+            # the index; the retry is a belt for slow propagation of a
+            # JUST-published dependency (graph -> mermaid).
+            cargo publish -p "$crate" || { sleep 45; cargo publish -p "$crate"; }
+          }
+          publish_if_absent abstracttui-graph
+          publish_if_absent abstracttui-mermaid
+        env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   github-release:

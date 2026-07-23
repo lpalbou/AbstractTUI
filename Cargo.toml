@@ -1,6 +1,6 @@
 [package]
 name = "abstracttui"
-version = "0.2.12"
+version = "0.2.13"
 edition = "2021"
 # MSRV (backlog 0180): the floor is set by the library's own std usage —
 # `is_multiple_of` (1.87: gfx/png, gfx/base64, three/validate, jpeg),
@@ -18,7 +18,7 @@ documentation = "https://docs.rs/abstracttui"
 readme = "README.md"
 categories = ["command-line-interface", "rendering", "gui", "graphics"]
 keywords = ["tui", "terminal", "renderer", "reactive", "graphics"]
-exclude = ["reviews/", "docs/captures/", "docs/media/", ".github/", ".cursor/", "book.toml"]
+exclude = ["reviews/", "docs/captures/", "docs/media/", ".github/", ".cursor/", "book.toml", "extensions/"]
 
 # Dependency policy (see docs/design/00-vision.md): std + the minimal,
 # low-level, MIT/Apache-licensed set below. Everything else is hand-rolled.
@@ -47,3 +47,22 @@ codegen-units = 1
 
 [profile.dev]
 opt-level = 1
+
+# Extension-family dev-dependencies (cycle 3): the acceptance battery
+# (tests/wave_extensions_accept.rs) composes the sibling crates with
+# the app shell (PageHost, Drawer) through the real Driver — the
+# proof the family works AS a family. Path-only (no version), so
+# `cargo package` strips them from the published manifest; the dev
+# cycle (core -> dev -> family -> core) is a supported cargo shape.
+[dev-dependencies]
+abstracttui-graph = { path = "extensions/graph" }
+abstracttui-mermaid = { path = "extensions/mermaid" }
+
+# Sibling-crate family (ADR-0004 §3): extension crates live in-repo as
+# workspace members so CI builds them against core HEAD and coupling is
+# caught at PR time, not release time. The root package stays
+# `abstracttui`; members publish separately (core first, family the
+# same day). See extensions/README.md.
+[workspace]
+members = ["extensions/*"]
+resolver = "2"

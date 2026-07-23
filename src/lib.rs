@@ -20,6 +20,7 @@
 //! - [`reactive`]— signals, memos, effects, scopes, scheduler
 //! - [`layout`]  — flexbox-style layout solver
 //! - [`ui`]      — component/view tree, event routing, focus
+//! - [`canvas`]  — sub-cell vector strokes: dots, curves, fills
 //! - [`widgets`] — built-in widget library
 //! - [`gfx`]     — bitmaps, mosaic renderers, image protocols
 //! - [`three`]   — GLB loading and software 3D rasterization
@@ -32,6 +33,7 @@ pub mod anim;
 pub mod app;
 pub mod base;
 pub mod boot;
+pub mod canvas;
 pub mod gfx;
 pub mod input;
 pub mod layout;

@@ -122,3 +122,44 @@ Recorded here so no item re-litigates them; 0400 carries the rationale.
   overview is an integrator action on adoption.
 - Item grammar follows `docs/backlog/planned/app-widgets/0120_textarea_multiline_composer.md`.
 - Study evidence: `reviews/study/extensions-cycle1.md`.
+
+## Status updates
+
+- **2026-07-23**: 0400 executed — ADR-0004 Accepted
+  (`docs/adr/0004-extension-packaging.md`); see the item's status note.
+- **2026-07-24 (extensions wave)**: **0420 COMPLETED** — the canvas
+  layer is public core API at `crate::canvas`
+  (`docs/backlog/completed/extensions/0420_canvas_vector_layer.md`
+  has the completion report; chart/progress goldens byte-identical).
+  The sequencing gate it held is OPEN: 0430/0440/0450 can consume
+  strokes via `abstracttui::canvas` instead of re-deriving them.
+  ADR-0004 §3's workspace scaffold landed the same wave: the root
+  manifest is now a cargo workspace (`members = ["extensions/*"]`,
+  see `extensions/README.md`), CI test/clippy/rustdoc gates run
+  `--workspace`, and `extensions/graph/` (0440's crate) is the first
+  resident member.
+- **2026-07-24 (extensions wave, cycle 2)**: **0440 COMPLETED** —
+  both halves of `abstracttui-graph` shipped (layout engine cycle 1,
+  `GraphView` cycle 2 over the 0420 canvas layer; completion report
+  in `docs/backlog/completed/extensions/0440_auto_layout_graph_view.md`,
+  70 crate tests green incl. full-Driver interaction + zero-idle
+  pins, examples `workflow`/`network`). One layout-lane fix landed
+  with a failing-first pin: BT/RL waypoint mirroring
+  (`map_point`, cell-interval mirror). 0450 (mermaid) now has its
+  layout authority AND its rendering substrate; 0430 gets initial
+  positions + the shared card/edge rendering.
+- **2026-07-24 (extensions wave, cycle 2)**: **0450 COMPLETED** —
+  `abstracttui-mermaid` shipped as the third workspace member
+  (completion report in
+  `docs/backlog/completed/extensions/0450_mermaid_extension.md`):
+  hand-rolled subset parser (the spelling table verbatim in crate
+  docs), flowcharts + flat state diagrams COMPILED to
+  `abstracttui-graph` (`to_graph`), solverless sequence rendering,
+  atomic fallback (verbatim fence + named first-line notice +
+  mermaid.live fragment link), 30-fixture corpus (11 accept / 19
+  fallback, docs pin 2026-07-24), sequence golden, BT/RL odd-band
+  mirror fixture, parser fuzz. 38 crate tests + the root
+  `wave_canvas_review.rs` probes (six 0420 contract dispositions, all
+  holding). Remaining in this band: 0430 (editor), 0460 (reader
+  enablement), 0480 (link seam) — 0450's in-feed link activation
+  still waits on 0480 + 0165 as documented in the item.

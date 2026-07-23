@@ -2,10 +2,9 @@
 
 ## Metadata
 - Created: 2026-07-22
-- Status: Proposed (v1-able — the one engine-code item in this track;
-  the substrate every diagram extension stands on)
+- Status: Completed (extensions wave, CANVAS seat)
 - Track: extensions
-- Completed: N/A
+- Completed: 2026-07-24
 
 ## ADR status
 - Governing ADRs: ADR-0001 (additive: new module, new public API);
@@ -156,10 +155,118 @@ lines against a documented, deterministic API.
 - Doc example compiles (doctest).
 
 ## Progress checklist
-- [ ] Module home/name ruled (render::vector proposed)
-- [ ] DotCanvas (braille + quadrant) + line/polyline (lift BrailleGrid)
-- [ ] Bezier flattening + arcs (deterministic, pinned)
-- [ ] StyledCanvas blit + color-rule contract text
-- [ ] Eighth-block fills
-- [ ] chart.rs refactor with byte-identical goldens
-- [ ] Docs page + doctest example
+- [x] Module home/name ruled (`crate::canvas` — see the completion report)
+- [x] DotCanvas (braille + quadrant) + line/polyline (lift BrailleGrid)
+- [x] Bezier flattening + arcs (deterministic, pinned)
+- [x] StyledCanvas blit + color-rule contract text
+- [x] Eighth-block fills
+- [x] chart.rs refactor with byte-identical goldens
+- [x] Docs page + doctest example (api.md section per wave instruction)
+
+## Completion report (2026-07-24)
+
+**Module home: `crate::canvas`, top level** — the item's working name
+`render::vector` is untenable in the layer map: blit targets
+`ui::StyledCanvas`, and `ui` already imports `render` (`ui/canvas.rs`
+uses `render::Style`), so a render-side home would cycle. The item's
+two reasons for render (pure cell math; keep widgets/ lint-free) are
+both satisfied by a top-level module between `ui` and `widgets`, and
+`abstracttui::canvas` is the spelling ADR-0004's anchor list ("the
+canvas/vector layer") reads naturally as. Files:
+`src/canvas/{mod,glyphs,curves,fill,tests}.rs` (largest ~330 lines).
+Layer edges added: `canvas -> {base, render, ui}`, `gfx -> canvas`
+(tables); `ui` imports no `gfx`, so the graph stays acyclic.
+
+**Shipped** (all additive; semver-checks 196/196 vs published 0.2.12):
+- `DotCanvas` (`DotMode::{Braille, Quadrant}`, `#[non_exhaustive]`
+  per ADR-0003 §3 — sextant is a known growth candidate):
+  `set/clear/get/clear_all`, `cell_char`, dims accessors.
+- `line` — the chart Bresenham lifted verbatim, PLUS a parametric
+  (Liang-Barsky) pre-clip to the grid box inflated by one dot. This
+  was a robustness find during promotion, not in the item: the
+  private grid only ever saw in-grid endpoints, but a public API
+  fed by flattened beziers or panned diagram edges walks O(segment
+  length) — up to billions of dots — and `x1 - x0` can overflow
+  i32. In-box segments (all chart traffic) skip the clip and walk
+  EXACTLY as before; clipped segments cost O(grid) and may differ
+  from an unclipped ideal by one boundary dot (deterministic,
+  documented on the method).
+- `polyline`; `bezier_quad`/`bezier_cubic` (adaptive de Casteljau
+  flattening, flatness tolerance in dot units, depth cap 12 → ≤4096
+  segments per curve — bounded, documented); `ellipse_arc`
+  (parameter-stepped ~1 dot/segment, cap 2048; sin/cos are an
+  in-crate f64 polynomial with quarter-turn range reduction so dot
+  sets are bit-identical across platforms — std trig goes through
+  the platform libm, whose last-ulp differences could flip a rounded
+  dot on one CI OS and not another). Non-finite inputs draw nothing
+  (the chart sample-skip contract).
+- `blit` (any `Canvas`; one color per grid, empty cells skipped,
+  later blits win overlapping cells — the chart.rs:326 rule as
+  documented API contract) and `blit_styled` (full `render::Style`
+  patch: attributes + `Style::link` ride strokes, the 0430/0480
+  edge-activation path).
+- `fill_v`/`fill_h` eighth-block fills; glyph vocabularies exported
+  (`braille_bit`, `QUADRANT_CHARS`, `V_EIGHTHS`, `H_EIGHTHS`).
+- Dedup executed as specified (tables, not fitters):
+  `gfx/mosaic_fit.rs` now re-exports `QUADRANT_CHARS` from canvas
+  and derives braille bits from `canvas::braille_bit`; its private
+  `BRAILLE_BITS` table is deleted; `SEXTANT_CHARS` stays put (no
+  stroke mode uses it — its only home).
+- Prelude: `DotCanvas`, `DotMode` (fills + tables stay behind
+  `canvas::`). Docs: module docs with the dot-space model + color
+  rule + a compiling ~10-line doctest; `docs/api.md` gained the
+  "Canvas & vector strokes" section (the item's docs page landed as
+  that section per the wave instruction); CHANGELOG under
+  `[Unreleased]`.
+
+**Refactors (deletion is the proof)**: `chart.rs` lost `braille_bit`,
+`BrailleGrid` and `V_EIGHTHS` (~95 lines) — Sparkline/LineChart build
+`DotCanvas::braille` and `blit`; BarChart bars are one `fill_v` call.
+**Point-4 decision (peer note P3-12): `Progress` WAS refactored onto
+the layer** (not left in place) — its 7-glyph `EIGHTHS` const is
+deleted and the fill run is one `fill_h` call; `H_EIGHTHS[..7]` is
+that exact ramp. Byte-identity: `chart_tests.rs` and the progress
+tests were NOT touched (chart_tests reaches `braille_bit` through a
+`#[cfg(test)]` re-import in chart.rs, so even its `use super::*`
+works unchanged) and every golden passes — including the exact-string
+pins `sparkline_renders_deterministic_ramp` ("⡠⠊"),
+`sparkline_flat_series_centers_and_gaps_skip` ("⠤⠤"),
+`bar_chart_eighth_precision_and_cycling_colors` ('█'/'▁' cells) and
+progress "█████▋". The canvas suite additionally cross-pins the
+"⡠⠊" ramp drawn through the public API
+(`bresenham_matches_the_shipped_chart_ramp`).
+
+**Validation** (gate numbers at completion): workspace
+`cargo test --workspace` 1,982 passed / 0 failed (root ≈ 1,935 incl.
+16 new canvas unit tests, the new alloc pin and the canvas doctest;
+`abstracttui-graph` ≈ 47, green at this run mid-build by its owner);
+`cargo clippy --workspace --all-targets -- -D warnings` zero;
+`cargo fmt --all --check` clean; `cargo semver-checks
+--baseline-version 0.2.12 -p abstracttui` 196 pass / 0 fail ("no
+semver update required" — additive). Alloc discipline:
+`tests/alloc_budget.rs::dot_canvas_stroke_and_blit_paths_allocate_nothing`
+— 8 frames of clear_all + line + polyline + both beziers + full-turn
+arc + far-off-grid line + blit + both fills = 0 allocs / 0 reallocs.
+Canvas unit tests: dot-order pin (all 8 bits), vocabulary pins,
+edge-clip behavior, quadrant mode, the shipped-ramp cross-pin,
+bezier determinism + curve-tracking (512-sample analytic envelope,
+both directions), bounded flattening on pathological inputs,
+non-finite rejection, arc determinism + mirror symmetry (±1 dot —
+Bresenham chords are not exactly reversal-symmetric, so proximity is
+the contract, not set equality) + radius envelope + quadrant
+containment, the color-rule pin, ClippedCanvas composition,
+styled-blit attrs, fill goldens, far-segment boundedness.
+
+**Follow-ups revealed** (none blocking):
+1. Charts hardcode braille mode; a chart-side `DotMode` knob (the
+   mosaic-style degradation for braille-poor fonts) is additive
+   whenever a consumer names it.
+2. Windows CI stays root-lib-only — the extension family rides the
+   unix `--workspace` jobs; widening Windows coverage to the family
+   is an integrator call.
+3. The semver CI job is scoped `package: abstracttui`; each family
+   crate joins the gate at its first crates.io release (ADR-0004's
+   consequence line, recorded in the workflow comment).
+4. 0480 (`register_link`) composes as designed: `blit_styled`
+   already carries `Style::link`; only the surface-side mint is
+   pending, no canvas change needed.

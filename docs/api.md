@@ -1619,3 +1619,97 @@ fn shell(cx: Scope, alerts: Signal<u32>) -> View {
 - **Digit jumps** ride the shortcut table (never capture): a focused
   text input keeps its digits; declared labels surface in
   keymap-help.
+
+## canvas — Canvas & vector strokes
+
+The sub-cell vector layer (extensions 0420): the dot-grid math the
+charts always used privately, promoted to public API so diagram
+extensions (`abstracttui-graph`, mermaid) and app draw closures stop
+re-deriving it. `Sparkline`/`LineChart` lines, `BarChart` bars and
+`Progress` fills all draw through this layer today — the promotion
+kept their rendered cells byte-identical (test-pinned).
+
+```rust
+use abstracttui::base::Point;
+use abstracttui::canvas::DotCanvas;
+use abstracttui::prelude::*;
+
+fn trace(cx: Scope, samples: Signal<Vec<(f32, f32)>>) -> View {
+    let t = use_theme(cx).get().tokens;
+    let ink = t.chart(0); // resolve tokens at build time, as always
+    dyn_view(cx, move |_| {
+        let pts = samples.get();
+        Element::new()
+            .style(LayoutStyle::default().grow(1.0))
+            .draw(move |canvas, rect| {
+                let mut dots = DotCanvas::braille(rect.w, rect.h);
+                for w in pts.windows(2) {
+                    let c = (0.5 * (w[0].0 + w[1].0), 0.5 * (w[0].1 + w[1].1));
+                    dots.bezier_quad(w[0], c, w[1], 0.25);
+                }
+                dots.blit(canvas, Point::new(rect.x, rect.y), ink);
+            })
+            .build()
+    })
+}
+```
+
+- **The dot-space model**: a `DotCanvas` covers a cell rect with a
+  finer grid — `DotMode::Braille` is 2x4 dots per cell (a WxH panel =
+  a 2Wx4H dot canvas), `DotMode::Quadrant` 2x2 (universal glyph
+  coverage where braille fonts are unreliable — the same degradation
+  rationale as the image mosaic; the mode enum is `#[non_exhaustive]`,
+  sextant is a known candidate). Dot (0,0) is top-left; strokes clip
+  at the grid edge, never panic.
+- **Primitives**: `set`/`clear`/`get`, `line` (Bresenham — far
+  off-grid endpoints are pre-clipped so a panned diagram edge costs
+  O(grid), never O(length)), `polyline`, `bezier_quad`/`bezier_cubic`
+  (adaptive flattening to a flatness tolerance in dot units, depth-
+  bounded at 4096 segments per curve), `ellipse_arc`
+  (parameter-stepped, ≤ 2048 segments). All deterministic — same
+  inputs, same dots, on every platform (arcs use an in-crate
+  polynomial sin/cos instead of the platform libm) — and non-finite
+  inputs draw nothing, the chart sample-skip contract.
+- **The cell-color rule (documented z-order)**: a terminal cell
+  carries ONE fg and ONE glyph, so `blit(canvas, origin, color)`
+  paints every non-empty cell in one stroke color and SKIPS empty
+  cells. Overlapping grids therefore compose at cell granularity:
+  later blits win overlapping cells — glyph and color both, dots
+  never merge across grids. Multi-color pictures = one grid per
+  color, blitted back-to-front (exactly how `LineChart` layers its
+  series). `blit_styled` takes a full `render::Style` patch instead
+  of a bare color, so a stroke can carry attributes and a link id.
+- **Composition is free**: blits go through `ui::Canvas`/
+  `ui::StyledCanvas`, so `ClippedCanvas` clipping and damage tracking
+  apply — a blit into a damaged region repaints only that region.
+  `clear_all()` keeps the allocation; the whole stroke + blit steady
+  state allocates nothing (pinned in `tests/alloc_budget.rs`).
+- **Eighth-block fills**: `fill_v`/`fill_h` draw partial gauge/bar
+  fills at 8 steps per cell (the `BarChart`/`Progress` vocabulary);
+  the glyph ramps `V_EIGHTHS`/`H_EIGHTHS`, the quadrant table and
+  `braille_bit` are exported for callers building their own cell
+  vocabularies.
+- **Colors are caller-resolved** `Rgba` (the widget token rule):
+  resolve theme tokens — `t.chart(i)`, `t.accent` — at view-build
+  time and pass the values; the canvas layer invents no colors.
+
+## Extensions family — sibling crates on this API
+
+Diagram-class capability ships OUTSIDE the core crate as sibling
+crates built on the public API above (ADR-0004: install only when
+needed, no cargo features, no private hooks). Each crate carries its
+own rustdoc — this guide does not duplicate it; the family guide with
+selection advice and worked examples is
+[graphs-and-diagrams.md](graphs-and-diagrams.md).
+
+- [`abstracttui-graph`](https://docs.rs/abstracttui-graph) — graph
+  auto-layout (`GraphDesc -> Layout`: `layered` sugiyama-lite,
+  `force` bounded seeded placement, `grid` labeled fallback; honesty
+  markers for broken cycles and degradations) and `GraphView` (cards,
+  canvas-stroke edges, selection/pan/tooltips, zero idle).
+- [`abstracttui-mermaid`](https://docs.rs/abstracttui-mermaid) —
+  honest-subset mermaid: an exhaustive spelling table (the contract,
+  shipped verbatim in the crate docs), flowcharts/flat-state compiled
+  onto `abstracttui-graph`, solverless sequence diagrams, atomic
+  fallback to the verbatim code fence with a named reason and a
+  mermaid.live escape link.

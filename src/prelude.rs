@@ -101,3 +101,9 @@ pub use crate::app::{
 // The page-level tab host (wave 8: app-kits/0545) — appended with its
 // wave.
 pub use crate::widgets::PageHost;
+
+// The sub-cell vector canvas (extensions wave: 0420) — appended with
+// its wave. Fill helpers + glyph tables stay behind `canvas::` (the
+// grid type is the app-code surface; vocabularies are explicit
+// imports, like the render paint types).
+pub use crate::canvas::{DotCanvas, DotMode};

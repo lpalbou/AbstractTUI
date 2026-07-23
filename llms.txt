@@ -22,9 +22,12 @@
 > key press/release state with honest fidelity (push-to-talk, level meters, and a
 > waveform scope for voice surfaces), text selection with OSC 52 clipboard copy, an
 > optional boot splash, and a headless testing harness that drives the production
-> pipeline without a pty. One crate,
-> five small dependencies (unicode-width, unicode-segmentation, miniz_oxide, plus libc on
-> unix / windows-sys on Windows). MIT licensed.
+> pipeline without a pty. A public sub-cell vector canvas (braille/quadrant dot grids,
+> lines, beziers, arcs, eighth-block fills) underlies the charts and an opt-in sibling
+> extension family: `abstracttui-graph` (graph auto-layout + a GraphView widget) and
+> `abstracttui-mermaid` (honest-subset mermaid rendering with atomic fallback). One core
+> crate, five small dependencies (unicode-width, unicode-segmentation, miniz_oxide, plus
+> libc on unix / windows-sys on Windows). MIT licensed.
 
 ## Core docs
 
@@ -44,7 +47,9 @@
   the widget catalog (`List` activation, masked `TextInput`, diff-aware `CodeView`,
   `Feed` streaming/rich lines/sync/selection-by-key, chart history rings with time axes,
   `Meter`/`AudioScope` levels, the `PageHost` page-level tab host), the widget
-  disposal-safety law, the app runtime (overlays,
+  disposal-safety law, the `canvas` sub-cell vector layer (braille/quadrant dot grids,
+  Bresenham/bezier/arc strokes, eighth-block fills, the cell-color z-order rule), the
+  app runtime (overlays,
   modal, toast, edge-anchored `Drawer` panels, the anchored-popup substrate and the
   Select/Combobox/MultiSelect pickers,
   completion, hooks, key press/release state and `PushToTalk`), theme, render
@@ -63,6 +68,13 @@
   ladder → mosaic modes → tmux passthrough), the GLB 3D pipeline (supported subset, scene/
   camera/light, the Viewport3D widget, animation and skinning, textures and mips), the
   boot splash, honest limits, and the measured performance envelope.
+- [Graphs and diagrams](docs/graphs-and-diagrams.md): The extension family —
+  `abstracttui-graph` (the `GraphDesc -> Layout` contract; layered vs force vs grid pass
+  selection; `GraphView` cards/strokes/selection/pan/tooltips; honesty markers for broken
+  cycles and degradations) and `abstracttui-mermaid` (the exhaustive subset table as the
+  contract, flowcharts/flat-state compiled onto the graph crate, solverless sequence
+  diagrams, the atomic code-fence fallback with a named reason and a mermaid.live escape
+  link), plus install lines and measured layout numbers.
 - [Live data](docs/live-data.md): Feeding the UI from background threads —
   `channel_source`/`latest_source`/`bounded_source` (drop/coalesce policies, honest
   `IngestStats`), the `interval` timer, waker dedup, the connection lifecycle
@@ -81,11 +93,14 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, 0.2.12 (2026-07-24) the current one.
-- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,910 tests) and the
-  explicitly-run suites (live pty, two release-mode perf-budget suites with byte-emission
-  ratchets, plus the scheduled weekly `perf.yml` deep gate), golden snapshots, lint gates,
-  the strict module layering rule, code conventions, and how to add a widget or a theme.
+  (2026-07-21) is the first public release, 0.2.13 (2026-07-24) the current one —
+  released alongside the first extension-family crates (`abstracttui-graph` 0.1.0,
+  `abstracttui-mermaid` 0.1.0, each with its own changelog under `extensions/`).
+- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,940 core tests; ~2,060
+  with the extension family via `--workspace`, the CI gate) and the explicitly-run suites
+  (live pty, two release-mode perf-budget suites with byte-emission ratchets, plus the
+  scheduled weekly `perf.yml` deep gate), golden snapshots, lint gates, the strict module
+  layering rule, code conventions, and how to add a widget or a theme.
 - [Security policy](SECURITY.md): Private reporting (contact@abstractframework.ai); the
   untrusted-input scope (terminal bytes, PNG/JPEG, GLB, markdown) — any panic, unbounded
   allocation, or hang on crafted input is treated as a vulnerability-class bug.
@@ -100,8 +115,8 @@
   (`use abstracttui::prelude::*;`) — widgets, layout vocabulary, signals, theme hooks, and
   `App`; `render::Style` is deliberately excluded from the glob.
 - [src/lib.rs](src/lib.rs): Crate root with the layer map — `base`, `term`, `input`,
-  `render`, `text`, `anim`, `reactive`, `layout`, `ui`, `widgets`, `gfx`, `three`,
-  `theme`, `app`, `boot`, `testing`.
+  `render`, `text`, `anim`, `reactive`, `layout`, `ui`, `canvas`, `widgets`, `gfx`,
+  `three`, `theme`, `app`, `boot`, `testing`.
 - [examples/](examples/README.md): The catalog of the nineteen runnable examples — `hello`,
   `dashboard`, `shell`, `drawers`, `gallery`, `themes`, `widgets`, `effects`, `splash`,
   `viewer3d`, `images`,
@@ -113,3 +128,8 @@
   surfaces (streaming transcript with completion open, open Select popup, diff-tinted
   code, scrolled feed, doc-vocabulary reader table), plus `themes-table.md` — every token
   hex value of all 26 themes; regenerable with `cargo run --example capture`.
+- [extensions/](extensions/README.md): The sibling-crate family workspace —
+  `extensions/graph/` (`abstracttui-graph`: layout passes + `GraphView`, examples
+  `workflow`/`network`) and `extensions/mermaid/` (`abstracttui-mermaid`: subset parser,
+  compiler, sequence renderer, a 30-fixture corpus, example `mermaid`); each crate
+  carries its own README and CHANGELOG.

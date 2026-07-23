@@ -98,6 +98,12 @@ through ordinary reactivity.*
   `TERM=dumb`.
 - **Headless testing** — drive the production pipeline against a captured
   terminal and assert on the rendered screen. No pty required.
+- **Vector strokes + an extension family** — a public sub-cell canvas
+  (braille/quadrant dot grids, lines, beziers, arcs, eighth-block
+  fills) in core, and diagram-class capability as opt-in sibling
+  crates: `abstracttui-graph` (auto-layout + graph widget) and
+  `abstracttui-mermaid` (honest-subset mermaid). See
+  [docs/graphs-and-diagrams.md](docs/graphs-and-diagrams.md).
 
 ## Your first app
 
@@ -137,6 +143,15 @@ Rust 2021 edition. The dependency policy is deliberately austere — `unicode-wi
 Windows, and nothing else. ANSI emission, input parsing, the layout solver, the
 signals runtime, PNG/JPEG decoding, glTF parsing, and the 3D rasterizer are all
 implemented in-crate.
+
+The extension family installs only when you need it (same MIT license,
+same dependency discipline, public core API only —
+[ADR-0004](docs/adr/0004-extension-packaging.md)):
+
+```sh
+cargo add abstracttui-graph      # 0.1 — graph auto-layout + GraphView
+cargo add abstracttui-mermaid    # 0.1 — mermaid subset renderer
+```
 
 ## Run the examples
 
@@ -201,10 +216,11 @@ aspirations, with the honest split stated.
 - [Getting started](docs/getting-started.md) — install to first pixels, step by step.
 - [Architecture](docs/architecture.md) — signals, damage, the compositor, the render pipeline.
 - [API guide](docs/api.md) — the public surface, module by module.
+- [Graphs and diagrams](docs/graphs-and-diagrams.md) — the extension family: graph layout, `GraphView`, the mermaid subset.
 - [Live data](docs/live-data.md) — background threads into the UI, bounded and honest.
 - [FAQ](docs/faq.md) and [Troubleshooting](docs/troubleshooting.md).
 - [Examples catalog](examples/README.md) — what each demo proves and the keys it answers to.
-- API reference on [docs.rs](https://docs.rs/abstracttui).
+- API reference on [docs.rs](https://docs.rs/abstracttui) (family crates: [abstracttui-graph](https://docs.rs/abstracttui-graph), [abstracttui-mermaid](https://docs.rs/abstracttui-mermaid)).
 
 ## License
 

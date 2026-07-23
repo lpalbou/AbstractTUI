@@ -1,0 +1,12 @@
+sequenceDiagram
+    participant a as Alice
+    participant b as Bob
+    a->>b: solid filled
+    b-->>a: dashed filled
+    a->b: solid open
+    b-->a: dashed open
+    a->>a: note to self
+    Note left of a: on the left
+    Note right of b: on the right
+    Note over a: over one
+    Note over a,b: spanning both

@@ -73,6 +73,21 @@ parsing, the flexbox solver, the signals runtime, JSON parsing (for glTF),
 PNG chunking and defiltering, base64, sixel encoding, and the 3D math and
 rasterizer are all implemented in-crate.
 
+Above the crate sits one more deliberate layer: the **sibling-crate
+extension family** ([ADR-0004](adr/0004-extension-packaging.md)).
+Genuinely new domains — graph layout + rendering
+(`abstracttui-graph`), mermaid diagrams (`abstracttui-mermaid`) —
+ship as separate crates in an in-repo cargo workspace
+(`extensions/*`), built and tested against core HEAD in CI but
+installed by downstreams only when needed. Extensions consume the
+PUBLIC API exclusively (the same "no private engine privileges" rule
+the built-in widgets live under); a capability an extension needs and
+cannot reach is, by definition, a core backlog item. They inherit the
+dependency posture (hand-rolled parsers, std + the family), the token
+discipline, and the honest-degradation principle; publish order is
+core first, family the same day. The family guide is
+[graphs-and-diagrams.md](graphs-and-diagrams.md).
+
 ## Pillar 1: fine-grained reactivity
 
 The `reactive` module implements signals, memos, and effects with ownership

@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.13] - 2026-07-24
+
+### Added
+
+- canvas: the public sub-cell vector layer (extensions 0420) —
+  `DotCanvas` (braille 2x4 / quadrant 2x2 dot grids, `#[non_exhaustive]`
+  `DotMode`), stroke primitives `line`/`polyline` (Bresenham with
+  parametric pre-clipping: far off-grid segments cost O(grid), never
+  O(length)), `bezier_quad`/`bezier_cubic` (adaptive flattening,
+  flatness tolerance in dot units, depth-bounded ≤ 4096 segments) and
+  `ellipse_arc` (parameter-stepped ≤ 2048 segments, in-crate
+  deterministic sin/cos so dot sets are bit-identical across
+  platforms), `blit`/`blit_styled` into any `Canvas`/`StyledCanvas`
+  (ONE stroke color per grid; empty cells skipped, later blits win
+  overlapping cells — the documented cell-color z-order; styled blits
+  carry attributes + link ids), eighth-block fills `fill_v`/`fill_h`,
+  and the shared glyph vocabularies (`braille_bit`, `QUADRANT_CHARS`,
+  `V_EIGHTHS`, `H_EIGHTHS` — deduplicated with `gfx::mosaic_fit`,
+  tables not fitters). `Sparkline`/`LineChart`/`BarChart`/`Progress`
+  now draw through the layer with byte-identical goldens (the
+  refactor proof); the stroke + blit steady state allocates nothing
+  (pinned in `tests/alloc_budget.rs`). `DotCanvas`/`DotMode` join the
+  prelude; docs in `docs/api.md` ("Canvas & vector strokes") and the
+  `canvas` module docs (worked doctest).
+- workspace: the sibling-crate extension family scaffold (ADR-0004
+  §3) — the root manifest becomes a workspace with
+  `members = ["extensions/*"]` (root package unchanged;
+  `extensions/` excluded from the published core crate), CI
+  build/test/clippy/rustdoc gates run `--workspace` so family crates
+  ride against core HEAD (the semver gate stays scoped to the
+  published core until family crates publish), and
+  `extensions/README.md` records the family contract (public API
+  only, dual-form core dependency, core-first publish order).
+- extensions family (first residents, released alongside this
+  version): `abstracttui-graph` 0.1.0 (graph auto-layout —
+  `GraphDesc -> Layout` with layered/force/grid passes — plus the
+  `GraphView` widget) and `abstracttui-mermaid` 0.1.0 (honest-subset
+  mermaid rendering: flowcharts/state compiled onto the graph crate,
+  solverless sequence diagrams, atomic fallback). Each crate carries
+  its own CHANGELOG; the family guide is
+  `docs/graphs-and-diagrams.md`.
+- docs: `docs/graphs-and-diagrams.md` — the extension-family guide
+  (layout pass selection, the data contract, `GraphView` usage, the
+  mermaid subset table, install lines, worked examples); release
+  workflow extended to publish the family crates after core with an
+  already-published skip (a core-only re-release stays green).
+
 ## [0.2.12] - 2026-07-24
 
 ### Added
@@ -1167,6 +1214,8 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[0.2.13]: https://github.com/lpalbou/abstracttui/compare/v0.2.12...v0.2.13
+[0.2.12]: https://github.com/lpalbou/abstracttui/compare/v0.2.11...v0.2.12
 [0.2.11]: https://github.com/lpalbou/abstracttui/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/lpalbou/abstracttui/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/lpalbou/abstracttui/compare/v0.2.8...v0.2.9
