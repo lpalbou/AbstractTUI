@@ -1,7 +1,7 @@
 # AbstractTUI backlog — overview
 
 Planning memory for AbstractTUI (the Rust terminal-UI engine, published as
-`abstracttui` 0.1.0). The engine itself is complete and shipped; this backlog
+`abstracttui` — 0.2.8 as of 2026-07-23). The engine itself is complete and shipped; this backlog
 tracks the work that turns it from "a proven engine" into "a foundation people
 build long-lived, networked applications on." It is organized around one
 honest observation: nobody has yet built a networked, long-lived app on
@@ -47,13 +47,15 @@ renumbered to 0291 the same way.)
 | --- | --- | --- | --- |
 | live-data | `planned/live-data/`, `proposed/live-data/` | Mixed | Network-driven reactivity: async-source→signal binding, bounded ingestion, reconnect, the transport decision, and the read-only watcher milestone. |
 | app-widgets | `planned/app-widgets/`, `proposed/app-widgets/` | Mixed | The content-widget layer real apps need (feed/transcript, streaming markdown, multiline composer, follow-tail scroll, lexers) + the API-stability and platform-accuracy passes. |
-| ports | `proposed/ports/` | Proposed | The two application epics that consume both tracks: a coding-agent console and an a2a chat TUI. |
+| ports | `planned/ports/`, `proposed/ports/` | Mixed | The application epics that consume both tracks: a coding-agent console, an a2a chat TUI, and the gateway configuration wizard (0215, planned — validator app #2). |
 | first-app | `proposed/first-app/`, `completed/first-app/` | Mixed | Bug/footgun reports from the first shipped application (`abstractcode-tui`, 2026-07-21): reproduced engine defects with field workarounds to delete. |
 | control-plane | `proposed/control-plane/` | Proposed | Making running apps observable and drivable from outside their own keyboard: lifecycle events, an automation bus + opt-in JSONL control server (MCP-bridgeable), declared-keys persistence with crash-resume, and headless serve with terminal attach/detach. |
 | extensions | `proposed/extensions/` | Proposed | Modularity architecture (two feature classes + the `abstracttui-*` sibling family, ADR-ready) and the diagram-class capability lane: core vector canvas + link-registration seam, node-graph widgets, mermaid subset, mdpad-reader enablement, and the standing web-rendering verdict. |
 | app-kits | `proposed/app-kits/`, `completed/app-kits/` | Mixed | The application-kit layer over the content widgets: anchored-popup substrate + choice controls, form kit + wizard, rich data tables, chip/count vocabulary, navigation (sidebar + filter tabs), header/banners, tree view, split panes + panel rail — proven by three in-repo reference validators (admin console, setup wizard, triage shell). |
 | media-av | `proposed/media-av/`, `completed/media-av/` | Mixed | MEDIA's band (0600–0690): voice/AV UI plumbing (push-to-talk contract, meter/scope widgets, speaking highlight, external-process pattern, the no-audio mock demo) + image-path follow-ups from the study-2 truth audit (`reviews/study2/media-images-truth.md`). |
 | games | `proposed/games/`, `completed/games/` | Mixed | Retro-games feasibility band (0700–0790, `reviews/study2/field-games.md`): four general-need gaps a cell game exposes — key press/release state, public frame tasks + fixed-timestep helper, sprite/tile toolkit (masked blit, sheets, palette swap), board-grid math (square + hex). Audio defers to media-av; saves to control-plane 0340; strokes to extensions 0420. |
+| field-gateway | `proposed/field-gateway/` | Proposed | Bug/footgun reports from the second-wave validator build (`abstractgateway/console-tui`, the 0215 gateway config wizard): reproduced engine defects with field workarounds to delete — the form/wizard/table field evidence for app-kits 0510/0520/0530. |
+| field-agora | `proposed/field-agora/` | Proposed | Bug/footgun reports from the second-wave validator build (`agora-tui`, the 0060 read-only multi-channel hub watcher): reproduced engine defects with field workarounds to delete — the first networked field evidence for live-data 0010/0020/0040 and the input 0050's transport ADR waits on. |
 
 ## Planned ledger
 
@@ -316,3 +318,6 @@ persistence-container ADR**, and the **0050 transport ADR** (waits on
   control-plane owns 0300–0390, extensions owns 0400–0490, app-kits owns
   0500–0590, media-av owns 0600–0690, games owns 0700–0790. Leave gaps
   for insertion.
+  field-gateway (findings from the 0215 gateway-console build) owns
+  0900–0990.
+  field-agora (findings from the 0060 agora-watcher build) owns 0800–0890.

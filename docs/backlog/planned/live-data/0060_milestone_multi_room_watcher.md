@@ -1,8 +1,8 @@
-# Proposed: Milestone — read-only multi-room watcher over a live hub (dogfood)
+# Planned: Milestone — read-only multi-room watcher over a live hub (dogfood)
 
 ## Metadata
 - Created: 2026-07-21
-- Status: Proposed
+- Status: Planned (promoted 2026-07-23, maintainer validator decision — see status update below)
 - Completed: N/A
 
 ## ADR status
@@ -114,3 +114,27 @@ Promoted proposed -> planned. Scope stands as written (read-only,
 multi-room, live panes + presence sidebar, quit/switch-focus only);
 it validates live-data 0010/0020/0040 in the field and produces the
 evidence 0050's transport ADR waits on.
+
+## Project scaffolded + launch prompt ready (2026-07-23)
+
+The setup wave is closed; the build can start from a fresh session.
+
+- **Scaffold**: `/Users/albou/projects/gh/agora-tui/` — compiles
+  against crates.io `abstracttui = "0.2.8"`, `q` quits, headless run
+  exits 0 with a skip notice (re-verified 2026-07-23, forced
+  recompile).
+- **Builder brief**: `LAUNCH-PROMPT.md` in that directory — mission,
+  hub API grounding (verified live + at source in the cycle-2 review),
+  engine guide, staged M1–M3 plan, feedback protocol. Its read-only
+  first-hour path was executed live 2026-07-23: hub healthz returned
+  the documented shape (`{"ok":true,"version":"0.12.41",
+  "protocol":"agora/0.3","paused":false}`), `agora whoami --as tui`
+  confirmed the cached seat key + protocol, `agora channels --as tui`
+  listed the three documented channels with the `*` member-mark legend
+  (the `tui` seat holds no memberships yet — the builder's documented
+  one-time `agora join` setup remains theirs to run).
+- **Feedback track**: engine findings from this build file into
+  `docs/backlog/proposed/field-agora/` (band **0800–0890**, README
+  table is the landing zone) — the first networked field evidence for
+  live-data 0010/0020/0040 and the input 0050's transport ADR waits
+  on.
