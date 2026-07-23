@@ -684,14 +684,17 @@ impl Driver {
             }
             other => {
                 // Screen-text selection intercept (0270 tier 3): while
-                // select mode is on, the layer owns left Down/Drag/Up —
-                // and, while a selection is VISIBLE, the copy/clear keys
-                // (Enter / c / Ctrl+C / Esc). Everything else (wheel,
-                // motion, other buttons, all other keys) routes normally,
-                // so scrolling keeps working mid-selection. Deliberately
-                // ahead of overlay routing: select mode is an explicit
-                // user mode and may copy from modal content too (the pane
-                // clamp resolves overlay tree panes).
+                // select mode is on, the layer owns left DRAGS (and the
+                // gesture-ending Up) — and, while a selection is VISIBLE,
+                // the copy/clear keys (Enter / c / Ctrl+C / Esc) plus the
+                // dismissal click. Plain clicks pass through to the
+                // widgets (click-through, 0285: consuming every Down/Up
+                // made every Button dead by mouse); everything else
+                // (wheel, motion, other buttons, all other keys) routes
+                // normally, so scrolling keeps working mid-selection.
+                // Deliberately ahead of overlay routing: select mode is
+                // an explicit user mode and may copy from modal content
+                // too (the pane clamp resolves overlay tree panes).
                 let overlays = &self.overlays;
                 let size = self.size;
                 match self
@@ -700,6 +703,21 @@ impl Driver {
                 {
                     SelectionAct::Pass => {}
                     SelectionAct::Consumed => return,
+                    SelectionAct::Claim => {
+                        // The gesture's Down PASSED to the widgets
+                        // (click-through, 0285) and just became a
+                        // selection drag: resolve that press WITHOUT a
+                        // click before the layer owns the gesture. Every
+                        // tree with a live pointer capture receives a
+                        // release outside every rect — release-inside-
+                        // decides widgets (Button) un-press without
+                        // firing — and the capture drops, so the NEXT
+                        // real click routes fresh instead of into a
+                        // stale captured target.
+                        self.overlays.cancel_pointer_press();
+                        app.tree().cancel_pointer_press();
+                        return;
+                    }
                     SelectionAct::Copy(region) => {
                         // The act CARRIES the region because a copy ENDS
                         // the gesture (backlog 0290): the selection layer

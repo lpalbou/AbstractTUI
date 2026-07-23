@@ -37,6 +37,7 @@
 pub mod actions;
 pub mod anchored;
 mod caps;
+pub mod choice_prompt;
 mod driver;
 mod driver_images;
 mod driver_suspend;
@@ -72,6 +73,11 @@ pub use push_to_talk::{CaptureState, PttMode, PushToTalk, StopReason};
 // Appended (first-app/0299): the public full-redraw verb + the
 // focus-regain repaint opt-in.
 pub use redraw::{redraw_on_focus_gained, request_full_redraw, set_redraw_on_focus_gained};
+// Appended (wave 5, app-kits/0515): the modal decision gate.
+pub use choice_prompt::{
+    ChoiceAnswer, ChoiceOption, ChoiceOutcome, ChoicePrompt, ChoicePromptHandle, ChoiceQuestion,
+    ChoiceSequence, ChoiceSequenceOutcome,
+};
 
 use std::cell::Cell;
 use std::rc::Rc;

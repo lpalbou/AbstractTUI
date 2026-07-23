@@ -428,6 +428,29 @@ impl Overlays {
         }
     }
 
+    /// Cancel in-progress pointer presses in every overlay tree (0285:
+    /// the selection layer claimed a passed-through gesture — see
+    /// `UiTree::cancel_pointer_press`). Snapshot handles first — widget
+    /// un-press handlers must never run under the store borrow. Covers
+    /// hidden layers too: a stale capture is worth dropping wherever it
+    /// lives.
+    pub(crate) fn cancel_pointer_press(&self) {
+        let trees: Vec<UiTree> = {
+            let store = self.store.borrow();
+            store
+                .meta
+                .iter()
+                .filter_map(|m| match &m.content {
+                    OverlayContent::Tree { tree, .. } => Some(tree.handle()),
+                    _ => None,
+                })
+                .collect()
+        };
+        for mut tree in trees {
+            tree.cancel_pointer_press();
+        }
+    }
+
     /// Drain zero-collapse diagnostics from every overlay tree (the
     /// root tree is drained separately by the driver).
     pub(crate) fn take_collapse_notices(&self) -> Vec<String> {

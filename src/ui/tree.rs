@@ -18,7 +18,7 @@ use crate::base::{Point, Rect, Rgba, Size};
 use crate::layout::{solve, LayoutId, LayoutTree};
 use crate::reactive::{batch, request_frame, GenArena, Key as ArenaKey, Scope};
 
-use super::event::{EventCtx, Key, Mods, MouseKind, Phase, UiEvent};
+use super::event::{EventCtx, Key, Mods, MouseButton, MouseEvent, MouseKind, Phase, UiEvent};
 use super::mount::{mount_view, remove_subtree};
 use super::view::{DrawFn, Handler, Shortcut, View};
 
@@ -71,6 +71,14 @@ pub(super) struct TreeCore {
     pub(super) hovered_path: Vec<ViewId>,
     /// Pointer capture: all mouse events route here until release.
     pub(super) capture: Option<ViewId>,
+    /// The screen cell of the press that armed the capture — the HEAL
+    /// anchor: a pressed widget's own visual re-render can dispose the
+    /// captured instance (Button's pressed `dyn_view` regenerates its
+    /// hit leaf on the very Down that captured it); the capture then
+    /// re-points at this cell's current occupant instead of silently
+    /// dying (which stranded the widget's pressed state whenever the
+    /// release landed outside it).
+    pub(super) capture_pos: Option<Point>,
     /// Hover memo: last pointer position + the layout epoch it was
     /// hit-tested against. Any-motion mouse streams (mode 1003) repeat
     /// positions heavily; skipping the hit-test walk when neither moved
@@ -139,6 +147,7 @@ impl UiTree {
                 text_fg: Rgba::WHITE,
                 hovered_path: Vec::new(),
                 capture: None,
+                capture_pos: None,
                 last_hover: None,
                 layout_epoch: 0,
                 dirty_subtrees: Vec::new(),
@@ -537,6 +546,59 @@ impl UiTree {
         self.core.borrow().capture
     }
 
+    /// Cancel an in-progress pointer press WITHOUT a click
+    /// (crate-internal; the selection layer's gesture claim, backlog
+    /// 0285). When a passed-through left Down becomes a selection DRAG,
+    /// the tree that saw the Down still holds a pointer capture and the
+    /// pressed widget still waits for its release — leaving both would
+    /// wedge the tree (the next click anywhere routes to the stale
+    /// captured target). Deliver a left-Up at an impossible position —
+    /// outside every rect, so release-inside-decides widgets (Button)
+    /// un-press without firing — through the normal capture routing,
+    /// which also drops the capture and re-derives hover. No live
+    /// capture = no-op. Returns whether a press was cancelled.
+    pub(crate) fn cancel_pointer_press(&mut self) -> bool {
+        self.layout(); // the heal below hit-tests at the press cell
+        if self.validated_capture().is_none() {
+            return false;
+        }
+        self.dispatch(&UiEvent::Mouse(MouseEvent {
+            pos: Point::new(-1, -1),
+            kind: MouseKind::Up(MouseButton::Left),
+            mods: Mods::NONE,
+        }));
+        true
+    }
+
+    /// The pointer-capture target, validated and HEALED: a live capture
+    /// answers as-is; a capture whose instance was disposed re-points at
+    /// the press cell's current occupant. The staleness is routine, not
+    /// exotic — Button's `pressed` write on Down regenerates its own
+    /// `dyn_view` hit leaf inside that same dispatch, so every button
+    /// press used to strand its capture immediately (the documented
+    /// "capture keeps the release routed here" contract only held until
+    /// the first pressed re-render; a release outside the widget then
+    /// never reached it and its pressed state wedged visibly). Healing
+    /// by press cell re-finds the replacement instance in the
+    /// re-render case; when the subtree genuinely died (a modal closed
+    /// mid-press), it points at whatever is beneath — which never armed
+    /// a press, so the gesture tail lands harmlessly (release-inside-
+    /// decides widgets ignore an un-pressed Up). No occupant = the
+    /// capture is honestly gone.
+    fn validated_capture(&mut self) -> Option<ViewId> {
+        let (capture, pos) = {
+            let core = self.core.borrow();
+            (core.capture, core.capture_pos)
+        };
+        let c = capture?;
+        if self.core.borrow().insts.contains(c.0) {
+            return Some(c);
+        }
+        let healed = pos.and_then(|p| self.hit_test(p));
+        self.core.borrow_mut().capture = healed;
+        healed
+    }
+
     /// Route an event. Returns true if something consumed it
     /// (`stop_propagation`, a shortcut, or a default action).
     ///
@@ -562,19 +624,12 @@ impl UiTree {
         self.layout(); // hit testing needs fresh rects
         let target = match event {
             UiEvent::Mouse(m) => {
-                // Capture redirects every mouse event; a stale capture
-                // (node disposed) auto-releases.
-                let captured = {
-                    let mut core = self.core.borrow_mut();
-                    match core.capture {
-                        Some(c) if core.insts.contains(c.0) => Some(c),
-                        Some(_) => {
-                            core.capture = None;
-                            None
-                        }
-                        None => None,
-                    }
-                };
+                // Capture redirects every mouse event; a capture whose
+                // instance was disposed HEALS by re-pointing at the
+                // press cell's current occupant (`validated_capture` —
+                // Button's pressed re-render kills the raw id on the
+                // very Down that captured it).
+                let captured = self.validated_capture();
                 if captured.is_none() {
                     // Hover transitions ride every uncaptured mouse event
                     // (Move mostly, but a Down teleported by focus jumps
@@ -671,7 +726,12 @@ impl UiTree {
                 // Mouse down captures its target: sliders/scrollbars keep
                 // receiving drags even when the pointer leaves their rect.
                 MouseKind::Down(_) => {
-                    self.core.borrow_mut().capture = Some(target);
+                    {
+                        let mut core = self.core.borrow_mut();
+                        core.capture = Some(target);
+                        // The press cell anchors the capture heal.
+                        core.capture_pos = Some(m.pos);
+                    }
                     // TARGETING RULE (documented): a click focuses the
                     // NEAREST FOCUSABLE ANCESTOR-OR-SELF of the hit target
                     // (clicking a button's label focuses the button; a
@@ -687,7 +747,11 @@ impl UiTree {
                     }
                 }
                 MouseKind::Up(_) => {
-                    self.core.borrow_mut().capture = None;
+                    {
+                        let mut core = self.core.borrow_mut();
+                        core.capture = None;
+                        core.capture_pos = None;
+                    }
                     // The pointer may sit over something else now.
                     self.update_hover(m.pos);
                 }
@@ -699,6 +763,14 @@ impl UiTree {
         if let Some(req) = ctx.capture_request.take() {
             let mut core = self.core.borrow_mut();
             core.capture = req.filter(|id| core.insts.contains(id.0));
+            // The heal anchor follows the explicit request: a grant made
+            // from a mouse event anchors at that event's cell; a grant
+            // from a non-mouse event (or an explicit release) has no
+            // press cell to heal at.
+            core.capture_pos = match (core.capture, event) {
+                (Some(_), UiEvent::Mouse(m)) => Some(m.pos),
+                _ => None,
+            };
         }
         if let Some(focus) = ctx.focus_request.take() {
             self.set_focus(Some(focus));

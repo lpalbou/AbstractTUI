@@ -2,9 +2,13 @@
 
 ## Metadata
 - Created: 2026-07-22
-- Status: Planned — Accepted-pending-maintainer (the LIST is the policy
-  artifact ADR-0001 §2 requires; each entry's ruling is recorded below
-  and awaits maintainer sign-off before the 0.3 window opens)
+- Status: Planned — MAINTAINER-APPROVED 2026-07-23 (entries 1, 2, 3, 5
+  approved; entry 3 approved specifically as deprecate-at-0.3 /
+  remove-no-earlier-than-0.4; entry 4 remains a candidate that enters
+  only if its design lands before the window — explained to the
+  maintainer separately). The window OPENS on the maintainer's word,
+  recommended trigger: when the tree view (0570), richer lexers
+  (0140), or widget-hosting feed blocks (0280) get scheduled.
 - Track: cross-track (release governance, beside `0001_roadmap.md`)
 - Completed: N/A
 

@@ -15,6 +15,7 @@ item records the workaround so the engine fix can delete it.
 | 0282 | `FeedState::sync` source shape too narrow — fold-shaped stores cannot adopt (borrow-based `sync_with` ask) | API gap |
 | 0283 | Capped preview blocks — width-aware `max_rows` + honest overflow marker on Text/Rich feed blocks (+ hang-indent, tight-rhythm notes) | capability gap |
 | 0284 | TextArea/TextInput placeholder paints unclipped past the widget rect (both branches; surfaced by the 0291 adoption) | rendering defect |
+| 0286 | KeyChord shifted-letter shortcuts have two wire spellings — plain `Char('A')` is a dead key on kitty terminals | footgun |
 | 0292 | Completion triggers fire on any mid-text token — no position policy (renumbered from 0300: band collision with control-plane) | API gap |
 | 0294 | Anchored panel places short lists over the chrome below instead of flipping up (renumbered from 0310) | UX defect |
 
@@ -41,6 +42,12 @@ Completed 2026-07-23 (0.2.6 field wave):
 | --- | --- | --- |
 | 0291 | Placeholder while focused-and-empty — `TextArea::placeholder_while_focused` + `TextInput` parity; autofocused composers paint their teaching beside the caret (default OFF, decision in-item) | API gap |
 | 0299 | Public full-redraw verb — `app::request_full_redraw()` + opt-in `set_redraw_on_focus_gained`; per-channel image re-place folded into `resync_unknown_screen` (heals suspend-resume too) | API gap |
+
+Completed 2026-07-23 (wave-5 field fix):
+
+| ID | Title | Class |
+| --- | --- | --- |
+| 0285 | Selection layer eats drag-less clicks — click-through shipped (layer claims only once the gesture DRAGS) + pointer-capture heal; buttons clickable with select mode on | UX defect |
 
 Table reconciliation (2026-07-23, by the consumer while filing 0281-0283):
 the open table above had gone stale against the directory — 0250 (fixed

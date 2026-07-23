@@ -79,3 +79,10 @@ pub use crate::app::{request_full_redraw, set_redraw_on_focus_gained};
 // Completion trigger-position policy + anchored-panel placement bias
 // (first-app/0292 + 0294) — appended with their wave.
 pub use crate::app::anchored::{PanelPlacement, TriggerPosition};
+
+// The modal decision gate (wave 5: app-kits/0515) — appended with its
+// wave.
+pub use crate::app::{
+    ChoiceAnswer, ChoiceOption, ChoiceOutcome, ChoicePrompt, ChoicePromptHandle, ChoiceQuestion,
+    ChoiceSequence, ChoiceSequenceOutcome,
+};

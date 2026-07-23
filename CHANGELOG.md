@@ -5,6 +5,73 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.8] - 2026-07-23
+
+### Added
+
+- app: `ChoicePrompt` — the modal decision gate (app-kits/0515): block
+  a flow on a structured question (prompt + options with optional
+  muted detail rows, `allow_multiple` sets, an `allow_other` free-text
+  row with an inline autofocused editor) and continue in `on_resolve`,
+  which fires EXACTLY ONCE with `ChoiceOutcome::{Answered, Cancelled}`
+  — Enter/click-commit, Confirm/Cancel buttons, Escape, and the
+  returned `ChoicePromptHandle::cancel()` all funnel through one
+  resolve path; the modal closes before the callback runs (the 0297
+  disposal-safety law), so resolving may dispose the opener or open
+  the next gate. Outside presses never dismiss (a gate has explicit
+  endings only). Movement follows the 0250 vocabulary (arrows/wheel
+  move, `1-9` jump, Space toggles in multiple mode, commit is
+  explicit); long lists window around the highlight with an `i/N`
+  note; the panel sizes itself from the question. Model types
+  (`ChoiceQuestion`/`ChoiceOption`/`ChoiceAnswer`) are plain data for
+  agent-driven callers; `ChoiceSequence` chains several questions
+  (`Completed(answers)` / `Cancelled { index, answers }`). All
+  re-exported in the prelude; demo `examples/decide.rs`; section in
+  docs/api.md.
+- app: `ChoicePrompt` cycle-2 fold (wave-5 REVIEWER findings F1–F7):
+  per-option shortcut letters (`option_key` / `ChoiceOption::key` —
+  case-sensitive explicit activation, rendered dim in the row, named
+  in the hint), must-choose mode (`dismissable(false)` — Esc refuses
+  visibly, no Cancel button, `handle.cancel()` keeps the programmatic
+  lever), LAYERED Esc from the Other editor (first Esc retreats to
+  the list keeping the draft, second cancels/refuses — the Combobox
+  precedent, position folded from review), danger-tinted options
+  (`ChoiceOption::danger` / `.danger(id)` — `Error` token ink),
+  `option_with(ChoiceOption)` combination escape hatch, a
+  keys-truthful hint row, and the accessibility contract: Heading
+  question, Menu region with current-choice value, MenuItem
+  "selected" / Checkbox on/off rows, Input editor with focus truth,
+  visible focus affordance (selection pair focused, accent ink
+  unfocused — the RadioGroup precedent).
+
+### Fixed
+
+- app: selection click-through (first-app/0285, field P0) — with select
+  mode on, the screen-text selection layer consumed EVERY left Down and
+  Up ahead of overlay/tree routing, so a drag-less click never reached
+  any widget: every `Button` in the app (including modal approve/deny
+  buttons) was dead by mouse. The layer now owns the gesture only once
+  it DRAGS: a plain Down passes through (the anchor arms silently), the
+  first Drag off the anchor cell claims the gesture (and resolves the
+  press the tree already saw — a release outside every rect un-presses
+  the widget without firing and drops the pointer capture), a drag-less
+  Up passes so the widget fires, and a click on a VISIBLE region stays
+  consumed (dismissal, Esc parity — both halves). Same-cell drag wiggle
+  still clicks (cell quantization is the drag slop). Drag-copy,
+  release-copy-ends-gesture (0290), copy keys, and wheel routing are
+  unchanged. Click rules stated in docs/api.md.
+- ui: pointer-capture heal — a pressed widget's own visual re-render
+  disposed the captured instance (Button's `pressed` write on Down
+  regenerates its `dyn_view` hit leaf inside that same dispatch), and
+  the stale capture was silently dropped: a release OUTSIDE the widget
+  then routed by position, never reached it, and wedged the pressed
+  visual until the next click. A stale capture now re-points at the
+  press cell's current occupant, making the documented "capture keeps
+  the release routed here" contract actually hold; when the pressed
+  subtree genuinely died, the gesture tail lands on whatever is beneath,
+  which never armed a press (harmless by the release-inside-decides
+  rule).
+
 ## [0.2.7] - 2026-07-23
 
 ### Added
@@ -856,6 +923,7 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[0.2.8]: https://github.com/lpalbou/abstracttui/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/lpalbou/abstracttui/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/lpalbou/abstracttui/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/lpalbou/abstracttui/compare/v0.2.4...v0.2.5

@@ -18,8 +18,29 @@
 //!   0290): the region clears with the copy, so the app's next
 //!   Enter/`c` keystrokes route normally — a retained region used to
 //!   silently eat them (the composer footgun). Esc cancels without
-//!   copying; a fresh click re-anchors. Wheel scrolling is untouched
-//!   (only left Down/Drag/Up are claimed).
+//!   copying; a fresh click re-anchors. Wheel scrolling is untouched.
+//!
+//! ## Click-through (backlog 0285)
+//!
+//! The layer owns the gesture only once it becomes a DRAG — a plain
+//! click belongs to the widgets:
+//!
+//! - **Left Down with no visible region**: the anchor arms silently and
+//!   the event PASSES — the widget under the pointer arms its own
+//!   pressed state in parallel (a Button in select mode stays
+//!   clickable; consuming every Down made every Button dead by mouse).
+//! - **Left Down with a visible region**: the click DISMISSES the
+//!   selection — clear and CONSUME (Esc parity: the user was clearing a
+//!   highlight, not aiming at the widget beneath), and its paired Up is
+//!   consumed too (a gesture is all-or-nothing to the tree).
+//! - **First Drag that leaves the anchor cell**: the layer CLAIMS the
+//!   gesture — from here Drag and the final Up are the layer's. The
+//!   driver resolves the press the tree already saw (a release outside
+//!   every rect through the pointer-capture routing), so the pressed
+//!   widget un-presses WITHOUT firing and the capture drops. Drags that
+//!   stay on the anchor cell remain potential clicks (terminal cell
+//!   quantization is the drag slop) and keep passing.
+//! - **Up with no drag (a plain click)**: passes — the widget fires.
 //! - **[`copy_to_clipboard`]**: the app-reachable clipboard verb (backlog
 //!   0150's clipboard leg) — queue any text for OSC 52 emission through
 //!   the same custody path, from any component handler.
@@ -155,6 +176,14 @@ pub(crate) enum SelectionAct {
     Pass,
     /// Consumed by the selection layer (state may have changed).
     Consumed,
+    /// Consumed — and this drag just CLAIMED a gesture whose Down had
+    /// passed through to the widgets (click-through, backlog 0285). The
+    /// driver must resolve the trees' pointer state: deliver a release
+    /// outside every rect so the pressed widget un-presses WITHOUT
+    /// firing (release-inside-decides) and the pointer capture drops —
+    /// otherwise the capture would wedge and route the NEXT click
+    /// anywhere to the stale captured widget.
+    Claim,
     /// Consumed; copy this region's screen text. The act CARRIES the
     /// region because a copy ENDS the gesture (backlog 0290): the layer
     /// cleared its own state before answering, so no region lingers to
@@ -162,12 +191,24 @@ pub(crate) enum SelectionAct {
     Copy(Region),
 }
 
+/// An armed left press: the anchor cell + the pane clamp resolved at
+/// Down, and whether the Down PASSED through to the widget trees
+/// (click-through, 0285). A dismissal click's Down was consumed, so its
+/// whole gesture stays consumed — all-or-nothing to the tree — and a
+/// claim over it releases nothing (nothing was pressed).
+#[derive(Copy, Clone, Debug)]
+struct DragArm {
+    anchor: Point,
+    clamp: Rect,
+    press_routed: bool,
+}
+
 #[derive(Default)]
 struct SelectionState {
     enabled: bool,
-    /// Left button is down: (anchor cell, pane clamp). No region until a
-    /// drag arrives — a plain click never paints.
-    drag: Option<(Point, Rect)>,
+    /// Left button is down (anchor armed). No region until a drag
+    /// leaves the anchor cell — a plain click never paints.
+    drag: Option<DragArm>,
     region: Option<Region>,
     /// Row rects patched into the last composed frame (the repair-damage
     /// source when the region changes or clears).
@@ -181,9 +222,10 @@ struct SelectionState {
 
 /// Cloneable handle to the engine selection layer. Enabling is the
 /// opt-in: apps bind a key to [`Selection::toggle`] for a "select mode",
-/// or call [`Selection::set_enabled`] once for always-on drag select
-/// (sensible when left-click has no other meaning in the app — while
-/// enabled, the selection layer owns left Down/Drag/Up).
+/// or call [`Selection::set_enabled`] once for always-on drag select.
+/// While enabled the layer owns left DRAGS (and the gesture-ending Up);
+/// plain clicks pass through to the widgets (click-through, 0285), so
+/// buttons and other clickables keep working with select mode on.
 #[derive(Clone)]
 pub struct Selection {
     state: Rc<RefCell<SelectionState>>,
@@ -255,37 +297,75 @@ impl Selection {
                 }
                 match (m.kind, m.button) {
                     (MouseKind::Down, MouseButton::Left) => {
-                        // A click clears (spec: Esc/click clears); the new
-                        // anchor arms a fresh drag against its own pane.
-                        if st.region.take().is_some() {
+                        let dismissed = st.region.take().is_some();
+                        if dismissed {
                             st.dirty = true;
                             request_frame();
                         }
                         let clamp = clamp_at(m.pos);
-                        st.drag = Some((clamp_point(m.pos, clamp), clamp));
-                        SelectionAct::Consumed
+                        st.drag = Some(DragArm {
+                            anchor: clamp_point(m.pos, clamp),
+                            clamp,
+                            press_routed: !dismissed,
+                        });
+                        if dismissed {
+                            // A click on a VISIBLE selection dismisses it
+                            // (Esc parity: the user was clearing the
+                            // highlight, not aiming at the widget
+                            // beneath): clear + CONSUME. The fresh anchor
+                            // still arms — dragging from here selects.
+                            SelectionAct::Consumed
+                        } else {
+                            // Click-through (0285): a plain click belongs
+                            // to the widgets — the anchor arms silently
+                            // and the Down routes on, so the widget under
+                            // the pointer arms its own pressed state. The
+                            // layer claims only if a drag follows.
+                            SelectionAct::Pass
+                        }
                     }
                     (MouseKind::Drag, MouseButton::Left) => {
-                        let Some((anchor, clamp)) = st.drag else {
+                        let Some(arm) = st.drag else {
                             // Drag whose Down predates select mode: not ours.
                             return SelectionAct::Pass;
                         };
+                        let head = clamp_point(m.pos, arm.clamp);
+                        if st.region.is_none() && head == arm.anchor {
+                            // Sub-cell wiggle: the pointer never left the
+                            // anchor cell, so this is still a potential
+                            // click (cell quantization is the drag slop).
+                            // The gesture keeps following its Down.
+                            return if arm.press_routed {
+                                SelectionAct::Pass
+                            } else {
+                                SelectionAct::Consumed
+                            };
+                        }
+                        let claiming = st.region.is_none();
                         let next = Region {
-                            anchor,
-                            head: clamp_point(m.pos, clamp),
-                            clamp,
+                            anchor: arm.anchor,
+                            head,
+                            clamp: arm.clamp,
                         };
                         if st.region != Some(next) {
                             st.region = Some(next);
                             st.dirty = true;
                             request_frame();
                         }
-                        SelectionAct::Consumed
+                        if claiming && arm.press_routed {
+                            // First drag off the anchor cell: the layer
+                            // claims a gesture the tree already saw the
+                            // Down of — the driver must resolve that
+                            // press without a click (see `Claim`).
+                            SelectionAct::Claim
+                        } else {
+                            SelectionAct::Consumed
+                        }
                     }
                     (MouseKind::Up, MouseButton::Left) => {
-                        if st.drag.take().is_none() {
+                        let Some(arm) = st.drag.take() else {
                             return SelectionAct::Pass; // orphan release
-                        }
+                        };
                         match st.region.take() {
                             // Release copies AND ends the gesture (0290):
                             // a retained region's only remaining power
@@ -297,7 +377,17 @@ impl Selection {
                                 Self::clear_locked(&mut st);
                                 SelectionAct::Copy(region)
                             }
-                            None => SelectionAct::Consumed, // the click's paired release
+                            // A drag-less click: the gesture follows its
+                            // Down — pass (the widget fires, 0285) when
+                            // the Down passed; stay consumed for a
+                            // dismissal click's paired release.
+                            None => {
+                                if arm.press_routed {
+                                    SelectionAct::Pass
+                                } else {
+                                    SelectionAct::Consumed
+                                }
+                            }
                         }
                     }
                     _ => SelectionAct::Pass, // wheel / motion / other buttons

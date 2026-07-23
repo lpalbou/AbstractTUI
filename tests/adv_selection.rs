@@ -5,11 +5,15 @@
 //! and the damage containment of a drag.
 
 use abstracttui::app::selection::{copy_to_clipboard, mouse_capture, selection};
-use abstracttui::app::{current_theme, Driver, RunConfig};
+use abstracttui::app::{current_theme, Driver, Modal, RunConfig};
 use abstracttui::prelude::*;
 use abstracttui::term::Capabilities;
-use abstracttui::testing::CaptureTerm;
+use abstracttui::testing::{Attrs, CaptureTerm};
 use abstracttui::ui::{text, Element};
+use abstracttui::widgets::Button;
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 /// RFC 4648 base64 of `s` — the test's own oracle for OSC 52 payloads
 /// (the engine's encoder is deliberately not imported: two independent
@@ -464,6 +468,258 @@ fn selection_idles_at_zero_cost_when_inactive() {
         assert!(turn.idle, "a parked selection costs nothing");
     }
     assert!(term.take_bytes().is_empty());
+}
+
+// ---------------------------------------------------------------------
+// 0285 — click-through: the selection layer owns the gesture only once
+// it DRAGS. Plain clicks reach the widgets (the field P0: with select
+// mode on app-wide, every Button was dead by mouse — the layer consumed
+// every left Down and Up ahead of overlay/tree routing).
+// ---------------------------------------------------------------------
+
+/// Click-through fixture: two buttons ("A" at cells 0..3, "B" at 3..6,
+/// row 0) over a text row (row 1). Returns the app + per-button click
+/// counters.
+fn two_buttons(size: Size) -> (App, Rc<RefCell<u32>>, Rc<RefCell<u32>>) {
+    let a: Rc<RefCell<u32>> = Rc::new(RefCell::new(0));
+    let b: Rc<RefCell<u32>> = Rc::new(RefCell::new(0));
+    let (a2, b2) = (a.clone(), b.clone());
+    let mut app = App::new(size);
+    app.mount(move |cx| {
+        let (a3, b3) = (a2.clone(), b2.clone());
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(
+                Element::new()
+                    .style(LayoutStyle::row().height(Dimension::Cells(1)))
+                    .child(
+                        Button::new("A")
+                            .on_click(move || *a3.borrow_mut() += 1)
+                            .view(cx),
+                    )
+                    .child(
+                        Button::new("B")
+                            .on_click(move || *b3.borrow_mut() += 1)
+                            .view(cx),
+                    )
+                    .build(),
+            )
+            .child(text("gamma delta"))
+            .build()
+    })
+    .unwrap();
+    (app, a, b)
+}
+
+/// The consumer's named regression (first-app P0): select mode ON, a
+/// Button under the cursor, a plain SGR click — the Button must fire.
+/// Before click-through the selection layer consumed both halves of the
+/// click and no Button anywhere could ever fire by mouse.
+#[test]
+fn plain_click_fires_buttons_while_select_mode_is_on() {
+    let size = Size::new(30, 4);
+    let (mut app, a, b) = two_buttons(size);
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
+    selection().set_enabled(true);
+    driver.turn(&mut app, &mut term).unwrap();
+
+    // Down + Up on button A's cell (1,0): a drag-less click.
+    term.push_input(b"\x1b[<0;2;1M");
+    term.push_input(b"\x1b[<0;2;1m");
+    driver.turn(&mut app, &mut term).unwrap();
+    assert_eq!(*a.borrow(), 1, "the click reached the button");
+    assert_eq!(*b.borrow(), 0);
+    assert!(!selection().is_active(), "a plain click paints nothing");
+    assert_eq!(
+        term.screen().clipboard(),
+        None,
+        "a plain click copies nothing"
+    );
+}
+
+/// Drag slop: a click whose press wiggles WITHIN the anchor cell (a
+/// same-cell Drag between Down and Up — terminals report sub-cell
+/// motion) is still a click, not a one-cell selection.
+#[test]
+fn same_cell_wiggle_still_clicks_the_button() {
+    let size = Size::new(30, 4);
+    let (mut app, a, _b) = two_buttons(size);
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
+    selection().set_enabled(true);
+    driver.turn(&mut app, &mut term).unwrap();
+
+    term.push_input(b"\x1b[<0;2;1M"); // down at (1,0)
+    term.push_input(b"\x1b[<32;2;1M"); // drag on the SAME cell
+    term.push_input(b"\x1b[<0;2;1m"); // release
+    driver.turn(&mut app, &mut term).unwrap();
+    assert_eq!(*a.borrow(), 1, "a wiggly click still clicks");
+    assert!(!selection().is_active(), "same-cell drags never paint");
+    assert_eq!(term.screen().clipboard(), None);
+}
+
+/// A drag that STARTS on a button selects text and must neither click
+/// the button nor wedge it: at the first cross-cell drag the layer
+/// claims the gesture and the driver resolves the passed-through press
+/// — the button un-presses WITHOUT firing (release-inside-rect decides)
+/// and the pointer capture drops, so the NEXT click routes fresh.
+#[test]
+fn drag_select_over_a_button_neither_clicks_nor_wedges_it() {
+    let size = Size::new(30, 4);
+    let (mut app, a, b) = two_buttons(size);
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
+    selection().set_enabled(true);
+    driver.turn(&mut app, &mut term).unwrap();
+    let sel_bg = current_theme().tokens.get(TokenId::SelectionBg);
+
+    // Down inside A (0,0), drag to (2,0): the layer claims the gesture.
+    term.push_input(b"\x1b[<0;1;1M");
+    term.push_input(b"\x1b[<32;3;1M");
+    driver.turn(&mut app, &mut term).unwrap();
+    // The selection highlight paints over the button...
+    let cell = term.screen().cell(1, 0).unwrap();
+    assert_eq!(cell.paint.bg, Some(sel_bg), "highlight paints over A");
+    // ...but the press was RESOLVED at the claim: no stuck pressed
+    // state. Pressed wears the selection pair + BOLD; the highlight
+    // keeps the cell's attrs — a stuck press would read bold here.
+    assert!(
+        !cell.paint.attrs.contains(Attrs::BOLD),
+        "the claim un-pressed the button (no stuck pressed state)"
+    );
+    assert_eq!(*a.borrow(), 0, "claiming the gesture never clicks");
+    assert_eq!(
+        app.tree().pointer_capture(),
+        None,
+        "the claim released the pointer capture"
+    );
+
+    // Release: the drag copies (selection over widgets keeps working)
+    // and still never clicks.
+    term.push_input(b"\x1b[<0;3;1m");
+    driver.turn(&mut app, &mut term).unwrap();
+    driver.turn(&mut app, &mut term).unwrap(); // custody emission
+    assert_eq!(
+        term.screen().clipboard(),
+        Some(("c", b64(" A").as_str())),
+        "the drag-release copied the button's screen text"
+    );
+    assert_eq!(*a.borrow(), 0, "the drag never clicked A");
+
+    // The gesture left nothing behind: a normal click on B fires B —
+    // a stuck capture would have routed this click back to A.
+    term.push_input(b"\x1b[<0;5;1M");
+    term.push_input(b"\x1b[<0;5;1m");
+    driver.turn(&mut app, &mut term).unwrap();
+    assert_eq!(*b.borrow(), 1, "the next click routes fresh");
+    assert_eq!(*a.borrow(), 0);
+}
+
+/// The dismissal rule: a click while a selection is VISIBLE clears it
+/// and is CONSUMED — both halves (the user was dismissing the
+/// highlight, not aiming at the widget beneath). Esc/click-clear
+/// parity, stated in docs/api.md. Post-0290 a region exists only
+/// mid-drag, so the click arrives as a degenerate second Down — the
+/// rule holds for whatever stream produces it.
+#[test]
+fn click_dismissing_a_visible_selection_never_fires_the_widget_beneath() {
+    let size = Size::new(30, 4);
+    let (mut app, _a, b) = two_buttons(size);
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
+    selection().set_enabled(true);
+    driver.turn(&mut app, &mut term).unwrap();
+    let sel_bg = current_theme().tokens.get(TokenId::SelectionBg);
+
+    // Paint a region on the text row (no release: region stays visible).
+    term.push_input(b"\x1b[<0;1;2M");
+    term.push_input(b"\x1b[<32;6;2M");
+    driver.turn(&mut app, &mut term).unwrap();
+    assert_eq!(term.screen().cell(0, 1).unwrap().paint.bg, Some(sel_bg));
+
+    // A click lands on button B while the region is visible: the click
+    // DISMISSES the selection and never reaches the button.
+    term.push_input(b"\x1b[<0;5;1M");
+    term.push_input(b"\x1b[<0;5;1m");
+    driver.turn(&mut app, &mut term).unwrap();
+    assert!(!selection().is_active(), "the click cleared the region");
+    assert_ne!(
+        term.screen().cell(0, 1).unwrap().paint.bg,
+        Some(sel_bg),
+        "the highlight cells recomposed from truth"
+    );
+    assert_eq!(*b.borrow(), 0, "the dismissal click never fires widgets");
+
+    // With nothing visible, the very next click is the widgets' again.
+    term.push_input(b"\x1b[<0;5;1M");
+    term.push_input(b"\x1b[<0;5;1m");
+    driver.turn(&mut app, &mut term).unwrap();
+    assert_eq!(*b.borrow(), 1, "the follow-up click fires normally");
+}
+
+/// The consumer's exact shape: an approval MODAL with engine Buttons,
+/// select mode on app-wide. The click must route into the modal tree
+/// and fire; a drag over the modal must claim + release the modal
+/// tree's capture (the overlay half of the cancel path).
+#[test]
+fn modal_buttons_are_clickable_while_select_mode_is_on() {
+    let size = Size::new(30, 9);
+    let ok: Rc<RefCell<u32>> = Rc::new(RefCell::new(0));
+    let scope_holder: Rc<RefCell<Option<abstracttui::reactive::Scope>>> =
+        Rc::new(RefCell::new(None));
+    let sh = scope_holder.clone();
+    let mut app = App::new(size);
+    app.mount(move |cx| {
+        *sh.borrow_mut() = Some(cx);
+        Element::new().child(text("underneath")).build()
+    })
+    .unwrap();
+    let overlays = app.overlays();
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
+    selection().set_enabled(true);
+    driver.turn(&mut app, &mut term).unwrap();
+
+    let cx = scope_holder.borrow().expect("scope");
+    let ok2 = ok.clone();
+    let tokens = current_theme().tokens;
+    // 10x3 panel centered in 30x9 -> bounds (10,3), 1-cell padding ->
+    // content at (11,4); Button "OK" occupies cells (11..15, 4).
+    let modal = Modal::open(&overlays, cx, size, Size::new(10, 3), move |mcx| {
+        Button::new("OK")
+            .on_click(move || *ok2.borrow_mut() += 1)
+            .element(mcx, &tokens)
+            .build()
+    });
+    driver.turn(&mut app, &mut term).unwrap();
+
+    // Plain click on OK: fires through the modal tree.
+    term.push_input(b"\x1b[<0;13;5M");
+    term.push_input(b"\x1b[<0;13;5m");
+    driver.turn(&mut app, &mut term).unwrap();
+    assert_eq!(*ok.borrow(), 1, "modal button clicks in select mode");
+
+    // Drag over the modal: claim releases the MODAL tree's capture.
+    term.push_input(b"\x1b[<0;13;5M");
+    term.push_input(b"\x1b[<32;15;5M");
+    driver.turn(&mut app, &mut term).unwrap();
+    let modal_tree = modal.layer().tree().expect("modal tree");
+    assert_eq!(
+        modal_tree.pointer_capture(),
+        None,
+        "the claim released the modal tree's capture"
+    );
+    assert_eq!(*ok.borrow(), 1, "the drag never clicked");
+    term.push_input(b"\x1b[<0;15;5m"); // release copies "OK"
+    driver.turn(&mut app, &mut term).unwrap();
+    driver.turn(&mut app, &mut term).unwrap(); // custody emission
+    assert_eq!(
+        term.screen().clipboard(),
+        Some(("c", b64("OK").as_str())),
+        "drag-copy from modal content still works"
+    );
+    assert_eq!(*ok.borrow(), 1);
 }
 
 #[test]

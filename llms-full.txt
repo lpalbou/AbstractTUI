@@ -1680,6 +1680,74 @@ Around the core loop the module provides:
 - **KeymapHelp** — a ready-made `?` help modal listing the shortcuts
   reachable from the current focus plus every registered global action.
 
+## app::ChoicePrompt — the modal decision gate
+
+Block a flow on a structured question — agent approvals, setup choices,
+destructive confirmations with alternatives — and continue in the
+callback:
+
+```rust,ignore
+ChoicePrompt::new("Overwrite 3 modified files?")
+    .option_detail("overwrite", "Overwrite them", "the local edits are lost")
+    .option("keep", "Keep my copies")
+    .allow_other("Something else…")
+    .on_resolve(|outcome| match outcome {
+        ChoiceOutcome::Answered(a) => apply(a),   // a.selected: ids, a.other: text
+        ChoiceOutcome::Cancelled => (),           // explicit — never silent
+    })
+    .open(cx);
+```
+
+The question is plain data (`ChoiceQuestion` + `ChoiceOption { id, label,
+detail }` — approval questions arrive from elsewhere; `ChoicePrompt::of`
+accepts one). The gate opens a focus-trapped `Modal` over everything and
+resolves EXACTLY ONCE through `on_resolve` — Enter-commit, click-commit,
+the Confirm/Cancel buttons, Escape, and the returned handle's `cancel()`
+all funnel into the same path; the modal is already closed when the
+callback runs, so it may dispose anything (including its opener) or open
+the next prompt. An outside click is swallowed, never a dismissal: a
+decision gate has explicit endings only.
+
+Selection follows the engine-wide vocabulary (movement is not
+activation): single mode — the highlight IS the candidate (`●`), arrows/
+Home/End/wheel move it, `1-9` jump (move only — a deliberate asymmetry),
+Enter or a click on the already-selected row commits `{ selected: [id] }`;
+multiple mode (`allow_multiple`) — Space or a click toggles `☑`/`☐`
+marks, `1-9` jump-toggle (the mark is the selection act), Enter or
+Confirm commits the whole set canonicalized to option order (an empty
+set is a legal answer — the gate reports, the caller judges).
+Per-option SHORTCUT LETTERS (`option_key(id, label, 'a')` /
+`ChoiceOption::key`) are the explicit activation vocabulary:
+case-sensitive (`a` ≠ `A`), rendered as a dim `(a)` in the row, named
+in the hint, commit in single mode and jump-toggle in multiple; a
+declared key outranks the digit-jump lane. `allow_other(label)` appends
+an "Other" row; engaging it (highlight in single mode, checked in
+multiple) reveals an inline `TextInput` — autofocused, and its own key
+handling shields the list (digits and letters type, they never jump or
+activate) — whose trimmed text rides `ChoiceAnswer::other`; committing
+a hollow Other is refused with a visible note. Esc is LAYERED while the
+editor is focused: the first Esc retreats to the list (draft kept), the
+second cancels — the hint tells the truth per state.
+`dismissable(false)` is the must-choose mode for destructive gates: no
+Cancel button, no advertised Esc; Esc REFUSES visibly ("an answer is
+required") while `handle.cancel()` keeps the programmatic lever.
+`ChoiceOption::danger(true)` / `.danger(id)` tints a destructive
+option's glyph+label with the `Error` token (the audited selection pair
+still wins while that row is highlighted with the list focused).
+`option_with(ChoiceOption)` is the escape hatch for detail+key+danger
+combinations. Option `detail` lines render muted under their label;
+long lists window around the highlight with an `i/N` position note; the
+panel sizes itself from the question and clamps into the viewport. The
+a11y tree carries the question (`Heading`), the options
+(`MenuItem`+"selected" / `Checkbox`+on/off per mode) and the revealed
+editor (`Input`) — the frozen-Role vocabulary, honestly mapped.
+
+`ChoiceSequence::new(vec![q1, q2]).on_resolve(..).open(cx)` chains
+several questions (each opens as the previous resolves);
+`ChoiceSequenceOutcome` is `Completed(answers)` or `Cancelled { index,
+answers }`. An empty question list completes synchronously. See
+`examples/decide.rs` for all three flavors.
+
 ## app::keys — key press/release state (held keys)
 
 Real-time surfaces (games' move-while-held, voice push-to-talk) need key
@@ -1769,14 +1837,34 @@ mouse_capture().resume();        // re-arm the entered mouse mode (e.g. on next 
 copy_to_clipboard("exact source text");
 ```
 
-While selection is enabled, the engine claims **left Down/Drag/Up only**:
-dragging paints the theme's `selection_fg`/`selection_bg` inks over the
-composed frame (damage-contract honest — only changed cells repaint), and
-releasing copies. **Every copy ends the gesture** (0290): the region
-clears with the copy, so the app's next keystrokes — including Enter and
-`c` — route normally at once (a retained region used to silently eat
-them in composer-shaped apps). The key table while a region is visible
-(i.e. mid-drag):
+While selection is enabled, the engine claims **left drags only — plain
+clicks pass through to the widgets** (click-through, 0285). The click
+rules, stated plainly:
+
+- **Left Down with no visible region**: the drag anchor arms silently
+  and the Down PASSES — the widget under the pointer arms its own
+  pressed state in parallel, so a Button stays clickable with select
+  mode on (the layer used to consume every Down/Up, which made every
+  Button in the app dead by mouse).
+- **First Drag that leaves the anchor cell**: the layer CLAIMS the
+  gesture — dragging paints the theme's `selection_fg`/`selection_bg`
+  inks over the composed frame (damage-contract honest — only changed
+  cells repaint), and releasing copies. At the claim, the press the
+  tree already saw is resolved WITHOUT a click: the pressed widget
+  receives a release outside every rect (release-inside-decides, so a
+  Button un-presses without firing) and the pointer capture drops.
+  Drags that never leave the anchor cell stay potential clicks
+  (terminal cell quantization is the drag slop — a wiggly click still
+  clicks).
+- **Up with no drag** (a plain click): passes — the widget fires.
+- **Left Down while a region is VISIBLE**: the click DISMISSES the
+  selection — clear + consume, both halves of the click (Esc parity:
+  the user was clearing a highlight, not aiming at the widget beneath).
+
+**Every copy ends the gesture** (0290): the region clears with the copy,
+so the app's next keystrokes — including Enter and `c` — route normally
+at once (a retained region used to silently eat them in composer-shaped
+apps). The key table while a region is visible (i.e. mid-drag):
 
 | Key            | Effect                                   |
 |----------------|------------------------------------------|
@@ -1785,9 +1873,9 @@ them in composer-shaped apps). The key table while a region is visible
 | Esc            | cancel — clear without copying           |
 | anything else  | routes to the app normally               |
 
-A fresh left click re-anchors; Ctrl+C only quits when no region is
-visible. Wheel scrolling, hover, and every other key route normally the
-whole time. Copies travel as OSC 52 through the presenter's byte custody;
+Ctrl+C only quits when no region is visible. Wheel scrolling, hover, and
+every other key route normally the whole time. Copies travel as OSC 52
+through the presenter's byte custody;
 terminals that did not advertise the capability still get the bytes
 (harmless) plus a one-time labeled startup notice, and under tmux the
 sequence is deliberately not passthrough-wrapped (tmux consumes OSC 52
@@ -3507,8 +3595,8 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.2.7 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.2.7 (2026-07-23).
+- Crate: `abstracttui` 0.2.8 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.2.8 (2026-07-23).
 - Description: a reactive, compositor-grade terminal UI engine — fine-grained signals,
   layered rendering with damage tracking, streaming transcripts and live-data ingestion,
   text selection with OSC 52 copy, images (kitty/iTerm2/sixel/mosaic),

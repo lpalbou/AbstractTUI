@@ -413,6 +413,65 @@ mod tests {
         root.dispose();
     }
 
+    /// The selection layer's gesture claim (0285): when a passed-through
+    /// press becomes a drag, `UiTree::cancel_pointer_press` delivers a
+    /// release outside every rect through the capture routing. The
+    /// button must un-press WITHOUT firing (Up-inside-rect decides), the
+    /// capture must drop, and the NEXT click must work normally — a
+    /// stuck capture would route it back to this button.
+    #[test]
+    fn cancel_pointer_press_unpresses_without_firing() {
+        let t = &default_theme().tokens;
+        let (count, on) = clicks();
+        let (_root, mut tree) = mount_widget(Size::new(12, 1), |cx| {
+            Button::new("Go").on_click(on).element(cx, t).build()
+        });
+        // No press in flight: the cancel is an honest no-op.
+        assert!(!tree.cancel_pointer_press(), "nothing to cancel");
+
+        mouse(&mut tree, MouseKind::Down(MouseButton::Left), 2, 0);
+        assert!(tree.pointer_capture().is_some(), "press captures");
+        assert!(tree.cancel_pointer_press(), "a live press cancels");
+        assert_eq!(*count.borrow(), 0, "cancel never clicks");
+        assert_eq!(tree.pointer_capture(), None, "capture dropped");
+        // The button is fully re-armed: a normal click still fires, and
+        // the (already-cancelled) gesture's real Up is a harmless orphan.
+        mouse(&mut tree, MouseKind::Up(MouseButton::Left), 2, 0);
+        assert_eq!(*count.borrow(), 0, "orphan release after cancel");
+        click(&mut tree, 2, 0);
+        assert_eq!(*count.borrow(), 1, "next click fires normally");
+    }
+
+    /// The capture HEAL (0285's enabling fix for a PRE-EXISTING defect):
+    /// the `pressed` write on Down regenerates the button's `dyn_view`
+    /// hit leaf, which used to strand the pointer capture — a release
+    /// OUTSIDE the button then routed by position, never reached it,
+    /// and wedged the pressed visual (selection pair + BOLD) until the
+    /// next click. The healed capture routes the outside release back
+    /// here: no fire (rect decides), pressed clears.
+    #[test]
+    fn outside_release_reaches_the_button_and_clears_pressed() {
+        let theme = default_theme();
+        let t = &theme.tokens;
+        let size = Size::new(12, 1);
+        let (count, on) = clicks();
+        let (_root, mut tree) = mount_widget(size, |cx| {
+            Button::new("Go").on_click(on).element(cx, t).build()
+        });
+        mouse(&mut tree, MouseKind::Down(MouseButton::Left), 2, 0);
+        mouse(&mut tree, MouseKind::Drag(MouseButton::Left), 40, 0);
+        mouse(&mut tree, MouseKind::Up(MouseButton::Left), 40, 0);
+        assert_eq!(*count.borrow(), 0, "release outside never clicks");
+        assert_eq!(tree.pointer_capture(), None, "capture released");
+        // Click-to-focus keeps the button FOCUSED (selection pair, no
+        // bold); a stuck press would render BOLD.
+        let frame = render(&mut tree, size);
+        assert!(
+            !frame.attrs_at(Point::new(3, 0)).contains(Attrs::BOLD),
+            "no stuck pressed visual after an outside release"
+        );
+    }
+
     #[test]
     fn pressed_state_wears_selection_pair_bold() {
         let theme = default_theme();

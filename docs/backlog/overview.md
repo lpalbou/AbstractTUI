@@ -21,8 +21,8 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | State | Count |
 | --- | --- |
 | Planned | 5 |
-| Proposed | 45 |
-| Completed | 42 |
+| Proposed | 46 |
+| Completed | 44 |
 | Deprecated | 0 |
 | Recurrent | 0 |
 
@@ -116,6 +116,8 @@ composer wave).
 | 0284 | Placeholder clipping fix (both widgets, both branches; right stroke untouchable) — completed 2026-07-23 | completed/first-app/ |
 | 0292 | Completion trigger position policy (`trigger_at` + TriggerPosition) — completed 2026-07-23 | completed/first-app/ |
 | 0294 | Anchored-panel placement bias (`PanelPlacement`, AbovePreferred for bottom composers) — completed 2026-07-23 | completed/first-app/ |
+| 0515 | `ChoicePrompt`/`ChoiceSequence` — the modal decision gate (options + multiple + Other free-text + shortcut letters + danger tint + must-choose mode; charter-verified SHIP) — completed 2026-07-23 | completed/app-kits/ |
+| 0285 | Selection click-through: the layer claims only once the gesture DRAGS (plain clicks reach widgets; dismissal click consumed) + pointer-capture heal (press re-render no longer strands the capture) — completed 2026-07-23 | completed/first-app/ |
 
 ## Proposed ledger
 

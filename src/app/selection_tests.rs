@@ -132,13 +132,19 @@ fn selection_claims_left_drag_only_wheel_and_buttons_pass() {
     let rdown = mouse(MouseKind::Down, MouseButton::Right, 3, 3);
     assert_eq!(sel.on_input(&rdown, &mut clamp), SelectionAct::Pass);
 
-    // Left down arms, drag paints, release copies AND ends the gesture
-    // (0290): the region must not linger to swallow later Enter/'c'.
+    // Left down arms but PASSES (click-through, 0285: widgets arm their
+    // press in parallel); the first drag off the anchor cell CLAIMS the
+    // gesture; release copies AND ends it (0290): the region must not
+    // linger to swallow later Enter/'c'.
     let down = mouse(MouseKind::Down, MouseButton::Left, 2, 1);
-    assert_eq!(sel.on_input(&down, &mut clamp), SelectionAct::Consumed);
+    assert_eq!(sel.on_input(&down, &mut clamp), SelectionAct::Pass);
     assert!(!sel.is_active(), "a click alone never paints");
     let drag = mouse(MouseKind::Drag, MouseButton::Left, 6, 2);
-    assert_eq!(sel.on_input(&drag, &mut clamp), SelectionAct::Consumed);
+    assert_eq!(
+        sel.on_input(&drag, &mut clamp),
+        SelectionAct::Claim,
+        "the first drag off the anchor claims the passed-through gesture"
+    );
     assert!(sel.is_active());
     let up = mouse(MouseKind::Up, MouseButton::Left, 6, 2);
     match sel.on_input(&up, &mut clamp) {
@@ -153,21 +159,129 @@ fn selection_claims_left_drag_only_wheel_and_buttons_pass() {
     assert_eq!(sel.on_input(&enter, &mut clamp), SelectionAct::Pass);
     assert_eq!(sel.on_input(&plain_c, &mut clamp), SelectionAct::Pass);
 
-    // A fresh click just re-anchors (nothing visible to clear).
+    // A fresh drag-less click passes whole (0285): the Down re-anchors
+    // silently and the paired Up lets the widget beneath fire.
     let down = mouse(MouseKind::Down, MouseButton::Left, 9, 9);
-    assert_eq!(sel.on_input(&down, &mut clamp), SelectionAct::Consumed);
+    assert_eq!(sel.on_input(&down, &mut clamp), SelectionAct::Pass);
     assert!(!sel.is_active());
     let up = mouse(MouseKind::Up, MouseButton::Left, 9, 9);
     assert_eq!(
         sel.on_input(&up, &mut clamp),
-        SelectionAct::Consumed,
-        "a click's paired release copies nothing"
+        SelectionAct::Pass,
+        "a drag-less click completes in the tree — the widget fires"
     );
 
     // Disabled: everything passes, even left drags.
     sel.set_enabled(false);
     let down = mouse(MouseKind::Down, MouseButton::Left, 2, 1);
     assert_eq!(sel.on_input(&down, &mut clamp), SelectionAct::Pass);
+}
+
+/// Click-through rule 2 (0285): a click on a VISIBLE selection is the
+/// dismissal click — clear + consume (Esc parity: the user was clearing
+/// the highlight, not aiming at the widget beneath), and its paired Up
+/// stays consumed too (a gesture is all-or-nothing to the tree). Post-
+/// 0290 a region exists only mid-drag, so this needs a degenerate
+/// stream (a second Down with no Up between) — the rule holds anyway.
+#[test]
+fn dismissal_click_with_visible_region_consumes_down_and_its_paired_up() {
+    let sel = selection();
+    sel.set_enabled(true);
+    let mut clamp = viewport_clamp();
+
+    // Paint a region (Down passes, cross-cell drag claims).
+    sel.on_input(&mouse(MouseKind::Down, MouseButton::Left, 1, 1), &mut clamp);
+    sel.on_input(&mouse(MouseKind::Drag, MouseButton::Left, 5, 1), &mut clamp);
+    assert!(sel.is_active());
+
+    // The dismissal click: consumed, region gone.
+    let down = mouse(MouseKind::Down, MouseButton::Left, 9, 3);
+    assert_eq!(
+        sel.on_input(&down, &mut clamp),
+        SelectionAct::Consumed,
+        "a click on a visible selection dismisses it — consumed"
+    );
+    assert!(!sel.is_active(), "the dismissal cleared the region");
+    let up = mouse(MouseKind::Up, MouseButton::Left, 9, 3);
+    assert_eq!(
+        sel.on_input(&up, &mut clamp),
+        SelectionAct::Consumed,
+        "the dismissal click's paired release stays consumed"
+    );
+
+    // A drag from a dismissal anchor still selects — but claims nothing
+    // from the tree (its Down never routed there).
+    sel.on_input(&mouse(MouseKind::Down, MouseButton::Left, 1, 1), &mut clamp);
+    sel.on_input(&mouse(MouseKind::Drag, MouseButton::Left, 5, 1), &mut clamp);
+    assert!(sel.is_active());
+    let dismiss = mouse(MouseKind::Down, MouseButton::Left, 2, 2);
+    assert_eq!(sel.on_input(&dismiss, &mut clamp), SelectionAct::Consumed);
+    let drag = mouse(MouseKind::Drag, MouseButton::Left, 6, 2);
+    assert_eq!(
+        sel.on_input(&drag, &mut clamp),
+        SelectionAct::Consumed,
+        "claiming a consumed press releases nothing: Consumed, not Claim"
+    );
+    assert!(sel.is_active(), "the dismissal anchor still drags a region");
+}
+
+/// Click-through rule 3's slop (0285): drags that never leave the
+/// anchor CELL stay potential clicks — terminals quantize to cells, so
+/// sub-cell wiggle must not turn a click into a one-cell selection.
+#[test]
+fn same_cell_wiggle_stays_a_click() {
+    let sel = selection();
+    sel.set_enabled(true);
+    let mut clamp = viewport_clamp();
+
+    let down = mouse(MouseKind::Down, MouseButton::Left, 4, 2);
+    assert_eq!(sel.on_input(&down, &mut clamp), SelectionAct::Pass);
+    // Wiggle inside the anchor cell: still the widget's gesture.
+    let wiggle = mouse(MouseKind::Drag, MouseButton::Left, 4, 2);
+    assert_eq!(sel.on_input(&wiggle, &mut clamp), SelectionAct::Pass);
+    assert_eq!(sel.on_input(&wiggle, &mut clamp), SelectionAct::Pass);
+    assert!(!sel.is_active(), "same-cell drags never paint");
+    let up = mouse(MouseKind::Up, MouseButton::Left, 4, 2);
+    assert_eq!(
+        sel.on_input(&up, &mut clamp),
+        SelectionAct::Pass,
+        "a wiggly click still clicks"
+    );
+
+    // But wiggle THEN a real drag claims: the slop is per-event, not a
+    // latch — leaving the anchor cell converts the gesture.
+    sel.on_input(&down, &mut clamp);
+    sel.on_input(&wiggle, &mut clamp);
+    let real = mouse(MouseKind::Drag, MouseButton::Left, 6, 2);
+    assert_eq!(sel.on_input(&real, &mut clamp), SelectionAct::Claim);
+    assert!(sel.is_active());
+    // Dragging BACK onto the anchor cell after the claim keeps the
+    // gesture claimed (a one-cell region, not a click again).
+    let back = mouse(MouseKind::Drag, MouseButton::Left, 4, 2);
+    assert_eq!(sel.on_input(&back, &mut clamp), SelectionAct::Consumed);
+    assert!(sel.is_active(), "once claimed, always claimed");
+    match sel.on_input(&mouse(MouseKind::Up, MouseButton::Left, 4, 2), &mut clamp) {
+        SelectionAct::Copy(_) => {}
+        other => panic!("claimed gesture's release copies, got {other:?}"),
+    }
+}
+
+/// The claim is ONE-SHOT per gesture: only the drag that converts a
+/// passed-through press answers `Claim` (the driver's release-outside
+/// must run once); further drags are plain `Consumed`.
+#[test]
+fn claim_fires_once_per_gesture() {
+    let sel = selection();
+    sel.set_enabled(true);
+    let mut clamp = viewport_clamp();
+
+    sel.on_input(&mouse(MouseKind::Down, MouseButton::Left, 1, 1), &mut clamp);
+    let first = mouse(MouseKind::Drag, MouseButton::Left, 3, 1);
+    assert_eq!(sel.on_input(&first, &mut clamp), SelectionAct::Claim);
+    let second = mouse(MouseKind::Drag, MouseButton::Left, 5, 1);
+    assert_eq!(sel.on_input(&second, &mut clamp), SelectionAct::Consumed);
+    let third = mouse(MouseKind::Drag, MouseButton::Left, 7, 2);
+    assert_eq!(sel.on_input(&third, &mut clamp), SelectionAct::Consumed);
 }
 
 #[test]
