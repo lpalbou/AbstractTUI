@@ -59,10 +59,30 @@ pub(crate) fn keys_summary(q: &ChoiceQuestion) -> String {
 }
 
 /// Whether the buttons row exists at all: Confirm needs multiple mode,
-/// Cancel needs dismissability — a single-choice must-answer gate has
-/// no buttons (its options ARE the endings).
+/// the dismiss button needs dismissability — a single-choice
+/// must-answer gate has no buttons (its options ARE the endings).
 pub(crate) fn has_buttons(multiple: bool, dismissable: bool) -> bool {
     multiple || dismissable
+}
+
+/// The dismiss affordance's rendered label (button + the advertised
+/// Esc shortcut). `None` = the built-in vocabulary ("Cancel"); a
+/// caller label (first-app 0271: the approval consumer's Esc DEFERS —
+/// "Cancel" beside a "Deny" option mislabels a consent surface)
+/// renders verbatim.
+pub(crate) fn dismiss_button_label(custom: Option<&str>) -> &str {
+    custom.unwrap_or("Cancel")
+}
+
+/// The hint row's Esc segment. The built-in vocabulary keeps its
+/// conjugated English ("Esc cancels" — byte-stable for every existing
+/// gate); a caller label renders verbatim after the key ("Esc Defer")
+/// — the engine never synthesizes grammar from a label.
+pub(crate) fn esc_segment(dismiss_label: Option<&str>) -> String {
+    match dismiss_label {
+        Some(label) => format!("Esc {label}"),
+        None => String::from("Esc cancels"),
+    }
 }
 
 pub(crate) fn measure(
@@ -70,7 +90,9 @@ pub(crate) fn measure(
     viewport: Size,
     max_visible: i32,
     dismissable: bool,
+    dismiss_label: Option<&str>,
     body_rows_pref: Option<i32>,
+    body_width_pref: Option<i32>,
 ) -> Geometry {
     // Width: the widest content line wins, clamped into the viewport
     // (2-cell breathing margin each side beyond the Modal padding).
@@ -98,21 +120,38 @@ pub(crate) fn measure(
     // The prompt wraps anyway; it only WIDENS the panel up to a cap so
     // short questions stay compact and long ones read as a paragraph.
     let prompt_w = crate::text::width(&q.prompt).min(52);
-    // "Confirm"(9) and/or "Cancel"(8) with a 2-cell gap when both.
-    let buttons_w = match (q.allow_multiple, dismissable) {
-        (true, true) => 19,
-        (true, false) => 9,
-        (false, true) => 8,
-        (false, false) => 0,
+    // Buttons render at label width + 2 (Button's 1-cell pad each
+    // side), with a 2-cell gap when both exist — computed from the
+    // ACTUAL labels so a caller dismiss label measures honestly.
+    let confirm_w = if q.allow_multiple {
+        crate::text::width("Confirm") + 2
+    } else {
+        0
     };
+    let dismiss_w = if dismissable {
+        crate::text::width(dismiss_button_label(dismiss_label)) + 2
+    } else {
+        0
+    };
+    let buttons_w = confirm_w + dismiss_w + if confirm_w > 0 && dismiss_w > 0 { 2 } else { 0 };
+    let esc = dismissable.then(|| esc_segment(dismiss_label));
     let hint_w = crate::text::width(
-        &hint_segments(q.allow_multiple, dismissable, &keys_summary(q)).join(" · "),
+        &hint_segments(q.allow_multiple, esc.as_deref(), &keys_summary(q)).join(" · "),
     );
+    // The BODY's declared content width (first-app 0271): options,
+    // prompt, hint and buttons are all visible to `natural`, but the
+    // body closure is opaque — a 72-col card body would clip inside a
+    // panel sized by three short options. `body_width` is the caller's
+    // honest declaration; it participates in the same max/clamp as
+    // every other content line (narrow viewports still clamp, and the
+    // body then clips inside its region — never the options).
+    let body_w = body_width_pref.unwrap_or(0);
     let natural = opt_w
         .max(other_w)
         .max(prompt_w)
         .max(buttons_w)
         .max(hint_w)
+        .max(body_w)
         .max(MIN_INNER_W);
     let inner_w = natural.min((viewport.w - 6).max(12));
 
@@ -176,9 +215,10 @@ pub(crate) fn clamp_row(row: usize, total: usize) -> usize {
 /// runs out of width the hints degrade by WHOLE segments from the
 /// front — the tail (Esc, then Enter) survives longest, never a
 /// mid-word cut. `keys` = declared shortcut letters ("a/A/d", possibly
-/// empty); a non-dismissable gate lists NO Esc segment (advertising a
-/// dead key would lie — the refusal note explains on attempt).
-pub(crate) fn hint_segments(multiple: bool, dismissable: bool, keys: &str) -> Vec<String> {
+/// empty); `esc` = the ready [`esc_segment`] text, `None` on a
+/// non-dismissable gate — it lists NO Esc segment (advertising a dead
+/// key would lie — the refusal note explains on attempt).
+pub(crate) fn hint_segments(multiple: bool, esc: Option<&str>, keys: &str) -> Vec<String> {
     let mut segs = Vec::new();
     if !keys.is_empty() {
         segs.push(format!("{keys} pick"));
@@ -187,8 +227,8 @@ pub(crate) fn hint_segments(multiple: bool, dismissable: bool, keys: &str) -> Ve
         segs.push(String::from("Space toggles"));
     }
     segs.push(String::from("Enter confirms"));
-    if dismissable {
-        segs.push(String::from("Esc cancels"));
+    if let Some(esc) = esc {
+        segs.push(esc.to_string());
     }
     segs
 }

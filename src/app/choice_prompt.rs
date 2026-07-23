@@ -20,6 +20,14 @@
 //!   `on_resolve` runs (the 0297 disposal-safety law), so the callback
 //!   may dispose the opener's scope or immediately open the next
 //!   prompt ([`ChoiceSequence`] is built on exactly that).
+//! - **Host retire is the one deliberate exception**
+//!   ([`ChoicePromptHandle::retire`], first-app 0271): the HOST closes
+//!   the gate with NO outcome — `on_resolve` never fires, and the
+//!   consumed exactly-once flag guarantees it never will. Retiring is
+//!   the host's statement that it owns the outcome (replacing the
+//!   prompt, resolving the gated question through another lane) —
+//!   distinct by construction from the user's Esc, which still
+//!   resolves `Cancelled`.
 //! - **Outside-press does NOT dismiss**: a decision gate has explicit
 //!   endings only (Escape and the Cancel button always exist); a stray
 //!   click is swallowed by the modal and acts on nothing.
@@ -184,10 +192,12 @@ pub struct ChoicePrompt {
     checked: Vec<String>,
     max_visible: i32,
     dismissable: bool,
+    dismiss_label: Option<String>,
     overlays: Option<Overlays>,
     on_resolve: Option<ResolveFn>,
     body: Option<BodyFn>,
     body_rows: i32,
+    body_width: Option<i32>,
 }
 
 impl ChoicePrompt {
@@ -203,10 +213,12 @@ impl ChoicePrompt {
             checked: Vec::new(),
             max_visible: 10,
             dismissable: true,
+            dismiss_label: None,
             overlays: None,
             on_resolve: None,
             body: None,
             body_rows: 8,
+            body_width: None,
         }
     }
 
@@ -278,6 +290,28 @@ impl ChoicePrompt {
         self
     }
 
+    /// Rename the dismiss affordance (first-app 0271): the button AND
+    /// the hint's Esc segment follow the label — an approval surface
+    /// whose Esc DEFERS (the gated run keeps waiting) says "Defer",
+    /// not "Cancel" beside a "Deny" option. The OUTCOME is unchanged:
+    /// Esc, the button and [`ChoicePromptHandle::cancel`] still
+    /// resolve [`ChoiceOutcome::Cancelled`] — the label names what the
+    /// CALLER does with that outcome. Rendering: the button and the
+    /// advertised Esc shortcut (KeymapHelp) carry the label verbatim;
+    /// the hint reads `Esc <label>` (the default keeps the built-in
+    /// "Esc cancels" — the engine never conjugates a caller label).
+    /// Irrelevant under `dismissable(false)`: no button, no Esc
+    /// segment, Esc refuses visibly as before.
+    pub fn dismiss_label(mut self, label: impl Into<String>) -> ChoicePrompt {
+        let label = label.into();
+        debug_assert!(
+            !label.trim().is_empty(),
+            "ChoicePrompt::dismiss_label: an empty label hides a consent affordance"
+        );
+        self.dismiss_label = Some(label);
+        self
+    }
+
     /// Multiple answers: Space/click toggles, Enter or the Confirm
     /// button commits the whole set. Default OFF (one answer; Enter
     /// commits the candidate).
@@ -335,8 +369,10 @@ impl ChoicePrompt {
     /// panel-width, non-focusable. Keys stay with the options (the
     /// gate autofocuses them); the WHEEL scrolls a `Scroll`-wrapped
     /// body while the pointer is over it and moves the highlight
-    /// elsewhere. Height rides [`ChoicePrompt::body_rows`]; the
-    /// options are allocated FIRST — never crushed (the 0240 law).
+    /// elsewhere. Height rides [`ChoicePrompt::body_rows`]; a body
+    /// wider than the question would size the panel declares its need
+    /// via [`ChoicePrompt::body_width`]; the options are allocated
+    /// FIRST — never crushed (the 0240 law).
     pub fn body(mut self, body: impl FnOnce(Scope) -> crate::ui::View + 'static) -> ChoicePrompt {
         self.body = Some(Box::new(body));
         self
@@ -348,6 +384,22 @@ impl ChoicePrompt {
     /// reachable under height pressure).
     pub fn body_rows(mut self, rows: i32) -> ChoicePrompt {
         self.body_rows = rows.max(1);
+        self
+    }
+
+    /// Minimum content width (cells) the BODY contributes to the
+    /// panel's measure (first-app 0271). The panel is content-derived
+    /// — options, prompt, hint, buttons — and the body closure is
+    /// opaque to it, so a 72-col card body would clip inside a panel
+    /// sized by three short options. Declaring the body's width here
+    /// folds it into the same measure: the panel widens to fit
+    /// (prompt wrapping, options and hint all use the widened width),
+    /// still clamped into the viewport with the existing margins — on
+    /// a narrow terminal the body clips inside its region as before,
+    /// never the options. Like [`ChoicePrompt::body_rows`], it
+    /// participates only when a [`ChoicePrompt::body`] is set (min 1).
+    pub fn body_width(mut self, cols: i32) -> ChoicePrompt {
+        self.body_width = Some(cols.max(1));
         self
     }
 
@@ -369,7 +421,9 @@ impl ChoicePrompt {
 
     /// Open the gate over everything. Returns a cloneable handle
     /// (`cancel()` resolves `Cancelled` through the same exactly-once
-    /// path; `is_open()` reads whether the prompt is still unresolved).
+    /// path; `retire()` closes WITHOUT resolving — the host owns the
+    /// outcome; `is_open()` reads whether the prompt is still
+    /// unresolved).
     pub fn open(self, cx: Scope) -> ChoicePromptHandle {
         let overlays = self
             .overlays
@@ -378,32 +432,41 @@ impl ChoicePrompt {
         let resolved = Rc::new(Cell::new(false));
         let cb_slot: Rc<RefCell<Option<ResolveFn>>> = Rc::new(RefCell::new(self.on_resolve));
         let modal_slot: Rc<RefCell<Option<Modal>>> = Rc::new(RefCell::new(None));
-        let resolve: Rc<dyn Fn(ChoiceOutcome)> = {
+        // The shared CLOSE half of every ending: the exactly-once gate
+        // first; then ALL bookkeeping — the modal close (layer removal
+        // + state disposal) — lands BEFORE the returned callback could
+        // run (the 0297 disposal-safety law): `on_resolve` may dispose
+        // everything or open the next prompt. Both borrows end before
+        // the caller sees the callback. Returns `None` once resolved
+        // (or retired) — the flag is consumed either way, so no later
+        // ending can fire the callback. `resolve` invokes it;
+        // [`ChoicePromptHandle::retire`] deliberately drops it.
+        let finish: Rc<dyn Fn() -> Option<ResolveFn>> = {
             let resolved = resolved.clone();
             let cb_slot = cb_slot.clone();
             let modal_slot = modal_slot.clone();
-            Rc::new(move |outcome: ChoiceOutcome| {
-                // Exactly-once gate first; then ALL bookkeeping — the
-                // modal close (layer removal + state disposal) — lands
-                // BEFORE the user callback (the 0297 disposal-safety
-                // law): `on_resolve` may dispose everything or open
-                // the next prompt. Both borrows end before the call.
+            Rc::new(move || {
                 if resolved.replace(true) {
-                    return;
+                    return None;
                 }
                 let modal = modal_slot.borrow_mut().take();
                 if let Some(modal) = modal {
                     modal.close();
                 }
-                let cb = cb_slot.borrow_mut().take();
-                if let Some(cb) = cb {
+                cb_slot.borrow_mut().take()
+            })
+        };
+        let resolve: Rc<dyn Fn(ChoiceOutcome)> = {
+            let finish = finish.clone();
+            Rc::new(move |outcome: ChoiceOutcome| {
+                if let Some(cb) = finish() {
                     cb(outcome);
                 }
             })
         };
         let handle = ChoicePromptHandle {
             resolved: resolved.clone(),
-            resolve: resolve.clone(),
+            finish: finish.clone(),
         };
 
         let Some(overlays) = overlays else {
@@ -434,7 +497,11 @@ impl ChoicePrompt {
             viewport,
             self.max_visible,
             self.dismissable,
+            self.dismiss_label.as_deref(),
             self.body.as_ref().map(|_| self.body_rows),
+            // Like body_rows, the width preference participates only
+            // when a body exists — the knob declares the BODY's need.
+            self.body.as_ref().and(self.body_width),
         );
         let initial_row = self
             .initial
@@ -453,6 +520,7 @@ impl ChoicePrompt {
         let panel = geo.panel;
         let spec_resolve = resolve.clone();
         let dismissable = self.dismissable;
+        let dismiss_label = self.dismiss_label;
         let body = self.body;
         let modal = Modal::open(&overlays, cx, viewport, panel, move |mcx| {
             view::gate_content(
@@ -464,6 +532,7 @@ impl ChoicePrompt {
                     initial_row,
                     initial_checked,
                     dismissable,
+                    dismiss_label,
                     resolve: spec_resolve,
                     body,
                 },
@@ -478,7 +547,9 @@ impl ChoicePrompt {
 #[derive(Clone)]
 pub struct ChoicePromptHandle {
     resolved: Rc<Cell<bool>>,
-    resolve: Rc<dyn Fn(ChoiceOutcome)>,
+    /// The shared close half (exactly-once flag + modal close); yields
+    /// the not-yet-fired callback, `None` once consumed.
+    finish: Rc<dyn Fn() -> Option<ResolveFn>>,
 }
 
 impl ChoicePromptHandle {
@@ -486,10 +557,29 @@ impl ChoicePromptHandle {
     /// exactly-once path as Escape — the gated flow always hears back;
     /// a gate never closes silently. No-op once resolved.
     pub fn cancel(&self) {
-        (self.resolve)(ChoiceOutcome::Cancelled);
+        if let Some(cb) = (self.finish)() {
+            cb(ChoiceOutcome::Cancelled);
+        }
     }
 
-    /// True until the prompt resolves (either way).
+    /// HOST retire (first-app 0271): close the gate WITHOUT invoking
+    /// `on_resolve` — the exactly-once flag is consumed, so no later
+    /// ending (Esc, buttons, `cancel()`, stray keys) can ever fire the
+    /// callback. Retiring means the HOST owns the outcome: it is
+    /// replacing the prompt with another surface or resolving the
+    /// gated question through another lane (a policy auto-approval, a
+    /// tier change), and a `Cancelled` here would be indistinguishable
+    /// from the USER dismissing — the exact conflation this verb
+    /// exists to remove. Idempotent; a retire after the prompt already
+    /// resolved is a no-op (the answer already reached the flow).
+    pub fn retire(&self) {
+        // The callback is deliberately DROPPED, never called: the
+        // close half still runs exactly once (modal removed, state
+        // disposed) — only the outcome delivery is the host's now.
+        drop((self.finish)());
+    }
+
+    /// True until the prompt resolves (either way) or is retired.
     pub fn is_open(&self) -> bool {
         !self.resolved.get()
     }

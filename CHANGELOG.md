@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.10] - 2026-07-23
+
+### Added
+
+- app: `ChoicePrompt::body_width(cols)` (first-app 0271, the adoption
+  blocker) — a minimum content width the BODY contributes to the
+  panel's measure. The panel was content-derived from the options,
+  prompt, hint and buttons while the body closure stayed invisible to
+  width, so a 72-col approval-card body clipped inside a ~45-col panel
+  sized by three short options. The declared width folds into the same
+  max/clamp as every other content line: the prompt wraps at the
+  widened width, options/hint gain the room, narrow viewports still
+  clamp with the existing margins (the body then clips inside its
+  region — never the options). Like `body_rows`, it participates only
+  when a `body` is set. `examples/decide.rs` gate 2 demos the 72-col
+  case.
+- app: `ChoicePrompt::dismiss_label(label)` (first-app 0271) — the
+  dismiss affordance's vocabulary follows the caller: the button, the
+  hint's Esc segment (`Esc Defer`) and the advertised Esc shortcut all
+  carry the label, for surfaces whose Esc is not a cancel (the
+  approval consumer's Esc DEFERS — the gated run keeps waiting;
+  "Cancel" beside a "Deny" option mislabeled the consent surface). The
+  outcome stays `ChoiceOutcome::Cancelled` (the caller's wiring maps
+  it); the unset default keeps the built-in "Cancel"/"Esc cancels"
+  byte-identical; irrelevant under `dismissable(false)` (must-choose
+  still refuses visibly). Button/hint widths are measured from the
+  actual label.
+- app: `ChoicePromptHandle::retire()` (first-app 0271) — HOST close
+  without resolving: the modal closes, `on_resolve` never fires, and
+  the consumed exactly-once flag keeps every later ending (Esc,
+  buttons, `cancel()`, stray keys) inert. Retiring means the host owns
+  the outcome (picker-replace, policy auto-approval while the prompt
+  is up) — distinct by construction from the user's Esc, which still
+  resolves `Cancelled`; consumers no longer thread a side-channel flag
+  to keep "user deferred" apart from "host retired". Idempotent; a
+  no-op after resolution.
+
 ## [0.2.9] - 2026-07-23
 
 ### Added
@@ -958,7 +995,7 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
-[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.2.8...HEAD
+[0.2.10]: https://github.com/lpalbou/abstracttui/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/lpalbou/abstracttui/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/lpalbou/abstracttui/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/lpalbou/abstracttui/compare/v0.2.6...v0.2.7

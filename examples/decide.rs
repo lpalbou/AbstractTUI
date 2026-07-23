@@ -11,7 +11,9 @@
 //!   with a BODY (first-app 0287): a scrollable manifest of what the
 //!   agent asked for, rendered between the prompt and the options —
 //!   the wheel scrolls it while arrows/Space/Enter stay with the
-//!   options,
+//!   options; the manifest carries a 72-col command row, so the gate
+//!   declares `body_width(72)` (first-app 0271) — the panel widens to
+//!   fit it instead of clipping at the options' natural width,
 //! - `3` a two-step setup sequence (`ChoiceSequence`).
 //!
 //! The status line renders the last outcome: the flow CONTINUES in
@@ -109,12 +111,21 @@ fn main() -> abstracttui::base::Result<()> {
                             "  3 fetch_url  https://crates.io/api",
                             "  4 write_file  Cargo.toml (0.4 KB)",
                             "  5 execute_command  cargo run",
+                            // The 72-col case (first-app 0271): a card
+                            // row pre-wrapped wider than the options
+                            // would size the panel.
+                            "  6 execute_command  cargo build --release --features kitty --timings -v",
                         ] {
                             rows = rows.child(text(line));
                         }
-                        Scroll::new(rows.build()).content_size(44, 6).view(mcx)
+                        Scroll::new(rows.build()).content_size(72, 7).view(mcx)
                     })
                     .body_rows(4)
+                    // The body's declared content width: the panel
+                    // widens to fit the manifest (still clamped into
+                    // the viewport on narrow terminals — the body then
+                    // clips, never the options).
+                    .body_width(72)
                     .option_detail("fs", "File system", "read + write inside the workspace")
                     .option_detail("net", "Network", "outbound requests")
                     .option("shell", "Shell commands")

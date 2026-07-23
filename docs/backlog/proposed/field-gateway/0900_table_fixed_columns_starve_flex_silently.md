@@ -51,3 +51,11 @@ in preference order: (a) proportional shrink of fixed columns when
 oversubscribed (flex keeps a floor), (b) a debug-build log line naming
 the starved column, (c) a documented `min` on `ColWidth::Flex`. Any of
 the three deletes the app-side arithmetic.
+
+## Addendum (cycle-2 adversarial review, same build): the real cost
+The honest fix at 80 cols was width-aware column SETS — and because
+rows and columns are separate arguments, every breakpoint is a PAIRED
+`if wide` branch in the row builder AND the column list across five
+tables (~90 lines of desync-hazard convention). A per-column
+`min_width` + drop-priority on `Column` would delete all of it: the
+row builder stays total, the widget drops columns honestly.

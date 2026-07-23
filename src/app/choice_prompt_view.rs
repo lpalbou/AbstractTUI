@@ -37,8 +37,8 @@ use super::interact::{
     hint_row, move_row, root_key_handler, toggle_row, Anchors, GateDims, GateState, HintPaint,
 };
 use super::parts::{
-    blank_row, choice_row, has_buttons, keys_summary, option_height, window_start, Geometry,
-    RowPaint, RowSpec, GLYPH_W,
+    blank_row, choice_row, dismiss_button_label, esc_segment, has_buttons, keys_summary,
+    option_height, window_start, Geometry, RowPaint, RowSpec, GLYPH_W,
 };
 use super::{ChoiceAnswer, ChoiceOutcome, ChoiceQuestion};
 
@@ -48,6 +48,9 @@ pub(crate) struct GateSpec {
     pub initial_row: usize,
     pub initial_checked: Vec<bool>,
     pub dismissable: bool,
+    /// Caller vocabulary for the dismiss affordance (first-app 0271);
+    /// None = the built-in "Cancel"/"Esc cancels".
+    pub dismiss_label: Option<String>,
     pub resolve: Rc<dyn Fn(ChoiceOutcome)>,
     /// Caller body (first-app 0287), built in the modal scope; None =
     /// the classic prompt→options gate.
@@ -64,9 +67,16 @@ pub(crate) fn gate_content(mcx: Scope, t: TokenSet, spec: GateSpec) -> View {
         initial_row,
         initial_checked,
         dismissable,
+        dismiss_label,
         resolve,
         body,
     } = spec;
+    // ONE resolution of the dismiss vocabulary feeds all three
+    // surfaces — button, advertised Esc shortcut, hint segment — so
+    // they can never disagree (a mislabeled consent affordance is the
+    // 0271 defect).
+    let dismiss_btn = dismiss_button_label(dismiss_label.as_deref()).to_string();
+    let esc_hint = dismissable.then(|| esc_segment(dismiss_label.as_deref()));
     let n = question.options.len();
     let has_other = question.other.is_some();
     let heights: Rc<Vec<i32>> = Rc::new(question.options.iter().map(option_height).collect());
@@ -513,7 +523,7 @@ pub(crate) fn gate_content(mcx: Scope, t: TokenSet, spec: GateSpec) -> View {
         if dismissable {
             let cancel_click = cancel.clone();
             row = row.child(
-                Button::new("Cancel")
+                Button::new(dismiss_btn.clone())
                     .on_click(move || cancel_click())
                     .element(mcx, &t)
                     .build(),
@@ -534,6 +544,7 @@ pub(crate) fn gate_content(mcx: Scope, t: TokenSet, spec: GateSpec) -> View {
         engaged,
         other_label,
         keys_summary(&question),
+        esc_hint,
     );
     let mut root = Element::new().style(
         LayoutStyle::column()
@@ -541,11 +552,12 @@ pub(crate) fn gate_content(mcx: Scope, t: TokenSet, spec: GateSpec) -> View {
             .height(Dimension::Percent(1.0)),
     );
     if dismissable {
-        // Advertised cancel (KeymapHelp lists it). Must-choose gates
-        // register NO Esc shortcut — advertising a dead key would lie;
-        // the root handler's visible refusal answers the attempt.
+        // Advertised dismiss (KeymapHelp lists it under the caller's
+        // label). Must-choose gates register NO Esc shortcut —
+        // advertising a dead key would lie; the root handler's visible
+        // refusal answers the attempt.
         let cancel_esc = cancel.clone();
-        root = root.shortcut_labeled(KeyChord::plain(Key::Escape), "Cancel", move |_| {
+        root = root.shortcut_labeled(KeyChord::plain(Key::Escape), dismiss_btn, move |_| {
             cancel_esc()
         });
     }

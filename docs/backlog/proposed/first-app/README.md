@@ -10,14 +10,9 @@ item records the workaround so the engine fix can delete it.
 | ID | Title | Class |
 | --- | --- | --- |
 | 0260 | Disclosure widget — graphical per-item fold/unfold (maintainer ask) | feature |
+| 0272 | ChoicePrompt aux-key vocabulary — no non-option key surface, hint row closed to callers (split out of 0271 at its completion; the `f` cards↔JSON toggle ask) | API gap |
 | 0280 | Feed custom blocks cannot host widgets — protocol images degrade to mosaic | capability gap |
-| 0281 | Scroll never re-clamps a bound offset when content shrinks under it | API gap |
-| 0282 | `FeedState::sync` source shape too narrow — fold-shaped stores cannot adopt (borrow-based `sync_with` ask) | API gap |
-| 0283 | Capped preview blocks — width-aware `max_rows` + honest overflow marker on Text/Rich feed blocks (+ hang-indent, tight-rhythm notes) | capability gap |
-| 0284 | TextArea/TextInput placeholder paints unclipped past the widget rect (both branches; surfaced by the 0291 adoption) | rendering defect |
 | 0289 | Typed uppercase inserts lowercase on kitty-spelling wires — `convert_event` drops the kitty `text` field; TextInput inserts the base char (found during the 0286/0288 verification) | bug |
-| 0292 | Completion triggers fire on any mid-text token — no position policy (renumbered from 0300: band collision with control-plane) | API gap |
-| 0294 | Anchored panel places short lists over the chrome below instead of flipping up (renumbered from 0310) | UX defect |
 
 Completed (moved to `../../completed/first-app/`, 2026-07-21 wave cycle 1):
 
@@ -57,8 +52,19 @@ Completed 2026-07-23 (choice-fix wave):
 | 0287 | ChoicePrompt body slot — `.body(\|mcx\| view)` + `body_rows(n)`: scrollable/reactive display region between prompt and options; options allocated first (0240), wheel-over-body scrolls the body, keys stay with the options | API gap |
 | 0288 | ChoicePrompt `option_key` uppercase dead on kitty — the same fold at the letter matcher (`KeyEvent::normalized`/`means_char`); `option_key(…, 'A')` fires on `CSI 97;2u`, lowercase-declared keys still refuse Shift+letter | bug |
 
+Completed 2026-07-23 (choice-0271 wave):
+
+| ID | Title | Class |
+| --- | --- | --- |
+| 0271 | ChoicePrompt approval-gate adoption gaps — `body_width(cols)` (body participates in the panel's measure), `dismiss_label(label)` (button + hint + advertised Esc follow the caller's vocabulary; outcome stays `Cancelled`), `handle.retire()` (host close without resolving — distinct from user-Esc). The aux-key gap (gap 2) was split out UNSHIPPED to 0272 above. | API gap |
+
 Table reconciliation (2026-07-23, by the consumer while filing 0281-0283):
 the open table above had gone stale against the directory — 0250 (fixed
 0.2.0), 0290 (0.2.2), 0297 (0.2.3) and 0298 all live in
 `../../completed/first-app/`; their rows are removed from the open table.
 The directory is the truth.
+
+Table reconciliation (2026-07-23, by the consumer while filing 0271):
+0281-0284, 0292 and 0294 live in `../../completed/first-app/` (the
+0.2.6-0.2.9 fix waves); their rows are removed from the open table
+above. The directory is the truth.

@@ -32,3 +32,4 @@ Each item carries a severity in its Metadata and in the row here:
 | 0810 | List rows are plain strings — no badge slot | capability gap | P3 |
 | 0820 | Connection has no app-initiated re-dial verb | API gap | P3 |
 | 0830 | reconnect countdown needs app-side deadline bookkeeping | API gap | P3 |
+| 0840 | layout docs: grow vs intrinsic basis for content-heavy panes | UX defect (docs) | P3 |

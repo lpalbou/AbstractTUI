@@ -805,7 +805,15 @@ the Confirm/Cancel buttons, Escape, and the returned handle's `cancel()`
 all funnel into the same path; the modal is already closed when the
 callback runs, so it may dispose anything (including its opener) or open
 the next prompt. An outside click is swallowed, never a dismissal: a
-decision gate has explicit endings only.
+decision gate has explicit endings only. The one deliberate exception is
+the handle's `retire()`: the HOST closes the gate with NO outcome —
+`on_resolve` never fires, and the consumed exactly-once flag guarantees
+no later ending (Esc, buttons, `cancel()`) ever will. Retiring says the
+host owns the outcome (it is replacing the prompt with another surface,
+or resolving the gated question through another lane), so "host retired,
+reopen later" stays distinguishable from the user's Esc (`Cancelled` —
+"user dismissed, stay away"). Idempotent; a retire after resolution is a
+no-op.
 
 Selection follows the engine-wide vocabulary (movement is not
 activation): single mode — the highlight IS the candidate (`●`), arrows/
@@ -844,6 +852,14 @@ second cancels — the hint tells the truth per state.
 `dismissable(false)` is the must-choose mode for destructive gates: no
 Cancel button, no advertised Esc; Esc REFUSES visibly ("an answer is
 required") while `handle.cancel()` keeps the programmatic lever.
+`dismiss_label("Defer")` renames the dismiss affordance everywhere it
+renders — the button, the hint's Esc segment (`Esc Defer`; the unset
+default keeps the built-in "Esc cancels" — the engine never conjugates
+a caller label) and the advertised shortcut — for surfaces whose Esc is
+not a cancel (the approval consumer's Esc DEFERS: the gated run keeps
+waiting). The OUTCOME stays `ChoiceOutcome::Cancelled`; the label names
+what the caller's wiring does with it. Irrelevant under
+`dismissable(false)`.
 `ChoiceOption::danger(true)` / `.danger(id)` tints a destructive
 option's glyph+label with the `Error` token (the audited selection pair
 still wins while that row is highlighted with the list focused).
@@ -872,10 +888,19 @@ letters/Enter bubble past it to the gate). The WHEEL scrolls a
 highlight elsewhere. Height honesty: the options are allocated FIRST
 (never crushed by a tall body — the 0240 law); the body absorbs what
 remains up to `body_rows`, floors at one row under pressure, and
-clips instead of painting over the rows below. The prompt string
-still wraps/ellipsizes as before — structure belongs in the body, not
-in a mile-long prompt. The body adds only its own honest display
-entries to the a11y tree; the question/options contract is untouched.
+clips instead of painting over the rows below. Width: the panel is
+content-derived (options, prompt, hint, buttons) and the body closure
+is opaque to that measure, so a body wider than the question would
+size the panel declares its need with `body_width(cols)` — a minimum
+content width that participates in the same measure (the prompt then
+wraps at the widened width; options and hint gain the room), still
+clamped into the viewport with the existing margins: on a narrow
+terminal the body clips inside its region as before, never the
+options. Like `body_rows`, it participates only when a body is set.
+The prompt string still wraps/ellipsizes as before — structure
+belongs in the body, not in a mile-long prompt. The body adds only
+its own honest display entries to the a11y tree; the question/options
+contract is untouched.
 
 `ChoiceSequence::new(vec![q1, q2]).on_resolve(..).open(cx)` chains
 several questions (each opens as the previous resolves);

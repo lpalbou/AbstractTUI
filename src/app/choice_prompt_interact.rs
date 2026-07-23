@@ -236,7 +236,9 @@ pub(crate) struct HintPaint {
 /// The hint row: refusal notes first (hollow Other, then the
 /// non-dismissable Esc refusal), the layered-Esc truth while the Other
 /// editor is focused, else the verb segments (+ the windowed `i/N`
-/// position, right-aligned so it survives narrow panels).
+/// position, right-aligned so it survives narrow panels). `esc` = the
+/// ready Esc segment ("Esc cancels" / "Esc <dismiss label>" — 0271),
+/// `None` on must-choose gates.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn hint_row(
     s: GateState,
@@ -245,6 +247,7 @@ pub(crate) fn hint_row(
     engaged: Memo<bool>,
     other_label: String,
     keys: String,
+    esc: Option<String>,
 ) -> View {
     dyn_view(
         LayoutStyle::default()
@@ -281,7 +284,7 @@ pub(crate) fn hint_row(
                     String::from("Esc back to the list"),
                 ]
             } else {
-                hint_segments(d.multiple, d.dismissable, &keys)
+                hint_segments(d.multiple, esc.as_deref(), &keys)
             };
             let bg = paint.ground;
             Element::new()

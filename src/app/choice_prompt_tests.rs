@@ -430,3 +430,8 @@ mod flows;
 // Esc, danger tint, a11y tree, focus affordance): the c2 sibling.
 #[path = "choice_prompt_tests_c2.rs"]
 mod c2;
+
+// First-app 0271 folds (body_width, dismiss_label, handle.retire):
+// the c3 sibling.
+#[path = "choice_prompt_tests_c3.rs"]
+mod c3;

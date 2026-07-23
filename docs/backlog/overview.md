@@ -21,8 +21,8 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | State | Count |
 | --- | --- |
 | Planned | 5 |
-| Proposed | 56 |
-| Completed | 47 |
+| Proposed | 65 |
+| Completed | 48 |
 | Deprecated | 0 |
 | Recurrent | 0 |
 
@@ -123,6 +123,7 @@ composer wave).
 | 0286 | KeyChord shifted-letter dual-spelling folded at every chord-match site (`KeyChord::normalized`; tree shortcuts, Actions, `pressed_chord`) — completed 2026-07-23 | completed/first-app/ |
 | 0287 | ChoicePrompt `.body(view)` slot — structured/scrollable/reactive display region; options-first height budget — completed 2026-07-23 | completed/first-app/ |
 | 0288 | ChoicePrompt `option_key` uppercase dead on kitty — letter matcher folds both wire spellings (`KeyEvent::means_char`) — completed 2026-07-23 | completed/first-app/ |
+| 0271 | ChoicePrompt approval-gate adoption gaps: `body_width` (body joins the panel measure), `dismiss_label` (defer-honest vocabulary), `handle.retire()` (host close without resolving) — completed 2026-07-23 | completed/first-app/ |
 
 ## Proposed ledger
 
