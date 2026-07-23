@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.17] - 2026-07-25
+
+### Fixed
+
+- widgets: `Table` no longer consumes `s` when NO `on_sort_requested`
+  handler is bound — the 0980 field finding itself, retrofitted (the
+  0.2.16 Enter/Space consumed-only-when-bound rule now covers sort
+  too). Live impact: the gateway console's `s` = steer key died
+  whenever its runs table held focus; an unbound Table now lets `s`
+  bubble to app shortcuts
+  (`s_passes_through_to_app_shortcuts_when_no_sort_handler`).
+- changelog: restored the `## [0.2.15]` heading — the 0.2.15 entries
+  (fusion-class fix, Modal resize re-clamp, the wave-10 size/ratio
+  sweep) had been folded under `[0.2.16]` when the double-click wave
+  reused the stamped section as its Unreleased home. Errata only; no
+  code change.
+
 ## [0.2.16] - 2026-07-24
 
 ### Added
@@ -49,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (the "no double-click synthesis" claim is superseded by subsumption).
 
 
+
+## [0.2.15] - 2026-07-24
 
 ### Fixed
 
@@ -1338,6 +1357,7 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[0.2.17]: https://github.com/lpalbou/abstracttui/compare/v0.2.16...v0.2.17
 [0.2.16]: https://github.com/lpalbou/abstracttui/compare/v0.2.15...v0.2.16
 [0.2.15]: https://github.com/lpalbou/abstracttui/compare/v0.2.14...v0.2.15
 [0.2.14]: https://github.com/lpalbou/abstracttui/compare/v0.2.13...v0.2.14

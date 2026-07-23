@@ -244,6 +244,39 @@ fn enter_passes_through_to_app_shortcuts_when_on_activate_unbound() {
     );
 }
 
+/// The 0980 finding itself, retrofitted: a Table with NO
+/// `on_sort_requested` must leave `s` to app shortcuts (the
+/// gateway console binds `s` = steer; the table was eating it).
+#[test]
+fn s_passes_through_to_app_shortcuts_when_no_sort_handler() {
+    let size = Size::new(20, 5);
+    let steered: Rc<RefCell<u32>> = Rc::new(RefCell::new(0));
+    let s2 = steered.clone();
+    let t = default_theme().tokens;
+    let (_root, mut tree) = mount_widget(size, move |cx| {
+        let s3 = s2.clone();
+        Element::new()
+            .style(LayoutStyle::column().grow(1.0))
+            .shortcut(crate::ui::KeyChord::plain(Key::Char('s')), move |_| {
+                *s3.borrow_mut() += 1;
+            })
+            .child(
+                Table::new(vec![Column::new("name", ColWidth::Flex(1.0))])
+                    .rows((0..3).map(|i| vec![format!("f{i}")]).collect())
+                    .element(cx, &t)
+                    .build(),
+            )
+            .build()
+    });
+    key(&mut tree, Key::Tab); // focus the table
+    key(&mut tree, Key::Char('s'));
+    assert_eq!(
+        *steered.borrow(),
+        1,
+        "a sort-less Table must not consume 's'"
+    );
+}
+
 #[test]
 fn double_click_activates_once_and_slow_or_single_clicks_never() {
     let size = Size::new(20, 5);

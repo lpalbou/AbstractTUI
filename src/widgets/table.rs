@@ -243,6 +243,10 @@ impl Table {
                     // (start after the currently sorted one) — the same
                     // on_sort_requested contract a header click fires;
                     // the app's `sorted` prop moves the indicator.
+                    // Consumed ONLY when a sort handler is bound — the
+                    // 0980 finding itself (an unbound Table ate the
+                    // app's own `s` shortcut; the Enter/Space rule
+                    // above, retrofitted to sort).
                     if k.key == Key::Char('s') {
                         let ncols = handler_widths.len();
                         if ncols > 0 {
@@ -252,8 +256,8 @@ impl Table {
                             };
                             if let Some(f) = on_sort.borrow_mut().as_mut() {
                                 f(next);
+                                ctx.stop_propagation();
                             }
-                            ctx.stop_propagation();
                         }
                         return;
                     }
