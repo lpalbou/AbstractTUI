@@ -1,32 +1,33 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 990 540" width="990" height="540" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="15" xml:space="preserve">
 <rect width="990" height="540" fill="#000000"/>
 <g shape-rendering="crispEdges">
-<rect x="0" y="0" width="990" height="18" fill="#1a1a2e"/>
+<rect x="9" y="0" width="126" height="18" fill="#1a1a2e"/>
+<rect x="144" y="0" width="846" height="18" fill="#1a1a2e"/>
 <rect x="0" y="18" width="990" height="18" fill="#1a1a2e"/>
-<rect x="0" y="36" width="9" height="18" fill="#1a1a2e"/>
-<rect x="9" y="36" width="234" height="18" fill="#58273d"/>
-<rect x="243" y="36" width="459" height="18" fill="#1a1a2e"/>
-<rect x="702" y="36" width="279" height="18" fill="#16213e"/>
-<rect x="981" y="36" width="9" height="18" fill="#1a1a2e"/>
+<rect x="0" y="36" width="990" height="18" fill="#1a1a2e"/>
 <rect x="0" y="54" width="9" height="18" fill="#1a1a2e"/>
 <rect x="9" y="54" width="234" height="18" fill="#58273d"/>
-<rect x="243" y="54" width="747" height="18" fill="#1a1a2e"/>
-<rect x="0" y="72" width="990" height="18" fill="#1a1a2e"/>
+<rect x="243" y="54" width="459" height="18" fill="#1a1a2e"/>
+<rect x="702" y="54" width="279" height="18" fill="#16213e"/>
+<rect x="981" y="54" width="9" height="18" fill="#1a1a2e"/>
+<rect x="0" y="72" width="9" height="18" fill="#1a1a2e"/>
+<rect x="9" y="72" width="234" height="18" fill="#58273d"/>
+<rect x="243" y="72" width="747" height="18" fill="#1a1a2e"/>
 <rect x="0" y="90" width="990" height="18" fill="#1a1a2e"/>
 <rect x="0" y="108" width="990" height="18" fill="#1a1a2e"/>
 <rect x="0" y="126" width="990" height="18" fill="#1a1a2e"/>
 <rect x="0" y="144" width="990" height="18" fill="#1a1a2e"/>
-<rect x="0" y="162" width="711" height="18" fill="#1a1a2e"/>
-<rect x="711" y="162" width="243" height="18" fill="#58273d"/>
-<rect x="954" y="162" width="36" height="18" fill="#1a1a2e"/>
+<rect x="0" y="162" width="990" height="18" fill="#1a1a2e"/>
 <rect x="0" y="180" width="711" height="18" fill="#1a1a2e"/>
-<rect x="711" y="180" width="72" height="18" fill="#0f3460"/>
-<rect x="783" y="180" width="207" height="18" fill="#1a1a2e"/>
-<rect x="0" y="198" width="990" height="18" fill="#1a1a2e"/>
-<rect x="0" y="216" width="711" height="18" fill="#1a1a2e"/>
-<rect x="711" y="216" width="261" height="18" fill="#0f3460"/>
-<rect x="972" y="216" width="18" height="18" fill="#1a1a2e"/>
-<rect x="0" y="234" width="990" height="18" fill="#1a1a2e"/>
+<rect x="711" y="180" width="243" height="18" fill="#58273d"/>
+<rect x="954" y="180" width="36" height="18" fill="#1a1a2e"/>
+<rect x="0" y="198" width="711" height="18" fill="#1a1a2e"/>
+<rect x="711" y="198" width="72" height="18" fill="#0f3460"/>
+<rect x="783" y="198" width="207" height="18" fill="#1a1a2e"/>
+<rect x="0" y="216" width="990" height="18" fill="#1a1a2e"/>
+<rect x="0" y="234" width="711" height="18" fill="#1a1a2e"/>
+<rect x="711" y="234" width="261" height="18" fill="#0f3460"/>
+<rect x="972" y="234" width="18" height="18" fill="#1a1a2e"/>
 <rect x="0" y="252" width="990" height="18" fill="#1a1a2e"/>
 <rect x="0" y="270" width="990" height="18" fill="#1a1a2e"/>
 <rect x="0" y="288" width="990" height="18" fill="#1a1a2e"/>
@@ -46,160 +47,142 @@
 <rect x="0" y="504" width="990" height="18" fill="#1a1a2e"/>
 <rect x="0" y="522" width="990" height="18" fill="#1a1a2e"/>
 </g>
-<text x="9" y="14" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#e94560">Themes</text>
-<text x="63" y="14" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">  —  </text>
-<text x="108" y="14" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Dark (Abstract)</text>
-<text x="243" y="14" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> (dark)</text>
-<text x="702" y="32" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#666666">preview</text>
-<text x="9" y="50" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#27ae60">● </text>
-<text x="27" y="50" textLength="684" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Dark (Abstract)            Light (Abstract)                                 </text>
-<text x="711" y="50" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e94560">▲ app</text>
-<text x="927" y="50" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">12:04</text>
-<text x="27" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1a1a2e">██</text>
-<text x="45" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#16213e">██</text>
-<text x="63" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#0f3460">██</text>
-<text x="81" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">██</text>
-<text x="99" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">██</text>
-<text x="117" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#27ae60">██</text>
-<text x="135" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f39c12">██</text>
-<text x="153" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e74c3c">██</text>
-<text x="171" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">██</text>
-<text x="270" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f7f7fb">██</text>
-<text x="288" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ffffff">██</text>
-<text x="306" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e6e8f0">██</text>
-<text x="324" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">██</text>
-<text x="342" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#2563eb">██</text>
-<text x="360" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#12883e">██</text>
-<text x="378" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#b16105">██</text>
-<text x="396" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#dc2626">██</text>
-<text x="414" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#2563eb">██</text>
-<text x="0" y="86" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">                                                                               primary text                   </text>
-<text x="0" y="104" textLength="711" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Observer Night             Catppuccin Mocha                                 </text>
-<text x="711" y="104" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">secondary label</text>
-<text x="27" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#0b0f14">██</text>
-<text x="45" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#10161e">██</text>
-<text x="63" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#161e28">██</text>
-<text x="81" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e8a54a">██</text>
-<text x="99" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#6ea8d8">██</text>
-<text x="117" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#7bc98c">██</text>
-<text x="135" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e0af68">██</text>
-<text x="153" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#d9705a">██</text>
-<text x="171" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#6ea8d8">██</text>
-<text x="270" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1e1e2e">██</text>
-<text x="288" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#181825">██</text>
-<text x="306" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#313244">██</text>
-<text x="324" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#cba6f7">██</text>
-<text x="342" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#89b4fa">██</text>
-<text x="360" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#a6e3a1">██</text>
-<text x="378" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f9e2af">██</text>
-<text x="396" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f38ba8">██</text>
-<text x="414" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#89b4fa">██</text>
-<text x="711" y="122" textLength="99" lengthAdjust="spacingAndGlyphs" fill="#666666">placeholder</text>
-<text x="711" y="140" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#27ae60">●ok</text>
-<text x="738" y="140" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#f39c12"> ●warn</text>
-<text x="792" y="140" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e74c3c"> ●err</text>
-<text x="837" y="140" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#60a5fa"> ●info</text>
-<text x="0" y="158" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Catppuccin Macchiato       Catppuccin Frappe                                                               </text>
-<text x="27" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#24273a">██</text>
-<text x="45" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1e2030">██</text>
-<text x="63" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#363a4f">██</text>
-<text x="81" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#c6a0f6">██</text>
-<text x="99" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#8aadf4">██</text>
-<text x="117" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#a6da95">██</text>
-<text x="135" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eed49f">██</text>
-<text x="153" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ed8796">██</text>
-<text x="171" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#8aadf4">██</text>
-<text x="270" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#303446">██</text>
-<text x="288" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#292c3c">██</text>
-<text x="306" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#414559">██</text>
-<text x="324" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ca9ee6">██</text>
-<text x="342" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#8caaee">██</text>
-<text x="360" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#a6d189">██</text>
-<text x="378" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e5c890">██</text>
-<text x="396" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e78284">██</text>
-<text x="414" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#8caaee">██</text>
-<text x="432" y="176" textLength="558" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">                                selected row                  </text>
-<text x="0" y="194" textLength="801" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">                                                                                action   </text>
-<text x="801" y="194" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">link</text>
-<text x="0" y="212" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Rose Pine                  Rose Pine Moon                                                                  </text>
-<text x="27" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#191724">██</text>
-<text x="45" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1f1d2e">██</text>
-<text x="63" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#26233a">██</text>
-<text x="81" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#c4a7e7">██</text>
-<text x="99" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#31748f">██</text>
-<text x="117" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#9ccfd8">██</text>
-<text x="135" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f6c177">██</text>
-<text x="153" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eb6f92">██</text>
-<text x="171" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3d90b1">██</text>
-<text x="270" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#232136">██</text>
-<text x="288" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#2a273f">██</text>
-<text x="306" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#393552">██</text>
-<text x="324" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#c4a7e7">██</text>
-<text x="342" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3e8fb0">██</text>
-<text x="360" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#9ccfd8">██</text>
-<text x="378" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f6c177">██</text>
-<text x="396" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eb6f92">██</text>
-<text x="414" y="230" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#459bbd">██</text>
-<text x="711" y="230" textLength="171" lengthAdjust="spacingAndGlyphs" fill="#e94560">███████████████████</text>
-<text x="0" y="266" textLength="711" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Tokyo Night                Nord                                             </text>
-<text x="711" y="266" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">──────  </text>
-<text x="783" y="266" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#e94560">──────</text>
-<text x="27" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1a1b26">██</text>
-<text x="45" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#24283b">██</text>
-<text x="63" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#414868">██</text>
-<text x="81" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#7aa2f7">██</text>
-<text x="99" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#2ac3de">██</text>
-<text x="117" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#9ece6a">██</text>
-<text x="135" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e0af68">██</text>
-<text x="153" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f7768e">██</text>
-<text x="171" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#2ac3de">██</text>
-<text x="270" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#2e3440">██</text>
-<text x="288" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3b4252">██</text>
-<text x="306" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#434c5e">██</text>
-<text x="324" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#88c0d0">██</text>
-<text x="342" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#5e81ac">██</text>
-<text x="360" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#a3be8c">██</text>
-<text x="378" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ebcb8b">██</text>
-<text x="396" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#d89fa4">██</text>
-<text x="414" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#9bb0cb">██</text>
-<text x="0" y="320" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   One Dark                   Dracula                                                                         </text>
-<text x="27" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#282c34">██</text>
-<text x="45" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#21252b">██</text>
-<text x="63" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3a3f4b">██</text>
-<text x="81" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#61afef">██</text>
-<text x="99" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#c678dd">██</text>
-<text x="117" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#98c379">██</text>
-<text x="135" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e5c07b">██</text>
-<text x="153" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e06c75">██</text>
-<text x="171" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#c678dd">██</text>
-<text x="270" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#282a36">██</text>
-<text x="288" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#343746">██</text>
-<text x="306" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#44475a">██</text>
-<text x="324" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ff79c6">██</text>
-<text x="342" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#8be9fd">██</text>
-<text x="360" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#50fa7b">██</text>
-<text x="378" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f1fa8c">██</text>
-<text x="396" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ff7979">██</text>
-<text x="414" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#8be9fd">██</text>
-<text x="0" y="374" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Monokai                    Gruvbox                                                                         </text>
-<text x="27" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#272822">██</text>
-<text x="45" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#2d2e27">██</text>
-<text x="63" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3e3d32">██</text>
-<text x="81" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#66d9ef">██</text>
-<text x="99" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#a1efe4">██</text>
-<text x="117" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#a6e22e">██</text>
-<text x="135" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e6db74">██</text>
-<text x="153" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#fb5d95">██</text>
-<text x="171" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#a1efe4">██</text>
-<text x="270" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#282828">██</text>
-<text x="288" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3836">██</text>
-<text x="306" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#504945">██</text>
-<text x="324" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#fe8019">██</text>
-<text x="342" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#83a598">██</text>
-<text x="360" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#b8bb26">██</text>
-<text x="378" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#fabd2f">██</text>
-<text x="396" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#fc7f70">██</text>
-<text x="414" y="392" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#89a99d">██</text>
+<text x="0" y="14" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">☾ theme menu · ☾ dark/light toggle                                                                            </text>
+<text x="9" y="32" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#e94560">Themes</text>
+<text x="63" y="32" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">  —  </text>
+<text x="108" y="32" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Dark (Abstract)</text>
+<text x="243" y="32" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> (dark)</text>
+<text x="702" y="50" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#666666">preview</text>
+<text x="9" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#27ae60">● </text>
+<text x="27" y="68" textLength="684" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Dark (Abstract)            Light (Abstract)                                 </text>
+<text x="711" y="68" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e94560">▲ app</text>
+<text x="927" y="68" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">12:04</text>
+<text x="27" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1a1a2e">██</text>
+<text x="45" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#16213e">██</text>
+<text x="63" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#0f3460">██</text>
+<text x="81" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">██</text>
+<text x="99" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">██</text>
+<text x="117" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#27ae60">██</text>
+<text x="135" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f39c12">██</text>
+<text x="153" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e74c3c">██</text>
+<text x="171" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">██</text>
+<text x="270" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f7f7fb">██</text>
+<text x="288" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ffffff">██</text>
+<text x="306" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e6e8f0">██</text>
+<text x="324" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">██</text>
+<text x="342" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#2563eb">██</text>
+<text x="360" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#12883e">██</text>
+<text x="378" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#b16105">██</text>
+<text x="396" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#dc2626">██</text>
+<text x="414" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#2563eb">██</text>
+<text x="0" y="104" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">                                                                               primary text                   </text>
+<text x="0" y="122" textLength="711" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Observer Night             Catppuccin Mocha                                 </text>
+<text x="711" y="122" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">secondary label</text>
+<text x="27" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#0b0f14">██</text>
+<text x="45" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#10161e">██</text>
+<text x="63" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#161e28">██</text>
+<text x="81" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e8a54a">██</text>
+<text x="99" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#6ea8d8">██</text>
+<text x="117" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#7bc98c">██</text>
+<text x="135" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e0af68">██</text>
+<text x="153" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#d9705a">██</text>
+<text x="171" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#6ea8d8">██</text>
+<text x="270" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1e1e2e">██</text>
+<text x="288" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#181825">██</text>
+<text x="306" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#313244">██</text>
+<text x="324" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#cba6f7">██</text>
+<text x="342" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#89b4fa">██</text>
+<text x="360" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#a6e3a1">██</text>
+<text x="378" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f9e2af">██</text>
+<text x="396" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f38ba8">██</text>
+<text x="414" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#89b4fa">██</text>
+<text x="711" y="140" textLength="99" lengthAdjust="spacingAndGlyphs" fill="#666666">placeholder</text>
+<text x="711" y="158" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#27ae60">●ok</text>
+<text x="738" y="158" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#f39c12"> ●warn</text>
+<text x="792" y="158" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e74c3c"> ●err</text>
+<text x="837" y="158" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#60a5fa"> ●info</text>
+<text x="0" y="176" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Catppuccin Macchiato       Catppuccin Frappe                                                               </text>
+<text x="27" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#24273a">██</text>
+<text x="45" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1e2030">██</text>
+<text x="63" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#363a4f">██</text>
+<text x="81" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#c6a0f6">██</text>
+<text x="99" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#8aadf4">██</text>
+<text x="117" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#a6da95">██</text>
+<text x="135" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eed49f">██</text>
+<text x="153" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ed8796">██</text>
+<text x="171" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#8aadf4">██</text>
+<text x="270" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#303446">██</text>
+<text x="288" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#292c3c">██</text>
+<text x="306" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#414559">██</text>
+<text x="324" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ca9ee6">██</text>
+<text x="342" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#8caaee">██</text>
+<text x="360" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#a6d189">██</text>
+<text x="378" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e5c890">██</text>
+<text x="396" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e78284">██</text>
+<text x="414" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#8caaee">██</text>
+<text x="432" y="194" textLength="558" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">                                selected row                  </text>
+<text x="0" y="212" textLength="801" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">                                                                                action   </text>
+<text x="801" y="212" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">link</text>
+<text x="0" y="230" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Rose Pine                  Rose Pine Moon                                                                  </text>
+<text x="27" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#191724">██</text>
+<text x="45" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1f1d2e">██</text>
+<text x="63" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#26233a">██</text>
+<text x="81" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#c4a7e7">██</text>
+<text x="99" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#31748f">██</text>
+<text x="117" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#9ccfd8">██</text>
+<text x="135" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f6c177">██</text>
+<text x="153" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eb6f92">██</text>
+<text x="171" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3d90b1">██</text>
+<text x="270" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#232136">██</text>
+<text x="288" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#2a273f">██</text>
+<text x="306" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#393552">██</text>
+<text x="324" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#c4a7e7">██</text>
+<text x="342" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3e8fb0">██</text>
+<text x="360" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#9ccfd8">██</text>
+<text x="378" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f6c177">██</text>
+<text x="396" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eb6f92">██</text>
+<text x="414" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#459bbd">██</text>
+<text x="711" y="248" textLength="171" lengthAdjust="spacingAndGlyphs" fill="#e94560">███████████████████</text>
+<text x="0" y="284" textLength="711" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Tokyo Night                Nord                                             </text>
+<text x="711" y="284" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">──────  </text>
+<text x="783" y="284" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#e94560">──────</text>
+<text x="27" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1a1b26">██</text>
+<text x="45" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#24283b">██</text>
+<text x="63" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#414868">██</text>
+<text x="81" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#7aa2f7">██</text>
+<text x="99" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#2ac3de">██</text>
+<text x="117" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#9ece6a">██</text>
+<text x="135" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e0af68">██</text>
+<text x="153" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f7768e">██</text>
+<text x="171" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#2ac3de">██</text>
+<text x="270" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#2e3440">██</text>
+<text x="288" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3b4252">██</text>
+<text x="306" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#434c5e">██</text>
+<text x="324" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#88c0d0">██</text>
+<text x="342" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#5e81ac">██</text>
+<text x="360" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#a3be8c">██</text>
+<text x="378" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ebcb8b">██</text>
+<text x="396" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#d89fa4">██</text>
+<text x="414" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#9bb0cb">██</text>
+<text x="0" y="338" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   One Dark                   Dracula                                                                         </text>
+<text x="27" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#282c34">██</text>
+<text x="45" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#21252b">██</text>
+<text x="63" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3a3f4b">██</text>
+<text x="81" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#61afef">██</text>
+<text x="99" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#c678dd">██</text>
+<text x="117" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#98c379">██</text>
+<text x="135" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e5c07b">██</text>
+<text x="153" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e06c75">██</text>
+<text x="171" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#c678dd">██</text>
+<text x="270" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#282a36">██</text>
+<text x="288" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#343746">██</text>
+<text x="306" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#44475a">██</text>
+<text x="324" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ff79c6">██</text>
+<text x="342" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#8be9fd">██</text>
+<text x="360" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#50fa7b">██</text>
+<text x="378" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f1fa8c">██</text>
+<text x="396" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ff7979">██</text>
+<text x="414" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#8be9fd">██</text>
 <text x="468" y="428" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">· · ·</text>
 <text x="9" y="446" textLength="810" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">Dark (Abstract)  text 14.7:1 · muted 7.3:1 · faint 3.0:1 · accent 4.5:1 · selection 10.2:1</text>
 <text x="0" y="464" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> text </text>

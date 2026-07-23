@@ -160,6 +160,62 @@ The shipped examples honor `ABSTRACTTUI_THEME=<id>` as a startup
 convention — `set_theme_by_id` at boot is all it takes to adopt the same
 convention in your app.
 
+## Theme modes & the switcher
+
+Polarity is a first-class vocabulary: `ThemeMode::{Dark, Light}` is a
+closed enum (the decisive-ground invariant leaves no room for a third
+value), `theme.mode()` derives it from the audited `dark` flag — one
+source, never a second luminance threshold — and
+`theme::themes_by_mode(mode)` lists every visible theme of one mode in
+the same curated order `list()` presents: built-ins in registry order
+(the house palette of each mode first), runtime registrations trailing.
+That "first of mode is the house theme" fact is documented and pinned;
+pickers and the toggle default rely on it.
+
+`app::toggle_mode()` flips dark ↔ light while keeping the user's theme
+*choice* per mode: `set_theme` (the one signal-write choke point)
+records every switch as its mode's last-used theme, so
+`nord → toggle → abstract-light → toggle → nord` round-trips. A mode
+never visited on this thread falls back to its house palette.
+
+`ThemeSwitcher` is the drop-in control — one line in any app's chrome:
+
+```rust
+use abstracttui::prelude::*;
+
+// In your header / tab bar / footer row:
+let menu = ThemeSwitcher::new().view(cx); // ☾/☼ button; opens the grouped menu
+let flip = ThemeSwitcher::toggle().view(cx); // same cell; one click flips the mode
+```
+
+The menu face opens an owned anchored popup (modal, above the whole
+live stack — it layers and anchors correctly inside a `Modal` or
+`Drawer`) listing every visible theme grouped **Dark** then **Light**,
+group headers as skipped rows, the active theme marked `●`. It rides
+the select-family machinery: Up/Down/Home/End/PageUp/PageDown move,
+type-ahead jumps by label prefix (a repeated letter cycles its
+matches), Enter or a click commits, Escape restores the pre-open theme,
+and a press outside keeps what you previewed. Movement previews the
+theme **live** — the `Select::commit_on_move` semantic, which exists
+for exactly this control — and the menu re-resolves its own tokens per
+step, so the list you are browsing is rendered in the theme it names.
+`on_change(|theme| ...)` fires once per switch that *sticks* (commit or
+outside-press with a changed theme; never on preview steps, never on
+Escape) — the hook for persisting a theme preference.
+
+The glyph: the button shows the **current** mode — `☾` on dark themes,
+`☼` on light ones. A static `◐` would spend the cell on decoration; a
+mode-reflecting glyph makes the one cell double as the app's polarity
+indicator, while hover/focus affordances and the a11y label ("theme",
+value = the active theme's label) carry the button-ness and the action.
+`☾` U+263E and `☼` U+263C are East-Asian-neutral (single-width in every
+convention) and absent from Unicode emoji-data — unlike `☀` U+2600,
+which some terminal stacks promote to a double-width emoji glyph.
+
+Closed, the switcher is zero-idle: no layers, no timers — it re-renders
+only when the theme signal or its own hover/focus state is written. The
+popup's subscriptions live on a per-open scope and die at dismissal.
+
 ## Contrast guarantees
 
 Every registered theme must pass `theme::audit(id, &tokens)` — a WCAG

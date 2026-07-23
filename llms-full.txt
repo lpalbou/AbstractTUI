@@ -1963,6 +1963,94 @@ effects synchronously — no widget holds a borrow across a user
 callback (the invariant is documented on `widgets::SharedCallback`
 and pinned by reentrancy tests on List and Select).
 
+One deliberate refinement for the paste INTERCEPT (`on_paste` below):
+an interceptor decides whether widget writes happen at all, so it runs
+FIRST — the law's guarantee is preserved from both arms (on `Consume`
+no widget write follows the hook; on `Insert` the widget re-checks its
+signals' liveness and treats a hook that disposed the scope as
+consumed, never a dead-signal panic).
+
+## File attachments — paste intercept, drop classifier, FilePicker
+
+Terminals have no drop protocol: **dropping a file onto every major
+terminal PASTES its path**, and the spelling varies per terminal. The
+engine owns the three surfaces a file-attaching app needs
+(`examples/attachments.rs` is the wired recipe; backlog
+first-app/0273):
+
+**1. The paste intercept.** `TextInput::on_paste` and
+`TextArea::on_paste` (uniform semantics) run when `UiEvent::Paste`
+reaches the focused editor, BEFORE insertion, with the RAW paste text:
+
+```rust,ignore
+TextArea::new()
+    .on_paste(|pasted| match abstracttui::input::paste::classify(pasted) {
+        Some(paths) => { attach(paths); PasteAction::Consume } // no text lands
+        None => PasteAction::Insert, // byte-identical to an unhooked editor
+    })
+```
+
+`PasteAction::Insert` = today's behavior exactly (TextInput folds line
+breaks to spaces, TextArea normalizes newlines); `Consume` = the
+editor inserts NOTHING, fires no `on_change`, touches neither caret
+nor history. The hook fires in `masked` fields too — return `Consume`
+unconditionally to block pasting into a password field. The enum is
+`#[non_exhaustive]` (ADR-0003 §3): foreign `match`es carry a `_` arm.
+
+**2. The drop classifier.** `input::paste::classify(&str) ->
+Option<Vec<String>>` — pure string parsing, zero I/O — answers "is
+this paste a file drop?" against the researched spellings of the real
+terminals (the corpus, with sources, lives in the `input::paste`
+module docs):
+
+| terminal | drop spelling |
+| --- | --- |
+| Terminal.app | backslash-escaped specials, space-joined multi-drop |
+| iTerm2 ≥ 3.4 | backslash-escaped (advanced pref: single-quoted) |
+| Ghostty | backslash-escaped; GTK multi-drop is NEWLINE-joined |
+| WezTerm | `SpacesOnly` default; `Posix`/`Windows*` = double-quoted; `None` = raw |
+| kitty | raw path as-is (no escaping, by policy) |
+| Windows Terminal | double-quoted when spaces; WSL tabs single-quote |
+| GNOME Terminal (VTE) | `file://` URIs converted to single-quoted paths |
+| MATE Terminal (bug class) | raw `file://` uri-list reaches the app |
+
+Accepted shapes per token: POSIX absolute, `~/` home-relative
+(returned as-is — expansion is YOURS), Windows drive/UNC, `file://`
+URLs (percent-decoded, empty/`localhost` host only). **The asymmetry
+policy**: a false positive EATS user text, a false negative just
+pastes — so every ambiguous case returns `None`: raw unescaped spaces
+(`/a/My File.txt` from kitty), unterminated quotes, interior blank
+lines, control characters, relative paths, non-`file:` URLs, and
+prose ("see /usr/bin for details"). Existence-checking stays app-side
+(the engine never touches the filesystem in the input path): fs-check
+the returned paths and offer a visible undo before silently attaching.
+
+**3. The picker.** `FilePicker` — breadcrumb header (left-truncated),
+live type-to-filter input (the single focus stop), entry rows with
+kind glyphs + an optional size column, keyboard nav, opt-in
+multi-select, `on_pick(Vec<String>)`:
+
+```rust,ignore
+FilePicker::new(StdFileSource::default())   // std::fs, dirs-first,
+    .start_in("/Users/me/Documents")        // hidden files skipped
+    .multi_select(true)                     // Space marks, badge counts
+    .on_pick(|paths| attach(paths))         // may close the modal (law)
+    .view(cx)
+```
+
+Keys: Enter descends a directory or picks a file (marked set when
+non-empty, else the current file); Backspace/Left go to the PARENT
+when the filter is empty (otherwise they edit the filter); Up/Down/
+Page move the selection; **Esc is never consumed** — the host modal
+owns dismissal (wire it like every modal: a `shortcut` that closes).
+The widget is PURE: entries come from the `FileSource` seam
+(`read_dir(path) -> Result<Vec<FileEntry>, String>`), so tests stay
+hermetic and archives/remote listings slot in; `StdFileSource` reads
+synchronously once per navigation (local fs is fine; a stalling
+network mount is the app's risk — the seam is the escape hatch).
+Errors render honestly in the list area ("cannot read: …"), and a
+parked picker costs zero idle bytes.
+
 ## app — the runtime
 
 `App::simple` is the whole happy path: mount a component, enter the
@@ -2227,6 +2315,53 @@ would be "open", which reads like a verb; renaming would be breaking
 and is not planned.) See `examples/shell.rs` (the 'i'/'g' drawers) and
 `examples/drawers.rs`.
 
+## app::ThemeSwitcher — the theme menu button
+
+One cell of chrome that gives any app runtime theming — mount it in a
+header, tab bar or footer row:
+
+```rust,ignore
+use abstracttui::prelude::*;
+
+// The menu face: ☾/☼ icon button (the glyph shows the CURRENT mode);
+// Enter/Space/click opens an anchored popup of every visible theme
+// grouped Dark / Light, current theme marked ●, house palettes first.
+ThemeSwitcher::new()
+    .on_change(|t| save_preference(t.id)) // fires when a switch STICKS
+    .view(cx)
+
+// The one-click face: no popup — each activation flips dark ↔ light
+// via app::toggle_mode(), restoring your last theme of the target mode.
+ThemeSwitcher::toggle().view(cx)
+```
+
+The popup rides the select-family machinery: arrows/Home/End/PageUp/
+PageDown move (group headers are skipped), type-ahead jumps by label
+prefix and a repeated letter cycles its matches, Enter or a click
+commits, Escape restores the pre-open theme, a press outside keeps the
+preview. Movement previews LIVE — the `Select::commit_on_move`
+semantic — and the menu re-resolves its own tokens per step, so the
+list renders in the theme you are previewing. It is an owned anchored
+popup: modal above the whole live stack, SCREEN-space anchored (a
+switcher inside a `Modal` or `Drawer` opens its menu adjacent to the
+button, never displaced), flipping above the anchor when the space
+below is short — a footer placement opens upward automatically.
+
+`on_change` fires once per switch that sticks (commit, or an
+outside-press that keeps a changed preview; every toggle flip) and
+never for preview steps, Escape-restores, or mechanical dismissals
+(resize, opener unmount). Live restyling needs no callback — the theme
+signal already drives it. Closed, the switcher is zero-idle. A11y: the
+trigger is `button "theme"` (toggle face: `"toggle theme mode"`) whose
+value is the active theme's label; the popup is a `menu` of
+`menuitem` rows.
+
+Mode vocabulary underneath: `ThemeMode`, `theme.mode()`,
+`theme::themes_by_mode(mode)`, `app::toggle_mode()` — see
+[docs/theming.md](theming.md#theme-modes--the-switcher). Demos:
+`examples/themes.rs` (both faces in the browser's toolbar),
+`examples/shell.rs` (footer placement).
+
 ## app::keys — key press/release state (held keys)
 
 Real-time surfaces (games' move-while-held, voice push-to-talk) need key
@@ -2446,6 +2581,16 @@ set_theme_by_id("catppuccin-mocha"); // false for unknown ids, nothing changes
 can add their own themes at runtime with `theme::register(candidate, mode)`:
 every registration runs the full contrast audit, and the mode decides
 whether violations refuse the theme or register it with labeled findings.
+
+Polarity is first-class: `ThemeMode::{Dark, Light}` (closed — the
+decisive-ground invariant admits no third value), `theme.mode()` derived
+from the audited flag, and `theme::themes_by_mode(mode)` listing one
+mode's themes in the curated order (house palette first, registrations
+trailing). `app::toggle_mode()` flips dark ↔ light restoring the
+last-used theme of the target mode (house palette on a cold start) —
+`set_theme` records every switch, so the round trip keeps your choices.
+The drop-in chrome control over all of this is
+[`app::ThemeSwitcher`](#appthemeswitcher--the-theme-menu-button).
 
 ## render — surfaces and paint (advanced)
 
@@ -3095,6 +3240,62 @@ dithering, artwork variants).
 The shipped examples honor `ABSTRACTTUI_THEME=<id>` as a startup
 convention — `set_theme_by_id` at boot is all it takes to adopt the same
 convention in your app.
+
+## Theme modes & the switcher
+
+Polarity is a first-class vocabulary: `ThemeMode::{Dark, Light}` is a
+closed enum (the decisive-ground invariant leaves no room for a third
+value), `theme.mode()` derives it from the audited `dark` flag — one
+source, never a second luminance threshold — and
+`theme::themes_by_mode(mode)` lists every visible theme of one mode in
+the same curated order `list()` presents: built-ins in registry order
+(the house palette of each mode first), runtime registrations trailing.
+That "first of mode is the house theme" fact is documented and pinned;
+pickers and the toggle default rely on it.
+
+`app::toggle_mode()` flips dark ↔ light while keeping the user's theme
+*choice* per mode: `set_theme` (the one signal-write choke point)
+records every switch as its mode's last-used theme, so
+`nord → toggle → abstract-light → toggle → nord` round-trips. A mode
+never visited on this thread falls back to its house palette.
+
+`ThemeSwitcher` is the drop-in control — one line in any app's chrome:
+
+```rust
+use abstracttui::prelude::*;
+
+// In your header / tab bar / footer row:
+let menu = ThemeSwitcher::new().view(cx); // ☾/☼ button; opens the grouped menu
+let flip = ThemeSwitcher::toggle().view(cx); // same cell; one click flips the mode
+```
+
+The menu face opens an owned anchored popup (modal, above the whole
+live stack — it layers and anchors correctly inside a `Modal` or
+`Drawer`) listing every visible theme grouped **Dark** then **Light**,
+group headers as skipped rows, the active theme marked `●`. It rides
+the select-family machinery: Up/Down/Home/End/PageUp/PageDown move,
+type-ahead jumps by label prefix (a repeated letter cycles its
+matches), Enter or a click commits, Escape restores the pre-open theme,
+and a press outside keeps what you previewed. Movement previews the
+theme **live** — the `Select::commit_on_move` semantic, which exists
+for exactly this control — and the menu re-resolves its own tokens per
+step, so the list you are browsing is rendered in the theme it names.
+`on_change(|theme| ...)` fires once per switch that *sticks* (commit or
+outside-press with a changed theme; never on preview steps, never on
+Escape) — the hook for persisting a theme preference.
+
+The glyph: the button shows the **current** mode — `☾` on dark themes,
+`☼` on light ones. A static `◐` would spend the cell on decoration; a
+mode-reflecting glyph makes the one cell double as the app's polarity
+indicator, while hover/focus affordances and the a11y label ("theme",
+value = the active theme's label) carry the button-ness and the action.
+`☾` U+263E and `☼` U+263C are East-Asian-neutral (single-width in every
+convention) and absent from Unicode emoji-data — unlike `☀` U+2600,
+which some terminal stacks promote to a double-width emoji glyph.
+
+Closed, the switcher is zero-idle: no layers, no timers — it re-renders
+only when the theme signal or its own hover/focus state is written. The
+popup's subscriptions live on a per-open scope and die at dismissal.
 
 ## Contrast guarantees
 
@@ -4592,7 +4793,7 @@ timeouts, and no sleeps.
 ===== PACKAGE FACTS =====
 
 - Crate: `abstracttui` 0.2.18 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.2.20 (2026-07-25).
+  (0.1.0); current release 0.2.21 (2026-07-25).
 - Extension family (sibling crates in the repo workspace, installed only when needed;
   ADR-0004 — public core API only, same MIT license and dependency discipline):
   - `abstracttui-graph` 0.1.0 — graph auto-layout (`GraphDesc -> Layout`: layered /

@@ -119,9 +119,12 @@ the ACTIVE ground), arrow-key navigation with scroll, Enter applies via
 signal. A live preview pane (≥ 96 cols) renders a miniature app mock in
 the SELECTED theme's own tokens before you apply. The bottom panel shows
 measured contrast ratios (text/muted/faint/accent/selection) from
-`theme::contrast_ratio`.
+`theme::contrast_ratio`. The top row carries the drop-in `ThemeSwitcher`
+chrome: the ☾/☼ menu button (grouped Dark/Light popup, live preview,
+type-ahead) and its one-click dark↔light toggle face.
 
-- Keys: arrows move, Enter applies, `q` quits.
+- Keys: arrows move, Enter applies, Tab focuses the switcher (Enter
+  opens its menu / flips the toggle), `q` quits.
 - Needs: 96+ cols for the preview pane; guarded below 40x10.
 - Looks like: a paint-store wall where the swatch card you point at
   becomes a little application.
@@ -261,8 +264,9 @@ to this same shell.
 
 - Keys: Ctrl+PgUp/PgDn or click pages, 1-3 jump, `i` inspector drawer,
   `g` nav drawer, Tab focus, `n` raise an alert (watch the Overview
-  badge), wheel/PgUp/PgDn scroll the Reader page, Ctrl+T theme, `q`
-  quit.
+  badge), wheel/PgUp/PgDn scroll the Reader page, Ctrl+T cycles all
+  themes, the footer's ☾/☼ `ThemeSwitcher` opens the grouped theme
+  menu (upward — the anchor is the bottom row), `q` quit.
 - Needs: any tty; `ABSTRACTTUI_THEME=<id>` themes it.
 - Looks like: one calm shell — a tab bar with an underline strip and
   a count badge over one full page at a time, with drawers sliding

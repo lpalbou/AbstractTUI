@@ -1350,6 +1350,53 @@ would be "open", which reads like a verb; renaming would be breaking
 and is not planned.) See `examples/shell.rs` (the 'i'/'g' drawers) and
 `examples/drawers.rs`.
 
+## app::ThemeSwitcher — the theme menu button
+
+One cell of chrome that gives any app runtime theming — mount it in a
+header, tab bar or footer row:
+
+```rust,ignore
+use abstracttui::prelude::*;
+
+// The menu face: ☾/☼ icon button (the glyph shows the CURRENT mode);
+// Enter/Space/click opens an anchored popup of every visible theme
+// grouped Dark / Light, current theme marked ●, house palettes first.
+ThemeSwitcher::new()
+    .on_change(|t| save_preference(t.id)) // fires when a switch STICKS
+    .view(cx)
+
+// The one-click face: no popup — each activation flips dark ↔ light
+// via app::toggle_mode(), restoring your last theme of the target mode.
+ThemeSwitcher::toggle().view(cx)
+```
+
+The popup rides the select-family machinery: arrows/Home/End/PageUp/
+PageDown move (group headers are skipped), type-ahead jumps by label
+prefix and a repeated letter cycles its matches, Enter or a click
+commits, Escape restores the pre-open theme, a press outside keeps the
+preview. Movement previews LIVE — the `Select::commit_on_move`
+semantic — and the menu re-resolves its own tokens per step, so the
+list renders in the theme you are previewing. It is an owned anchored
+popup: modal above the whole live stack, SCREEN-space anchored (a
+switcher inside a `Modal` or `Drawer` opens its menu adjacent to the
+button, never displaced), flipping above the anchor when the space
+below is short — a footer placement opens upward automatically.
+
+`on_change` fires once per switch that sticks (commit, or an
+outside-press that keeps a changed preview; every toggle flip) and
+never for preview steps, Escape-restores, or mechanical dismissals
+(resize, opener unmount). Live restyling needs no callback — the theme
+signal already drives it. Closed, the switcher is zero-idle. A11y: the
+trigger is `button "theme"` (toggle face: `"toggle theme mode"`) whose
+value is the active theme's label; the popup is a `menu` of
+`menuitem` rows.
+
+Mode vocabulary underneath: `ThemeMode`, `theme.mode()`,
+`theme::themes_by_mode(mode)`, `app::toggle_mode()` — see
+[docs/theming.md](theming.md#theme-modes--the-switcher). Demos:
+`examples/themes.rs` (both faces in the browser's toolbar),
+`examples/shell.rs` (footer placement).
+
 ## app::keys — key press/release state (held keys)
 
 Real-time surfaces (games' move-while-held, voice push-to-talk) need key
@@ -1569,6 +1616,16 @@ set_theme_by_id("catppuccin-mocha"); // false for unknown ids, nothing changes
 can add their own themes at runtime with `theme::register(candidate, mode)`:
 every registration runs the full contrast audit, and the mode decides
 whether violations refuse the theme or register it with labeled findings.
+
+Polarity is first-class: `ThemeMode::{Dark, Light}` (closed — the
+decisive-ground invariant admits no third value), `theme.mode()` derived
+from the audited flag, and `theme::themes_by_mode(mode)` listing one
+mode's themes in the curated order (house palette first, registrations
+trailing). `app::toggle_mode()` flips dark ↔ light restoring the
+last-used theme of the target mode (house palette on a cold start) —
+`set_theme` records every switch, so the round trip keeps your choices.
+The drop-in chrome control over all of this is
+[`app::ThemeSwitcher`](#appthemeswitcher--the-theme-menu-button).
 
 ## render — surfaces and paint (advanced)
 

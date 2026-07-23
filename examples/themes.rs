@@ -3,9 +3,14 @@
 //! Demonstrates: the ONE-theme-signal architecture (damage contract §5) —
 //! Enter writes the signal and the whole screen restyles through normal
 //! reactivity, no manual repaint anywhere in this file — plus per-theme
-//! token swatches and measured contrast ratios (the audit, visible).
+//! token swatches and measured contrast ratios (the audit, visible),
+//! and the drop-in [`ThemeSwitcher`] chrome (top row): the ◐-class
+//! icon button — `☾`/`☼` reflecting the current mode — whose popup
+//! groups every theme by Dark/Light with live preview, next to its
+//! one-click dark↔light toggle face.
 //!
-//! Keys: arrows move · Enter applies · q quits.
+//! Keys: arrows move · Enter applies · Tab focuses the switcher
+//! (Enter opens its menu / flips the toggle) · q quits.
 //!
 //! Docs: docs/theming.md.
 //!
@@ -50,6 +55,14 @@ fn main() -> abstracttui::base::Result<()> {
         let cols_for = move || cols_nav.get().max(1) as i32;
 
         Element::new()
+            // Explicit column: the toolbar row stacks ABOVE the
+            // gallery (the default direction is row — with a second
+            // child the gallery would slide sideways).
+            .style(
+                LayoutStyle::column()
+                    .width(Dimension::Percent(1.0))
+                    .height(Dimension::Percent(1.0)),
+            )
             .shortcut(KeyChord::plain(Key::Char('q')), move |_| quitter.quit())
             .shortcut(KeyChord::plain(Key::Left), move |_| step(sel, -1))
             .shortcut(KeyChord::plain(Key::Right), move |_| step(sel, 1))
@@ -64,6 +77,19 @@ fn main() -> abstracttui::base::Result<()> {
             .shortcut(KeyChord::plain(Key::Enter), move |_| {
                 set_theme_by_id(themes()[sel.get_untracked()].id);
             })
+            // The one-line drop-in: the switcher's menu face and its
+            // one-click toggle face, in ordinary app chrome. Tab
+            // focuses; Enter/Space or a click activates. Spacing rides
+            // the layout gap — text nodes wrap-trim edge whitespace.
+            .child(
+                Element::new()
+                    .style(LayoutStyle::row().height(Dimension::Cells(1)).gap(1))
+                    .child(ThemeSwitcher::new().view(cx))
+                    .child(text("theme menu ·"))
+                    .child(ThemeSwitcher::toggle().view(cx))
+                    .child(text("dark/light toggle"))
+                    .build(),
+            )
             .child(dyn_view(LayoutStyle::default().grow(1.0), move || {
                 let active = theme.get();
                 let selected = sel.get();

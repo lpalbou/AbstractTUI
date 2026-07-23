@@ -56,6 +56,7 @@ mod screenshot;
 pub mod select;
 pub mod selection;
 mod theme;
+pub mod theme_switcher;
 mod viewport;
 
 #[cfg(test)]
@@ -69,7 +70,8 @@ pub use notices::use_startup_notices;
 pub use overlays::{ImageHandle, LayerHandle, Overlays};
 pub use popups::{Modal, Toast, MODAL_Z, TOAST_Z};
 pub use select::{Combobox, MultiSelect, Select, SelectOption};
-pub use theme::{current_theme, set_theme, set_theme_by_id, use_theme};
+pub use theme::{current_theme, set_theme, set_theme_by_id, toggle_mode, use_theme};
+pub use theme_switcher::ThemeSwitcher;
 pub use viewport::{current_viewport, use_viewport};
 // Appended (wave 3, games/0700 + media-av/0610): key state + push-to-talk.
 pub use keys::{hold_gesture_label, key_state, use_key_state, KeyFidelity, KeyState};

@@ -56,8 +56,11 @@ use super::anchored::{DismissReason, PanelAnchor, PanelWidth, Popup};
 use super::overlays::Overlays;
 use super::viewport::use_viewport;
 
+// pub(crate): the ThemeSwitcher (theme_switcher.rs) composes the same
+// movement/type-ahead/row machinery instead of hand-rolling a fourth
+// copy — the module stays crate-internal, nothing here is public API.
 #[path = "select_core.rs"]
-mod core;
+pub(crate) mod core;
 use core::{
     first_enabled, last_enabled, option_rows_view, page_highlight, resolve_overlays,
     step_highlight, trigger_view, type_ahead_target, OptionRows, TriggerLabel, TypeAhead,

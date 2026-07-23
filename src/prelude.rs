@@ -119,3 +119,9 @@ pub use crate::canvas::{DotCanvas, DotMode};
 // receives (`ShotCell` and the exporters stay behind `render::`).
 pub use crate::app::request_screenshot;
 pub use crate::render::Screenshot;
+
+// Theme modes + the theme switcher (app-kits/0595) — appended with
+// their wave: the closed polarity vocabulary, the mode-grouped
+// listing, the one-click mode flip, and the drop-in chrome control.
+pub use crate::app::{toggle_mode, ThemeSwitcher};
+pub use crate::theme::{themes_by_mode, ThemeMode};

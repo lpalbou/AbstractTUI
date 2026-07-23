@@ -6,10 +6,10 @@
 # cap), two-observation dead-listener nag. The ledger only THROTTLES —
 # the server-side ack cursor (ack_inbox) is the only truth.
 import hashlib, json, os, sys, time, urllib.request
-URL = 'http://127.0.0.1:8765'
-AGENT = 'tui'
+URL = 'tui'
+AGENT = 'http://127.0.0.1:8765'
 NOOP = "{}"
-CLIENT = '0.12.39'
+CLIENT = '0.12.46'
 FLOOR = 600
 BACKOFF_BASE, BACKOFF_CAP = 600, 3600
 
@@ -54,13 +54,7 @@ except Exception:
     pass
 home = os.environ.get("AGORA_HOME", os.path.expanduser("~/.agora"))
 def listener_dead():
-    pidfile = os.path.join(home, f"listen-{AGENT}.pid")
-    try:
-        pid = int(open(pidfile).read().strip() or "0")
-        os.kill(pid, 0)  # signal 0 = liveness probe, sends nothing
-        return False
-    except Exception:
-        return True
+    return False
 try:
     keys = json.load(open(os.path.join(home, "keys.json")))
 except Exception:
@@ -153,9 +147,19 @@ oblig_unread = []
 for e in unread:
     if not isinstance(e, dict) or str(e.get("sender", "")) == AGENT:
         continue
-    if (str(e.get("status", "")) in ("open", "blocked")
-            or e.get("critical") or e.get("escalated")
-            or e.get("reply_to_me")):
+    is_oblig = (str(e.get("status", "")) in ("open", "blocked")
+                or e.get("critical") or e.get("escalated")
+                or e.get("reply_to_me"))
+    # Narrowed rule (0135): an ADDRESSED open that does not name
+    # this seat is the named seats' debt, not a reason to prompt
+    # here (62% of commons wakes measured as addressed opens
+    # hitting everyone).
+    if (is_oblig and str(e.get("status", "")) in ("open", "blocked")
+            and e.get("addressed") and not e.get("to_me")
+            and not e.get("critical") and not e.get("escalated")
+            and not e.get("reply_to_me")):
+        is_oblig = False
+    if is_oblig:
         oblig_unread.append(e)
 
 def _mid(m):
@@ -184,7 +188,7 @@ if arm_due:
         "is deaf to hub messages until you re-arm it. Do it NOW, "
         "exactly as your agora rule says: check_inbox, triage, then "
         "start ONE background shell running "
-        "`while true; do agora listen --once --as tui --important-only --max-wait 240; sleep 5; done` "
+        "`while true; do agora listen --once --as http://127.0.0.1:8765 --important-only --max-wait 240; sleep 5; done` "
         "monitored on the ANCHORED pattern ^AGORA_WAKE (debounce "
         ">= 15000 ms), then keep your foreground on real work. "
         "FIRST check the listener is not already running (read your "
@@ -208,4 +212,4 @@ if have_debt:
 else:
     led["sig"], led["attempts"] = "", 0
 _save()
-print(json.dumps({'followup_message': msg}))
+print(json.dumps({"decision": "block", "reason": msg}))

@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.21] - 2026-07-25
+
+### Added
+
+- theme: first-class polarity (backlog app-kits/0595). `ThemeMode::{Dark,
+  Light}` — a closed enum (the decisive-ground invariant admits no third
+  value) — `Theme::mode()` derived from the audited `dark` flag (one
+  source, never a second luminance threshold), and
+  `theme::themes_by_mode(mode)` listing one mode's themes in the curated
+  order (house palette first, then families, runtime registrations
+  trailing; ordering documented and test-pinned).
+- app: `toggle_mode()` — flip dark ↔ light keeping the user's theme
+  CHOICE per mode. `set_theme` (the one signal-write choke point) records
+  every switch as its mode's last-used theme, so
+  `nord → toggle → abstract-light → toggle → nord` round-trips; a mode
+  never visited falls back to its house palette (first-of-mode by the
+  documented ordering).
+- app: `ThemeSwitcher` — the drop-in one-cell theme control for any
+  app's chrome, composing the select-family substrate (`pub(crate)`
+  select core + the OWNED anchored popup) instead of hand-rolling a
+  fourth movement/type-ahead implementation. Menu face
+  (`ThemeSwitcher::new()`): a `☾`/`☼` icon button (glyph shows the
+  CURRENT mode; both glyphs East-Asian-neutral and emoji-data-free —
+  deliberately not `☀` U+2600, which some terminal stacks promote to a
+  double-width emoji) opening a grouped Dark/Light popup — headers as
+  skipped rows, current theme marked `●`, live preview on movement
+  (the `commit_on_move` theme-picker semantic), type-ahead with
+  repeated-letter cycling, Enter/click commits, Escape restores the
+  pre-open theme, outside press keeps the preview; the menu re-resolves
+  its own tokens per preview step; SCREEN-space anchored (correct
+  inside `Modal`/`Drawer` — the anchored-layer P1 class, test-pinned)
+  with the highlight window capped to the solved rect on short
+  viewports. Toggle face (`ThemeSwitcher::toggle()`): one click =
+  `toggle_mode()`, no popup. `on_change(|theme|)` fires once per switch
+  that sticks (never on previews, Escape, or mechanical dismissals).
+  Zero idle while closed (test-pinned). A11y: `button "theme"` /
+  `"toggle theme mode"` with the active theme label as value; the popup
+  is a `menu` of `menuitem` rows. Wired into `examples/themes.rs` (both
+  faces) and `examples/shell.rs` (footer). Docs: theming.md "Theme
+  modes & the switcher" + api.md "app::ThemeSwitcher".
+- Survey note (the abstractuic port audit, re-run this wave): the
+  engine's 26-theme registry is a strict superset of abstractuic's 21
+  `THEME_SPECS` themes, and every one of the 21 matches today's
+  `theme.css` byte-for-byte on all twelve seeded fields — zero drift,
+  nothing new to port, no value changes shipped (themes apps pin are
+  never churned cosmetically).
+
 ## [0.2.20] - 2026-07-25
 
 ### Added
@@ -1536,6 +1583,7 @@ First public release.
   theme browser, and 3D viewer.
 
 [Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.2.17...HEAD
+[0.2.21]: https://github.com/lpalbou/abstracttui/compare/v0.2.20...v0.2.21
 [0.2.20]: https://github.com/lpalbou/abstracttui/compare/v0.2.19...v0.2.20
 [0.2.19]: https://github.com/lpalbou/abstracttui/compare/v0.2.18...v0.2.19
 [0.2.18]: https://github.com/lpalbou/abstracttui/compare/v0.2.17...v0.2.18

@@ -11,7 +11,9 @@
 //!
 //! Keys: Ctrl+PgUp/PgDn or click · 1-3 jump · i inspector drawer ·
 //! g nav drawer · Tab focus · n raise an alert (watch the Overview
-//! badge) · Ctrl+T theme · q quit.
+//! badge) · Ctrl+T cycles themes · q quit. The footer also carries
+//! the drop-in `ThemeSwitcher` (☾/☼): Tab to it + Enter (or click)
+//! opens the grouped Dark/Light theme menu with live preview.
 //!
 //! Docs: docs/api.md § "widgets::PageHost — the page-level tab host" + § "app::Drawer — edge-anchored overlay panels".
 //!
@@ -124,9 +126,19 @@ fn main() -> abstracttui::base::Result<()> {
                 abstracttui::app::set_theme(&list[next]);
             })
             .child(host)
-            .child(text(
-                " Ctrl+PgUp/PgDn pages · 1-3 jump · i inspector · g nav · n alert · Ctrl+T theme · q quit",
-            ))
+            // Footer: the drop-in ThemeSwitcher (one line of chrome —
+            // its popup opens ABOVE the bottom-row anchor
+            // automatically) beside the key legend. Spacing rides the
+            // layout gap — text nodes wrap-trim edge whitespace.
+            .child(
+                Element::new()
+                    .style(LayoutStyle::row().height(Dimension::Cells(1)).gap(1))
+                    .child(ThemeSwitcher::new().view(cx))
+                    .child(text(
+                        "theme · Ctrl+PgUp/PgDn pages · 1-3 jump · i inspector · g nav · n alert · Ctrl+T cycle · q quit",
+                    ))
+                    .build(),
+            )
             .build()
     })?;
     // Anchor the keyboard on the shell (the bar is the first focusable)

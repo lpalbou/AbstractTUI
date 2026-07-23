@@ -15,12 +15,14 @@
 
 pub mod contrast;
 pub mod derive;
+pub mod mode;
 pub mod register;
 pub mod registry;
 pub mod seeds;
 pub mod tokens;
 
 pub use contrast::{audit, contrast_ratio, Violation};
+pub use mode::{themes_by_mode, ThemeMode};
 pub use register::{register, RegisterError, RegisterMode, Registration, ThemeCandidate};
 pub use registry::{default_theme, get, list, resolve, themes, Theme, DEFAULT_THEME_ID};
 pub use tokens::{TokenId, TokenSet};

@@ -72,9 +72,11 @@
 ## Topics
 
 - [Theming](docs/theming.md): The 36-token semantic model, the 26 built-in themes, runtime
-  switching through one signal, WCAG-derived contrast floors and the audit, registering
-  custom themes (Strict/Labeled modes), token derivation helpers, and styling rules for
-  widget authors.
+  switching through one signal, theme modes (`ThemeMode`, `themes_by_mode`, the
+  remembered-choice `toggle_mode()`) and the drop-in `ThemeSwitcher` chrome control
+  (grouped Dark/Light menu with live preview), WCAG-derived contrast floors and the
+  audit, registering custom themes (Strict/Labeled modes), token derivation helpers, and
+  styling rules for widget authors.
 - [Graphics and 3D](docs/graphics-and-3d.md): Images end-to-end (decode → capability
   ladder → mosaic modes → tmux passthrough), the GLB 3D pipeline (supported subset, scene/
   camera/light, the Viewport3D widget, animation and skinning, textures and mips), the
@@ -104,7 +106,7 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, 0.2.20 (2026-07-25) the current one —
+  (2026-07-21) is the first public release, 0.2.21 (2026-07-25) the current one —
   released alongside the first extension-family crates (`abstracttui-graph` 0.1.0,
   `abstracttui-mermaid` 0.1.0, each with its own changelog under `extensions/`).
 - [Contributing](CONTRIBUTING.md): Building, the test suite (~2,015 core tests; ~2,140
