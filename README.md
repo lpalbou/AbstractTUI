@@ -98,6 +98,11 @@ through ordinary reactivity.*
   `TERM=dumb`.
 - **Headless testing** — drive the production pipeline against a captured
   terminal and assert on the rendered screen. No pty required.
+- **Screenshots** — capture any screen as a plain value (`Driver::screenshot()`,
+  the `app::request_screenshot` key-bindable verb, or the VT model in headless
+  tests) and export it as plain text, replayable ANSI, or a GitHub-renderable
+  SVG — deterministic artifacts for docs, bug reports, and test evidence, with
+  protocol-image regions honestly labeled.
 - **Vector strokes + an extension family** — a public sub-cell canvas
   (braille/quadrant dot grids, lines, beziers, arcs, eighth-block
   fills) in core, and diagram-class capability as opt-in sibling
@@ -161,9 +166,9 @@ cd abstracttui
 cargo run --example dashboard
 ```
 
-Nineteen runnable examples live in [examples/](examples/README.md), and every one
-exits cleanly with a notice when no interactive terminal is present, so they are
-safe to run anywhere. Start with these six:
+Twenty-one runnable examples live in [examples/](examples/README.md), and every
+one exits cleanly with a notice when no interactive terminal is present, so they
+are safe to run anywhere. Start with these six:
 
 - `dashboard` — the flagship ops screen: charts, log tail, sortable table,
   toasts, modal help, spatial pane navigation.

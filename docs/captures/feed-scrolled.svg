@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 756 396" width="756" height="396" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="15" xml:space="preserve">
+<rect width="756" height="396" fill="#000000"/>
+<g shape-rendering="crispEdges">
+<rect x="0" y="0" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="18" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="36" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="54" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="72" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="90" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="108" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="126" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="144" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="162" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="180" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="198" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="216" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="234" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="252" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="270" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="288" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="306" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="324" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="342" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="360" width="756" height="18" fill="#16213e"/>
+<rect x="0" y="378" width="756" height="18" fill="#1a1a2e"/>
+</g>
+<text x="0" y="14" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╭</text>
+<text x="9" y="14" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> events </text>
+<text x="81" y="14" textLength="675" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">──────────────────────────────────────────────────────────────────────────╮</text>
+<text x="0" y="32" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="32" textLength="396" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:04:56 worker-2 event 8 — payload accepted</text>
+<text x="738" y="32" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">││</text>
+<text x="0" y="50" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="50" textLength="396" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:04:03 worker-0 event 9 — payload accepted</text>
+<text x="738" y="50" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">││</text>
+<text x="0" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="68" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:05:10 worker-1 event 10 — payload accepted</text>
+<text x="738" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">││</text>
+<text x="0" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="86" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:05:17 worker-2 event 11 — payload accepted</text>
+<text x="738" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">││</text>
+<text x="0" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="104" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:06:24 worker-0 event 12 — payload accepted</text>
+<text x="738" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="747" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="0" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="122" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:06:31 worker-1 event 13 — payload accepted</text>
+<text x="738" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="747" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="0" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="140" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:07:38 worker-2 event 14 — payload accepted</text>
+<text x="738" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="747" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="0" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="158" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:07:45 worker-0 event 15 — payload accepted</text>
+<text x="738" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="747" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="0" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="176" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:08:52 worker-1 event 16 — payload accepted</text>
+<text x="738" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="747" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="0" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="194" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:08:59 worker-2 event 17 — payload accepted</text>
+<text x="738" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="747" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="0" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="212" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:09:06 worker-0 event 18 — payload accepted</text>
+<text x="738" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="747" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="0" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="230" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:09:13 worker-1 event 19 — payload accepted</text>
+<text x="738" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="747" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="0" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="248" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:10:20 worker-2 event 20 — payload accepted</text>
+<text x="738" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="747" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="0" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="266" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:10:27 worker-0 event 21 — payload accepted</text>
+<text x="738" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="747" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="0" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="284" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:11:34 worker-1 event 22 — payload accepted</text>
+<text x="738" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">││</text>
+<text x="0" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="302" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:11:41 worker-2 event 23 — payload accepted</text>
+<text x="738" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">││</text>
+<text x="0" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="320" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:12:48 worker-0 event 24 — payload accepted</text>
+<text x="738" y="320" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">││</text>
+<text x="0" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="338" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:12:55 worker-1 event 25 — payload accepted</text>
+<text x="738" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">││</text>
+<text x="0" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
+<text x="9" y="356" textLength="405" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">12:13:02 worker-2 event 26 — payload accepted</text>
+<text x="738" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">││</text>
+<text x="0" y="374" textLength="756" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╰──────────────────────────────────────────────────────────────────────────────────╯</text>
+<text x="0" y="392" textLength="756" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">scrolled (f to re-follow)                                                           </text>
+</svg>

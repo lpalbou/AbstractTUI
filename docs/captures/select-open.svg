@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 648 360" width="648" height="360" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="15" xml:space="preserve">
+<rect width="648" height="360" fill="#000000"/>
+<g shape-rendering="crispEdges">
+<rect x="0" y="0" width="648" height="18" fill="#1a1a2e"/>
+<rect x="0" y="18" width="648" height="18" fill="#1a1a2e"/>
+<rect x="0" y="36" width="648" height="18" fill="#1a1a2e"/>
+<rect x="0" y="54" width="81" height="18" fill="#1a1a2e"/>
+<rect x="81" y="54" width="252" height="18" fill="#16213e"/>
+<rect x="333" y="54" width="315" height="18" fill="#1a1a2e"/>
+<rect x="0" y="72" width="81" height="18" fill="#1a1a2e"/>
+<rect x="81" y="72" width="252" height="18" fill="#0f3460"/>
+<rect x="333" y="72" width="315" height="18" fill="#1a1a2e"/>
+<rect x="0" y="90" width="9" height="18" fill="#1a1a2e"/>
+<rect x="9" y="90" width="72" height="18" fill="#16213e"/>
+<rect x="81" y="90" width="252" height="18" fill="#58273d"/>
+<rect x="333" y="90" width="315" height="18" fill="#1a1a2e"/>
+<rect x="0" y="108" width="81" height="18" fill="#1a1a2e"/>
+<rect x="81" y="108" width="252" height="18" fill="#0f3460"/>
+<rect x="333" y="108" width="315" height="18" fill="#1a1a2e"/>
+<rect x="0" y="126" width="81" height="18" fill="#1a1a2e"/>
+<rect x="81" y="126" width="252" height="18" fill="#0f3460"/>
+<rect x="333" y="126" width="315" height="18" fill="#1a1a2e"/>
+<rect x="0" y="144" width="648" height="18" fill="#1a1a2e"/>
+<rect x="0" y="162" width="648" height="18" fill="#1a1a2e"/>
+<rect x="0" y="180" width="648" height="18" fill="#1a1a2e"/>
+<rect x="0" y="198" width="648" height="18" fill="#1a1a2e"/>
+<rect x="0" y="216" width="648" height="18" fill="#1a1a2e"/>
+<rect x="0" y="234" width="648" height="18" fill="#1a1a2e"/>
+<rect x="0" y="252" width="648" height="18" fill="#1a1a2e"/>
+<rect x="0" y="270" width="648" height="18" fill="#1a1a2e"/>
+<rect x="0" y="288" width="648" height="18" fill="#1a1a2e"/>
+<rect x="0" y="306" width="648" height="18" fill="#1a1a2e"/>
+<rect x="0" y="324" width="648" height="18" fill="#1a1a2e"/>
+<rect x="0" y="342" width="648" height="18" fill="#1a1a2e"/>
+</g>
+<text x="0" y="32" textLength="648" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> settings                                                               </text>
+<text x="0" y="68" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> channel </text>
+<text x="81" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">▐</text>
+<text x="90" y="68" textLength="225" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">stable                   </text>
+<text x="315" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">▾▌</text>
+<text x="0" y="86" textLength="297" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">          stable                 </text>
+<text x="297" y="86" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">lts</text>
+<text x="0" y="104" textLength="648" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> [x] page beta                                                          </text>
+<text x="0" y="122" textLength="279" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">          nightly              </text>
+<text x="279" y="122" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">daily</text>
+<text x="81" y="140" textLength="252" lengthAdjust="spacingAndGlyphs" fill="#666666"> archive                    </text>
+<text x="0" y="338" textLength="648" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> enter commits · esc abandons · click outside dismisses                 </text>
+</svg>

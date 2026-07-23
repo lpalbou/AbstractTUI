@@ -22,7 +22,9 @@
 > key press/release state with honest fidelity (push-to-talk, level meters, and a
 > waveform scope for voice surfaces), text selection with OSC 52 clipboard copy, an
 > optional boot splash, and a headless testing harness that drives the production
-> pipeline without a pty. A public sub-cell vector canvas (braille/quadrant dot grids,
+> pipeline without a pty — including screenshot capture with deterministic plain-text,
+> replayable-ANSI and GitHub-renderable-SVG exporters. A public sub-cell vector canvas
+> (braille/quadrant dot grids,
 > lines, beziers, arcs, eighth-block fills) underlies the charts and an opt-in sibling
 > extension family: `abstracttui-graph` (graph auto-layout + a GraphView widget) and
 > `abstracttui-mermaid` (honest-subset mermaid rendering with atomic fallback). One core
@@ -54,7 +56,10 @@
   Select/Combobox/MultiSelect pickers,
   completion, hooks, key press/release state and `PushToTalk`), theme, render
   (Style-as-patch, shaders, the markdown doc vocabulary and the reader surface), gfx,
-  three, term/input, the testing harness, and plain statements of stability and limits.
+  three, term/input, the testing harness, screenshots & captures (the `Screenshot`
+  value from the live driver, the `request_screenshot` verb, or the testing rig, with
+  text/replayable-ANSI/GitHub-renderable-SVG exporters and labeled protocol-image
+  regions), and plain statements of stability and limits.
 - [Documentation index](docs/README.md): One-line map of every guide and the reference
   material.
 
@@ -93,10 +98,10 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, 0.2.13 (2026-07-24) the current one —
+  (2026-07-21) is the first public release, 0.2.14 (2026-07-24) the current one —
   released alongside the first extension-family crates (`abstracttui-graph` 0.1.0,
   `abstracttui-mermaid` 0.1.0, each with its own changelog under `extensions/`).
-- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,940 core tests; ~2,060
+- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,960 core tests; ~2,090
   with the extension family via `--workspace`, the CI gate) and the explicitly-run suites
   (live pty, two release-mode perf-budget suites with byte-emission ratchets, plus the
   scheduled weekly `perf.yml` deep gate), golden snapshots, lint gates, the strict module
@@ -117,14 +122,17 @@
 - [src/lib.rs](src/lib.rs): Crate root with the layer map — `base`, `term`, `input`,
   `render`, `text`, `anim`, `reactive`, `layout`, `ui`, `canvas`, `widgets`, `gfx`,
   `three`, `theme`, `app`, `boot`, `testing`.
-- [examples/](examples/README.md): The catalog of the nineteen runnable examples — `hello`,
+- [examples/](examples/README.md): The catalog of the twenty-one runnable examples —
+  `hello`,
   `dashboard`, `shell`, `drawers`, `gallery`, `themes`, `widgets`, `effects`, `splash`,
   `viewer3d`, `images`,
-  `components`, `grid`, `feed`, `transcript`, `reader`, `voice_mock`, `caps`, `capture` — each
+  `components`, `grid`, `feed`, `transcript`, `reader`, `voice_mock`, `decide`,
+  `screenshot`, `caps`, `capture` — each
   documented with keys and requirements; every one exits cleanly without a tty, and
   `dashboard`/`viewer3d`/`images` take `--caps`.
 - [docs/captures/](docs/captures/): Deterministic text "screenshots" of the shipped
-  examples (plain and style-annotated) and clockless in-process stills of the app-layer
+  examples (plain, style-annotated, and rendered SVG via `Screenshot::to_svg`) and
+  clockless in-process stills of the app-layer
   surfaces (streaming transcript with completion open, open Select popup, diff-tinted
   code, scrolled feed, doc-vocabulary reader table), plus `themes-table.md` — every token
   hex value of all 26 themes; regenerable with `cargo run --example capture`.

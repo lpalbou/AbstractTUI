@@ -75,6 +75,7 @@ Restated from `planned/0001_roadmap.md` and binding here:
 | 0340 | Persist registry — declared state keys, atomic snapshot, restore, crash marker (pid-bearing) | **v1-able** core; migration hook + restore/mount ergonomics **needs-design** (first consumer: app-kits 0520) |
 | 0350 | Background mode + attach/detach — design | core **v1-able-with-design** (conservative serve caps); caps re-negotiation + ImageSession reset **needs-design**; multi-viewer, windows **research** |
 | 0360 | Milestone: attach/detach proof (serve example + attach client) | **v1-able** as scoped (single session, single client, fixed no-graphics caps) |
+| 0370 | Screenshot capture + exporters (text / ANSI / SVG) | **SHIPPED 2026-07-24** (`completed/control-plane/0370`) — the observe primitive, landed ahead of 0310/0320 with zero dependency on them; the bus/wire observe verb serializes `render::Screenshot` exports |
 
 ## Sequencing (load-bearing; final, cycle 3)
 - **0300 before 0310/0320**: the bus and the wire protocol both carry

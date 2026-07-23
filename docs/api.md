@@ -1515,6 +1515,99 @@ into a `ui::UiTree`, dispatch events, draw into a `ui::BufferCanvas`.
 Golden-snapshot assertions and deterministic fuzz helpers round out the
 module.
 
+## Screenshots & captures
+
+`render::Screenshot` is a captured screen as a plain value — a grid of
+`{glyph, fg, bg, underline color, attrs}` cells (`ShotCell`) — with three
+deterministic exporters. It answers "what does the app actually show?"
+for debugging, documentation, and test evidence.
+
+**Two capture surfaces, one truth.** In a running app, capture the frame
+as **last presented** (a pure read of the composed frame — no re-render,
+no damage side effects):
+
+```rust,ignore
+// Embedders/tests driving their own turns:
+let shot = driver.screenshot();
+
+// Component code (App::run consumed the App): the request verb — the
+// same thread-local drain shape as `request_full_redraw`. The callback
+// runs on the app thread with the screen as the user saw it when the
+// request landed. No default hotkey exists; this binding IS the recipe:
+Element::new().shortcut(KeyChord::plain(Key::F(12)), |_| {
+    abstracttui::app::request_screenshot(|shot| {
+        let _ = shot.write_svg("/tmp/screen.svg");
+    });
+})
+```
+
+In headless tests, capture from the byte side — the testing rig's VT
+model, i.e. what the emitted bytes actually produced:
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::app::Driver;
+use abstracttui::testing::CaptureTerm;
+
+let size = Size::new(24, 3);
+let mut app = App::new(size);
+app.mount(|_cx| Element::new().child(text("proof of pixels")).build()).unwrap();
+let mut term = CaptureTerm::new(size);
+let cfg = RunConfig { probe: false, ..RunConfig::default() };
+let mut driver = Driver::new(&mut app, &mut term, cfg).unwrap();
+driver.turn(&mut app, &mut term).unwrap();
+
+let shot = term.screen().screenshot();          // bytes -> VT model -> value
+assert!(shot.to_text().contains("proof of pixels"));
+let svg = shot.to_svg();                        // attach to a test report
+assert!(svg.contains("proof of pixels"));
+```
+
+Both surfaces produce the same value for the same screen (test-pinned),
+and `Screenshot::from_surface(&Surface)` captures any surface directly.
+
+**The exporters** (pure functions, byte-deterministic; `write_text` /
+`write_ansi` / `write_svg` are the one-call file forms):
+
+- `to_text()` — plain UTF-8 lines, trailing blanks trimmed. Identical to
+  `VtScreen::to_text` for the same screen.
+- `to_ansi()` — SGR-styled text you can `cat` into any truecolor
+  terminal. Minimal escapes: one SGR transition per style change (the
+  presenter's own builders), rows separated by `SGR 0` + CRLF, no
+  trailing newline. Fidelity is test-pinned by a roundtrip law: replaying
+  the export through the testing rig's VT interpreter reproduces the
+  capture exactly, including the cluster-fusion hazards (after
+  ZWJ/VS16/ambiguous-width clusters and trailing regional indicators the
+  export re-anchors the column with `CHA` — the presenter's risky-cluster
+  defense, in the row-relative form that keeps the bytes replayable from
+  any scrollback position).
+- `to_svg()` — the docs/report artifact; GitHub renders it in READMEs.
+  Backgrounds merge into per-run rects, text runs pin to their columns
+  with `textLength` (font drift cannot shear the grid; wide glyphs run
+  alone), decorations draw as explicit rects, exact RGB from the capture.
+  Cells carrying "terminal default" colors render with a built-in
+  neutral ink/paper; pass your own via `to_svg_with(fg, bg)`.
+  A generated sample lives at
+  [`docs/captures/transcript-stream.svg`](captures/transcript-stream.svg)
+  (the capture pipeline now emits `.svg` beside every `.txt` still).
+
+**Honesty notes.** Cells under a kitty/iTerm2/sixel image are not the
+picture — the terminal shows pixels the cell plane cannot see.
+`Driver::screenshot()` stamps those placements from the live session
+bookkeeping into `Screenshot::pixel_regions()`; `to_svg` renders them as
+labeled placeholder veils, text/ANSI exports stay cell-plane-verbatim.
+Unicode-mosaic images ARE cells and capture as themselves. VT-model
+captures carry no regions (the rig consumes protocol payloads as
+counted, unmodeled frames). Hyperlink targets are not captured (a visual
+capture has no click surface — the styled debug dumps show them);
+`blink` exports as static; `undercurl` draws as a straight underline in
+SVG. Capture is on-demand only: nothing here runs per-frame, and an
+idle app still costs zero.
+
+The future control-server "observe" verb (backlog control-plane
+0310/0320) is a serialization of this same value — the bus exposes
+`Screenshot` exports over the wire; nothing new to invent there.
+
 ## Stability and limits
 
 Plain statements of current behavior:

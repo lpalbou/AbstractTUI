@@ -25,10 +25,10 @@ See `examples/README.md` for the full list.
 
 ## Testing
 
-The default test pass runs the core suite — roughly 1,940 tests across unit
+The default test pass runs the core suite — roughly 1,960 tests across unit
 tests, the integration suites under `tests/`, and doctests. The repo is a
 cargo workspace since the extension family landed: `--workspace` adds the
-family crates (`extensions/graph`, `extensions/mermaid`) for roughly 2,060
+family crates (`extensions/graph`, `extensions/mermaid`) for roughly 2,090
 tests total, and is what CI gates on:
 
 ```sh

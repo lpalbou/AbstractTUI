@@ -29,6 +29,8 @@ capability report and exit — the diagnostic surface, no tty needed.
 | `reader.rs` | REAL — mdpad-class markdown reader: GFM tables, lazy in-flow images, TOC/anchor jumps, search highlights with live count |
 | `shell.rs` | REAL — the app shell: a global `PageHost` (three full pages behind one tab bar, live tab badge, container-reserved chords, digit jumps) + the drawer wave's edge drawers (co-owned) |
 | `drawers.rs` | REAL — the drawer system alone: a modal inspector (scrim, focus trap, Esc/✕) hosting a scrollable Feed page + a passive glanceable nav panel, state surviving close/reopen |
+| `decide.rs` | REAL — the decision gate (`ChoicePrompt`): destructive confirmation with shortcut letters + must-choose mode, a multi-pick with a scrollable body, a chained sequence |
+| `screenshot.rs` | REAL — the capture recipe: `s` writes text/ANSI/SVG stills of the live screen; headless it exports from both truth surfaces and exits 0 |
 | `caps.rs` | TOOL — the live terminal-capability report: what the probe detected, which image channel the ladder picks |
 | `capture.rs` | TOOL — deterministic screenshot pipeline into `docs/captures/` |
 | `common/` | shared helpers (small-terminal guard, key legend) — not a target |
@@ -271,11 +273,29 @@ same typeset fold that draws — position and pixels cannot drift.
 - Looks like: a document you can actually read — tables aligned,
   pictures in the flow, search hits glowing in selection tones.
 
+## screenshot
+
+The capture recipe, live: a themed panel with `s` bound to
+`app::request_screenshot` — each press writes the LAST PRESENTED frame
+as `screenshot-demo.{txt,ansi,svg}` under the system temp dir (`cat`
+the `.ansi` to replay it; the `.svg` renders on GitHub). Deliberately
+no engine-default hotkey — this binding is the documented recipe.
+Without a tty it drives the same scene headlessly through
+`Driver` + `CaptureTerm`, captures from BOTH truth surfaces (composed
+frame and VT-modeled bytes), asserts they agree, writes the same three
+artifacts, and exits 0 — the test-artifact recipe in miniature.
+
+- Keys: `s` capture · `q`/Ctrl+C quit.
+- Needs: nothing — with a tty it is interactive, without one it
+  exports and exits 0 (CI-safe).
+- Looks like: a calm panel that names the three files it just wrote.
+
 ## capture (tool)
 
 The deterministic screenshot pipeline: runs the built examples under a
 real pty at fixed sizes/themes, interprets the bytes with the testing
-rig's `VtScreen`, and dumps plain + styled text renders into
+rig's `VtScreen`, and dumps plain + styled text renders — and a
+rendered `.svg` per shot (`VtScreen::screenshot().to_svg()`) — into
 `docs/captures/` — plus `themes-table.md` (every theme's token hex from
 the registry), in-process splash stills (2D/3D at the burst and settled
 beats), and in-process APP stills driven headlessly through

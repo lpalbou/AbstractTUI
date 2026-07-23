@@ -107,3 +107,9 @@ pub use crate::widgets::PageHost;
 // grid type is the app-code surface; vocabularies are explicit
 // imports, like the render paint types).
 pub use crate::canvas::{DotCanvas, DotMode};
+
+// Screenshots (control-plane/0370) — appended with its wave: the
+// component-reachable capture verb + the capture value its callback
+// receives (`ShotCell` and the exporters stay behind `render::`).
+pub use crate::app::request_screenshot;
+pub use crate::render::Screenshot;

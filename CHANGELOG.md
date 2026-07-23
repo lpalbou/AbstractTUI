@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.14] - 2026-07-24
+
+### Added
+
+- render: screenshots (control-plane 0370) — `render::Screenshot`, a
+  captured screen as a plain value (grid of `ShotCell` = glyph + fg/bg/
+  underline color + the full `Attrs` set), capturable from every truth
+  surface: `Driver::screenshot()` (the composed frame as last
+  presented — pure read, no re-render, no damage; byte-channel image
+  placements stamped as labeled `pixel_regions()` from the live session
+  bookkeeping), the component-reachable `app::request_screenshot(..)`
+  verb (thread-local drain in the driver's phase U, the
+  `request_full_redraw` shape; served the same turn a key handler
+  requests it; no default hotkey — apps bind their own), the testing
+  rig's `VtScreen::screenshot()` (what emitted bytes actually
+  produced), and `Screenshot::from_surface(..)` for any surface. Three
+  deterministic exporters + file conveniences: `to_text()` (plain
+  UTF-8, trailing blanks trimmed), `to_ansi()` (replayable-with-`cat`
+  SGR text using the presenter's own minimal-transition builders,
+  fidelity pinned by a roundtrip law — replaying the export through
+  the VT interpreter reproduces the capture exactly, with CHA column
+  re-anchors after fusion-arming clusters: ZWJ/VS16/ambiguous-width +
+  trailing regional indicators; row-relative so scrollback replay
+  works), and `to_svg()`/`to_svg_with(fg, bg)`
+  (GitHub-renderable: merged background rects, column-pinned
+  `textLength` text runs, explicit decoration rects, XML-escaped,
+  labeled placeholder veils over pixel-image regions). `Screenshot` +
+  `request_screenshot` join the prelude; the `capture` example now
+  emits a `.svg` beside every still in `docs/captures/`; new
+  `screenshot` example carries the key-binding + headless-test-artifact
+  recipes (exits 0 without a tty). Docs in `docs/api.md`
+  ("Screenshots & captures"). Measured (300x100, dense styling):
+  capture ~0.55 ms, text ~0.07 ms, ANSI ~0.43 ms, SVG ~0.87 ms.
+
 ## [0.2.13] - 2026-07-24
 
 ### Added
@@ -1214,6 +1248,7 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[0.2.14]: https://github.com/lpalbou/abstracttui/compare/v0.2.13...v0.2.14
 [0.2.13]: https://github.com/lpalbou/abstracttui/compare/v0.2.12...v0.2.13
 [0.2.12]: https://github.com/lpalbou/abstracttui/compare/v0.2.11...v0.2.12
 [0.2.11]: https://github.com/lpalbou/abstracttui/compare/v0.2.10...v0.2.11

@@ -42,6 +42,7 @@ pub mod drawer;
 mod drawer_view;
 mod driver;
 mod driver_images;
+mod driver_screenshot;
 mod driver_suspend;
 mod events;
 pub mod keymap_help;
@@ -51,6 +52,7 @@ pub mod overlays;
 pub mod popups;
 pub mod push_to_talk;
 mod redraw;
+mod screenshot;
 pub mod select;
 pub mod selection;
 mod theme;
@@ -75,6 +77,9 @@ pub use push_to_talk::{CaptureState, PttMode, PushToTalk, StopReason};
 // Appended (first-app/0299): the public full-redraw verb + the
 // focus-regain repaint opt-in.
 pub use redraw::{redraw_on_focus_gained, request_full_redraw, set_redraw_on_focus_gained};
+// Appended (control-plane/0370): the public screenshot verb — capture
+// the last presented frame as a `render::Screenshot`.
+pub use screenshot::request_screenshot;
 // Appended (wave 5, app-kits/0515): the modal decision gate.
 pub use choice_prompt::{
     ChoiceAnswer, ChoiceOption, ChoiceOutcome, ChoicePrompt, ChoicePromptHandle, ChoiceQuestion,

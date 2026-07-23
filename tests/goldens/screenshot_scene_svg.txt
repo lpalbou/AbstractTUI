@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 126" width="360" height="126" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace" font-size="15" xml:space="preserve">
+<rect width="360" height="126" fill="#000000"/>
+<g shape-rendering="crispEdges">
+<rect x="0" y="0" width="360" height="18" fill="#3b4252"/>
+<rect x="0" y="18" width="360" height="18" fill="#3b4252"/>
+<rect x="0" y="36" width="360" height="18" fill="#3b4252"/>
+<rect x="0" y="54" width="360" height="18" fill="#3b4252"/>
+<rect x="0" y="72" width="360" height="18" fill="#3b4252"/>
+<rect x="0" y="90" width="360" height="18" fill="#3b4252"/>
+<rect x="0" y="108" width="360" height="18" fill="#3b4252"/>
+</g>
+<text x="0" y="14" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#4c525d">╭</text>
+<text x="9" y="14" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#d8dee9"> shot </text>
+<text x="63" y="14" textLength="297" lengthAdjust="spacingAndGlyphs" fill="#4c525d">────────────────────────────────╮</text>
+<text x="0" y="32" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#4c525d">│</text>
+<text x="9" y="32" textLength="126" lengthAdjust="spacingAndGlyphs" fill="#eceff4">status: ready </text>
+<text x="135" y="32" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eceff4">世</text>
+<text x="153" y="32" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eceff4">界</text>
+<text x="180" y="32" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eceff4">🚀</text>
+<text x="351" y="32" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#4c525d">│</text>
+<text x="0" y="50" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#4c525d">│</text>
+<text x="9" y="50" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#eceff4">family </text>
+<text x="72" y="50" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eceff4">👨‍👩‍👧‍👦</text>
+<text x="90" y="50" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#eceff4"> flag </text>
+<text x="144" y="50" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eceff4">🇫🇷</text>
+<text x="162" y="50" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#eceff4"> tone </text>
+<text x="216" y="50" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eceff4">👍🏽</text>
+<text x="351" y="50" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#4c525d">│</text>
+<text x="0" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#4c525d">│</text>
+<text x="9" y="68" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#eceff4">plain tail</text>
+<text x="351" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#4c525d">│</text>
+<text x="0" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#4c525d">│</text>
+<text x="351" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#4c525d">│</text>
+<text x="0" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#4c525d">│</text>
+<text x="351" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#4c525d">│</text>
+<text x="0" y="122" textLength="360" lengthAdjust="spacingAndGlyphs" fill="#4c525d">╰──────────────────────────────────────╯</text>
+</svg>

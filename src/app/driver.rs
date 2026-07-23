@@ -126,7 +126,11 @@ pub struct Driver {
     /// `image_notice_seen` — one line per DISTINCT warning per run.
     pub(super) pending_image_notices: Vec<String>,
     pub(super) image_notice_seen: std::collections::HashSet<String>,
-    frame: Surface,
+    /// The composed frame as last presented (phase C flattens into it,
+    /// phase P presents from it, phase S copies it into `prev`).
+    /// `pub(super)` for the screenshot capture surface
+    /// (driver_screenshot.rs) — a pure read of "what the screen shows".
+    pub(super) frame: Surface,
     prev: Surface,
     size: Size,
     /// Event captured by a blocking wait, dispatched by the next turn so
@@ -390,6 +394,12 @@ impl Driver {
         if super::redraw::take_full_redraw_request() {
             self.resync_unknown_screen();
         }
+        // Public screenshot verb (control-plane/0370,
+        // `app::request_screenshot`): serve pending captures with the
+        // LAST PRESENTED frame — the screen as the user saw it when the
+        // request landed (this turn's own render, if any, comes after).
+        // Pure read; a quiet turn drains an empty vec at zero cost.
+        self.serve_screenshot_requests();
         // Zero-collapse diagnostics drained from last frame's solve reach
         // the app here (phase U owns signal writes). The notices lane is
         // the in-session surface; stderr waits until teardown.
