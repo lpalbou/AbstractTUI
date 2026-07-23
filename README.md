@@ -43,7 +43,11 @@ through ordinary reactivity.*
   `Combobox` / `MultiSelect` over anchored popups that layer above modals),
   lists and sortable tables with distinct selection and activation events,
   tabs, checkboxes, radio groups, scroll regions, panels, badges, progress
-  bars, spinners, modals, toasts, tooltips — arranged by a flexbox-style solver
+  bars, spinners, modals, toasts, tooltips — plus the app-shell pair:
+  `PageHost` (full pages behind one themed tab bar — container-reserved
+  chords, reactive tab badges, overflow windowing) and `Drawer`
+  (edge-anchored overlay panels, modal or glanceable, sliding from any
+  edge) — arranged by a flexbox-style solver
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
 - **Transcripts and documents** — `Feed` renders append-only conversations
@@ -142,12 +146,15 @@ cd abstracttui
 cargo run --example dashboard
 ```
 
-Seventeen runnable examples live in [examples/](examples/README.md), and every one
+Nineteen runnable examples live in [examples/](examples/README.md), and every one
 exits cleanly with a notice when no interactive terminal is present, so they are
-safe to run anywhere. Start with these five:
+safe to run anywhere. Start with these six:
 
 - `dashboard` — the flagship ops screen: charts, log tail, sortable table,
   toasts, modal help, spatial pane navigation.
+- `shell` — the app shell: three full pages behind a global `PageHost` tab
+  bar (live tab badge, Ctrl+PgUp/PgDn, digit jumps) plus `Drawer` panels
+  from both edges (`i` inspector, `g` nav).
 - `gallery` — the whole design system on one screen; one keypress restyles it.
 - `themes` — every theme as a live card grid with a preview pane and measured
   contrast ratios.

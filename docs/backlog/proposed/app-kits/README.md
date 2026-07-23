@@ -44,6 +44,7 @@ header, banners, split panes, panel rails — all hand-rolled today,
 | 0520 | Wizard flow container (on the form kit) | setup/config flows, migrations, apply-with-summary |
 | 0530 | Data-table upgrades: rich cells, activation, multi-select, row identity | admin consoles, monitors, file lists, triage tables |
 | 0540 | Chip & count vocabulary: interactive chips, count badges, tag input | status columns, unread counts, tags, multi-select rendering |
+| 0545 | PageHost: the page-level tab host (SHIPPED same-day 2026-07-24 — completed/app-kits/) | app shells: full pages behind one tab bar (console-tui's screens) |
 | 0550 | Navigation kit: sidebar nav + filter tab strip with counts | admin nav, channel lists, triage filters, places rails |
 | 0560 | App header + banner primitives | account chip/sign-out headers, attention + context banners |
 | 0570 | Tree view (virtualized, keyed, lazy children) | file browse, outline/notes, grouped entities |

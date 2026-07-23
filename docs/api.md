@@ -848,6 +848,11 @@ Around the core loop the module provides:
   `current_caps()` is the untracked snapshot for plumbing.
 - **KeymapHelp** — a ready-made `?` help modal listing the shortcuts
   reachable from the current focus plus every registered global action.
+  Global actions resolve LAST in the driver's key path: a key that
+  nothing in the UI consumed — including one a MODAL overlay owned but
+  did not consume — falls through to the action registry, which is
+  what lets an action-bound toggle (the shell example's `i` inspector)
+  close the very modal drawer it opened.
 
 ## app::ChoicePrompt — the modal decision gate
 
@@ -977,6 +982,60 @@ several questions (each opens as the previous resolves);
 `ChoiceSequenceOutcome` is `Completed(answers)` or `Cancelled { index,
 answers }`. An empty question list completes synchronously. See
 `examples/decide.rs` for all three flavors.
+
+## app::Drawer — edge-anchored overlay panels
+
+A drawer summons a FULL page (a Feed, a form, a reader) from a viewport
+edge, over the app, without touching its layout — the entity-app
+chat/inspector panel, translated to cells. Install once, then drive it
+through the handle or a bound signal:
+
+```rust
+let inspector = Drawer::new(DrawerEdge::Right)
+    .size(DrawerSize::Percent(0.4))     // or Cells(n); cross axis fills
+    .title("Inspector")                  // themed header + esc hint + ✕
+    .motion(Duration::from_millis(160)) // Duration::ZERO = instant mode
+    .on_close(|why| { /* DrawerCloseReason::{Api, Escape, ..} */ })
+    .install(cx, |mount| inspector_page(mount));
+inspector.toggle();                      // open / close / is_open too
+```
+
+Focus modes: `DrawerFocus::Modal` (default) is a focus-trapped tree —
+all input routes to the panel, Esc closes, a press outside closes when
+`close_on_outside(true)` (default), and a `scrim(true)` (default) veils
+the page with the theme's `overlay` token. The titled header's ✕ is a
+MOUSE-ONLY affordance (deliberately not focusable — chrome must never
+steal a modal's initial focus from the content it frames, so
+`focus_init` lands on the page and a hosted `PageHost`'s chords answer
+from frame one); Esc is the keyboard close. `DrawerFocus::Passive` is
+glanceable: keys stay with the main surface until the user clicks into
+the panel (the focused-overlay key rule); no scrim ever — dimming
+content that stays interactive would lie. The default diverges from the
+web `AfDrawer` (non-modal) deliberately: in a keyboard-first terminal
+an unfocused panel cannot even scroll.
+
+Lifecycle honesty: a CLOSED drawer removes its layers and disposes its
+mount scope — `build` runs per open, and state that must survive close
+lives OUTSIDE the builder (the Tabs rule: create signals in the
+installing scope, capture them in `build`). A hidden-but-mounted tree
+would accumulate undrained damage and spin the frame loop; removal is
+the zero-idle-lawful shape. The slide bills exactly its band
+(`Layer::set_origin` damages old ∪ new bounds) and the flight requests
+frames only while easing — settled, parked or closed drawers cost zero
+bytes (wave-pinned).
+
+Stacking laws: drawers occupy fixed per-edge z slots in a band below
+`MODAL_Z` (Left < Right < Top < Bottom at corners), so a `Modal` opened
+from a drawer layers above it, owned popups (`top_z() + 1`) layer above
+everything live, and toasts stay on top. ONE drawer per edge: opening
+on an occupied edge finishes the incumbent instantly with
+`DrawerCloseReason::Replaced`. A terminal resize RE-CLAMPS (geometry
+re-solves, surfaces resize, an in-flight slide continues toward the
+fresh resting place) — unlike `Popup`, which dismisses, a drawer's
+anchor is the edge itself and never goes stale. `bind(Signal<bool>)` is
+the controlled mode: external writes open/close, handle verbs write
+back — one truth. See `examples/shell.rs` (the 'i'/'g' drawers) and
+`examples/drawers.rs`.
 
 ## app::keys — key press/release state (held keys)
 
@@ -1486,3 +1545,74 @@ Plain statements of current behavior:
   host, but it has not yet run on a live Windows machine; treat a first
   Windows deployment as a beta event. macOS and Linux are the live-verified
   platforms.
+
+## widgets::PageHost — the page-level tab host
+
+Full complex pages behind one themed tab bar (app-kits 0545 — "a
+global tab system... higher-level containers able to contain full
+complex pages"). `Tabs` remains the small in-content strip; the
+navigation-kit `FilterTabs` (0550, proposed) filters one surface
+without panels. A `PageHost` is the app-shell container: N pages
+addressed by id, exactly one mounted.
+
+```rust
+use abstracttui::prelude::*;
+
+fn shell(cx: Scope, alerts: Signal<u32>) -> View {
+    PageHost::new()
+        .page("overview", "Overview", move |gcx| overview(gcx))
+        .page("reader", "Reader", move |gcx| reader(gcx))
+        .page("settings", "Settings", move |gcx| settings(gcx))
+        .badge("overview", move || {
+            let n = alerts.get();
+            (n > 0).then(|| n.to_string())
+        })
+        .number_jump(true) // opt-in: plain digits 1-9 jump
+        .view(cx)
+}
+```
+
+- **Pages are builders** (`FnMut(Scope) -> View`) receiving a
+  per-activation GENERATION scope: only the active page is mounted;
+  switching disposes the outgoing page's scope (signals, effects,
+  timers, focus) and builds the incoming one fresh.
+- **No keep-alive, by design**: a hidden-but-mounted page's timers
+  would keep ticking — the zero-idle law forbids it. Durable page
+  state lives in app-owned signals created OUTSIDE the builders (the
+  compose store pattern); builders re-read them on remount. Demo:
+  `examples/shell.rs` (type into Settings, leave, return).
+- **Controlled or uncontrolled**: `.active(Signal<String>)` hands the
+  app the navigation signal (the cycle-7 router ruling: navigation
+  state IS a signal — external writes switch pages, `on_change` does
+  not fire for them); otherwise the host owns an internal signal and
+  `.initial(id)` picks the start page. Unknown ids fold to the first
+  page. `on_change(|id|)` fires after the active write on host-driven
+  switches (disposal-safe, the 0297 law).
+- **Tab bar**: two rows (titles + the `border_focus` cell strip);
+  active `text`+BOLD, idle `text_muted`, badges `info`, ground
+  `surface`. Badges are reactive getters — a count change repaints
+  the bar only. Overflow WINDOWS the strip around the active tab
+  (sticky window start; `‹`/`›` indicators are prev/next click
+  targets); oversized titles truncate with an ellipsis. Clicks
+  hit-test the bar plan AS DRAWN — the pixels on screen — so a model
+  change landing between a draw and a press (a badge widening) can
+  never shift a tab under the pointer; nothing to configure. One tab
+  stop, `Role::Tabs`, access value `"Title (i/N) [badge]"`.
+- **Chords** (default Ctrl+PgUp/PgDn; `.chords(prev, next)` replaces,
+  and EMPTY sets disarm the interceptor entirely — the reserved keys
+  return to the content) are CONTAINER-RESERVED: intercepted at
+  Capture phase on the host root, because scrollable widgets match
+  PageUp/PageDown modifier-blind and would eat a bubble-layer chord;
+  plain PgUp/PgDn always stay with the content. Matching is
+  normalized — both wire spellings of a shifted letter fire. Chords
+  are live while focus is anywhere inside the host; with nothing
+  focused, keys target the tree root, so a host mounted AS the root
+  element answers from frame one (otherwise establish focus:
+  click/Tab/`focus_first` — inside a MODAL overlay, a `Modal` or a
+  modal `Drawer`, `focus_init` lands on the bar and chords answer
+  with no ritual). A chord/digit switch re-anchors focus on the host
+  root so the next chord is never dead after the focused node died
+  with its page.
+- **Digit jumps** ride the shortcut table (never capture): a focused
+  text input keeps its digits; declared labels surface in
+  keymap-help.

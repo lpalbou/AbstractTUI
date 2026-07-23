@@ -25,7 +25,7 @@ See `examples/README.md` for the full list.
 
 ## Testing
 
-The default test pass runs the whole suite — roughly 1,640 tests across unit
+The default test pass runs the whole suite — roughly 1,910 tests across unit
 tests, the integration suites under `tests/`, and doctests:
 
 ```sh

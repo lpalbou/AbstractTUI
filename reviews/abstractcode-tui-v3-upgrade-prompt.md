@@ -256,3 +256,41 @@ each. Everything above was verified against your working tree and the
 engine's v0.2.6 tag on 2026-07-23; the full findings review (file:line
 on both sides, fit verdicts, deletion estimates) is at
 `~/tmp/abstractframework/abstracttui/reviews/abstractcode-tui-review-2026-07-23.md`.
+
+---
+
+## 0.2.12 addendum (2026-07-24) — PageHost + Drawer now exist
+
+Additive note, appended after the 0.2.6 review above (do not re-run the
+sections above against 0.2.12 — they still hold). Two higher-level
+containers shipped in the 0.2.11/0.2.12 window that map onto surfaces
+you already hand-roll or have filed:
+
+- **`Drawer`** (`app::drawer`, `docs/api.md` "app::Drawer") — an
+  edge-anchored overlay panel hosting a full page, modal or passive.
+  Your **message cards** are the fit: a "open this answer" gesture
+  (you already have `Feed::selected_key` + `FeedState::row_of` from
+  §7, and `Feed::on_item_press` landed too) can open a **right passive
+  Drawer** holding the full answer — TOC + `/` search via
+  `MarkdownView` (§7's reader) — while the transcript stays live and
+  keyboard-owning behind it. That is the "reader for long answers" of
+  §7, now with a shipped container instead of a hand-built modal:
+  `DrawerFocus::Passive` keeps keys with the transcript, Esc closes,
+  closed = disposed (state in your store survives). It does NOT replace
+  your decision Modals (forms/confirms stay modal); it is the
+  glanceable-reference surface you didn't have.
+- **`PageHost`** (`widgets::PageHost`, `docs/api.md`) — full pages
+  behind one themed tab bar, only the active mounted, durable state in
+  app-owned signals (your store pattern exactly). You are single-screen
+  today, so this is not a migration — but if abstractcode-tui grows a
+  second top-level screen (a settings/keybindings page, a runs browser
+  beside the chat), reach for PageHost rather than hand-rolling a
+  switcher: it owns the tab bar, the digit jumps, the container chords
+  (Capture-phase, so your scrollables can't eat them), and the
+  focus-re-anchor-after-switch that the 0230 dead-keys class needs.
+
+Neither is urgent for your app as it stands; both are the right tool
+the day a detail panel or a second screen appears. Full working
+composition (PageHost + drawers + modal-from-drawer + toast, end to
+end through the real Driver) is `examples/shell.rs` +
+`tests/wave_shell_accept.rs` in the engine tree.

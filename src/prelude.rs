@@ -90,3 +90,14 @@ pub use crate::app::{
 // The fold/unfold card (wave 7: first-app/0260 + field-agora/0850) —
 // appended with its wave.
 pub use crate::widgets::Disclosure;
+
+// The global drawer system (wave 8: app-kits/0585) — appended with its
+// wave. `DRAWER_Z` stays behind `app::` like the other z-band
+// constants.
+pub use crate::app::{
+    Drawer, DrawerCloseReason, DrawerEdge, DrawerFocus, DrawerHandle, DrawerSize,
+};
+
+// The page-level tab host (wave 8: app-kits/0545) — appended with its
+// wave.
+pub use crate::widgets::PageHost;

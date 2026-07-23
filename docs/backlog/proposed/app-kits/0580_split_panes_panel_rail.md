@@ -15,6 +15,11 @@
   thread/rail split), or any master-detail surface in a dogfood app
   (a file-manager triptych — tree + list + preview, three panes, two
   dividers — is the fuller exercise if a fourth validator is added).
+- Sibling (appended 2026-07-24): 0585's `app::Drawer` (completed) is
+  the OVERLAY half of this family — summonable edge panels that cover
+  the page. This item stays the DOCKED half (in-layout regions that
+  consume space and resize neighbors); the two compose, neither
+  absorbs the other.
 
 ## ADR status
 - Governing ADRs: None — no ADR system in this repo yet (see 0170).

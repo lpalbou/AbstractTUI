@@ -32,6 +32,7 @@ pub mod list;
 pub mod logo;
 pub mod markdown;
 pub mod meter;
+pub mod page_host;
 pub mod progress;
 pub mod radio;
 pub mod richtext;
@@ -85,6 +86,8 @@ pub use markdown::{MdSearchMatch, OutlineEntry};
 // Appended (wave 7, first-app 0260 + field-agora 0850): the
 // fold/unfold card.
 pub use disclosure::Disclosure;
+// Appended (wave 8, app-kits 0545): the page-level tab host.
+pub use page_host::PageHost;
 
 /// Shared callback-slot shape for interactive widgets: the builder's
 /// `Option<Box<dyn FnMut(..)>>` moved behind `Rc<RefCell<..>>` so
@@ -140,7 +143,7 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 36] = [
+    const SOURCES: [(&str, &str); 38] = [
         ("mod.rs", include_str!("mod.rs")),
         ("audio_scope.rs", include_str!("audio_scope.rs")),
         ("meter.rs", include_str!("meter.rs")),
@@ -168,6 +171,10 @@ mod lint_tests {
         ("markdown_doc.rs", include_str!("markdown_doc.rs")),
         ("markdown_image.rs", include_str!("markdown_image.rs")),
         ("markdown_search.rs", include_str!("markdown_search.rs")),
+        // PageHost's private shipped sibling (bar geometry) joins by
+        // hand, like feed_typeset.rs.
+        ("page_host.rs", include_str!("page_host.rs")),
+        ("page_host_bar.rs", include_str!("page_host_bar.rs")),
         ("progress.rs", include_str!("progress.rs")),
         ("radio.rs", include_str!("radio.rs")),
         ("richtext.rs", include_str!("richtext.rs")),

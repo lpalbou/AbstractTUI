@@ -26,6 +26,12 @@ Each item carries a severity in its Metadata and in the row here:
 **P1** blocked the build / **P2** cost real time, workaround holds /
 **P3** paper cut.
 
+Round-trips already observed: 0850 (Disclosure/Card + `Feed::on_item_press`)
+shipped in abstracttui 0.2.11 the same day it was filed, alongside
+`Scroll::scrollbar_auto_hide` (the cycle-3 design review's first engine
+ask, pre-empted); agora-tui adopted 0.2.11 and deleted its click-toggle
+gap the same session.
+
 | ID | Title | Class | Severity |
 | --- | --- | --- | --- |
 | 0800 | use_startup_notices carries unbounded mid-session diagnostics | API gap | P3 |
@@ -34,6 +40,10 @@ Each item carries a severity in its Metadata and in the row here:
 | 0830 | reconnect countdown needs app-side deadline bookkeeping | API gap | P3 |
 | 0840 | layout docs: grow vs intrinsic basis for content-heavy panes | UX defect (docs) | P3 |
 | 0860 | RichTextView/MarkdownView have no intrinsic measure — invisible in Scroll | footgun | P3 |
+| 0870 | FeedItem headline single-row/nowrap mode (folded cards wrap into body-lookalikes) | capability gap | P3 |
+| 0880 | FeedItem body max-measure for wide terminals | capability gap | P3 |
+| 0885 | Disclosure title needs a rich-span slot (folded cards lose identity color) | capability gap | P2 |
+| 0890 | Disclosure capped body under-measures rich feed items (rows clip) | bug | P2 |
 
 Completed 2026-07-24 (disclosure wave, moved to
 `../../completed/field-agora/`):

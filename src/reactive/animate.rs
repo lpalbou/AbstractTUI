@@ -76,6 +76,16 @@ where
                 let state_for_task = state.clone();
                 register_frame_task(move |now| {
                     let mut st = state_for_task.borrow_mut();
+                    // Owner died mid-flight (dyn_view regeneration, a
+                    // drawer/popup mount disposed while animating): the
+                    // follower is gone, so cancel quietly instead of
+                    // panicking on a disposed-signal write (the Meter
+                    // frame-task rule, widgets/meter.rs).
+                    if !out.is_alive() {
+                        st.flight = None;
+                        st.task_live = false;
+                        return false;
+                    }
                     let Some(flight) = st.flight.as_mut() else {
                         st.task_live = false;
                         return false; // landed or cancelled: drop the task
@@ -277,6 +287,28 @@ mod tests {
             assert!(mid > 0.0, "was mid-flight when retargeted");
             assert_eq!(frame_tasks_pending(), 0);
         });
+    }
+
+    #[test]
+    fn follower_scope_disposed_mid_flight_cancels_quietly() {
+        // The disposal-safety guard (0585): a follower whose owning
+        // scope dies while a flight is live must CANCEL on the next
+        // frame-task pass — not panic writing a disposed signal. This
+        // is the drawer's replace/host-gone path and any dyn_view
+        // regeneration that unmounts an animating component.
+        let (root, (source, child)) = create_root(|cx| {
+            let child = cx.child();
+            let source = child.signal(0.0f32);
+            let _follower = animate(child, source, Easing::Linear, Duration::from_millis(100));
+            (source, child)
+        });
+        source.set(10.0);
+        flush_effects();
+        assert_eq!(frame_tasks_pending(), 1, "flight is live");
+        child.dispose(); // follower + effect die mid-flight
+        let left = run_frame_tasks(Instant::now());
+        assert_eq!(left, 0, "task cancelled quietly, no panic, no residue");
+        root.dispose();
     }
 
     #[test]

@@ -5,6 +5,127 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.12] - 2026-07-24
+
+### Added
+
+- widgets: `PageHost` — the page-level tab host (app-kits 0545, the
+  maintainer's "global tab system"). N full pages addressed by id,
+  each a builder `FnMut(Scope) -> View` on a per-activation
+  generation scope: only the active page is mounted; switching
+  disposes the outgoing scope (no keep-alive by design — hidden pages
+  would keep timers ticking against the zero-idle law; durable state
+  lives in app-owned signals, the documented recipe). Themed windowed
+  tab bar (sticky window around the active tab, `‹`/`›` overflow
+  indicators as prev/next click targets, ellipsis truncation,
+  reactive count/badge slots repainting the bar only), controlled
+  (`active(Signal<String>)`) or uncontrolled (`initial(id)`) with
+  disposal-safe `on_change(id)` (0297). Navigation: click,
+  Left/Right on the focused bar (wrap), container-reserved chords
+  (default Ctrl+PgUp/PgDn, Capture-phase so modifier-blind
+  scrollables cannot eat them; normalized matching covers both wire
+  spellings), opt-in digit jumps 1-9 riding the shortcut table, and
+  focus re-anchoring after a chord switch (the 0230 dead-keys class).
+  A11y: one tab stop, `Role::Tabs`, value `"Title (i/N) [badge]"`.
+  Exported from the prelude; demoed in `examples/shell.rs` (the
+  app-shell demo, co-owned with the drawer wave); acceptance in
+  `tests/wave_page_host.rs`.
+- app: `Drawer` — the global drawer system (app-kits 0585, the
+  maintainer's "entity-app drawer" brief). Edge-anchored overlay
+  panels (`DrawerEdge::{Left, Right, Top, Bottom}`, `DrawerSize::
+  {Cells, Percent}`) hosting FULL pages over the app without touching
+  its layout; install once (`install(cx, build)`), drive through
+  `DrawerHandle` (`open`/`close`/`toggle`/`is_open`) or a bound
+  `Signal<bool>` (controlled mode — one truth both ways). Focus
+  modes: `Modal` (default: focus-trapped tree, Esc closes, optional
+  outside-press dismissal + `overlay`-token scrim — the deliberate
+  divergence from the non-modal web `AfDrawer`: a keyboard-first
+  terminal panel must own keys to be usable) and `Passive`
+  (glanceable; click-to-focus per the focused-overlay key rule; never
+  a scrim). Slide transition rides `reactive::animate` +
+  `LayerHandle::set_offset` — frames only while easing, damage billed
+  to the drawer band, `motion(Duration::ZERO)` is the instant mode;
+  closed drawers remove their layers and dispose the mount scope
+  (state survives outside the builder, the Tabs rule — a hidden
+  mounted tree would spin the frame loop on undrained damage).
+  Stacking: fixed per-edge z slots below `MODAL_Z` (modal-from-drawer
+  layers above; popups above everything; toasts on top), ONE drawer
+  per edge (`DrawerCloseReason::Replaced`), resize RE-CLAMPS instead
+  of dismissing. `on_close` observes every close with its reason
+  (`Api`/`Escape`/`OutsidePress`/`Replaced`/`HostGone`,
+  `#[non_exhaustive]`). Exported from the prelude; demoed in
+  `examples/drawers.rs` + the `examples/shell.rs` drawer regions;
+  acceptance in `tests/wave_drawers.rs` (slide-frames-then-idle-zero,
+  band containment, feed page scrolls, modal-from-drawer, both wire
+  spellings).
+- testing: `CaptureTerm::push_resize(size)` — deliver a terminal
+  resize through the headless driver (the wave-8 acceptance drives
+  resize-while-overlays-open scenarios with it; previously only
+  in-crate tests could re-publish a viewport).
+
+### Fixed
+
+- reactive: `animate`'s frame task now cancels quietly when the
+  follower's owning scope was disposed MID-FLIGHT (dyn_view
+  regeneration, a drawer replaced/host-gone while sliding) instead of
+  panicking on a disposed-signal write — the Meter frame-task rule
+  applied to the shared follower (0585;
+  `follower_scope_disposed_mid_flight_cancels_quietly`).
+- widgets: `PageHost` tab clicks now hit-test against the plan AS
+  DRAWN (the pixels the user sees) instead of recomputing from the
+  live model — a badge widening in the same batch as a click shifted
+  the segment geometry under the pointer, landing the press on the
+  wrong tab (cycle-2 cross-review F1;
+  `wave_shell_review2::click_resolves_against_the_drawn_bar_*`). The
+  draw closure publishes `(plan, width)`; the handler recomputes only
+  before the first draw.
+- app: the drawer header's ✕ is now a MOUSE-ONLY affordance (not
+  focusable) — as the panel's first focusable it stole a modal
+  drawer's initial focus from the CONTENT, leaving a hosted
+  `PageHost`'s container chords dead until a click (the 0230 class
+  inside a drawer; cycle-2 cross-review F2;
+  `wave_shell_review2::page_host_inside_a_modal_drawer_owns_chords_while_open`).
+  Esc remains the keyboard close; content now receives `focus_init`.
+- app: closing a drawer (and shrinking one on resize) now repaints the
+  region the panel occupied. A close slides the panel to its
+  off-screen closed origin BEFORE removal, so `LayerHandle::remove`'s
+  current-bounds damage clipped to EMPTY and the vacated cells never
+  recomposited — an instant (`motion: ZERO`) or scrimless (passive)
+  close left the frozen panel on screen (a modal scrim's full-viewport
+  removal masked it for modal drawers only; cycle-1's close test
+  asserted `layer().is_none()`, not the pixels, so it slipped through).
+  `finish`/`reclamp` now name the panel's last-visible rect via the new
+  crate-internal `Overlays::damage_root_under_rect` (cycle-3 acceptance
+  F1; `wave_drawers::instant_scrimless_close_repaints_the_vacated_region`,
+  `wave_drawers::scrimless_right_drawer_shrink_on_resize_leaves_no_stale_edge`,
+  and the end-to-end `wave_shell_accept`).
+- app: a drawer open whose one-per-edge claim was STOLEN while user
+  code ran mid-open (the replaced incumbent's `on_close` reopening it,
+  or the build closure opening another same-edge drawer) no longer
+  mounts anyway — two panels could land on ONE fixed z slot, the
+  equal-z trap the slots exist to avoid. The LAST claim owns the
+  slot; the preempted open aborts before creating layers and fires no
+  close reason (it never completed — which is also what makes a
+  mutually-reopening callback pair terminate instead of recurse).
+  (Cycle-2 cross-review;
+  `wave_shell_review::reopen_from_on_close_during_replacement_keeps_one_drawer_per_edge`.)
+- app: opening (or reopening mid-close) a MODAL drawer now blurs
+  passive drawer trees — overlay key dispatch walks topmost-z first
+  and a FOCUSED non-modal tree above the modal's fixed edge slot kept
+  every key, so Esc closed a passive strip while the modal stayed
+  open beneath its scrim. Clicking back into an unveiled passive
+  panel re-steals the keyboard deliberately (the engine's one focus
+  story). (Cycle-2 cross-review;
+  `wave_shell_review::modal_drawer_takes_keys_from_a_focused_passive_drawer_above_it`.)
+- app: the drawer scrim's veil cell is captured AT OPEN
+  (`Mount::veil`) and reused by the resize re-clamp — the re-clamp
+  repainted with the CURRENT theme's `overlay` token, minting a
+  mixed-theme drawer after a theme switch + resize while open
+  (latent with the registry themes, which share one overlay value;
+  real for runtime-registered themes). Tokens resolve at open, the
+  documented rule. (Cycle-2 cross-review;
+  `drawer::tests::review::scrim_repaint_on_resize_keeps_the_at_open_veil_token`.)
+
 ## [0.2.11] - 2026-07-24
 
 ### Added

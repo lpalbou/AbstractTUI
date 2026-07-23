@@ -301,8 +301,9 @@ that way.
   compositor, and the render pipeline.
 - [API guide](api.md) — the public surface, module by module.
 - [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
-- [Examples catalog](../examples/README.md) — seventeen runnable programs, from
+- [Examples catalog](../examples/README.md) — nineteen runnable programs, from
   the 53-line `hello` to the full `dashboard`, with the keys each answers to.
   For content-heavy apps start with `transcript` (streaming markdown chat),
   `reader` (tables, images, TOC, search), and `voice_mock` (push-to-talk and
-  live meters, no audio required).
+  live meters, no audio required); for app chrome start with `shell` (full
+  pages behind a `PageHost` tab bar plus `Drawer` panels from both edges).

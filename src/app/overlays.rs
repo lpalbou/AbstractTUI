@@ -276,6 +276,21 @@ impl Overlays {
         }
     }
 
+    /// Damage the ROOT layer under `rect` (frame coordinates): the cells
+    /// there recomposite from below on the next frame. The repair for a
+    /// layer that vacated a VISIBLE region by a route `remove()` cannot
+    /// see — an overlay that moved off-screen (or shrank) in the SAME
+    /// step it was removed, so its own bounds no longer cover where it
+    /// was seen (the instant-close / resize-shrink class, 0585 cycle-3
+    /// F1). `remove()` damages under the layer's CURRENT bounds; a mover
+    /// must additionally name the region it is leaving behind.
+    pub(crate) fn damage_root_under_rect(&self, rect: Rect) {
+        if let Ok(mut store) = self.store.try_borrow_mut() {
+            store.damage_root_under(rect);
+        }
+        request_frame();
+    }
+
     // ---- driver plumbing (crate-internal) -------------------------------
 
     pub(crate) fn store(&self) -> &Rc<RefCell<OverlayStore>> {

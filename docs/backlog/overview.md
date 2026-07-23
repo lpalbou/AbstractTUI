@@ -119,6 +119,7 @@ composer wave).
 | 0292 | Completion trigger position policy (`trigger_at` + TriggerPosition) — completed 2026-07-23 | completed/first-app/ |
 | 0294 | Anchored-panel placement bias (`PanelPlacement`, AbovePreferred for bottom composers) — completed 2026-07-23 | completed/first-app/ |
 | 0515 | `ChoicePrompt`/`ChoiceSequence` — the modal decision gate (options + multiple + Other free-text + shortcut letters + danger tint + must-choose mode; charter-verified SHIP) — completed 2026-07-23 | completed/app-kits/ |
+| 0545 | `PageHost` — the page-level tab host (full pages behind a themed windowed tab bar; capture-reserved chords, opt-in digit jumps, reactive badges, no keep-alive by design; the console-tui "global tab system" brief) — completed 2026-07-24 | completed/app-kits/ |
 | 0285 | Selection click-through: the layer claims only once the gesture DRAGS (plain clicks reach widgets; dismissal click consumed) + pointer-capture heal (press re-render no longer strands the capture) — completed 2026-07-23 | completed/first-app/ |
 | 0286 | KeyChord shifted-letter dual-spelling folded at every chord-match site (`KeyChord::normalized`; tree shortcuts, Actions, `pressed_chord`) — completed 2026-07-23 | completed/first-app/ |
 | 0287 | ChoicePrompt `.body(view)` slot — structured/scrollable/reactive display region; options-first height budget — completed 2026-07-23 | completed/first-app/ |
@@ -126,6 +127,7 @@ composer wave).
 | 0271 | ChoicePrompt approval-gate adoption gaps: `body_width` (body joins the panel measure), `dismiss_label` (defer-honest vocabulary), `handle.retire()` (host close without resolving) — completed 2026-07-23 | completed/first-app/ |
 | 0260 | Disclosure card widget — fold/unfold title row, configurable initial state, capped body with scrollbar (`widgets::Disclosure`) — completed 2026-07-24 | completed/first-app/ |
 | 0850 | Feed message-card enablers — `Feed::on_item_press` + `item_at_row`, `Scroll::extent_signal`/`scrollbar_auto_hide`, the documented card recipe (Feed-native kind stays behind 0280) — completed 2026-07-24 | completed/field-agora/ |
+| 0585 | Global drawer system — `app::Drawer` edge-anchored overlay panels hosting full pages (Modal/Passive focus modes, scrim, slide via `animate` with the idle-zero pin, per-edge z slots below `MODAL_Z`, one-per-edge replace, resize re-clamp, bound-signal controlled mode) + the `animate` mid-flight disposal guard — completed 2026-07-24 | completed/app-kits/ |
 
 ## Proposed ledger
 

@@ -1,6 +1,6 @@
 [package]
 name = "abstracttui"
-version = "0.2.11"
+version = "0.2.12"
 edition = "2021"
 # MSRV (backlog 0180): the floor is set by the library's own std usage —
 # `is_multiple_of` (1.87: gfx/png, gfx/base64, three/validate, jpeg),
@@ -18,7 +18,7 @@ documentation = "https://docs.rs/abstracttui"
 readme = "README.md"
 categories = ["command-line-interface", "rendering", "gui", "graphics"]
 keywords = ["tui", "terminal", "renderer", "reactive", "graphics"]
-exclude = ["reviews/", "docs/captures/", "docs/media/", ".github/", "book.toml"]
+exclude = ["reviews/", "docs/captures/", "docs/media/", ".github/", ".cursor/", "book.toml"]
 
 # Dependency policy (see docs/design/00-vision.md): std + the minimal,
 # low-level, MIT/Apache-licensed set below. Everything else is hand-rolled.

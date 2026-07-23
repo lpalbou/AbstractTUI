@@ -27,6 +27,8 @@ capability report and exit — the diagnostic surface, no tty needed.
 | `transcript.rs` | REAL — streaming conversation: markdown answers typeset live block-by-block (doc vocabulary: a table streams in as a TABLE, task lists, strikethrough), code tint, follow-tail break/re-pin, 10k stress |
 | `voice_mock.rs` | REAL — the voice surface with no audio/network: push-to-talk (hold/latch per key-state fidelity), dB meter + band spectrum + rolling scope, fake transcription feed |
 | `reader.rs` | REAL — mdpad-class markdown reader: GFM tables, lazy in-flow images, TOC/anchor jumps, search highlights with live count |
+| `shell.rs` | REAL — the app shell: a global `PageHost` (three full pages behind one tab bar, live tab badge, container-reserved chords, digit jumps) + the drawer wave's edge drawers (co-owned) |
+| `drawers.rs` | REAL — the drawer system alone: a modal inspector (scrim, focus trap, Esc/✕) hosting a scrollable Feed page + a passive glanceable nav panel, state surviving close/reopen |
 | `caps.rs` | TOOL — the live terminal-capability report: what the probe detected, which image channel the ladder picks |
 | `capture.rs` | TOOL — deterministic screenshot pipeline into `docs/captures/` |
 | `common/` | shared helpers (small-terminal guard, key legend) — not a target |
@@ -286,3 +288,39 @@ fenced "screenshots".
 - Run: `cargo build --examples && cargo run --example capture`
   (`-- themes|splash|shots|apps` for one family).
 - Needs: unix `script(1)` for the pty shots; nothing for the rest.
+
+## shell
+
+The app shell (co-owned: page host + drawers). A global `PageHost`
+hosts three full pages — a dashboard-ish overview with status chips
+and a live tab badge, a scrolling markdown reader, a settings form —
+behind one themed tab bar. Durable page state lives in app-owned
+signals (type into Settings, switch away, come back: the draft
+survives the remount); the badge follows the alert count without
+remounting anything. The drawer wave adds its edge-anchored drawers
+to this same shell.
+
+- Keys: Ctrl+PgUp/PgDn or click pages, 1-3 jump, `i` inspector drawer,
+  `g` nav drawer, Tab focus, `n` raise an alert (watch the Overview
+  badge), Ctrl+T theme, `q` quit.
+- Needs: any tty; `ABSTRACTTUI_THEME=<id>` themes it.
+- Looks like: one calm shell — a tab bar with an underline strip and
+  a count badge over one full page at a time, with drawers sliding
+  over it from both edges on demand.
+
+## drawers
+
+The drawer system in isolation. A right MODAL inspector (scrim, focus
+trap, Esc/✕ close, outside press dismisses) hosting a full scrollable
+Feed page, and a left PASSIVE nav panel — glanceable: the app keeps
+the keyboard until you click into it. Both keep their page state
+across close/reopen because it lives in app-owned signals outside the
+builders (the Tabs rule); `n` appends feed lines that keep arriving
+while the inspector is open.
+
+- Keys: `i` inspector · `g` nav · `n` add a feed line · Ctrl+T theme ·
+  `q` quit.
+- Needs: any tty; `ABSTRACTTUI_THEME=<id>` themes it.
+- Looks like: a live page dimming under an opaque right panel sliding
+  in; the left panel floats over it undimmed, keys staying with the
+  page until clicked.

@@ -6,7 +6,9 @@
 > exactly the screen regions they own. Damage flows through a z-ordered compositor with
 > alpha blending and per-cell shaders, a frame diff, and a byte-economical ANSI presenter,
 > so an idle app emits zero bytes and allocates nothing. On top sit a 20+ widget library
-> arranged by a flexbox-style solver and a track-based grid, 26 built-in themes over 36
+> arranged by a flexbox-style solver and a track-based grid, an app-shell vocabulary
+> (a page-level tab host and edge-anchored drawer panels, both hosting full pages),
+> 26 built-in themes over 36
 > contrast-audited semantic design tokens, PNG/baseline-JPEG images drawn through the best
 > channel the terminal proves (kitty graphics, iTerm2, sixel, or unicode mosaic),
 > software-rasterized 3D from GLB files (textures, animation, skinning — no GPU),
@@ -41,8 +43,10 @@
   (plus the `reactive::connection` lifecycle with jittered-backoff reconnect), ui, layout,
   the widget catalog (`List` activation, masked `TextInput`, diff-aware `CodeView`,
   `Feed` streaming/rich lines/sync/selection-by-key, chart history rings with time axes,
-  `Meter`/`AudioScope` levels), the widget disposal-safety law, the app runtime (overlays,
-  modal, toast, the anchored-popup substrate and the Select/Combobox/MultiSelect pickers,
+  `Meter`/`AudioScope` levels, the `PageHost` page-level tab host), the widget
+  disposal-safety law, the app runtime (overlays,
+  modal, toast, edge-anchored `Drawer` panels, the anchored-popup substrate and the
+  Select/Combobox/MultiSelect pickers,
   completion, hooks, key press/release state and `PushToTalk`), theme, render
   (Style-as-patch, shaders, the markdown doc vocabulary and the reader surface), gfx,
   three, term/input, the testing harness, and plain statements of stability and limits.
@@ -77,8 +81,8 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, 0.2.11 (2026-07-24) the current one.
-- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,640 tests) and the
+  (2026-07-21) is the first public release, 0.2.12 (2026-07-24) the current one.
+- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,910 tests) and the
   explicitly-run suites (live pty, two release-mode perf-budget suites with byte-emission
   ratchets, plus the scheduled weekly `perf.yml` deep gate), golden snapshots, lint gates,
   the strict module layering rule, code conventions, and how to add a widget or a theme.
@@ -98,8 +102,9 @@
 - [src/lib.rs](src/lib.rs): Crate root with the layer map — `base`, `term`, `input`,
   `render`, `text`, `anim`, `reactive`, `layout`, `ui`, `widgets`, `gfx`, `three`,
   `theme`, `app`, `boot`, `testing`.
-- [examples/](examples/README.md): The catalog of the seventeen runnable examples — `hello`,
-  `dashboard`, `gallery`, `themes`, `widgets`, `effects`, `splash`, `viewer3d`, `images`,
+- [examples/](examples/README.md): The catalog of the nineteen runnable examples — `hello`,
+  `dashboard`, `shell`, `drawers`, `gallery`, `themes`, `widgets`, `effects`, `splash`,
+  `viewer3d`, `images`,
   `components`, `grid`, `feed`, `transcript`, `reader`, `voice_mock`, `caps`, `capture` — each
   documented with keys and requirements; every one exits cleanly without a tty, and
   `dashboard`/`viewer3d`/`images` take `--caps`.

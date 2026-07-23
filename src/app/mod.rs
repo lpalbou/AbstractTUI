@@ -38,6 +38,8 @@ pub mod actions;
 pub mod anchored;
 mod caps;
 pub mod choice_prompt;
+pub mod drawer;
+mod drawer_view;
 mod driver;
 mod driver_images;
 mod driver_suspend;
@@ -77,6 +79,10 @@ pub use redraw::{redraw_on_focus_gained, request_full_redraw, set_redraw_on_focu
 pub use choice_prompt::{
     ChoiceAnswer, ChoiceOption, ChoiceOutcome, ChoicePrompt, ChoicePromptHandle, ChoiceQuestion,
     ChoiceSequence, ChoiceSequenceOutcome,
+};
+// Appended (wave 8, app-kits/0585): the global drawer system.
+pub use drawer::{
+    Drawer, DrawerCloseReason, DrawerEdge, DrawerFocus, DrawerHandle, DrawerSize, DRAWER_Z,
 };
 
 use std::cell::Cell;
