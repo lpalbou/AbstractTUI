@@ -54,3 +54,20 @@ pub use crate::{
 // handle (0296) — appended with their wave.
 pub use crate::app::select::SelectHandle;
 pub use crate::app::{current_caps, use_caps};
+
+// Key state + push-to-talk + level meters (wave 3: games/0700,
+// media-av/0610 + 0620) — appended with their wave.
+pub use crate::app::{
+    hold_gesture_label, use_key_state, CaptureState, KeyFidelity, KeyState, PttMode, PushToTalk,
+    StopReason,
+};
+pub use crate::widgets::{AudioScope, Meter};
+
+// Markdown reader surface (wave 3: app-widgets 0142/0144/0146/0148) —
+// appended with its wave: the document view + its outline/search
+// currencies (`md::outline`/`parse_doc` stay behind `render::md`).
+pub use crate::widgets::{MarkdownView, MdSearchMatch, OutlineEntry};
+
+// Connection lifecycle + jittered reconnect (live-data 0040) —
+// appended with its wave.
+pub use crate::reactive::{connection, Backoff, ConnState, Connection, ConnectionEvents};

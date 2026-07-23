@@ -27,6 +27,47 @@ fn focused_input(size: Size) -> (crate::reactive::RootScope, UiTree, Signal<Stri
     (root, tree, sig)
 }
 
+/// Disposal-safety law (backlog 0297): TextInput finishes every signal
+/// write (value, caret) before `notify` runs the user callback, so
+/// `on_submit`/`on_change` may dispose the input's scope synchronously.
+/// Audited clean at filing; pinned for both arms.
+#[test]
+fn callbacks_may_dispose_the_inputs_scope() {
+    let t = &default_theme().tokens;
+    // on_submit (Enter) disposes — the submit-and-close dialog.
+    let mut tree = UiTree::new(Size::new(16, 1));
+    let (root, ()) = crate::reactive::create_root(|cx| {
+        let modal_cx = cx.child();
+        let view = TextInput::new()
+            .on_submit(move |_| modal_cx.dispose())
+            .element(modal_cx, t)
+            .build();
+        tree.mount(modal_cx, view);
+    });
+    tree.layout();
+    key(&mut tree, Key::Tab); // focus
+    type_str(&mut tree, "hi");
+    key(&mut tree, Key::Enter); // submit -> dispose, mid-dispatch
+    assert_eq!(tree.instance_count(), 0, "subtree unmounted by dispose");
+    root.dispose();
+
+    // on_change (first keystroke) disposes.
+    let mut tree = UiTree::new(Size::new(16, 1));
+    let (root, ()) = crate::reactive::create_root(|cx| {
+        let modal_cx = cx.child();
+        let view = TextInput::new()
+            .on_change(move |_| modal_cx.dispose())
+            .element(modal_cx, t)
+            .build();
+        tree.mount(modal_cx, view);
+    });
+    tree.layout();
+    key(&mut tree, Key::Tab);
+    key(&mut tree, Key::Char('q')); // edit -> on_change -> dispose
+    assert_eq!(tree.instance_count(), 0, "subtree unmounted by dispose");
+    root.dispose();
+}
+
 #[test]
 fn typing_inserts_and_renders_inside_the_frame() {
     let theme = default_theme();

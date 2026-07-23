@@ -39,11 +39,14 @@ pub mod anchored;
 mod caps;
 mod driver;
 mod driver_images;
+mod driver_suspend;
 mod events;
 pub mod keymap_help;
+pub mod keys;
 mod notices;
 pub mod overlays;
 pub mod popups;
+pub mod push_to_talk;
 pub mod select;
 pub mod selection;
 mod theme;
@@ -62,6 +65,9 @@ pub use popups::{Modal, Toast, MODAL_Z, TOAST_Z};
 pub use select::{Combobox, MultiSelect, Select, SelectOption};
 pub use theme::{current_theme, set_theme, set_theme_by_id, use_theme};
 pub use viewport::{current_viewport, use_viewport};
+// Appended (wave 3, games/0700 + media-av/0610): key state + push-to-talk.
+pub use keys::{hold_gesture_label, key_state, use_key_state, KeyFidelity, KeyState};
+pub use push_to_talk::{CaptureState, PttMode, PushToTalk, StopReason};
 
 use std::cell::Cell;
 use std::rc::Rc;

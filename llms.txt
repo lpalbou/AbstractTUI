@@ -11,10 +11,16 @@
 > channel the terminal proves (kitty graphics, iTerm2, sixel, or unicode mosaic),
 > software-rasterized 3D from GLB files (textures, animation, skinning — no GPU),
 > cell-shader animation with tweens, easings, and timelines, streaming transcripts
-> (`Feed` + follow-tail scroll + a multiline composer with completion), a live-data lane
-> for background producers (bounded ingestion, honest drop counters), text selection with
-> OSC 52 clipboard copy, an optional boot splash, and a headless testing harness that
-> drives the production pipeline without a pty. One crate,
+> (`Feed` + follow-tail scroll + a multiline composer with completion) speaking the full
+> markdown doc vocabulary (GFM tables that render live while streaming, task lists, lazy
+> in-flow images) with a document reader surface (heading outline and anchor jumps,
+> find-in-document highlights), a live-data lane for background producers (bounded
+> ingestion, honest drop counters, `TimeSeries` history rings with relative time axes on
+> the charts) plus an engine-owned connection lifecycle with jittered-backoff reconnect,
+> key press/release state with honest fidelity (push-to-talk, level meters, and a
+> waveform scope for voice surfaces), text selection with OSC 52 clipboard copy, an
+> optional boot splash, and a headless testing harness that drives the production
+> pipeline without a pty. One crate,
 > five small dependencies (unicode-width, unicode-segmentation, miniz_oxide, plus libc on
 > unix / windows-sys on Windows). MIT licensed.
 
@@ -31,12 +37,15 @@
   fine-grained reactivity, the compositor (layers, blending, shaders, diff/present), the
   frame lifecycle, the zero-cost idle guarantee and the tests that pin it, the terminal
   layer (capabilities, kitty keyboard, tmux, restore), the 3D pipeline, platform posture.
-- [API guide](docs/api.md): The public surface, module by module — prelude, reactive, ui,
-  layout, the widget catalog (`List` activation, masked `TextInput`, diff-aware
-  `CodeView`), the app runtime (overlays, modal, toast, the anchored-popup substrate and
-  the Select/Combobox/MultiSelect pickers, completion, hooks), theme, render
-  (Style-as-patch, shaders), gfx, three, term/input, the testing harness, and plain
-  statements of stability and limits.
+- [API guide](docs/api.md): The public surface, module by module — prelude, reactive
+  (plus the `reactive::connection` lifecycle with jittered-backoff reconnect), ui, layout,
+  the widget catalog (`List` activation, masked `TextInput`, diff-aware `CodeView`,
+  `Feed` streaming/rich lines/sync/selection-by-key, chart history rings with time axes,
+  `Meter`/`AudioScope` levels), the widget disposal-safety law, the app runtime (overlays,
+  modal, toast, the anchored-popup substrate and the Select/Combobox/MultiSelect pickers,
+  completion, hooks, key press/release state and `PushToTalk`), theme, render
+  (Style-as-patch, shaders, the markdown doc vocabulary and the reader surface), gfx,
+  three, term/input, the testing harness, and plain statements of stability and limits.
 - [Documentation index](docs/README.md): One-line map of every guide and the reference
   material.
 
@@ -52,8 +61,10 @@
   boot splash, honest limits, and the measured performance envelope.
 - [Live data](docs/live-data.md): Feeding the UI from background threads —
   `channel_source`/`latest_source`/`bounded_source` (drop/coalesce policies, honest
-  `IngestStats`), the `interval` timer, waker dedup, the Feed + follow-tail rendering
-  pattern, and back-pressure honesty.
+  `IngestStats`), the `interval` timer, waker dedup, the connection lifecycle
+  (`reactive::connection` + full-jitter `Backoff`, with a state diagram and a
+  worker-thread example), the Feed + follow-tail rendering pattern, and back-pressure
+  honesty.
 - [FAQ](docs/faq.md): Real questions — design rationale, SSH, which terminals support
   images, wide-character widths, headless testing, embedding in an existing event loop,
   the near-zero dependency policy, theme readability, `NO_COLOR`/dumb terminals, Windows
@@ -66,11 +77,11 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, 0.2.2 (2026-07-22) the current one.
-- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,470 tests) and the
-  explicitly-run suites (live pty, two release-mode perf-budget suites), golden snapshots,
-  lint gates, the strict module layering rule, code conventions, and how to add a widget
-  or a theme.
+  (2026-07-21) is the first public release, 0.2.3 (2026-07-23) the current one.
+- [Contributing](CONTRIBUTING.md): Building, the test suite (~1,640 tests) and the
+  explicitly-run suites (live pty, two release-mode perf-budget suites with byte-emission
+  ratchets, plus the scheduled weekly `perf.yml` deep gate), golden snapshots, lint gates,
+  the strict module layering rule, code conventions, and how to add a widget or a theme.
 - [Security policy](SECURITY.md): Private reporting (contact@abstractframework.ai); the
   untrusted-input scope (terminal bytes, PNG/JPEG, GLB, markdown) — any panic, unbounded
   allocation, or hang on crafted input is treated as a vulnerability-class bug.
@@ -87,13 +98,13 @@
 - [src/lib.rs](src/lib.rs): Crate root with the layer map — `base`, `term`, `input`,
   `render`, `text`, `anim`, `reactive`, `layout`, `ui`, `widgets`, `gfx`, `three`,
   `theme`, `app`, `boot`, `testing`.
-- [examples/](examples/README.md): The catalog of the fourteen runnable examples — `hello`,
+- [examples/](examples/README.md): The catalog of the sixteen runnable examples — `hello`,
   `dashboard`, `gallery`, `themes`, `widgets`, `effects`, `splash`, `viewer3d`, `images`,
-  `components`, `grid`, `feed`, `transcript`, `capture` — each documented with keys and
-  requirements; every one exits cleanly without a tty, and `dashboard`/`viewer3d`/`images`
-  take `--caps`.
+  `components`, `grid`, `feed`, `transcript`, `reader`, `voice_mock`, `capture` — each
+  documented with keys and requirements; every one exits cleanly without a tty, and
+  `dashboard`/`viewer3d`/`images` take `--caps`.
 - [docs/captures/](docs/captures/): Deterministic text "screenshots" of the shipped
   examples (plain and style-annotated) and clockless in-process stills of the app-layer
   surfaces (streaming transcript with completion open, open Select popup, diff-tinted
-  code, scrolled feed), plus `themes-table.md` — every token hex value of all 26 themes;
-  regenerable with `cargo run --example capture`.
+  code, scrolled feed, doc-vocabulary reader table), plus `themes-table.md` — every token
+  hex value of all 26 themes; regenerable with `cargo run --example capture`.

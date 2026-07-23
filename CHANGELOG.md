@@ -5,6 +5,304 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-07-23
+
+### Added (input/AV wave — games/0700, media-av/0610 + 0620 + 0650)
+
+- `app::keys` (games/0700): key press/release STATE as a first-class
+  input fact. `use_key_state(cx)` arms a driver-fed service tapping the
+  pre-conversion input stream (releases were decoded and then dropped at
+  the routing seam): `is_down`/`keys_down` (held keys, chords included),
+  per-turn `pressed`/`pressed_chord`/`released` edge sets sealed by the
+  driver's phase U, and `focus_cleared` (FocusLost empties the down-set
+  and synthesizes labeled release edges). CAPABILITY HONESTY:
+  `KeyFidelity::Full` only where kitty release events are actually live
+  (protocol spoken + event-type flags pushed, re-published at the 0293
+  mid-session upgrade); on `Degraded` legacy wires press edges stay
+  honest but the surface never claims "held" — deliberately NO
+  repeat-timeout hold approximation (a dropped repeat would fabricate a
+  release mid-hold). `hold_gesture_label(fidelity, chord)` gives hint
+  lines the truthful wording. Zero cost until armed; zero per-turn cost
+  while quiet (alloc-budget pinned).
+- `app::PushToTalk` (media-av/0610): the capture-gesture contract over
+  the key-state service. Hold-to-talk on `Full` fidelity (press starts,
+  release stops; same-turn taps fire start then stop), labeled
+  latch/toggle mode on `Degraded` wires (never a fake hold),
+  `Signal<CaptureState>` as the one truth for meters/badges/feeds,
+  `on_start`/`on_stop(reason)` callbacks, and the mic-privacy rule:
+  focus loss stops capture in every mode and capture never auto-restarts
+  on focus return.
+- `widgets::Meter` (media-av/0620): level meter with real ballistics —
+  instant attack, frame-clocked decay (default 20 dB/s over the span,
+  frame-rate-independent), peak-hold marker (~1.5 s then fall), optional
+  `db_floor` log mapping, one channel (horizontal/vertical) or N band
+  bars, eighth-block sub-cell fill, zone inks from the `ok`/`warn`/
+  `error` tokens. THE IDLE LAW, test-pinned: a silent meter reaches its
+  fixpoint and stops requesting frames — unchanged input costs zero
+  frames and zero allocations.
+- `widgets::AudioScope` (media-av/0620): rolling waveform strip over a
+  `Signal<Vec<f32>>` window on the braille chart substrate (pair with
+  `bounded_source` + `DropOldest`: the source window IS the ring). No
+  clock of its own — quiet data means nothing re-renders.
+- `examples/voice_mock.rs` (media-av/0650): the whole voice surface with
+  no audio and no network — push-to-talk on Space with the truthful
+  gesture label and live key-state fidelity in the footer, a timer-driven
+  sine+noise fake mic through `bounded_source` into the dB meter, band
+  spectrum and scope, and a fake transcription feeding words into a
+  `Feed` while "talking". Joins the live pty smoke matrix.
+- tests: `tests/wave_inputav.rs` (driver-level key-state/PTT/meter
+  acceptance over scripted kitty and legacy wires, incl. a WASD
+  held-key pan proof for the games lane) and an alloc-budget extension
+  pinning idle turns at zero allocations with a parked meter, quiet
+  scope, armed key state and a bound PTT mounted.
+
+### Added (reader wave — app-widgets 0142/0144/0146/0148)
+
+- `render::md::DocBlock` + `parse_doc` (0142): the doc vocabulary —
+  GFM tables (`TableBlock`: header, `:--`/`:-:`/`--:` alignment,
+  body rows, inline styles in cells, `\|` escapes), whole-line
+  `![alt](src)` image blocks (`ImageBlock`), and `- [ ]`/`- [x]`
+  task items (`TaskBlock`) — additive beside the exhaustive core
+  `Block` enum (`DocBlock` is `#[non_exhaustive]` from birth; on
+  table-free sources `parse_doc` equals `parse` wrapped in `Core`,
+  test-pinned). `DocStreamSession` streams it with the same
+  freeze/equivalence contract as `StreamSession`; a table opens at
+  header+delimiter, grows per pipe line, seals at the first non-pipe
+  line (any chunking equals the batch parse — fuzz-pinned against the
+  hostile corpus).
+- `~~strikethrough~~` in the core inline vocabulary (attribute-only:
+  `Attrs::STRIKE`; unclosed/empty degrade literal like `*`/`` ` ``;
+  `\~` escapes).
+- `render::md::outline`/`slugify`/`Heading` (0146): heading extraction
+  with GitHub-compatible anchor ids (lowercase, punctuation dropped,
+  spaces to dashes, `-1`/`-2` dedup — golden table incl. unicode;
+  documented deviation: combining marks drop). Widget layer:
+  `MarkdownView::outline_rows` (headings paired with their typeset row
+  at a width — TOC jump targets from the SAME fold that draws) and
+  `MarkdownView::resolve_anchor` for `[text](#anchor)` links.
+- `MarkdownView` renders the doc vocabulary (0142/0144): tables typeset
+  through the Table widget's own `solve_columns` (one column policy —
+  natural widths when they fit, fair-share flex + per-cell ellipsis
+  truncation when they don't; bold header, border-ink separator,
+  alignment honored); images render as MOSAIC rows in the flow —
+  header-only sizing at typeset (`gfx::probe_dimensions`, PNG IHDR +
+  JPEG SOF walk, fuzz-pinned to match the real decoders), LAZY decode
+  on first draw cached by (path, signature, size) across rebuilds,
+  alt-text captions, labeled missing-file/decode-failure states.
+  Pixel-protocol images in scrollable flow are deliberately deferred
+  (mosaic cells are cell-safe in any scroll context; the
+  placement/eviction question is named in 0144).
+- `MarkdownView::find` + `.highlights(matches, current)` +
+  `MdSearchMatch` (0148): find-in-typeset-text (literal + Unicode
+  case-fold with offset-true mapping; matches snap to grapheme
+  clusters, never span wrapped rows) painted as a non-destructive
+  style patch in selection tones with a distinct current match
+  (BOLD+UNDERLINE); zero cost with an empty query. The row-local
+  text↔cells mapping (`byte offset ↔ column`, both directions) is the
+  shared substrate 0160 content selection consumes.
+- `gfx::probe_dimensions` (0144): header-only PNG/JPEG dimension
+  probing. `widgets::Image::from_path` widened from PNG-only to the
+  unified magic-routed decoder (PNG + baseline JPEG).
+- `examples/reader.rs`: the mdpad-class reader — tables, lazy images
+  (incl. an honestly-missing one), TOC panel with anchor jumps, `/`
+  search with live count and `n`/`N` navigation, theme cycling; joins
+  the live pty smoke matrix (`live_reader`).
+
+### Changed (integration — Feed adopts the doc vocabulary)
+
+- `Feed` markdown items (static AND streaming) now typeset the full doc
+  vocabulary: `FeedItem::markdown` parses through `md::parse_doc` and
+  streaming items ride `md::DocStreamSession` (was `StreamSession`) —
+  GFM tables, in-flow images (probe-sized at typeset, decoded lazily on
+  first draw; feed items measure and window without decoding), task
+  lists and `~~strikethrough~~` render inside feed transcripts. A
+  streamed markdown TABLE renders as a table live: the in-flight table
+  is the OPEN region (re-typeset per delta) until its first non-pipe
+  line seals it — closed blocks stay frozen, and streamed-vs-static
+  pixel parity plus the per-token typeset cost pins now cover the doc
+  vocabulary. Core-only sources typeset identically through the doc
+  fold (the pre-existing app-shot captures regenerate byte-identical).
+  No API shape changes (`cargo semver-checks` clean vs 0.2.2).
+- `examples/transcript.rs` gains a fourth scripted turn streaming a
+  table + task list + strikethrough; `live_transcript` joins the pty
+  smoke matrix (composer-path exit through the `/quit` completion).
+- `examples/capture` apps family gains `reader-table` (doc vocabulary
+  as a byte-deterministic in-process still).
+- Fixed the residual rustdoc warning on `gfx::probe` (unresolved
+  `decode_image` intra-doc link); `RUSTDOCFLAGS="-D warnings" cargo
+  doc` and `cargo clippy --all-targets` are clean tree-wide.
+
+### Added (content wave — app-widgets 0102/0104/0190)
+
+- Rich feed lines (0102): `FeedItem::rich(RichText)` /
+  `.rich_block(...)` / `FeedItem::rich_lines(Vec<RichLine>)` — multi-ink
+  spans inside one feed line (severity-tinted log lines, chat headers)
+  without a `FeedBlock::Custom` draw closure. Typeset through the SAME
+  span-preserving wrap and row walk as every other block (parity with
+  `RichTextView` is cell-exact, test-pinned); span styles stay patches
+  (`fg: None` inherits the item ink per theme). The public `FeedBlock`
+  enum is exhaustive in 0.2.x, so the new kind rides `FeedItem`
+  constructors; the enum gains `#[non_exhaustive]` + a true `Rich`
+  variant inside the 0.3 budget (planned/0002).
+- `FeedState::sync` + `widgets::SyncSpec` (0104): the diffing bridge
+  from a `Signal<Vec<T>>` source of truth to the keyed feed —
+  key/fingerprint/render closures plus an optional visibility filter
+  (one truth, no app-side mirror predicate). Appended tail keys take
+  the O(1) push path, changed fingerprints update in place, and
+  everything violating push order (shrink, reorder, mid-list insert or
+  visibility flip) takes the documented rebuild path inside the
+  engine. Pixel parity with a hand-pushed feed is test-pinned across
+  reorder, mid-list update, burst append and full replace.
+- Feed selection by key (the deferred 0100 item 6):
+  `Feed::selected_key(Signal<Option<String>>)` highlights the selected
+  item's row band in `selection_bg` (item inks stay), and
+  `FeedState::row_of(key)` answers the scroll-to-key target for a
+  wrapping `Scroll`.
+- `widgets::TimeSeries` + `TimeSeriesState` (0190): the bounded history
+  ring monitors hand-rolled until now — `push(t, v)` with cadence-slot
+  quantization, drop-by-age (`new(cadence, window)`) or drop-by-count
+  (`with_slots`) retention, NAN padding for missed slots so a sampling
+  pause renders as a HOLE (the chart gap contract) instead of a
+  time-compressed lie, and a reactive handle whose tracked
+  `samples()`/`span()` reads re-render chart panels per push. Steady
+  pushes never grow the ring (test-pinned).
+- Chart time axes (0190): `LineChart::time_axis(span)` embeds relative
+  time labels in the existing axis rule row ("now" anchored at the
+  plot's right edge, nice ticks leftward — `-15s`, `-1m` — density
+  adapting to width, deterministic); `Sparkline::time_axis(span)` adds
+  an optional label row (one-row rects degrade to the bare trend).
+  The dashboard example's traffic panel migrated onto the ring +
+  time axis, deleting its hand-walked `(0..WINDOW)` sample vectors —
+  dashboard captures regenerated.
+
+### Added (scheduled deep gates — backlog 0180, closing leg)
+
+- `.github/workflows/perf.yml`: weekly + dispatchable scheduled run of
+  the release-mode perf suites, `fuzz_big` and the soak on a hosted
+  runner — timing suites retry once to absorb runner load noise (the
+  budgets are load-sensitive with 30–70 % quiet-host headroom), fuzz
+  and soak never retry, and the printed measurements upload as a run
+  artifact for week-over-week trend reading.
+- Byte-emission RATCHETS in `tests/perf_app_surfaces.rs`: the suites'
+  printed byte medians are now asserted against quiet-host baselines ×
+  1.5 (feed token frame, select popup open/close, selection drag,
+  composer keystroke, codeview scroll — measurement added there — and
+  both feed-scroll guard phases). Byte counts are load-independent, so
+  the ratchets assert in every profile; emission regressions can no
+  longer hide behind "the host was busy".
+- Cycle-2 cross-review probes (`tests/wave_c2_review.rs`): sync-rebuild
+  × selection-key interaction, one-writer/NaN-fingerprint
+  characterizations, `TimeSeries` cadence-boundary pins, streamed-vs-
+  batch equivalence amplified over a hostile table corpus (CRLF,
+  code-span pipes, alignment lookalikes), CJK/emoji search-cell pins,
+  slug-dedup literal collisions, image cache invalidation on rewrite,
+  the 0293 fidelity flip mid-hold, and the physical-fact rule vs the
+  selection layer's key claims.
+
+### Added (connection lifecycle — live-data 0040)
+
+- `reactive::connection` + `ConnState` + `Connection` +
+  `ConnectionEvents`: the engine-owned reconnect story. One dial fn
+  supplied by the app (the engine does NO network I/O — transports
+  stay 0050's decision); a `Signal<ConnState>` the UI renders honestly
+  (`Connecting` / `Connected` / `Degraded(reason)` / `Reconnecting {
+  attempt, next_in }` / `Closed`); retries armed on the existing timer
+  heap (zero wakeups until due, zero cost forever once `Closed` —
+  test-pinned); cancellation via `close()`, `retry_now()`, or scope
+  death. Reports cross threads on the posted-jobs lane; a superseded
+  attempt's late reports are inert and counted (`stale_reports` — the
+  `dead_sends` convention), so a zombie worker can never flip the
+  live attempt's state.
+- `reactive::Backoff`: pure jittered exponential backoff — FULL jitter
+  (uniform in `[0, min(cap, base × 2^n)]`), defaults base 500 ms / ×2 /
+  cap 30 s (the agora client's parameters), `reset()` on success,
+  `seeded(n)` for deterministic tests. Ends the un-jittered
+  thundering-herd hand-roll the first consumer shipped
+  (`reviews/study2/field-consumer-tensions.md` §3.5).
+- docs: `docs/live-data.md` § "Connection lifecycle" (state diagram +
+  worker-thread example + the full-jitter rationale); `docs/api.md`
+  § `reactive::connection`.
+
+### Fixed (disposal-safety law engine-wide — first-app 0297)
+
+- The 0250 "bookkeeping-before-callbacks" ruling is now the LAW on
+  every widget callback, not a List/Table accident: a user callback
+  may dispose its widget's scope synchronously (the modal
+  approve/deny close), so consumers can delete their one-tick retire
+  deferrals. Two offenders found and fixed: `Button`'s mouse-Up arm
+  wrote `pressed` AFTER `on_click` (the confirmed 0297 filing), and
+  `TextArea`'s handler re-published the caret cell AFTER
+  `on_change`/`on_submit` (found by this audit — a submit-and-close
+  composer panicked on the dead caret signal). Callbacks now run
+  strictly LAST; one knowable consequence documented in
+  `docs/api.md` § "The widget disposal-safety law" (a callback
+  mutating the widget's own state sees it rendered next event).
+- Disposal pinned per site: Button (both arms), Checkbox, RadioGroup,
+  Tabs, TextInput (`on_change`/`on_submit`), TextArea
+  (`on_change`/`on_submit`), Table `on_sort_requested` (its
+  `on_select` was pinned by 0250), and the Select commit path (the
+  popup follows its owner's scope down — the AnchorGone cascade,
+  pinned because it hangs on more than ordering).
+
+### Fixed (wave-3 cycle-3 close — cycle-2 review demands, CLOSER)
+
+- `FeedState::sync` one-writer violations SELF-HEAL (review C-1, P2):
+  every item mutation bumps a feed-internal counter; a drain that
+  finds the counter moved past the bridge's own record takes the
+  rebuild path — a stray manual `push` onto a synced feed is evicted
+  at the very next drain and feed order is restored to source order
+  (violations used to be silently PERMANENT: strays survived every
+  fast-path drain, and a manually-pushed key the source appended later
+  replaced in place at the old index, diverging order forever). One
+  u64 compare per drain; self-heal semantics documented in the `sync`
+  rustdoc.
+- `SyncSpec` fingerprint docs (review C-2/C-3): float fingerprints
+  must compare by bits (`to_bits` — IEEE `NaN != NaN` re-renders the
+  item every drain, pixels correct, cost silent), and the
+  rebuild-storm cost is named where consumers read (a source that
+  reorders every drain rebuilds every drain: O(visible) renders — sync
+  a stable order and sort at render). Doc-only by judgment: no
+  engine-side fix exists for a user-supplied `PartialEq` short of
+  rejecting float fingerprints wholesale.
+- `TimeSeries` pause padding is UNIFORM (review C-4, boundary fixed +
+  C-6): the `missed >= capacity` restart is deleted — it contradicted
+  the module's own gap claim by exactly one slot and collapsed the
+  display to a lone zero-span dot (an x-axis compression, the thing
+  the gap contract exists to avoid). NAN padding is now capped at
+  `capacity - 1` slots per push (same bounded work), so a pause of ANY
+  length ≥ the window shows a full window of hole ending in the fresh
+  sample; the cap applies in u64 space before the usize cast, closing
+  C-6's 32-bit wrap. Tests updated deliberately (restart pin →
+  uniform-padding pin, both sides).
+- Markdown image cache identity gains the platform file id (review
+  R-3 — the known mtime-alone class): unix folds `dev + ino` into the
+  probe/decode cache signature (a write-tmp-then-rename rewrite mints
+  a new inode), windows folds `creation_time` (std's file-index
+  accessors are unstable; in-place same-size same-mtime overwrites
+  stay undetected there — documented degradation). Same-length
+  rewrites under 1s-mtime filesystems / `rsync -a` / `tar` no longer
+  serve stale pixels; pinned by a rename-rewrite test with the mtime
+  set back (`File::set_modified`) so only the inode discriminates.
+- `Driver::suspend(app, term)` — the job-control suspend seam (review
+  I-2, P2): key-state hygiene BEFORE the stop (`keys::on_suspend`
+  drains held keys into synthesized releases and flags the frame —
+  releases during a stop are unobservable and Ctrl+Z keeps focus, so
+  no FocusLost ever covers it; the stuck-hold/stuck-mic class), then
+  `Terminal::suspend`, then the resume re-sync (size re-query +
+  prev-poison + presenter invalidate + damage-all + image re-place —
+  both halves of "the screen is unknown"). New:
+  `KeyState::suspend_cleared()` (sealed per turn like focus),
+  `StopReason::Suspended` (PushToTalk stops in EVERY mode before the
+  stop signal, latch included, and never auto-restarts on resume),
+  `CaptureTerm` models the suspend round trip (`suspend_count()`).
+  The keys module doc names suspend beside focus loss.
+- Backlog id collisions renumbered (review handoff item): the
+  first-app full-redraw filing 0300 → **0299** (collided with
+  control-plane/0300, outside first-app's 0220–0299 band) and the
+  mid-close textarea-placeholder filing 0310 → **0291** (same class,
+  collided with control-plane/0310); README + overview rows updated,
+  renumber notes in both files (the 0292/0294 precedent).
+
 ## [0.2.2] - 2026-07-22
 
 ### Fixed (image path — study-2 MEDIA audit)
@@ -401,6 +699,7 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[0.2.3]: https://github.com/lpalbou/abstracttui/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/lpalbou/abstracttui/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/lpalbou/abstracttui/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/lpalbou/abstracttui/compare/v0.1.0...v0.2.0

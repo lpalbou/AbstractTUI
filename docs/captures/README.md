@@ -8,8 +8,8 @@ runs). `themes-table.md` lists every registered theme's token values.
 Sizes and demo data are fixed; wall-clock frame pacing may shift animated
 data by a tick between regenerations — regenerate deliberately, diff by eye.
 The app-surface stills (`transcript-stream`, `select-open`, `code-diff`,
-`feed-scrolled`) render in-process with scripted input and no clocks —
-those four are byte-deterministic.
+`feed-scrolled`, `reader-table`) render in-process with scripted input and
+no clocks — those five are byte-deterministic.
 
 | artifact |
 |---|
@@ -31,6 +31,8 @@ those four are byte-deterministic.
 | `hello.txt` |
 | `images.styled.txt` |
 | `images.txt` |
+| `reader-table.styled.txt` |
+| `reader-table.txt` |
 | `select-open.styled.txt` |
 | `select-open.txt` |
 | `splash-2d-reveal.styled.txt` |

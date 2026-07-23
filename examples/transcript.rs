@@ -1,13 +1,17 @@
 //! transcript — the app-widgets wave proof demo: a synthetic agent
-//! conversation streamed live through `Feed` + `md::StreamSession` +
-//! `Scroll::follow_tail` (backlogs 0100 / 0110 / 0130 composed).
+//! conversation streamed live through `Feed` with
+//! `md::DocStreamSession` and `Scroll::follow_tail` (backlogs 0100 /
+//! 0110 / 0130 composed; doc-vocabulary adoption from wave 3).
 //!
 //! What to watch for:
 //! - answers arrive token by token (`reactive::interval` drives the
-//!   synthetic stream); only the OPEN markdown block re-typesets per
+//!   synthetic stream); only the OPEN markdown region re-typesets per
 //!   token — closed blocks (and every earlier message) are frozen;
 //! - code fences render with syntax tint mid-stream, from the moment
 //!   the opening ``` arrives (never flapping to plain text);
+//! - the fourth answer streams a markdown TABLE: it renders as a table
+//!   live, growing a row per line (the open region spans the whole
+//!   in-flight table), plus task-list checkboxes and ~~strikethrough~~;
 //! - the view stays PINNED to the tail until you scroll up (wheel,
 //!   PgUp, Home) — the status line flips to "scrolled"; scrolling back
 //!   to the bottom (or pressing f) re-pins it;
@@ -45,7 +49,7 @@ use abstracttui::reactive::interval;
 use abstracttui::widgets::{Feed, FeedItem, FeedState};
 
 /// The scripted conversation, replayed round-robin with fresh keys.
-const SCRIPT: [(&str, &str); 3] = [
+const SCRIPT: [(&str, &str); 4] = [
     (
         "How does the feed stay cheap while an answer streams in?",
         "# Two freezes\n\nThe stream session seals every block that can no \
@@ -71,6 +75,17 @@ const SCRIPT: [(&str, &str); 3] = [
          the last:\n\n```rust\nlet first = prefix.partition_point(|p| *p <= top);\n\
          // walk until off-screen — never the whole feed\n```\n\n> Press \
          `s` and scroll around: ten thousand items, one screenful of work.",
+    ),
+    (
+        "What about richer markdown — tables, task lists?",
+        "The DOC vocabulary streams too. Watch this table arrive row by \
+         row — it renders as a TABLE from the moment its delimiter line \
+         lands (the whole table is the open region until it seals):\n\n\
+         | stage | blocks | cost |\n|:------|-------:|-----:|\n\
+         | closed | 41 | frozen |\n| open tail | 1 | per token |\n\n\
+         And the checklist face: ~~hand-rolled parsers~~ one shared \
+         recipe.\n\n- [x] tables in transcripts\n- [x] strikethrough\n\
+         - [ ] your app here",
     ),
 ];
 

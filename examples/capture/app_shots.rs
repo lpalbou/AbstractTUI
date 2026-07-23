@@ -12,7 +12,12 @@
 //! - `code-diff` — a unified diff through `CodeView::lang("diff")`:
 //!   added/removed/hunk/meta inks on the code ground;
 //! - `feed-scrolled` — follow-tail BROKEN by a wheel scroll: the tail
-//!   is off-screen and the status line says so.
+//!   is off-screen and the status line says so;
+//! - `reader-table` — the doc vocabulary through `MarkdownView`: a GFM
+//!   table (alignment + bold header + border rule), task-list
+//!   checkboxes, strikethrough (no images — their file paths and
+//!   decode notices are machine-dependent; the cell surfaces are the
+//!   deterministic part).
 
 use std::path::Path;
 
@@ -22,7 +27,7 @@ use abstracttui::prelude::*;
 use abstracttui::term::Capabilities;
 use abstracttui::testing::CaptureTerm;
 use abstracttui::ui::text;
-use abstracttui::widgets::{CodeView, Feed, FeedItem, FeedState};
+use abstracttui::widgets::{CodeView, Feed, FeedItem, FeedState, MarkdownView};
 
 use crate::write_shot;
 
@@ -75,6 +80,7 @@ pub fn app_shots(out: &Path) -> Vec<String> {
     produced.extend(select_open(out));
     produced.extend(code_diff(out));
     produced.extend(feed_scrolled(out));
+    produced.extend(reader_table(out));
     produced
 }
 
@@ -276,6 +282,59 @@ diff --git a/src/render/present.rs b/src/render/present.rs
                 .build()
         })
         .expect("mount diff shot");
+    })
+}
+
+// ----------------------------------------------------- reader-table
+
+/// The wave-3 doc vocabulary as a still: a table with all three
+/// alignments, a bold header over a border-ink rule, task checkboxes
+/// and struck text — the reader surface without its machine-dependent
+/// parts (image paths, decode notices).
+fn reader_table(out: &Path) -> Vec<String> {
+    const DOC: &str = "\
+# Release readiness
+
+The doc vocabulary in one glance: alignment comes from the delimiter
+row, overwide cells truncate with an ellipsis, and the header rides
+its own border rule.
+
+| Stage | Owner | State |
+|:------|:-----:|------:|
+| parse | READER | shipped |
+| typeset | READER | shipped |
+| feed adoption | INTEGRATOR | shipped |
+
+## Checklist
+
+- [x] tables render in transcripts
+- [x] ~~literal pipe soup~~ typeset columns
+- [ ] a whole book in the terminal
+
+> Streamed or batch, the pixels are the same — one fold.";
+    shot(out, "reader-table", Size::new(72, 24), &[], |app| {
+        app.mount(|cx| {
+            let t = use_theme(cx).get().tokens;
+            Element::new()
+                .style(LayoutStyle::column().padding(Edges::all(1)))
+                .child(
+                    Block::new()
+                        .border(BorderKind::Rounded)
+                        .title("reader")
+                        .fill(t.surface)
+                        .layout(LayoutStyle::column().grow(1.0))
+                        .child(
+                            MarkdownView::new(DOC)
+                                .layout(LayoutStyle::default().grow(1.0))
+                                .element(&t)
+                                .build(),
+                        )
+                        .element(&t)
+                        .build(),
+                )
+                .build()
+        })
+        .expect("mount reader shot");
     })
 }
 

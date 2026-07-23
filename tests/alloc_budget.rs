@@ -495,6 +495,111 @@ fn idle_turns_with_feed_interval_parked_popup_and_parked_image_allocate_nothing(
     assert!(term.bytes().is_empty(), "idle turns wrote bytes");
 }
 
+// ---------------------------------------------------------------------------
+// Wave-3 extension of the idle pin (INPUTAV): a PARKED METER (decayed to
+// its fixpoint, frame task dropped), an AudioScope with a quiet window,
+// an armed push-to-talk binding, and the ARMED key-state service — the
+// always-mounted shapes of a voice app — must cost literal zero on idle
+// turns. This is the allocation half of media-av/0620's required
+// acceptance ("meter with unchanged input over N turns = zero frames
+// requested, zero allocs"); the frames half is pinned in
+// tests/wave_inputav.rs.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn idle_turns_with_parked_meter_scope_and_key_state_allocate_nothing() {
+    use abstracttui::app::{use_key_state, App, Driver, PushToTalk, RunConfig};
+    use abstracttui::prelude::*;
+    use abstracttui::testing::CaptureTerm;
+    use abstracttui::ui::text;
+    use std::time::Duration;
+
+    let _serial = serial();
+    let size = Size::new(60, 12);
+    let mut term = CaptureTerm::new(size);
+    let mut app = App::new(size);
+    let level_slot: std::rc::Rc<Cell<Option<abstracttui::reactive::Signal<f32>>>> =
+        std::rc::Rc::new(Cell::new(None));
+    let level_out = level_slot.clone();
+    app.mount(move |cx| {
+        let _keys = use_key_state(cx); // armed: the driver tap is live
+        let _ptt = PushToTalk::bind(cx, KeyChord::plain(Key::Char(' ')));
+        let level = cx.signal(0.0f32);
+        level_out.set(Some(level));
+        let window = cx.signal(vec![0.2f32, 0.6, 0.4, 0.1]);
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(
+                Meter::new(level)
+                    .decay(240.0)
+                    .peak_hold(Duration::from_millis(50))
+                    .view(cx),
+            )
+            .child(AudioScope::new(window).range(0.0, 1.0).view(cx))
+            .child(text(" status"))
+            .build()
+    })
+    .expect("mount");
+    let cfg = RunConfig {
+        caps: Some(abstracttui::term::Capabilities::with(|c| {
+            c.truecolor = true;
+            c.colors_256 = true;
+            c.kitty_keyboard = true; // Full fidelity: the richest tap path
+        })),
+        enter: None,
+        probe: false,
+    };
+    let mut driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
+    let start = std::time::Instant::now();
+    let now = std::rc::Rc::new(Cell::new(start));
+    let clock = now.clone();
+    driver.set_clock(move || clock.get());
+
+    // Exercise the full life first: a PTT hold cycle over kitty bytes,
+    // a level burst, and the decay back to silence — then park.
+    for _ in 0..64 {
+        if driver.turn(&mut app, &mut term).expect("turn").idle {
+            break;
+        }
+    }
+    term.push_input(b"\x1b[32u"); // Space down (capture starts)
+    driver.turn(&mut app, &mut term).expect("turn");
+    let level = level_slot.get().expect("level signal");
+    level.set(0.85);
+    driver.turn(&mut app, &mut term).expect("turn");
+    term.push_input(b"\x1b[32;1:3u"); // Space up (capture stops)
+    driver.turn(&mut app, &mut term).expect("turn");
+    level.set(0.0); // silence: the meter must now DECAY to its fixpoint
+    let mut parked = false;
+    for _ in 0..240 {
+        now.set(now.get() + Duration::from_millis(16));
+        if driver.turn(&mut app, &mut term).expect("turn").idle {
+            parked = true;
+            break;
+        }
+    }
+    assert!(parked, "precondition: the meter decayed to its fixpoint");
+    let _ = term.take_bytes();
+
+    // 16 idle turns: not one byte, not one allocation — with the key
+    // tap armed, a PTT bound, a parked meter and a quiet scope mounted.
+    let (allocs, reallocs, bytes) = alloc_delta(|| {
+        for _ in 0..16 {
+            now.set(now.get() + Duration::from_millis(16));
+            let turn = driver.turn(&mut app, &mut term).expect("idle turn");
+            assert!(turn.idle, "turn must report idle");
+            assert!(!turn.rendered, "idle turn rendered");
+        }
+    });
+    assert_eq!(
+        (allocs, reallocs),
+        (0, 0),
+        "idle turns allocated with the voice surfaces parked: \
+         {allocs} allocs / {reallocs} reallocs / {bytes} B over 16 turns"
+    );
+    assert!(term.bytes().is_empty(), "idle turns wrote bytes");
+}
+
 #[test]
 fn jpeg_hostile_corpus_allocation_is_bounded() {
     let _serial = serial();

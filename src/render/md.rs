@@ -3,18 +3,20 @@
 //! layout, spacing and chrome.
 //!
 //! SUPPORTED, exactly (docs/design/render.md §2.8):
-//! - Inline: `**bold**`, `*italic*`, `` `code` ``, `[text](url)`, and
-//!   backslash escapes for `\* \` \[ \] \( \) \\ \#`.
+//! - Inline: `**bold**`, `*italic*`, `~~strikethrough~~`, `` `code` ``,
+//!   `[text](url)`, and backslash escapes for `\* \~ \` \[ \] \( \) \\ \#`.
 //! - Blocks: `#`..`######` headings; `-`/`*`/`+` unordered and `N.`
 //!   ordered list items (2-space indent steps); `>` blockquotes (one
 //!   level; nested `>` folds into the same level); fenced code
 //!   (` ``` `lang ... ` ``` `, verbatim, no inline parsing); `---`/`***`
 //!   horizontal rules; blank-line paragraph separation.
 //!
-//! NOT supported (deliberately, parsed as literal text): nested
-//! emphasis, `__`/`_` emphasis, setext headings, tables, HTML, images,
-//! reference links, task lists, multi-paragraph list items. Unclosed
-//! markers degrade to literal text — no input can fail to parse.
+//! NOT supported in the CORE vocabulary (deliberately, parsed as
+//! literal text): nested emphasis, `__`/`_` emphasis, setext headings,
+//! HTML, reference links, multi-paragraph list items. Unclosed markers
+//! degrade to literal text — no input can fail to parse. GFM tables,
+//! block images and task-list items live in the DOC vocabulary:
+//! [`parse_doc`] / [`DocBlock`] (additive beside this exhaustive enum).
 //!
 //! Styling: emphasis/code/link/heading styles are PATCHES supplied by
 //! [`MdStyles`]; the defaults are attribute-only (theme-free), and
@@ -51,6 +53,23 @@ use super::style::Style;
 #[path = "md_stream.rs"]
 mod stream;
 pub use stream::StreamSession;
+
+/// Document vocabulary (0142/0144): the core blocks extended with GFM
+/// tables, block images and task items — additive beside [`Block`]
+/// (which shipped exhaustive and cannot grow variants).
+#[path = "md_doc.rs"]
+mod doc;
+pub use doc::{parse_doc, CellAlign, DocBlock, ImageBlock, TableBlock, TaskBlock};
+
+/// Streaming session for the doc vocabulary (0142).
+#[path = "md_doc_stream.rs"]
+mod doc_stream;
+pub use doc_stream::DocStreamSession;
+
+/// Heading outline + GitHub-compatible anchor slugs (0146).
+#[path = "md_outline.rs"]
+mod outline_impl;
+pub use outline_impl::{outline, slugify, Heading};
 
 /// One parsed block. Paragraph/heading/list/quote content is a single
 /// logical [`RichLine`] — wrapping is the renderer's move.
@@ -366,6 +385,24 @@ fn parse_inline(src: &str, styles: &MdStyles, block_style: Style) -> RichLine {
                     _ => i += open_len, // unclosed: literal
                 }
             }
+            // `~~strike~~`: attribute-only by design (STRIKE is
+            // semantic, not themable ink), so `MdStyles` needs no new
+            // field — its literal-struct construction stays valid.
+            b'~' if b.get(i + 1) == Some(&b'~') => {
+                match find_close(b, i + 2, b"~~") {
+                    // Empty ("~~~~" alone) stays literal.
+                    Some(end) if end > i + 2 => {
+                        flush_plain(&mut out, i, plain_start);
+                        out.push(Span::new(
+                            &src[i + 2..end],
+                            block_style.merge(Style::new().attrs(Attrs::STRIKE)),
+                        ));
+                        i = end + 2;
+                        plain_start = i;
+                    }
+                    _ => i += 2, // unclosed: literal
+                }
+            }
             b'`' => match find_close(b, i + 1, b"`") {
                 Some(end) if end > i + 1 => {
                     flush_plain(&mut out, i, plain_start);
@@ -392,7 +429,10 @@ fn parse_inline(src: &str, styles: &MdStyles, block_style: Style) -> RichLine {
 }
 
 fn is_escapable(b: u8) -> bool {
-    matches!(b, b'*' | b'`' | b'[' | b']' | b'(' | b')' | b'\\' | b'#')
+    matches!(
+        b,
+        b'*' | b'~' | b'`' | b'[' | b']' | b'(' | b')' | b'\\' | b'#'
+    )
 }
 
 /// Next unescaped occurrence of `close` at/after `from`; byte-exact (all

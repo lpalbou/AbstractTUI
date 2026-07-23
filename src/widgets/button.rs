@@ -177,8 +177,8 @@ impl Button {
                 // button that fires from them would hijack the app.
                 UiEvent::Key(k) if k.key == Key::Enter || k.key == Key::Char(' ') => {
                     if focused.get_untracked() {
-                        fire();
                         ctx.stop_propagation();
+                        fire();
                     }
                 }
                 UiEvent::Mouse(m) => match m.kind {
@@ -191,11 +191,22 @@ impl Button {
                         // frozen while the pointer is captured, so the rect
                         // check is the truthful inside-ness test.
                         let inside = ctx.current_rect().contains(m.pos);
-                        if pressed.get_untracked() && inside {
-                            fire();
-                        }
+                        let clicks = pressed.get_untracked() && inside;
+                        // Disposal-safety law (0297 — the 0250 ruling
+                        // engine-wide): ALL widget bookkeeping lands
+                        // BEFORE the user callback. `pressed` is cleared
+                        // first, so an `on_click` that disposes this
+                        // button's scope synchronously (the modal
+                        // approve/deny close) finds no dangling signal
+                        // write behind it. `stop_propagation` is
+                        // dispatch-owned (disposal-safe either side);
+                        // it rides ahead of the callback for the same
+                        // bookkeeping-first reading.
                         pressed.set(false);
                         ctx.stop_propagation();
+                        if clicks {
+                            fire();
+                        }
                     }
                     _ => {}
                 },
@@ -345,6 +356,61 @@ mod tests {
         key(&mut tree, Key::Enter);
         assert_eq!(*count.borrow(), 0);
         assert_eq!(tree.focused(), None, "disabled = not in tab order");
+    }
+
+    /// Disposal-safety law (backlog 0297 — the 0250 ruling clause 4
+    /// stated engine-wide): Button completes its own bookkeeping (the
+    /// `pressed` write) BEFORE `on_click` runs, so a click callback may
+    /// dispose the button's scope synchronously — the natural modal
+    /// approve/deny close — without a dead-signal write behind it. The
+    /// mouse-Up arm is the one that wrote `pressed` AFTER the callback
+    /// before the fix; the keyboard arm is exercised too.
+    #[test]
+    fn on_click_may_dispose_the_buttons_scope() {
+        let t = default_theme().tokens;
+        // Mouse path (the fixed arm): press + release inside.
+        let clicks = Rc::new(RefCell::new(0u32));
+        let mut tree = crate::ui::UiTree::new(Size::new(12, 1));
+        let (root, ()) = crate::reactive::create_root(|cx| {
+            let modal_cx = cx.child();
+            let c = clicks.clone();
+            let view = Button::new("Go")
+                .on_click(move || {
+                    *c.borrow_mut() += 1;
+                    modal_cx.dispose();
+                })
+                .element(modal_cx, &t)
+                .build();
+            tree.mount(modal_cx, view);
+        });
+        tree.layout();
+        mouse(&mut tree, MouseKind::Down(MouseButton::Left), 2, 0);
+        mouse(&mut tree, MouseKind::Up(MouseButton::Left), 2, 0);
+        assert_eq!(*clicks.borrow(), 1, "the click still fired");
+        assert_eq!(tree.instance_count(), 0, "subtree unmounted by dispose");
+        root.dispose();
+
+        // Keyboard path (already clean; pinned so it stays that way).
+        let clicks = Rc::new(RefCell::new(0u32));
+        let mut tree = crate::ui::UiTree::new(Size::new(12, 1));
+        let (root, ()) = crate::reactive::create_root(|cx| {
+            let modal_cx = cx.child();
+            let c = clicks.clone();
+            let view = Button::new("Go")
+                .on_click(move || {
+                    *c.borrow_mut() += 1;
+                    modal_cx.dispose();
+                })
+                .element(modal_cx, &t)
+                .build();
+            tree.mount(modal_cx, view);
+        });
+        tree.layout();
+        key(&mut tree, Key::Tab); // focus
+        key(&mut tree, Key::Enter);
+        assert_eq!(*clicks.borrow(), 1, "Enter clicked");
+        assert_eq!(tree.instance_count(), 0, "subtree unmounted by dispose");
+        root.dispose();
     }
 
     #[test]

@@ -2,10 +2,63 @@
 
 ## Metadata
 - Created: 2026-07-21
-- Status: Planned — three of four legs executed 2026-07-22 (see status
-  note); the scheduled perf/fuzz/soak workflows remain open
+- Status: Completed — all four legs executed (three on 2026-07-22, the
+  scheduled deep-gate leg on 2026-07-23; see status notes)
 - Track: app-widgets (API/claims honesty lane)
-- Completed: N/A
+- Completed: 2026-07-23 (REVIEWER, wave 3 cycle 2)
+
+## Status note — 2026-07-23: scheduled deep gates shipped (want #2, the last leg)
+
+- **`.github/workflows/perf.yml`**: weekly cron (Mon 03:17 UTC, off the
+  :00 rush) + `workflow_dispatch`; ubuntu; prebuilds release tests and
+  both example profiles (so the startup test never pays a cold cargo
+  build inside a measurement window); runs `perf_budgets` and
+  `perf_app_surfaces` in release, serially (`--ignored
+  --test-threads=1`), then `fuzz_big` and the soak. The printed
+  measurements upload as a run artifact (90-day retention) for trend
+  eyeballing.
+- **Load-sensitivity policy** (the quality-perf.md risk note, encoded):
+  the two TIMING suites retry ONCE on failure (30 s settle between
+  attempts) to absorb runner scheduler noise — the budgets carry
+  30–70 % quiet-host headroom, so two consecutive breaches are a real
+  regression and fail the run honestly. Fuzz and soak are
+  deterministic and never retry (their failures repeat by
+  construction). Failures open visibly (red scheduled run), never
+  block PRs — ci.yml's omission comment now points here.
+- **Byte ratchets added** (the "prints byte medians so future runs can
+  ratchet emission" note in quality-perf.md §2, now cashed in):
+  `perf_app_surfaces` asserts absolute byte budgets (quiet-host
+  baseline × 1.5) where it previously only printed — feed stream token
+  frame ≤ 110 B (measured 73), select popup open/close ≤ 452/381 B
+  (301/254), selection drag ≤ 390 B (260), composer keystroke ≤ 698 B
+  (465), codeview scroll ≤ 383 B (255 — measurement added: the test
+  previously discarded its bytes; the vertical-shift detection engages
+  for app-managed scroll too), feed-scroll shift/guard phases ≤
+  258/2,637 B (172/1,758). Byte counts are load-independent (fixed
+  caps, deterministic content — verified identical debug↔release), so
+  ratchets assert in EVERY profile; a breach means the damage contract
+  regressed, and the retry cannot mask it.
+- **Deliberate red-budget dry run executed locally** (the validation
+  bullet): a ratchet temporarily broken to 10 B failed attempt 1,
+  failed the retry, and exited non-zero through the same
+  `run_timing_suite` shell function the workflow uses; restored and
+  re-verified green. Suite runtimes on this host (release): fuzz_big
+  0.04 s, soak 3.7 s, perf_app_surfaces ~10 s, perf_budgets ~10 s —
+  comfortably inside the 60-minute job timeout with cold compiles.
+- **Docs aligned**: README's Performance paragraph now states the
+  timing budgets + ratchets gate on the scheduled job (the want #4
+  sentence is now simply true); CONTRIBUTING names the workflow beside
+  the manual invocations; SETUP.md's follow-ups list records both the
+  MSRV job (was stale — it predated the 2026-07-22 leg) and the
+  scheduled gates.
+- **Residual, named honestly**: "run at least once green" on a hosted
+  runner is a push-time event — this repo has never been pushed, so
+  EVERY workflow here (ci.yml included) awaits its first hosted run.
+  The local dry run covers the falsifiability half of the validation;
+  the first green scheduled run lands with the publication push
+  (SETUP.md step 1). If the hosted runner proves noisier than the
+  retry-once policy absorbs, the recorded quiet-host medians in the
+  ratchet comments are the recalibration baseline.
 
 ## Status note — 2026-07-22: MSRV + Linux pty job + claim rewording shipped
 
@@ -131,7 +184,13 @@ downstream users get an MSRV contract.
 - [x] Linux live-pty CI job (with example prebuild) or README reword
       (2026-07-22: BOTH — job wired + row reworded to its evidence;
       green first run pending push)
-- [ ] Scheduled perf/fuzz/soak workflows
+- [x] Scheduled perf/fuzz/soak workflows (2026-07-23: perf.yml — weekly
+      cron + dispatch, retry-once timing policy, byte ratchets added to
+      perf_app_surfaces, measurements artifact; red-budget dry run
+      executed locally; green first hosted run pending push, like every
+      workflow in this repo)
 - [x] MSRV established + declared + CI job + policy line (2026-07-22:
       1.87, verified with the pinned toolchain locally)
-- [x] README perf-claim nuance sentence (2026-07-22)
+- [x] README perf-claim nuance sentence (2026-07-22; tightened
+      2026-07-23 to name the scheduled job — the sentence is now
+      simply true)

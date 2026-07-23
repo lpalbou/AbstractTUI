@@ -291,11 +291,10 @@ impl TextArea {
             move |ctx: &mut EventCtx, ev: &UiEvent| {
                 let width = (ctx.current_rect().w - 2).max(1);
                 width_hint.set(width);
-                let consumed = match ev {
-                    UiEvent::Key(k) => handle_key(
-                        &state, k.key, k.mods, width, min_rows, max_rows, policy, &on_change,
-                        &on_submit,
-                    ),
+                let (consumed, owed) = match ev {
+                    UiEvent::Key(k) => {
+                        handle_key(&state, k.key, k.mods, width, min_rows, max_rows, policy)
+                    }
                     UiEvent::Paste(s) => {
                         // Block paste: whole insertion, newlines KEPT
                         // (normalized), never a submit (0120 §5).
@@ -304,8 +303,7 @@ impl TextArea {
                         value.update(|text| insert_at_caret(text, &mut c, &clean));
                         finish_edit(&state, &mut c, width, min_rows, max_rows);
                         caret.set(c);
-                        notify(&on_change, value);
-                        true
+                        (true, Owed::Change)
                     }
                     UiEvent::FocusIn | UiEvent::FocusOut => {
                         // Keep the anchor honest: present while focused,
@@ -318,15 +316,32 @@ impl TextArea {
                         } else {
                             caret_cell.set(None);
                         }
-                        false
+                        (false, Owed::Nothing)
                     }
-                    _ => false,
+                    _ => (false, Owed::Nothing),
                 };
                 if consumed {
                     let mut c = caret.get_untracked();
                     publish_caret_cell(&state, &mut c, ctx.current_rect(), width);
                     caret.set(c);
                     ctx.stop_propagation();
+                    // Disposal-safety law (backlog 0297, the 0250 ruling
+                    // engine-wide): every widget signal write above —
+                    // buffer, caret, caret-cell publish — is DONE, so
+                    // the user callback runs LAST and may dispose the
+                    // TextArea's scope synchronously (submit-and-close
+                    // composers). One deliberate divergence from the
+                    // pre-law order: a callback that mutates the buffer
+                    // (submit-and-clear) leaves the published caret
+                    // cell one event stale — the next event or focus
+                    // change re-publishes; anchor consumers (the
+                    // completion controller) key off caret MOVEMENT,
+                    // not clear-time geometry.
+                    match owed {
+                        Owed::Change => notify(&on_change, value),
+                        Owed::Submit => notify(&on_submit, value),
+                        Owed::Nothing => {}
+                    }
                 }
             }
         };
@@ -509,8 +524,19 @@ fn publish_caret_cell(state: &TextAreaState, c: &mut Caret, rect: crate::base::R
     state.inner.caret_cell.set(Some(cell));
 }
 
-/// One key against the state. Returns consumed.
-#[allow(clippy::too_many_arguments)]
+/// Which user callback one consumed event owes. Owed callbacks fire
+/// LAST — after every widget signal write including the caret-cell
+/// publish (disposal-safety law, backlog 0297): `handle_key` itself
+/// never runs user code, it only reports the debt.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Owed {
+    Nothing,
+    Change,
+    Submit,
+}
+
+/// One key against the state. Returns (consumed, owed callback); ALL
+/// widget bookkeeping happens here, no user code does.
 fn handle_key(
     state: &TextAreaState,
     key: Key,
@@ -519,9 +545,7 @@ fn handle_key(
     min_rows: i32,
     max_rows: i32,
     policy: SubmitPolicy,
-    on_change: &TextCallback,
-    on_submit: &TextCallback,
-) -> bool {
+) -> (bool, Owed) {
     let value = state.inner.value;
     let mut c = state.inner.caret.get_untracked();
     let mut text = value.get_untracked();
@@ -533,41 +557,43 @@ fn handle_key(
             }
             finish_edit(state, &mut c, width, min_rows, max_rows);
             state.inner.caret.set(c);
-            if edited {
-                notify(on_change, value);
-            }
-            true
+            (true, if edited { Owed::Change } else { Owed::Nothing })
         }
-        EditOutcome::Submit => {
-            notify(on_submit, value);
-            true
-        }
+        EditOutcome::Submit => (true, Owed::Submit),
         EditOutcome::HistoryBack => {
             let recalled = state.inner.history.borrow_mut().back(&text);
-            if let Some(entry) = recalled {
+            let owed = if let Some(entry) = recalled {
                 state.set_text(entry);
                 let mut c = state.inner.caret.get_untracked();
                 finish_edit(state, &mut c, width, min_rows, max_rows);
                 state.inner.caret.set(c);
-                notify(on_change, value);
-            }
-            true // the edge arrow is ours even when history is empty
+                Owed::Change
+            } else {
+                Owed::Nothing
+            };
+            (true, owed) // the edge arrow is ours even when history is empty
         }
         EditOutcome::HistoryForward => {
             let recalled = state.inner.history.borrow_mut().forward();
-            if let Some(entry) = recalled {
+            let owed = if let Some(entry) = recalled {
                 state.set_text(entry);
                 let mut c = state.inner.caret.get_untracked();
                 finish_edit(state, &mut c, width, min_rows, max_rows);
                 state.inner.caret.set(c);
-                notify(on_change, value);
-            }
-            true
+                Owed::Change
+            } else {
+                Owed::Nothing
+            };
+            (true, owed)
         }
-        EditOutcome::Ignored => false,
+        EditOutcome::Ignored => (false, Owed::Nothing),
     }
 }
 
 #[cfg(test)]
 #[path = "textarea_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "textarea_disposal_tests.rs"]
+mod disposal_tests;

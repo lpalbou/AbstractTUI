@@ -378,7 +378,12 @@ impl Table {
 /// Resolve column widths: fixed cells first, percent of total, then flex
 /// shares over the remainder by largest-remainder (columns tile exactly;
 /// 1-cell gaps between columns).
-fn solve_columns(widths: &[ColWidth], total: i32) -> Vec<i32> {
+///
+/// `pub(crate)`: the markdown table typesetter (0142) shares THIS
+/// solver — one column-width policy for the Table widget and md-table
+/// rows, never a duplicate (the 1-cell-gap assumption is part of the
+/// contract both sides render against).
+pub(crate) fn solve_columns(widths: &[ColWidth], total: i32) -> Vec<i32> {
     let n = widths.len() as i32;
     if n == 0 || total <= 0 {
         return vec![0; widths.len()];
@@ -514,6 +519,37 @@ mod tests {
             canvas.cell(Point::new(0, 3)).unwrap().2,
             theme.tokens.selection_bg
         );
+    }
+
+    /// Disposal-safety law (backlog 0297): `on_sort_requested` is the
+    /// LAST thing its arms run (no widget write follows on either the
+    /// 's'-key or the header-click path), so the callback may dispose
+    /// the Table's scope synchronously. Audited clean at filing; pinned.
+    #[test]
+    fn on_sort_requested_may_dispose_the_tables_scope() {
+        let t = default_theme().tokens;
+        let mut tree = crate::ui::UiTree::new(Size::new(20, 5));
+        let (root, ()) = crate::reactive::create_root(|cx| {
+            let modal_cx = cx.child();
+            let view = Table::new(vec![
+                Column::new("name", ColWidth::Flex(1.0)),
+                Column::new("size", ColWidth::Cells(6)),
+            ])
+            .rows(
+                (0..3)
+                    .map(|i| vec![format!("f{i}"), format!("{i}")])
+                    .collect(),
+            )
+            .on_sort_requested(move |_| modal_cx.dispose())
+            .element(modal_cx, &t)
+            .build();
+            tree.mount(modal_cx, view);
+        });
+        tree.layout();
+        key(&mut tree, Key::Tab); // focus
+        key(&mut tree, Key::Char('s')); // sort request -> dispose
+        assert_eq!(tree.instance_count(), 0, "subtree unmounted by dispose");
+        root.dispose();
     }
 
     /// 0250 ruling clause 4 mirrored onto Table: `on_select` runs AFTER

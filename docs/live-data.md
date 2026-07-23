@@ -106,6 +106,106 @@ missed ticks coalesce, there are no catch-up storms. Between fires an
 armed interval costs zero wakeups (the loop sleeps until the deadline);
 timers never frame-pace.
 
+## Connection lifecycle
+
+Reconnect is the half of networking with no transport dependence at
+all, so the engine owns it: `reactive::connection` is the state
+machine, `reactive::Backoff` the retry schedule. The engine still does
+**no network I/O** — you supply the dial function; the transport stays
+your call. What you stop hand-rolling: the state enum, the backoff
+math, the retry timer, the cancellation story, and the answer to "what
+does the frame loop do while offline" (nothing — the one armed
+one-shot costs zero wakeups until due).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Connecting : connection(cx, backoff, dial)
+    Connecting --> Connected : events.connected()
+    Connecting --> Degraded : events.degraded(reason)
+    Connecting --> Reconnecting : events.failed(reason)
+    Connected --> Degraded : events.degraded(reason)
+    Degraded --> Connected : events.connected()
+    Connected --> Reconnecting : events.failed(reason)
+    Degraded --> Reconnecting : events.failed(reason)
+    Reconnecting --> Connecting : retry timer fires / retry_now()
+    Connecting --> Closed : close() / events.closed()
+    Connected --> Closed : close() / events.closed()
+    Degraded --> Closed : close() / events.closed()
+    Reconnecting --> Closed : close() (armed retry cancelled)
+    Closed --> [*]
+```
+
+Every transition is a signal write — the UI renders the state like any
+other signal, and each state carries what honest rendering needs
+(`Degraded(reason)`; `Reconnecting { attempt, next_in }` for
+"reconnecting (attempt 2) in 1.4s"). Success resets the schedule;
+`Closed` is terminal from either side (UI `close()`, transport
+`closed()`, or scope disposal) and costs nothing forever.
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::reactive::spawn_worker;
+
+let conn = connection(cx, Backoff::default(), move |events| {
+    // Runs on the UI thread once per attempt: spawn the blocking
+    // transport work and return immediately.
+    let events = events.clone();
+    spawn_worker("hub-stream", move || {
+        match dial_hub() {                       // your transport
+            Ok(stream) => {
+                events.connected();
+                while let Ok(msg) = stream.read() {
+                    if events.is_closed() { return; }  // stop condition
+                    tx.send(msg);                // the 0010/0020 lanes
+                }
+                events.failed("stream ended");   // drop -> reconnect
+            }
+            Err(e) => events.failed(e.to_string()),
+        }
+    });
+});
+// Render it honestly — a badge, a status line, dimmed panes:
+let state = conn.state();
+dyn_view(LayoutStyle::line(1), move || match state.get() {
+    ConnState::Connected => text("● online"),
+    ConnState::Degraded(r) => text(format!("◐ degraded: {r}")),
+    ConnState::Reconnecting { attempt, next_in } =>
+        text(format!("○ retry #{attempt} in {next_in:.1?}")),
+    ConnState::Connecting => text("… connecting"),
+    ConnState::Closed => text("· closed"),
+});
+```
+
+**Why full jitter.** A fleet of clients backing off `base × 2^n`
+with no jitter retries in lockstep after a server restart — every
+retry wave lands together and the herd re-kills the thing it is
+waiting for. The common hand-roll (linear `500ms × errors`, capped,
+no jitter) has exactly that failure mode. `Backoff` draws uniformly
+from `[0, min(cap, base × 2^n)]` (defaults: base 500 ms, cap 30 s),
+so retries decorrelate while pressure on a dead endpoint still decays
+exponentially. `Backoff::seeded(n)` makes tests deterministic.
+
+Three rules the machine enforces so you don't have to:
+
+- **Stale attempts can't lie.** Each dial gets a generation-stamped
+  reporter; once a failure is accepted, later reports from that
+  attempt (a zombie worker racing its replacement) are inert and
+  counted (`stale_reports`) — attempt N can never flip attempt N+1's
+  state. Workers poll `events.is_closed()`/`is_current()` to stop
+  early.
+- **Cancellation is scope death.** The connection dies with `cx` like
+  everything else: armed retry removed, dial fn dropped, workers see
+  `is_closed()`. `conn.close()` does the same on demand;
+  `conn.retry_now()` skips a pending wait (the "retry now" button).
+- **Offline is idle.** Between transitions the loop stays parked; the
+  only clock is the one armed one-shot. A visible countdown is an
+  ordinary `interval`, billed as such — never a poll loop.
+
+Catch-up after reconnect (cursors, replay, resubscription) is
+deliberately NOT here — it is transport/protocol policy (the app's
+dial fn re-subscribes; per-channel cursors in the reference domain),
+and the state enum must never grow transport-specific fields.
+
 ## Worker lifecycle
 
 Spawn producers with `reactive::spawn_worker(label, f)`: a worker

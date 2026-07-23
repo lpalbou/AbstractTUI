@@ -103,10 +103,12 @@ The same one-import surface covers the rest of a form or chat screen:
 `Select`/`Combobox`/`MultiSelect` for choices (a one-row trigger opening an
 anchored popup), `TextArea` + `TextAreaState` for a multiline composer that
 grows with its content, and `Feed` (`abstracttui::widgets`) with
-`Scroll::follow_tail` for streaming transcripts. The
+`Scroll::follow_tail` for streaming transcripts — markdown items speak the
+full doc vocabulary, GFM tables and task lists included. The
 [API guide](api.md#widgets--the-built-in-library) walks each one;
 `cargo run --example transcript` and `--example components` show them
-composed.
+composed, and `--example reader` is the document side: tables, in-flow
+images, a TOC panel, and find-in-document.
 
 ## Layout basics
 
@@ -299,5 +301,8 @@ that way.
   compositor, and the render pipeline.
 - [API guide](api.md) — the public surface, module by module.
 - [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
-- [Examples catalog](../examples/README.md) — fourteen runnable programs, from
+- [Examples catalog](../examples/README.md) — sixteen runnable programs, from
   the 53-line `hello` to the full `dashboard`, with the keys each answers to.
+  For content-heavy apps start with `transcript` (streaming markdown chat),
+  `reader` (tables, images, TOC, search), and `voice_mock` (push-to-talk and
+  live meters, no audio required).

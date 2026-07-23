@@ -13,7 +13,8 @@
 //!
 //! A fourth family (`app_shots.rs`) renders the app-layer surfaces —
 //! streaming transcript + composer + completion, an open Select popup,
-//! a diff-tinted CodeView, a scrolled feed — fully IN PROCESS through
+//! a diff-tinted CodeView, a scrolled feed, a doc-vocabulary reader
+//! still (table/tasks/strike) — fully IN PROCESS through
 //! `Driver` + `CaptureTerm`: fixed data, scripted input, no clocks, no
 //! pty — byte-deterministic.
 //!
@@ -449,8 +450,8 @@ fn write_manifest(out: &Path) {
          Sizes and demo data are fixed; wall-clock frame pacing may shift animated\n\
          data by a tick between regenerations — regenerate deliberately, diff by eye.\n\
          The app-surface stills (`transcript-stream`, `select-open`, `code-diff`,\n\
-         `feed-scrolled`) render in-process with scripted input and no clocks —\n\
-         those four are byte-deterministic.\n\n",
+         `feed-scrolled`, `reader-table`) render in-process with scripted input and\n\
+         no clocks — those five are byte-deterministic.\n\n",
     );
     md.push_str("| artifact |\n|---|\n");
     for name in names {

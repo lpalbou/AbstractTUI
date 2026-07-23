@@ -25,6 +25,7 @@ mod mosaic_fit;
 pub mod pipeline;
 pub mod png;
 pub mod png_encode;
+pub mod probe;
 pub mod proto;
 pub mod quantize;
 pub mod session;
@@ -46,3 +47,6 @@ pub use pipeline::{
     choose_channel, present_image, Channel, ExternalSink, ImageOutput, ImageRenderer, RenderedImage,
 };
 pub use session::{ImageSession, SlotKey, SyncOutcome};
+// Appended (0144, reader wave): header-only dimension probing for lazy
+// image layout.
+pub use probe::probe_dimensions;

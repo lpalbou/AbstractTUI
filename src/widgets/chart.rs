@@ -29,6 +29,12 @@ use crate::layout::{Dimension, Style as LayoutStyle};
 use crate::theme::TokenSet;
 use crate::ui::Element;
 
+// Time-axis support (backlog 0190): history ring + reactive handle +
+// tick math — sibling module for the file-size discipline.
+#[path = "chart_time.rs"]
+mod time;
+pub use time::{TimeSeries, TimeSeriesState};
+
 /// Braille dot bit for (col in 0..2, row in 0..4) — Unicode braille
 /// bit order (dots 1-8).
 const fn braille_bit(col: i32, row: i32) -> u8 {
@@ -145,6 +151,7 @@ pub struct Sparkline {
     data: Vec<f32>,
     slot: usize,
     range: Option<(f32, f32)>,
+    time_axis: Option<std::time::Duration>,
     layout: Option<LayoutStyle>,
 }
 
@@ -154,6 +161,7 @@ impl Sparkline {
             data,
             slot: 0,
             range: None,
+            time_axis: None,
             layout: None,
         }
     }
@@ -170,6 +178,17 @@ impl Sparkline {
         self
     }
 
+    /// Opt-in relative time axis (backlog 0190): one label row under
+    /// the trend line — "now" at the right edge, nice ticks leftward
+    /// (`-30s`, `-1m`), density adapting to width. `span` is the time
+    /// the samples cover ([`TimeSeries::span`] when fed from a ring).
+    /// The default layout grows to two rows; a one-row rect degrades
+    /// to the bare trend line.
+    pub fn time_axis(mut self, span: std::time::Duration) -> Sparkline {
+        self.time_axis = Some(span);
+        self
+    }
+
     pub fn layout(mut self, layout: LayoutStyle) -> Sparkline {
         self.layout = Some(layout);
         self
@@ -177,11 +196,16 @@ impl Sparkline {
 
     pub fn element(self, t: &TokenSet) -> Element {
         let color = t.chart(self.slot);
+        let label_fg = t.text_faint;
         let data = self.data;
         let fixed = self.range;
-        let layout = self
-            .layout
-            .unwrap_or_else(|| LayoutStyle::default().height(Dimension::Cells(1)).grow(1.0));
+        let span = self.time_axis;
+        let default_h = if span.is_some() { 2 } else { 1 };
+        let layout = self.layout.unwrap_or_else(|| {
+            LayoutStyle::default()
+                .height(Dimension::Cells(default_h))
+                .grow(1.0)
+        });
         Element::new().style(layout).draw(move |canvas, rect| {
             if rect.w <= 0 || rect.h <= 0 || data.is_empty() {
                 return;
@@ -219,6 +243,17 @@ impl Sparkline {
                     );
                 }
             }
+            // Label row below the trend, when opted in and there is room.
+            if let Some(span) = span {
+                if rect.h >= 2 {
+                    time::draw_time_labels(
+                        canvas,
+                        crate::base::Rect::new(rect.x, rect.y + 1, rect.w, 1),
+                        span,
+                        label_fg,
+                    );
+                }
+            }
         })
     }
 }
@@ -232,6 +267,7 @@ pub struct LineChart {
     series: Vec<Vec<f32>>,
     range: Option<(f32, f32)>,
     axes: bool,
+    time_axis: Option<std::time::Duration>,
     layout: Option<LayoutStyle>,
 }
 
@@ -241,6 +277,7 @@ impl LineChart {
             series,
             range: None,
             axes: true,
+            time_axis: None,
             layout: None,
         }
     }
@@ -253,6 +290,18 @@ impl LineChart {
     /// Axes + min/max labels (default on). Off = pure plot area.
     pub fn axes(mut self, on: bool) -> LineChart {
         self.axes = on;
+        self
+    }
+
+    /// Opt-in relative time labels on the x-axis rule (backlog 0190):
+    /// "now" anchored at the plot's right edge, nice ticks leftward
+    /// (`-15s`, `-1m`), density adapting to width, embedded in the
+    /// existing axis row (no extra height). `span` is the time the
+    /// samples cover — [`TimeSeries::span`] when fed from a ring, so
+    /// warmup labels the REAL span, never the target window. Requires
+    /// `axes(true)` (there is no rule row without axes).
+    pub fn time_axis(mut self, span: std::time::Duration) -> LineChart {
+        self.time_axis = Some(span);
         self
     }
 
@@ -269,6 +318,7 @@ impl LineChart {
         let series = self.series;
         let fixed = self.range;
         let axes = self.axes;
+        let time_span = self.time_axis;
         let layout = self
             .layout
             .unwrap_or_else(|| LayoutStyle::default().grow(1.0));
@@ -321,6 +371,15 @@ impl LineChart {
                     label_fg,
                     Rgba::TRANSPARENT,
                 );
+                // Relative time ticks embed in the rule row (0190).
+                if let Some(span) = time_span {
+                    time::draw_time_labels(
+                        canvas,
+                        crate::base::Rect::new(plot.x, plot.bottom(), plot.w, 1),
+                        span,
+                        label_fg,
+                    );
+                }
             }
 
             // One dot grid per series so colors never merge in a cell:

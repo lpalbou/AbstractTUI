@@ -179,8 +179,12 @@ pub trait Terminal {
     /// process resumes. The alternate screen comes back BLANK, the window
     /// may have been resized while stopped, and session verbs (cursor
     /// style, title) were reset by the restore: callers must damage-all,
-    /// re-query `size()`, and re-apply verbs on return. Unsupported
-    /// off-unix.
+    /// re-query `size()`, and re-apply verbs on return — plus key-state
+    /// hygiene (a release during the stop is unobservable, so held-key
+    /// state must fail toward not-held; cycle-2 review I-2). When a
+    /// driver exists, drive suspend through `app::Driver::suspend`,
+    /// which owns that whole composition, instead of calling this
+    /// directly. Unsupported off-unix.
     fn suspend(&mut self) -> Result<()> {
         Err(Error::Unsupported(
             "suspend/resume needs unix job control (SIGTSTP) — bind Ctrl+Z \

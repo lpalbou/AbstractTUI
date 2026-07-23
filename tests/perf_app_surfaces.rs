@@ -40,6 +40,20 @@ fn assert_budget(m: &Measurement, budget: Duration) {
     }
 }
 
+/// Byte-emission ratchet (0180 scheduled-gate leg, cycle 2): unlike
+/// timings, byte counts are LOAD-INDEPENDENT facts (fixed caps, fixed
+/// content, deterministic diff), measured identical in debug and
+/// release — so the ratchet asserts in every profile. Budgets are the
+/// 2026-07-23 quiet-host medians × 1.5 headroom; a breach means the
+/// damage contract regressed (emission grew), not that a host was busy.
+fn assert_byte_ratchet(label: &str, measured: usize, budget: usize) {
+    assert!(
+        measured <= budget,
+        "byte ratchet '{label}': {measured} B exceeds the ratcheted \
+         budget {budget} B (baseline × 1.5 — emission regressed)"
+    );
+}
+
 fn fixed_caps() -> Capabilities {
     // Deterministic: host env must never leak into measurements.
     Capabilities::with(|c| {
@@ -155,6 +169,8 @@ fn perf_feed_streaming_token_frame_90x30() {
         med * 3 < full_paint,
         "token frames should emit a fraction of a full paint: {med} vs {full_paint}"
     );
+    // Absolute ratchet beside the relative one (measured 73 B median).
+    assert_byte_ratchet("feed stream token frame", med, 110);
     assert_budget(&m, Duration::from_millis(3));
 }
 
@@ -232,6 +248,9 @@ fn perf_select_popup_open_close_100x30() {
         close_med * 3 < full_paint,
         "popup close must repaint only the vacated region: {close_med} vs {full_paint}"
     );
+    // Absolute ratchets (measured 301 B open / 254 B close).
+    assert_byte_ratchet("select popup open", open_med, 452);
+    assert_byte_ratchet("select popup close", close_med, 381);
     assert_budget(&m, Duration::from_millis(6)); // two frames per cycle
 }
 
@@ -285,6 +304,8 @@ fn perf_selection_drag_full_screen_200x60() {
     });
     let med = median_of(frame_bytes);
     eprintln!("selection drag emission: median {med} B/frame (one changed row of 200 cells)");
+    // Was print-only; ratcheted (measured 260 B — one 200-cell row).
+    assert_byte_ratchet("selection drag frame", med, 390);
     assert_budget(&m, Duration::from_millis(5));
 }
 
@@ -358,6 +379,8 @@ fn perf_textarea_keystroke_with_completion_open_90x30() {
     );
     let med = median_of(frame_bytes);
     eprintln!("composer keystroke emission: median {med} B/frame");
+    // Was print-only; ratcheted (measured 465 B — composer + panel).
+    assert_byte_ratchet("composer keystroke frame", med, 698);
     assert_budget(&m, Duration::from_millis(3));
 }
 
@@ -415,13 +438,20 @@ fn perf_codeview_diff_scroll_100x40() {
     settle(&mut driver, &mut app, &mut term);
     let _ = term.take_bytes();
 
+    let mut frame_bytes: Vec<usize> = Vec::new();
     let m = time_median("codeview diff scroll 1 line @ 100x40", 4, 9, 20, |i| {
         offset.set((i as i32 + 1) % (total - 40).max(1));
         let turn = driver.turn(&mut app, &mut term).expect("scroll turn");
         assert!(turn.rendered, "a scroll step must repaint");
-        term.take_bytes();
+        frame_bytes.push(term.take_bytes().len());
         sink(turn.emitted);
     });
+    let med = median_of(frame_bytes);
+    eprintln!("codeview scroll emission: median {med} B/frame (shift-detected)");
+    // Ratcheted (measured 255 B — the diff's vertical-shift detection
+    // engages for app-managed scrolling too: the pane re-TINTS 38
+    // lines per frame, but the diff emits a shift + one fresh row).
+    assert_byte_ratchet("codeview scroll frame", med, 383);
     assert_budget(&m, Duration::from_millis(5));
 }
 
@@ -549,6 +579,10 @@ fn perf_feed_scroll_with_parked_protocol_image_90x30() {
         p2 > p1,
         "the plain diff must cost more than the shift: {p1} vs {p2}"
     );
+    // Absolute ratchets on both phases (measured 172 B shifted /
+    // 1,758 B plain diff): the guard's cost must not silently grow.
+    assert_byte_ratchet("feed scroll (shift path)", p1, 258);
+    assert_byte_ratchet("feed scroll (guard/plain-diff path)", p2, 2637);
     eprintln!(
         "scroll-guard cost @ 90x30 log scroll: no image {p1} B/frame (scrolled) | \
          parked kitty image {p2} B/frame (plain diff) | ratio {:.1}x | first paint {full_paint} B",

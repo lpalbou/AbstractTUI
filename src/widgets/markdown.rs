@@ -31,6 +31,24 @@ use crate::ui::{Element, StyledCanvas};
 
 use super::code::{code_token_color, diff_rich_line};
 
+/// Doc-vocabulary typesetting (0142): tables (column solving shared
+/// with the Table widget), task items, and the doc layout fold with
+/// heading rows.
+#[path = "markdown_doc.rs"]
+pub(crate) mod doc;
+pub use doc::OutlineEntry;
+
+/// In-flow image rows (0144): probe at typeset, decode lazily at first
+/// draw, mosaic-only rendering.
+#[path = "markdown_image.rs"]
+pub(crate) mod imageflow;
+
+/// Find-in-typeset-text (0148) + the text↔cells mapping substrate
+/// shared with content selection (0160).
+#[path = "markdown_search.rs"]
+pub(crate) mod search;
+pub use search::MdSearchMatch;
+
 /// One typeset row: a rich line plus its chrome. Crate-shared: the Feed
 /// widget caches these per item/block (backlog 0100) — ONE row recipe,
 /// so a feed item and a MarkdownView can never typeset differently.
@@ -43,6 +61,9 @@ pub(crate) struct Row {
     pub(crate) quote: bool,
     /// Full-width rule row (`---` and the level-1 underline).
     pub(crate) rule: bool,
+    /// One mosaic slice of an in-flow image (0144): when set, the row
+    /// paints image cells instead of `line` (which stays empty).
+    pub(crate) image: Option<imageflow::MdImageSlice>,
 }
 
 impl Row {
@@ -53,6 +74,7 @@ impl Row {
             ground: None,
             quote: false,
             rule: false,
+            image: None,
         }
     }
 }
@@ -61,6 +83,11 @@ pub struct MarkdownView {
     source: String,
     scroll_offset: i32,
     layout: Option<LayoutStyle>,
+    /// Search-highlight overlay (0148): matches from [`MarkdownView::find`]
+    /// at the SAME width the element renders at, painted non-destructively
+    /// over the typeset rows. Empty = zero extra work at draw.
+    highlights: Vec<MdSearchMatch>,
+    current_match: Option<usize>,
 }
 
 impl MarkdownView {
@@ -69,6 +96,8 @@ impl MarkdownView {
             source: source.into(),
             scroll_offset: 0,
             layout: None,
+            highlights: Vec::new(),
+            current_match: None,
         }
     }
 
@@ -83,13 +112,28 @@ impl MarkdownView {
         self
     }
 
+    /// Overlay search matches (0148): `matches` from [`MarkdownView::find`]
+    /// computed at the width this element will draw at; `current` indexes
+    /// into `matches` for the distinct current-match treatment. Painted as
+    /// a style patch AFTER the rows — glyphs stay, tones change
+    /// (`selection_bg`/`selection_fg`; the current match adds BOLD +
+    /// UNDERLINE — the token set has no dedicated search tone, documented
+    /// in the 0148 report).
+    pub fn highlights(mut self, matches: Vec<MdSearchMatch>, current: Option<usize>) -> Self {
+        self.highlights = matches;
+        self.current_match = current;
+        self
+    }
+
     /// Typeset row count at `width` — the scroll clamp (same fold as the
     /// renderer, so the clamp can never drift from the pixels).
     pub fn rows(source: &str, t: &TokenSet, width: i32) -> usize {
-        layout_rows(source, t, width).len()
+        doc::layout_doc(source, t, width).rows.len()
     }
 
     /// Heading outline `(level, text)` — table-of-contents material.
+    /// See [`MarkdownView::outline_rows`] for anchor ids + typeset row
+    /// positions (0146).
     pub fn outline(source: &str, t: &TokenSet) -> Vec<(u8, String)> {
         md::parse(source, &md_styles(t))
             .iter()
@@ -100,10 +144,53 @@ impl MarkdownView {
             .collect()
     }
 
+    /// The document outline with TYPESET ROW positions (0146): each
+    /// heading paired with the row its text starts at when the document
+    /// is laid out at `width` — the row to scroll to for a TOC jump.
+    /// Anchor ids are GitHub-compatible and deduplicated
+    /// ([`md::outline`]); rows come from the SAME fold the renderer
+    /// draws, so a jump can never drift from the pixels.
+    pub fn outline_rows(source: &str, t: &TokenSet, width: i32) -> Vec<OutlineEntry> {
+        doc::outline_rows(source, t, width)
+    }
+
+    /// Resolve an intra-document anchor (`#getting-started`, leading
+    /// `#` optional) to the typeset row of its heading at `width` —
+    /// `[text](#anchor)` link targets against [`md::outline`] ids.
+    pub fn resolve_anchor(source: &str, t: &TokenSet, width: i32, anchor: &str) -> Option<usize> {
+        let want = anchor.strip_prefix('#').unwrap_or(anchor);
+        doc::outline_rows(source, t, width)
+            .into_iter()
+            .find(|e| e.heading.anchor_id == want)
+            .map(|e| e.row)
+    }
+
+    /// Find `query` in the TYPESET text at `width` (0148): literal
+    /// match, whole-fragment scope (matches never span wrapped rows —
+    /// they live in what the eye sees). `case_insensitive` folds via
+    /// Unicode lowercasing. Empty query = no matches, no work. Feed the
+    /// result to [`MarkdownView::highlights`] and scroll to
+    /// `matches[i].row`.
+    pub fn find(
+        source: &str,
+        t: &TokenSet,
+        width: i32,
+        query: &str,
+        case_insensitive: bool,
+    ) -> Vec<MdSearchMatch> {
+        search::find_in_rows(
+            &doc::layout_doc(source, t, width).rows,
+            query,
+            case_insensitive,
+        )
+    }
+
     pub fn element(self, t: &TokenSet) -> Element {
         let tokens = *t;
         let offset = self.scroll_offset as usize;
         let source = self.source;
+        let highlights = self.highlights;
+        let current = self.current_match;
         let layout = self
             .layout
             .unwrap_or_else(|| LayoutStyle::default().grow(1.0));
@@ -117,12 +204,15 @@ impl MarkdownView {
             let rows = match &mut cache {
                 Some((w, rows)) if *w == rect.w => rows,
                 slot => {
-                    let rows = layout_rows(&source, &tokens, rect.w);
+                    let rows = doc::layout_doc(&source, &tokens, rect.w).rows;
                     &mut slot.insert((rect.w, rows)).1
                 }
             };
             let offset = offset.min(rows.len().saturating_sub(1));
             draw_rows(canvas, rect, &tokens, &rows[offset..]);
+            if !highlights.is_empty() {
+                search::draw_highlights(canvas, rect, &tokens, rows, offset, &highlights, current);
+            }
         })
     }
 }
@@ -142,16 +232,6 @@ pub(crate) fn md_styles(t: &TokenSet) -> MdStyles {
         link: Style::new().fg(t.link).attrs(Attrs::UNDERLINE),
         heading: Style::new().attrs(Attrs::BOLD),
     }
-}
-
-/// Parse + typeset at `width`. Pure over (source, tokens, width).
-fn layout_rows(source: &str, t: &TokenSet, width: i32) -> Vec<Row> {
-    let ts = BlockTypesetter::new(t);
-    let mut rows: Vec<Row> = Vec::new();
-    for block in md::parse(source, ts.styles()) {
-        ts.push_block(&mut rows, &block, width, true);
-    }
-    rows
 }
 
 /// The block -> typeset-rows recipe, crate-shared (backlog 0100): the
@@ -212,6 +292,7 @@ impl BlockTypesetter {
                         ground: None,
                         quote: false,
                         rule: true,
+                        image: None,
                     });
                 }
             }
@@ -244,6 +325,7 @@ impl BlockTypesetter {
                         ground: None,
                         quote: false,
                         rule: false,
+                        image: None,
                     });
                 }
             }
@@ -267,6 +349,7 @@ impl BlockTypesetter {
                         ground: None,
                         quote: true,
                         rule: false,
+                        image: None,
                     });
                 }
             }
@@ -295,6 +378,7 @@ impl BlockTypesetter {
                         ground: Some(t.surface_raised),
                         quote: false,
                         rule: false,
+                        image: None,
                     });
                 }
             }
@@ -306,6 +390,7 @@ impl BlockTypesetter {
                     ground: None,
                     quote: false,
                     rule: true,
+                    image: None,
                 });
             }
         }
@@ -333,6 +418,12 @@ pub(crate) fn draw_rows(
             for x in rect.x..rect.right() {
                 canvas.put(Point::new(x, y), '─', t.border, Rgba::TRANSPARENT);
             }
+            continue;
+        }
+        // In-flow image slice (0144): decode-on-first-draw, mosaic
+        // cells only. The row's `line` is empty by construction.
+        if let Some(slice) = &row.image {
+            imageflow::draw_image_row(canvas, rect, y, t, row.indent, slice);
             continue;
         }
         if let Some(ground) = row.ground {

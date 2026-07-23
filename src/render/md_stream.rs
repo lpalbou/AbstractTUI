@@ -257,9 +257,11 @@ impl std::fmt::Debug for StreamSession {
     }
 }
 
-/// How a COMPLETE line behaves for cut safety.
+/// How a COMPLETE line behaves for cut safety. `pub(super)`: the doc
+/// vocabulary's classifier (`md_doc::doc_line_class`) REFINES this one
+/// so the two stream sessions share one set of boundary rules.
 #[derive(Copy, Clone, PartialEq, Eq)]
-enum LineClass {
+pub(super) enum LineClass {
     /// Opens a fenced code block (state change, never a paragraph).
     FenceOpen,
     /// Plain text: opens or continues a paragraph.
@@ -271,7 +273,7 @@ enum LineClass {
 
 /// Classify a complete line with the batch parser's own dispatch order
 /// (fence, blank, rule, heading, quote, list, else paragraph).
-fn line_class(raw: &str) -> LineClass {
+pub(super) fn line_class(raw: &str) -> LineClass {
     let line = raw.trim_end();
     let trimmed = line.trim_start();
     if trimmed.starts_with("```") {
@@ -299,8 +301,10 @@ fn line_class(raw: &str) -> LineClass {
 ///
 /// NOT committed: blanks (a next char makes them text), `---`/`***`
 /// (one more char makes them paragraph text), bare `#`/`-`/`1.`
-/// (marker incomplete).
-fn fragment_committed_non_para(fragment: &str) -> bool {
+/// (marker incomplete). `pub(super)`: the doc stream session reuses
+/// this rule verbatim (its extra block kinds are all line-committed
+/// through the same prefixes or not at all).
+pub(super) fn fragment_committed_non_para(fragment: &str) -> bool {
     let trimmed = fragment.trim_start();
     trimmed.starts_with("```")
         || trimmed.starts_with('>')

@@ -13,14 +13,14 @@ mosaic), software-rasterized 3D (GLB), themes, and animation.
 | [api.md](api.md) | The public API surface, module by module. |
 | [theming.md](theming.md) | The 36-token semantic model, the 26 built-in themes, runtime switching, contrast guarantees, custom theme registration, and styling rules for widget authors. |
 | [graphics-and-3d.md](graphics-and-3d.md) | Images end-to-end (decode → bitmap → widget/protocols, the capability ladder, mosaic modes), the 3D pipeline (GLB loading, scenes, the Viewport3D widget, animation), the boot splash, honest limits, and measured performance. |
-| [live-data.md](live-data.md) | Background threads into the UI: the ownership rule, source→signal bindings, bounded ingestion with honest drop counters, the `interval` time source, worker lifecycle. |
+| [live-data.md](live-data.md) | Background threads into the UI: the ownership rule, source→signal bindings, bounded ingestion with honest drop counters, the `interval` time source, the connection lifecycle (reconnect with jittered backoff), worker lifecycle. |
 | [faq.md](faq.md) | Real questions: design rationale, SSH, terminal image support, headless testing, embedding, dependencies, Windows, clipboard policy, and more. |
 | [troubleshooting.md](troubleshooting.md) | Symptom → cause → fix: blank screens, dead keyboards, missing images, wrong colors, flicker, splash gates, slow frames, width misalignment, hanging tests. |
 
 ## Reference material
 
 - [`../examples/README.md`](../examples/README.md) — the examples
-  catalog: fourteen runnable programs from a 53-line hello to a full ops
+  catalog: sixteen runnable programs from a 53-line hello to a full ops
   dashboard, each documented with keys, requirements, and what it should
   look like. Every example exits cleanly without a tty, and
   `dashboard`/`viewer3d`/`images` take `--caps` to print the terminal
@@ -29,6 +29,7 @@ mosaic), software-rasterized 3D (GLB), themes, and animation.
   shipped examples (plain and style-annotated renders), plus in-process
   stills of the app-layer surfaces (streaming transcript with the
   completion dropdown open, an open Select popup, a diff-tinted code
-  pane, a scrolled feed); regenerable with `cargo run --example capture`.
+  pane, a scrolled feed, a doc-vocabulary reader table); regenerable
+  with `cargo run --example capture`.
 - [`captures/themes-table.md`](captures/themes-table.md) — the generated
   reference table: every token hex value of all 26 built-in themes.

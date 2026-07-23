@@ -2,20 +2,37 @@
 
 ## Metadata
 - Created: 2026-07-22
-- Status: Proposed
+- Status: Completed (was: Proposed)
 - Track: media-av (band 0600–0690)
-- Completed: N/A
+- Completed: 2026-07-23 (wave 3, INPUTAV) — `app::PushToTalk`:
+  `bind(cx, chord)` + `on_start`/`on_stop(StopReason)` builders,
+  `state() -> Signal<CaptureState>` (Idle/Held/Latched — the one truth
+  for meters/badges/feeds), `mode() -> PttMode::{Hold, Latch}` +
+  `gesture_label()` (both tracked: the label flips live at the 0293
+  upgrade), `cancel()`. Consumes 0700's edge/state surface exactly as
+  specified (no second key-state machinery). Mic-privacy rule shipped
+  in BOTH modes: FocusLost stops capture (`StopReason::FocusLost`), and
+  capture never auto-restarts when focus returns mid-hold (repeats
+  re-prove the hold, a fresh press is required). Machine detail found
+  by test: the effect acts on press RISING edges only — a mid-turn
+  fidelity flip re-running the effect over the same sealed press edge
+  used to double-toggle a fresh latch. Driver-level acceptance in
+  tests/wave_inputav.rs (kitty press/release bytes → Held → Released;
+  focus-out escape mid-hold → FocusLost; legacy wire → labeled latch);
+  unit matrix in src/app/push_to_talk.rs. Latch caveat stated, not
+  papered over: legacy auto-repeat arrives as more presses, so HOLDING
+  the chord on a Degraded wire toggles repeatedly — the truthful label
+  ("press … to start/stop") is the mitigation, never a synthetic
+  release.
 - Depends on: games/0700 (key press/release state service) — this item
   deliberately adds NO second key-state machinery; it is 0700's first
   named consumer plus the voice-specific degradation policy.
 - Dependency chain (convergence cycle 2): **first-app/0293 (kitty
-  enter-flags never follow the probe) → 0700 → this item.** 0293 is
-  the wire-level prerequisite: on probe-proven terminals (iTerm2 ≥ 3.5,
-  VS Code/Cursor, Warp) the engine never pushes the kitty flags after
-  the probe, so releases never arrive and hold-to-talk would degrade to
-  latch mode exactly where the protocol exists. 0293 lands → 0700's
-  fidelity flag reads kitty-true there → this item's Hold mode works,
-  all with zero changes here.
+  enter-flags never follow the probe) → 0700 → this item.** 0293
+  **SHIPPED in 0.2.2** (`Driver::apply_caps_upgrade` pushes the flags
+  post-probe) and 0700 shipped this wave, so Hold mode works on
+  probe-proven terminals (iTerm2 ≥ 3.5, VS Code/Cursor, Warp) exactly
+  as the chain predicted — with zero changes here.
 - Promotion trigger: a voice-assistant/dictation app reaching its mic
   phase (the AbstractAssistant port class), together with 0700.
 
@@ -84,7 +101,29 @@ and a mic that always stops when focus leaves.
 - Fidelity label matches `Capabilities::kitty_keyboard` in both modes.
 
 ## Progress checklist
-- [ ] 0700 lands (dependency)
-- [ ] PushToTalk helper + latch fallback
-- [ ] FocusLost stop + tests
-- [ ] docs: voice input section
+- [x] 0700 lands (dependency — same wave)
+- [x] PushToTalk helper + latch fallback
+- [x] FocusLost stop + tests (both modes; never-auto-restart pinned)
+- [x] docs: voice input section (docs/api.md "app::PushToTalk",
+      CHANGELOG; examples/voice_mock.rs is the living recipe)
+
+## Post-completion addition (wave-3 cycle-3 close, CLOSER — 2026-07-23)
+
+Cycle-2 review I-2 (`reviews/wave3/review-cycle2.md`): `Terminal::
+suspend` bypassed key-state hygiene — a key released while the process
+was STOPPED stayed in the down-set forever (no repeat corrects it;
+Ctrl+Z keeps focus, so no FocusLost covers it), and a Held capture
+would resume "recording" with the chord up. Shipped the suspend seam:
+`Driver::suspend(app, term)` orchestrates keys-drain →
+`Terminal::suspend` → resume re-sync (`driver_suspend.rs`);
+`keys::on_suspend()` drains the down-set into synthesized releases and
+flags the frame (`KeyState::suspend_cleared`, sealed per turn like
+focus); PushToTalk stops with the NEW `StopReason::Suspended` in every
+mode (Latch included — the flag fires with an empty down-set) BEFORE
+the stop signal, and never auto-restarts on resume. The keys module
+doc names suspend beside focus loss. Tests:
+`suspend_drains_the_down_set_and_labels_the_frame` (keys),
+`suspend_stops_a_hold_with_the_truthful_reason` +
+`suspend_stops_a_latch_on_a_degraded_wire_too` (PTT),
+`driver_suspend_drains_holds_stops_ptt_and_represents` (driver-level,
+through `CaptureTerm`'s new in-memory suspend round trip).

@@ -83,6 +83,21 @@ note per ADR-0001 §2. Additive work never needs this list.
    it rolls to the next budget. Named here so it cannot ship "additively
    by accident" (the 0570 lesson).
 
+5. **`widgets::FeedBlock` → `#[non_exhaustive]`, plus the `Rich`
+   variant fold-back** (0102's execution, 2026-07-23). 0102 probed the
+   "additive enum variant" premise against the 0.2.2 baseline:
+   `enum_variant_added` on the exhaustive public `FeedBlock` is MAJOR,
+   so the rich kind shipped through `FeedItem::rich`/`rich_block`/
+   `rich_lines` constructors over the crate-private flat `ItemBlock`
+   vocabulary (src/widgets/feed_item.rs — deliberately shaped as the
+   eventual public enum). In the 0.3 window: `FeedBlock` gains
+   `#[non_exhaustive]` + `Rich(RichText)` mirroring `ItemBlock`, after
+   which media-av/0660 (image blocks) and first-app/0280
+   (widget-hosting blocks) land additively. Migration note: downstream
+   `match` on `FeedBlock` gains a `_` arm; the `FeedItem` constructors
+   keep working verbatim. New variants go at the END (entry 1's
+   discriminant rule).
+
 ## Enforcement
 
 - The `semver` CI job (`.github/workflows/ci.yml`, wired 2026-07-22)

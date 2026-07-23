@@ -116,6 +116,118 @@ fn bar_chart_eighth_precision_and_cycling_colors() {
     assert_eq!(c.cell(Point::new(1, 0)).unwrap().1, t.chart(4));
 }
 
+// ---------------------------------------------------------------------------
+// Time axis (backlog 0190)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn line_chart_time_axis_anchors_now_and_adapts_density() {
+    use std::time::Duration;
+    let t = default_theme().tokens;
+    let data: Vec<f32> = (0..72).map(|i| (i % 10) as f32).collect();
+    // Wide: nice 5s ticks; the axis row is the bottom row.
+    let el = LineChart::new(vec![data.clone()])
+        .range(0.0, 10.0)
+        .time_axis(Duration::from_millis(250) * 71)
+        .element(&t);
+    let c = draw_into(el, Size::new(60, 8));
+    let axis_row = row(&c, 7);
+    assert!(
+        axis_row.trim_end().ends_with("now"),
+        "now anchors the right edge: {axis_row:?}"
+    );
+    for label in ["-5s", "-10s", "-15s"] {
+        assert!(axis_row.contains(label), "missing {label}: {axis_row:?}");
+    }
+    // Label ink matches the value labels (text_faint), embedded in the
+    // border-ink rule row. (Char columns, not byte offsets: the rule
+    // row's '─' is multibyte.)
+    let byte = axis_row.find("now").unwrap();
+    let nx = axis_row[..byte].chars().count() as i32;
+    assert_eq!(c.cell(Point::new(nx, 7)).unwrap().1, t.text_faint);
+    assert_eq!(c.cell(Point::new(nx - 1, 7)).unwrap().0, '─');
+    assert_eq!(c.cell(Point::new(nx - 1, 7)).unwrap().1, t.border);
+
+    // Deterministic: same inputs, same cells.
+    let el = LineChart::new(vec![data.clone()])
+        .range(0.0, 10.0)
+        .time_axis(Duration::from_millis(250) * 71)
+        .element(&t);
+    let c2 = draw_into(el, Size::new(60, 8));
+    for y in 0..8 {
+        assert_eq!(row(&c, y), row(&c2, y), "row {y} nondeterministic");
+    }
+
+    // Narrow: density adapts (fewer labels, none colliding).
+    let el = LineChart::new(vec![data])
+        .range(0.0, 10.0)
+        .time_axis(Duration::from_millis(250) * 71)
+        .element(&t);
+    let c = draw_into(el, Size::new(30, 6));
+    let axis_row = row(&c, 5);
+    assert!(axis_row.trim_end().ends_with("now"), "{axis_row:?}");
+    assert!(axis_row.contains("-10s"), "{axis_row:?}");
+    assert!(
+        !axis_row.contains("-5s"),
+        "narrow keeps 10s ticks only: {axis_row:?}"
+    );
+}
+
+#[test]
+fn sparkline_time_axis_labels_below_and_one_row_degrades() {
+    use std::time::Duration;
+    let t = default_theme().tokens;
+    let data: Vec<f32> = (0..40).map(|i| (i % 7) as f32).collect();
+    let el = Sparkline::new(data.clone())
+        .time_axis(Duration::from_secs(39))
+        .element(&t);
+    let c = draw_into(el, Size::new(40, 2));
+    assert!(!row(&c, 0).trim().is_empty(), "trend line on row 0");
+    let labels = row(&c, 1);
+    assert!(labels.trim_end().ends_with("now"), "{labels:?}");
+    assert!(labels.contains("-10s"), "{labels:?}");
+    // One-row rect: bare trend line, labels degrade away, no panic.
+    let el = Sparkline::new(data)
+        .time_axis(Duration::from_secs(39))
+        .element(&t);
+    let c = draw_into(el, Size::new(40, 1));
+    assert!(!row(&c, 0).trim().is_empty());
+}
+
+/// Gap honesty end-to-end: a sampling pause recorded by `TimeSeries`
+/// pads NAN slots, and the chart draws a HOLE for them — the pause
+/// still occupies x-width (no time compression).
+#[test]
+fn time_series_pause_renders_a_hole_never_compression() {
+    use std::time::Duration;
+    let t = default_theme().tokens;
+    let ms = Duration::from_millis;
+    let mut ts = TimeSeries::with_slots(ms(100), 16);
+    for i in 0..6u64 {
+        ts.push(ms(i * 100), 5.0);
+    }
+    // Pause 6 slots, then resume for 4.
+    for i in 12..16u64 {
+        ts.push(ms(i * 100), 5.0);
+    }
+    let samples = ts.samples();
+    assert_eq!(samples.len(), 16, "pause slots retained (no compression)");
+    // Flat 0..10 range keeps the line mid-plot; the hole is the pause.
+    let el = LineChart::new(vec![samples])
+        .range(0.0, 10.0)
+        .axes(false)
+        .time_axis(ts.span())
+        .element(&t);
+    let size = Size::new(16, 3);
+    let c = draw_into(el, size);
+    // Middle band columns (the pause: slots 6..12 of 16 across 16
+    // cells) are empty in every row; drawn columns exist on both sides.
+    let hole = |x: i32| (0..size.h).all(|y| c.cell(Point::new(x, y)).unwrap().0 == ' ');
+    assert!(!hole(1), "pre-pause line drawn");
+    assert!(hole(7) && hole(8), "pause renders as a hole");
+    assert!(!hole(14), "post-pause line drawn");
+}
+
 #[test]
 fn bar_chart_edge_cases() {
     let t = default_theme().tokens;

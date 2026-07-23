@@ -23,7 +23,7 @@ general-needs-first):
 
 | ID | Title | Also serves |
 | --- | --- | --- |
-| 0700 | Key press/release state (held keys) | push-to-talk (MEDIA), any hold-to-act UI |
+| 0700 | Key press/release state (held keys) — **COMPLETED 2026-07-23, wave 3 INPUTAV** (moved to `../../completed/games/`; `app::keys` + fidelity honesty; WASD held-pan proof in tests/wave_inputav.rs; media-av/0610 consumed it same wave) | push-to-talk (MEDIA), any hold-to-act UI |
 | 0710 | Game tick: public frame tasks + fixed-timestep helper | shader clocks, physics-y dashboards, demos |
 | 0720 | Sprite/tile toolkit: masked blit, sheets, cell-art palette swap | icon art, map thumbnails, any cell-art surface |
 | 0730 | Board-grid math: square + hex coordinates | map viewers, seat/floor plans, pathfinding demos |

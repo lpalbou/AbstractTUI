@@ -60,6 +60,8 @@ pub struct CaptureTerm {
     idle_streak: u32,
     /// Optional failure injection: the next write/flush returns this.
     fail_next_write: Option<std::io::ErrorKind>,
+    /// Completed suspend round trips (the I-2 acceptance surface).
+    suspend_count: u64,
 }
 
 impl CaptureTerm {
@@ -75,6 +77,7 @@ impl CaptureTerm {
             last_input: Vec::new(),
             idle_streak: 0,
             fail_next_write: None,
+            suspend_count: 0,
         }
     }
 
@@ -132,6 +135,11 @@ impl CaptureTerm {
 
     pub fn is_entered(&self) -> bool {
         self.entered.is_some()
+    }
+
+    /// Completed suspend round trips (leave + re-enter byte pairs).
+    pub fn suspend_count(&self) -> u64 {
+        self.suspend_count
     }
 
     /// The options the session was entered with, while entered.
@@ -252,6 +260,26 @@ impl Terminal for CaptureTerm {
                 mode.disarm_bytes()
             },
         )
+    }
+
+    /// Job-control suspend modeled in-memory (the I-2 acceptance
+    /// surface): emits the leave bytes, "stops" (nothing — a scripted
+    /// terminal has no process to signal), then re-enters with the
+    /// same options — the platform contract's byte round trip without
+    /// the SIGTSTP. The session stays entered (exactly like the real
+    /// backend after resume); `suspend_count` lets tests assert the
+    /// round trip happened.
+    fn suspend(&mut self) -> Result<()> {
+        let Some(opts) = self.entered else {
+            return Err(crate::base::Error::Term(
+                "suspend outside a session — enter() first".into(),
+            ));
+        };
+        Terminal::write(self, &opts.leave_bytes())?;
+        Terminal::write(self, &opts.enter_bytes())?;
+        self.flush()?;
+        self.suspend_count += 1;
+        Ok(())
     }
 
     /// Mirrors the platform backends (backlog 0293): the delta bytes go

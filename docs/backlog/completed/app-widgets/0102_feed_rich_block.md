@@ -1,6 +1,6 @@
 # 0102 — `FeedBlock::Rich`: span-model feed lines (multi-ink without a custom block)
 
-- Status: proposed
+- Status: Completed (content wave, CONTENT2 seat — 2026-07-23)
 - Track: app-widgets (band 0100–0190; extends the 0100 Feed trunk)
 - Origin: FIELD study 2 consumer-tensions report
   (`reviews/study2/field-consumer-tensions.md` §4.1 — ranked the
@@ -70,3 +70,52 @@ shortcut (Markdown blocks already exist).
   `Card` draw closure for header lines becomes a `FeedBlock::Rich`
   construction (report cites transcript_view.rs:41-177 as the deletable
   mass).
+
+## Completion report
+
+- Final path: docs/backlog/completed/app-widgets/0102_feed_rich_block.md
+- Date: 2026-07-23
+- ONE PREMISE CORRECTION, gate-forced: the item's "additive enum
+  variant" is FALSE against `cargo semver-checks` — `FeedBlock` shipped
+  EXHAUSTIVE in 0.2.x, and `enum_variant_added` on an exhaustive public
+  enum is MAJOR (probe-verified against the published 0.2.2 baseline
+  before designing). The rich kind therefore ships as `FeedItem`
+  constructors — `FeedItem::rich(RichText)`, `.rich_block(RichText)`
+  (builder append, composes with `.block(...)` in any order), and
+  `FeedItem::rich_lines(Vec<RichLine>)` (the one-styled-line
+  convenience) — over a crate-private FLAT `ItemBlock` vocabulary
+  (`src/widgets/feed_item.rs`) that IS the eventual 0.3 public enum;
+  `From<FeedBlock> for ItemBlock` converts losslessly. The fold-back
+  (`FeedBlock` + `#[non_exhaustive]` + true `Rich` variant, after which
+  0660/0280's block kinds land additively) is entry 8 of the 0.3
+  budget (planned/0002) — this pass owned the block-vocabulary design
+  the item's family note asked for.
+- Typesetting: `ItemBlock::Rich` wraps through the SAME span-preserving
+  `RichText::wrap` and lands as `Row::plain` rows drawn by the shared
+  `draw_rows` -> `print_span_clipped` walk — one renderer, one more
+  face, zero new draw code. Spans store VERBATIM (no ink stamping), so
+  the patch rule (`fg: None` inherits the item ink) survives theme
+  rebinds; explicit inks are resolved `Rgba` by the widget-wide token
+  posture (rebuild items to retint — documented). Separator policy
+  mirrors `Text` (its sibling class). Streaming stayed out of scope per
+  the item. File split for the size discipline: `feed_item.rs` (public
+  model) + `feed_sync.rs` joined the `#[path]` siblings and the mod.rs
+  lint list; `feed.rs` holds state + painter (546 lines).
+- Tests (src/widgets/feed_tests.rs):
+  `rich_block_matches_richtextview_pixels` (the parity pin — chars,
+  inks, grounds AND attrs cell-exact vs `RichTextView` at the same
+  width), `rich_item_consumers_severity_log_and_chat_header` (the two
+  filed consumer shapes, incl. multi-block rich-header-over-markdown),
+  `rich_blocks_rewrap_and_resync_extent_on_resize` (height honesty),
+  `rich_span_patch_rule_binds_item_ink_per_theme` (fg-less spans wear
+  each theme's `text`; explicit ink byte-stable across themes),
+  `rich_blocks_render_in_fixed_box_mode` (both feed modes). Existing
+  Text-only extent tests unchanged and green (no regression).
+- Measured: 1k three-ink rich items pushed at width 40 typeset in
+  ~3.1 ms median release (≈3.1 µs/item, incl. mount + dispose;
+  `perf_rich_block_typeset_1k_items`, `#[ignore]`d perf-suite
+  convention).
+- Consumer-deletion acceptance: the in-repo consumer shapes are pinned
+  as tests (severity log line + chat header); abstractcode-tui's Card
+  deletion is that app's own follow-up — the constructor it needs now
+  exists.

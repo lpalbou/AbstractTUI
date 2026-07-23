@@ -99,9 +99,17 @@ whatever ref you dispatched on, so prefer tags for real releases.
 
 - **`cargo fmt --check` is enforced in CI.** The tree was formatted with
   rustfmt on 2026-07-21 and the `lint` job gates on it.
-- **No MSRV job.** `Cargo.toml` declares no `rust-version`. When you decide
-  on a minimum supported Rust version, add `rust-version = "..."` to
-  `Cargo.toml` and a CI job pinned to that toolchain.
+- **MSRV job is live** (2026-07-22, backlog 0180): `Cargo.toml` declares
+  `rust-version = "1.87"` and the `msrv` CI job checks the whole tree at
+  the pinned toolchain. Raising the floor is a minor-version event,
+  declared in the CHANGELOG.
+- **Scheduled deep gates are live** (2026-07-23, backlog 0180 want #2):
+  `perf.yml` runs the release-mode perf suites (timing budgets + byte
+  ratchets), `fuzz_big` and the soak weekly (cron) and on
+  workflow_dispatch, uploading the printed measurements as a run
+  artifact. Timing suites retry once to absorb runner load noise (the
+  budgets are load-sensitive; see reviews/study2/quality-perf.md), then
+  fail honestly. First green run pending push, like every workflow here.
 - **Windows runs lib tests only.** The integration harness drives real
   terminals through a unix pty helper (cfg-gated), so `cargo test --lib` is
   the Windows gate for now. A Windows ConPTY harness would close the gap.

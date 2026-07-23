@@ -31,7 +31,10 @@ pub(crate) fn convert_mods(m: InMods) -> Mods {
     out
 }
 
-fn convert_key(code: KeyCode) -> Option<Key> {
+/// Key-identity conversion, shared with the key-state service
+/// (`app::keys` taps the pre-conversion stream and must speak the same
+/// vocabulary routing does).
+pub(crate) fn convert_key(code: KeyCode) -> Option<Key> {
     Some(match code {
         KeyCode::Char(c) => Key::Char(c),
         KeyCode::Enter => Key::Enter,

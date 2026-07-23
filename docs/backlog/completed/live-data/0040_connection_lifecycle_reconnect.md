@@ -1,9 +1,13 @@
-# Proposed: Connection lifecycle model + jittered reconnect/backoff helper
+# Completed: Connection lifecycle model + jittered reconnect/backoff helper
 
 ## Metadata
 - Created: 2026-07-21
-- Status: Proposed
-- Completed: N/A
+- Status: Completed (fix wave 3, FIXNET — graduated DIRECTLY from
+  proposed/: the item's own promotion-evidence section records the
+  trigger as fired with two studies' evidence, and the recommended
+  "promote at the next single-writer pass" IS this pass; a paper stop
+  in planned/ would have recorded no additional fact)
+- Completed: 2026-07-23
 
 ## ADR status
 - Governing ADRs: None (this repository has no ADR system yet). ADR impact: None by itself —
@@ -114,3 +118,89 @@ caution stands only for declaring the API surface STABLE (validate the shape aga
 disconnect cycle); it should not keep the item in proposed/ while consumers accrete divergent
 hand-rolls. 0050 (transport ADR) correctly stays gated on watcher evidence — the consumer
 proved ureq-class blocking HTTP in a worker thread workable meanwhile.
+
+## Completion report (2026-07-23, fix wave 3 — FIXNET)
+
+Final path: `docs/backlog/completed/live-data/0040_connection_lifecycle_reconnect.md`.
+
+**Shipped** (`src/reactive/connection.rs` + `connection_tests.rs`,
+re-exported from `reactive::` and the prelude; ~460 source lines +
+a split test file, both under the file budget):
+
+- **`ConnState`** — the transport-agnostic lifecycle a UI renders:
+  `Connecting / Connected / Degraded(String) / Reconnecting { attempt,
+  next_in } / Closed`. Deliberately a CLOSED vocabulary (the item's
+  own non-goal: the enum must never grow transport-specific fields;
+  documented in-type, consistent with ADR-0003's closed-vocabulary
+  clause). `next_in` is a `Duration` so "retry #2 in 1.4s" renders
+  without clock math.
+- **`Backoff`** — pure full-jitter exponential schedule: uniform in
+  `[0, min(cap, base × 2^attempt)]`, defaults base 500 ms / ×2 / cap
+  30 s (the agora client's parameters, per the item), `reset()` on
+  success, `seeded(n)` for deterministic tests, `ceiling()`/`attempt()`
+  as the honest observables. PRNG is the crate's own xorshift64 shape
+  (the particles precedent) — zero new dependencies.
+- **`connection(cx, backoff, dial)`** — the machine: state as a
+  `Signal<ConnState>` owned by `cx`; `dial` runs on the UI thread once
+  per attempt (birth + each retry) and spawns the app's transport work;
+  the `Clone + Send` **`ConnectionEvents`** reporter crosses threads on
+  the posted-jobs lane (`connected`/`degraded`/`failed`/`closed`, plus
+  `is_closed`/`is_current` worker stop conditions). Retries ride the
+  EXISTING timer heap (`arm_timer_at`/`cancel_timer`, the interval
+  precedent — injected test clocks stay authoritative); cancellation =
+  `close()` / `retry_now()` / scope death (`on_cleanup` cancels the
+  armed one-shot and drops the dial fn; the cleanup touches only
+  Rc-held state, so it is safe after the arena freed the nodes).
+- **Generation stamping** — accepting a failure supersedes the attempt
+  (gen bump BEFORE scheduling), so a zombie worker's late reports are
+  inert-and-counted (`stale_reports`, the `dead_sends` convention)
+  and can never flip the live attempt's state.
+- **Docs**: `docs/live-data.md` § "Connection lifecycle" (mermaid state
+  diagram, worker-thread example, the full-jitter/thundering-herd
+  rationale, the three enforced rules); `docs/api.md`
+  § `reactive::connection`; CHANGELOG under `[Unreleased]`.
+
+**Honest non-goals held**: no network I/O, no threads, no TLS, no
+socket ownership (0050's question — the dial fn is the seam); no
+catch-up/replay (transport policy; stated in both docs); no engine-loop
+changes (the item demanded the existing idle machinery suffice — it
+did: one armed one-shot while reconnecting, nothing at all while
+`Closed`).
+
+**Validation** (14 tests green first run):
+
+- Backoff: ceiling monotone base→cap (`backoff_ceiling_grows_monotone_
+  to_the_cap`), draws within `[0, ceiling]` and under the cap across
+  seeds with real variance (`backoff_draws_stay_within_the_jitter_
+  bounds`), reset re-bases, zero-base degeneracy safe.
+- Machine: state-sequence GOLDEN under scripted failures (birth →
+  fail → `Reconnecting{1, ≤base}` → timer-fired redial → connect →
+  degrade → fail (schedule RESET by the connect: attempt 1 again) →
+  close; exactly 7 transitions), degraded-from-Connecting counts as
+  impaired connect, cancel-mid-reconnect removes the armed entry
+  ENTIRELY (`next_timer_deadline() == None` — a dead connection may
+  not bound the idle sleep), scope-disposal-mid-reconnect ditto plus
+  inert-counted late reports, stale-attempt reports refused while the
+  live attempt's land, transport clean close terminal, `retry_now`
+  consumes the wait, re-entrant close from inside `dial` (no borrow
+  collision, dial fn dropped not restored), Send contract pinned
+  end-to-end through a real thread.
+- **Zero idle cost when Closed** pinned on all three loop meters: no
+  armed timer, no pending posted jobs, no frame tasks, and a far-future
+  clock fires nothing.
+
+**Stability note**: the 0060 watcher milestone remains the surface's
+first REAL disconnect/reconnect exercise (the item's stability caution
+stands — this API is shipped additive, not declared 1.0-frozen; 0170
+audits it with everything else).
+
+**Follow-ups revealed**:
+
+- The consumer migration (`abstractcode-tui` runner.rs:923-1012 linear
+  no-jitter hand-roll → `connection` + `Backoff`) is the ports-track
+  proof, on their next engine bump — same acceptance shape as 0297's
+  retire-deferral deletion.
+- If the 0060 watcher wants a visible countdown ("retry in 3…2…1"),
+  that is an app-side `interval` per the docs; if it turns out every
+  consumer builds one, a `Reconnecting`-aware countdown helper is a
+  one-evening follow-up — file only on the second real request.

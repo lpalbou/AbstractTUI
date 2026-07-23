@@ -214,6 +214,27 @@ mod tests {
     use crate::theme::default_theme;
     use crate::widgets::itest_util::{click, key, mount_widget};
 
+    /// Disposal-safety law (backlog 0297): RadioGroup writes
+    /// `selection` BEFORE `on_change`, so the callback may dispose the
+    /// group's scope synchronously. Audited clean at filing; pinned.
+    #[test]
+    fn on_change_may_dispose_the_radio_groups_scope() {
+        let t = default_theme().tokens;
+        let mut tree = crate::ui::UiTree::new(Size::new(20, 3));
+        let (root, ()) = crate::reactive::create_root(|cx| {
+            let modal_cx = cx.child();
+            let view = RadioGroup::of(["a", "b", "c"])
+                .on_change(move |_| modal_cx.dispose())
+                .element(modal_cx, &t)
+                .build();
+            tree.mount(modal_cx, view);
+        });
+        tree.layout();
+        click(&mut tree, 2, 2); // select row 2 -> on_change -> dispose
+        assert_eq!(tree.instance_count(), 0, "subtree unmounted by dispose");
+        root.dispose();
+    }
+
     #[test]
     fn arrows_move_selection_when_focused_and_click_selects() {
         let t = default_theme().tokens;

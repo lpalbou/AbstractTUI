@@ -1,0 +1,24 @@
+
+ ╭ reader ────────────────────────────────────────────────────────────╮
+ │Release readiness                                                   │
+ │────────────────────────────────────────────────────────────────────│
+ │                                                                    │
+ │The doc vocabulary in one glance: alignment comes from the delimiter│
+ │row, overwide cells truncate with an ellipsis, and the header rides │
+ │its own border rule.                                                │
+ │                                                                    │
+ │Stage           Owner      State                                    │
+ │────────────────────────────────                                    │
+ │parse           READER   shipped                                    │
+ │typeset         READER   shipped                                    │
+ │feed adoption INTEGRATOR shipped                                    │
+ │                                                                    │
+ │Checklist                                                           │
+ │  [x] tables render in transcripts                                  │
+ │  [x] literal pipe soup typeset columns                             │
+ │  [ ] a whole book in the terminal                                  │
+ │                                                                    │
+ │▎ Streamed or batch, the pixels are the same — one fold.            │
+ │                                                                    │
+ ╰────────────────────────────────────────────────────────────────────╯
+

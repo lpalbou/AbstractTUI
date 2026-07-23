@@ -13,7 +13,7 @@ cargo build
 
 The crate targets stable Rust (edition 2021) and builds from std plus five
 small, permissively licensed dependencies (see `Cargo.toml`). To try it out,
-run any of the 14 examples:
+run any of the 16 examples:
 
 ```sh
 cargo run --example hello
@@ -25,7 +25,7 @@ See `examples/README.md` for the full list.
 
 ## Testing
 
-The default test pass runs the whole suite — roughly 1,470 tests across unit
+The default test pass runs the whole suite — roughly 1,640 tests across unit
 tests, the integration suites under `tests/`, and doctests:
 
 ```sh
@@ -47,6 +47,12 @@ cargo test --test perf_app_surfaces --release -- --ignored --test-threads=1  # a
 Timing budgets are load-sensitive: run them on a quiet host, and treat a
 red timing on a loaded machine as a re-run signal, not a regression
 (allocation and byte-count asserts are load-independent and always hold).
+The app-surface suite also ratchets byte emission: printed byte medians
+are asserted against quiet-host baselines, so an emission regression
+cannot hide behind a busy host. The scheduled `perf.yml` workflow runs
+both perf suites plus `fuzz_big` and the soak weekly on a hosted runner
+(retrying timing suites once to absorb load noise) and uploads the
+printed measurements as an artifact.
 
 ### Minimum supported Rust version (MSRV)
 

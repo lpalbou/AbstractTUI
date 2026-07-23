@@ -181,6 +181,76 @@ fn select_arrows_move_highlight_only_and_enter_commits_once() {
     assert!(rig.popup().is_none(), "commit closed the popup");
 }
 
+/// Disposal-safety law (backlog 0297): a commit `on_change` may
+/// dispose the FACE's scope synchronously — the pick-then-close modal.
+/// The disposed scope is the one owning the MOUNTED subtree (the real
+/// modal shape: signals AND mounted instances die together — the
+/// documented dyn_view-vs-dyn_view_scoped rule; disposing only a build
+/// scope under a live mount is the zombie-view misuse the runtime's
+/// panic message already teaches). The popup's content scope is a
+/// child of the face's, so the disposal CASCADES: the AnchorGone
+/// cleanup removes the layer while the callback runs, and the
+/// post-callback dismiss inside `commit_and_close` finds the popup
+/// already ended (idempotent no-op) — no dead-signal write anywhere.
+/// Audited clean at filing; pinned because the cleanliness hangs on
+/// that cascade, not on ordering alone. The bound value lives OUTSIDE
+/// the modal scope (the app owns it) and carries the committed pick
+/// out of the closed modal.
+#[test]
+fn select_commit_on_change_may_dispose_the_faces_scope() {
+    super::super::viewport::publish_viewport(VP);
+    let overlays = Overlays::new();
+    overlays.ensure_root(VP);
+    let mut tree = UiTree::new(VP);
+    let ov = overlays.clone();
+    let value_holder: Rc<RefCell<Option<Signal<usize>>>> = Default::default();
+    let vh = value_holder.clone();
+    let changes: Rc<RefCell<Vec<usize>>> = Default::default();
+    let ch = changes.clone();
+    let (root, ()) = create_root(|cx| {
+        let modal_cx = cx.child();
+        let value = cx.signal(usize::MAX); // app-owned: survives the close
+        *vh.borrow_mut() = Some(value);
+        let face = Select::new(fruit_options())
+            .value(value)
+            .layout(face_layout())
+            .overlays(&ov)
+            .on_change(move |i| {
+                ch.borrow_mut().push(i);
+                modal_cx.dispose();
+            })
+            .element(modal_cx, &default_theme().tokens)
+            .build();
+        // The rig's wrapper shape, but owned by the MODAL scope: the
+        // trigger keeps its one row (room below for the popup) and the
+        // whole mounted subtree dies with `modal_cx`.
+        let view = Element::new()
+            .style(LayoutStyle::column().width(Dimension::Percent(1.0)).h(VP.h))
+            .child(face)
+            .child(text("below content"))
+            .build();
+        tree.mount(modal_cx, view);
+    });
+    tree.layout();
+    let mut rig = Rig {
+        _root: root,
+        tree,
+        overlays,
+    };
+    rig.key(Key::Tab); // focus the trigger
+    let value = value_holder.borrow().unwrap();
+    rig.key(Key::Enter); // open
+    assert!(rig.popup().is_some(), "popup open");
+    rig.key(Key::Enter); // commit alpha -> on_change -> dispose
+    assert_eq!(value.get_untracked(), 0, "commit landed before the close");
+    assert_eq!(changes.borrow().as_slice(), [0], "exactly one on_change");
+    assert!(
+        rig.popup().is_none(),
+        "cascade took the popup with the scope"
+    );
+    assert_eq!(rig.tree.instance_count(), 0, "face subtree unmounted");
+}
+
 #[test]
 fn select_escape_and_outside_press_abandon_without_committing() {
     let value_holder: Rc<RefCell<Option<Signal<usize>>>> = Default::default();

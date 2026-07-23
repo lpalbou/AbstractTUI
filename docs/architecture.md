@@ -101,7 +101,11 @@ Background threads reach this world through the live-data lane
 post values, a waker coalesces any burst into one wakeup, and the bound
 signal is written on the UI thread at the next frame's update phase — the
 single-writer rule is preserved by construction. Overflow policies and drop
-counters keep back-pressure honest; see [Live data](live-data.md).
+counters keep back-pressure honest. Reconnect rides the same lanes:
+`reactive::connection` owns the connection state machine and its jittered
+retry schedule (`Backoff`), with worker reports crossing on the posted-jobs
+lane and retries armed on the timer heap — offline costs zero wakeups until
+the retry is due. See [Live data](live-data.md).
 
 ## Pillar 2: the compositor
 
@@ -186,7 +190,12 @@ sealed when LAYOUT begins. Signal writes from other threads arrive only as
 posted jobs, and posted jobs run only in the USER phase — a write landing
 mid-frame wakes the loop and is drained by the next frame. Late damage is
 never lost and never double-painted, by construction rather than by
-discipline.
+discipline. One engine-owned addition happens inside DRAW itself: an image
+pre-pass folds the rects vacated by moved or removed image placements into
+the frame's damage (and, where a byte protocol left pixels the cell model
+cannot see, poisons the previous-frame model so the diff re-emits them) —
+deterministic driver bookkeeping, not user code, so the seal against
+re-entrant damage stands.
 
 The cursor follows the same economy. The default is the terminal's native
 cursor, parked by the presenter, so a focused-but-idle text field costs
@@ -214,7 +223,10 @@ and the guarantee holds through the whole app layer with the modern
 mounts in play — a streaming `Feed`, an armed `interval`, a parked
 `Select` popup, a parked protocol image — where sixteen idle turns
 through the real driver allocate nothing and write nothing
-(`alloc_budget::idle_turns_with_feed_interval_parked_popup_and_parked_image_allocate_nothing`).
+(`alloc_budget::idle_turns_with_feed_interval_parked_popup_and_parked_image_allocate_nothing`),
+and again with the AV surfaces mounted — a settled `Meter`, a quiet
+`AudioScope`, armed key state, and a bound push-to-talk
+(`alloc_budget::idle_turns_with_parked_meter_scope_and_key_state_allocate_nothing`).
 
 Idle really means idle: the event loop blocks in a terminal read with zero
 wakeups until input, a resize, a cross-thread wake, or a timer deadline

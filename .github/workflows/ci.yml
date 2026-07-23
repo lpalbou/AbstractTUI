@@ -7,9 +7,10 @@
 # (ADR-0001: additive-only between budgeted breaking windows).
 #
 # Deliberate omissions (see .github/SETUP.md "Follow-ups"):
-#   - perf/fuzz/soak remain #[ignore]d and manual: the scheduled deep-gate
-#     workflows are 0180's open leg (timing budgets are load-sensitive
-#     and belong on a scheduled quiet-runner job, not per-PR).
+#   - perf/fuzz/soak remain #[ignore]d here and gate on the SCHEDULED
+#     workflow instead (perf.yml, weekly + dispatch — 0180 want #2:
+#     timing budgets are load-sensitive and belong on a scheduled
+#     quiet-runner job, not per-PR).
 
 name: CI
 

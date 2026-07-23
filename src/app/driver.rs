@@ -187,6 +187,13 @@ impl Driver {
         // Publish the env-pass capabilities into the reactive view
         // (`app::use_caps`, 0295/0685); probe folds upgrade it later.
         super::caps::publish_caps(&caps);
+        // Key-state fidelity (games/0700): Full only when kitty release
+        // events are actually live on THIS session (protocol spoken +
+        // event-type flags pushed). Republished at the 0293 upgrade.
+        super::keys::publish_fidelity(super::keys::release_events_live(
+            &caps,
+            enter.kitty_keyboard,
+        ));
 
         // Cross-thread wakeups: posted jobs and frame requests interrupt
         // the blocking read. A terminal without a waker (scripted tests)
@@ -292,6 +299,10 @@ impl Driver {
         // policy (§4). An empty task list costs nothing.
         reactive::run_frame_tasks(now);
         flush_effects();
+        // Key-state edges seal per turn (games/0700): last turn's
+        // press/release pulses clear before this turn's events fold in.
+        // One flag read when no consumer ever armed the service.
+        super::keys::begin_turn();
         // tmux probe grace expired with wrapped replies still missing:
         // finalize on the evidence in hand (passthrough-off sessions
         // never answer — spending the grace once is the design).
@@ -612,6 +623,14 @@ impl Driver {
         event: Event,
         quit: &mut bool,
     ) {
+        // Key-state tap (games/0700), PRE-conversion and PRE-routing:
+        // key state is a physical fact — observed even for events a
+        // modal, the selection layer, or the routing drop consumes.
+        match &event {
+            Event::Key(k) => super::keys::on_key_event(k),
+            Event::FocusLost => super::keys::on_focus_lost(),
+            _ => {}
+        }
         match event {
             Event::Resize(size) => self.apply_resize(app, size),
             Event::CapsReply(reply) => {
@@ -707,7 +726,7 @@ impl Driver {
         }
     }
 
-    fn apply_resize(&mut self, app: &mut App, size: Size) {
+    pub(super) fn apply_resize(&mut self, app: &mut App, size: Size) {
         if size == self.size || size.is_empty() {
             return;
         }
@@ -773,6 +792,12 @@ impl Driver {
                 )),
             }
         }
+        // The key-state fidelity follows the flags (games/0700): the
+        // moment releases become live mid-session, hold semantics do too.
+        super::keys::publish_fidelity(super::keys::release_events_live(
+            &self.caps,
+            self.kitty_flags,
+        ));
         let fresh = present_caps_from(&self.caps);
         if fresh != self.present_caps {
             self.present_caps = fresh;
@@ -827,6 +852,29 @@ impl Driver {
     /// fully transparent by convention).
     fn poison_prev(&mut self) {
         self.poison_prev_rect(Rect::from_size(self.size));
+    }
+
+    /// The terminal's content is UNKNOWN at the current geometry (a
+    /// job-control suspend returned: the alt screen came back blank
+    /// and the restore reset cursor/pen): poison `prev` AND invalidate
+    /// the presenter (both halves of "the screen is unknown" — the
+    /// apply_resize rule), damage every layer so the flatten produces
+    /// regions for the diff to re-emit, and re-place images. Used by
+    /// the suspend orchestration (`driver_suspend.rs`, cycle-2 review
+    /// I-2); backlog first-app/0299 asks for the component-reachable
+    /// public form of this verb.
+    pub(super) fn resync_unknown_screen(&mut self) {
+        self.poison_prev();
+        self.presenter.invalidate();
+        let mut store = self.overlays.store().borrow_mut();
+        for layer in store.layers.iter_mut() {
+            layer.surface_mut().damage_all();
+        }
+        for img in store.images.iter_mut() {
+            img.dirty = true;
+        }
+        drop(store);
+        reactive::request_frame();
     }
 
     /// Poison one region of the previous-frame model: the next diff

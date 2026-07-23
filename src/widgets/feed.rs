@@ -28,14 +28,25 @@
 //!
 //! ## Content model
 //!
-//! An item is a list of [`FeedBlock`]s: plain text (wrapped verbatim),
-//! markdown (the `render::md` vocabulary through the SAME typeset
-//! recipe as [`MarkdownView`](super::MarkdownView) — one recipe, no
-//! drift), a code fence, or a custom-draw block (app escape hatch with
-//! an honest height-at-width callback). A STREAMING item wraps
-//! [`md::StreamSession`](crate::render::md::StreamSession): closed
-//! blocks typeset once and freeze; only the open tail block
-//! re-typesets per delta.
+//! An item is a list of blocks: plain text (wrapped verbatim),
+//! markdown (the DOC vocabulary —
+//! [`md::parse_doc`](crate::render::md::parse_doc): the core blocks
+//! plus GFM tables, in-flow images decoded lazily at first draw, task
+//! lists and `~~strikethrough~~` — through the SAME typeset recipe as
+//! [`MarkdownView`](super::MarkdownView), one recipe, no drift), a
+//! code fence, rich span lines ([`FeedItem::rich`] — 0102: multi-ink
+//! log lines/chat headers through the shared span walk), or a
+//! custom-draw block (app escape hatch with an honest height-at-width
+//! callback). A STREAMING item wraps
+//! [`md::DocStreamSession`](crate::render::md::DocStreamSession):
+//! closed blocks typeset once and freeze; only the open tail region
+//! re-typesets per delta (a table streams as the open region until its
+//! closing line arrives, then freezes — an agent answer streaming a
+//! markdown table renders as a table live). Image rows measure from a
+//! header PROBE at typeset (`gfx::probe_dimensions`); nothing decodes
+//! until an image row first draws. A feed mirroring a `Signal<Vec<T>>`
+//! fold binds through [`FeedState::sync`] (0104); app-driven selection
+//! binds through [`Feed::selected_key`] + [`FeedState::row_of`].
 //!
 //! ## Windowing
 //!
@@ -64,99 +75,23 @@ use std::rc::Rc;
 use crate::base::Rect;
 use crate::layout::{Dimension, Style as LayoutStyle};
 use crate::reactive::{Scope, Signal};
-use crate::render::md::StreamSession;
+use crate::render::md::DocStreamSession;
 use crate::theme::TokenSet;
 use crate::ui::{dyn_view, Element, StyledCanvas};
 
 use super::markdown::{draw_rows, md_styles};
 
-/// One rich block of a feed item.
-pub enum FeedBlock {
-    /// Plain text, wrapped verbatim (log lines, tool output). No
-    /// markdown parsing.
-    Text(String),
-    /// Markdown source (the supported `render::md` subset).
-    Markdown(String),
-    /// A fenced code block: highlighted like a markdown fence.
-    Code {
-        /// Language label. Routes the lexer like a markdown fence:
-        /// `"diff"`/`"patch"` tint through the diff mapping
-        /// (`code::diff_token_color`); every other label renders with
-        /// the C-like lexer.
-        lang: String,
-        /// Verbatim source.
-        source: String,
-    },
-    /// App-drawn block: an honest height-at-width callback plus a draw
-    /// closure over the block's solved sub-rect. The draw MUST NOT
-    /// mutate the owning `FeedState` (it runs during paint).
-    Custom(CustomBlock),
-}
+// Content model (public block vocabulary + item builder) — sibling
+// module for the file-size discipline.
+#[path = "feed_item.rs"]
+mod item;
+use item::SharedDrawFn;
+pub use item::{CustomBlock, FeedBlock, FeedItem};
 
-/// Shared draw closure (custom blocks are drawn from cloned handles so
-/// user paint code runs outside the feed-state borrow).
-type SharedDrawFn = Rc<dyn Fn(&mut dyn StyledCanvas, Rect)>;
-
-/// The custom-draw escape hatch (badges, tool cards, charts).
-pub struct CustomBlock {
-    height: Box<dyn Fn(i32) -> i32>,
-    draw: SharedDrawFn,
-}
-
-impl CustomBlock {
-    /// `height(width) -> rows` must be honest (windowing trusts it);
-    /// `draw(canvas, rect)` paints inside the block's rect.
-    pub fn new(
-        height: impl Fn(i32) -> i32 + 'static,
-        draw: impl Fn(&mut dyn StyledCanvas, Rect) + 'static,
-    ) -> CustomBlock {
-        CustomBlock {
-            height: Box::new(height),
-            draw: Rc::new(draw),
-        }
-    }
-}
-
-/// One feed item: a small block list. Items are IDENTITIES (keyed);
-/// see [`FeedState::push`].
-pub struct FeedItem {
-    blocks: Vec<FeedBlock>,
-}
-
-impl FeedItem {
-    pub fn new() -> FeedItem {
-        FeedItem { blocks: Vec::new() }
-    }
-
-    /// Single markdown-block item (the common chat message).
-    pub fn markdown(src: impl Into<String>) -> FeedItem {
-        FeedItem::new().block(FeedBlock::Markdown(src.into()))
-    }
-
-    /// Single plain-text item (the common log line).
-    pub fn text(s: impl Into<String>) -> FeedItem {
-        FeedItem::new().block(FeedBlock::Text(s.into()))
-    }
-
-    /// Single code-fence item.
-    pub fn code(lang: impl Into<String>, source: impl Into<String>) -> FeedItem {
-        FeedItem::new().block(FeedBlock::Code {
-            lang: lang.into(),
-            source: source.into(),
-        })
-    }
-
-    pub fn block(mut self, b: FeedBlock) -> FeedItem {
-        self.blocks.push(b);
-        self
-    }
-}
-
-impl Default for FeedItem {
-    fn default() -> Self {
-        FeedItem::new()
-    }
-}
+// The Signal<Vec<T>> -> keyed-feed diffing bridge (backlog 0104).
+#[path = "feed_sync.rs"]
+mod sync;
+pub use sync::SyncSpec;
 
 // Entry storage + typesetting internals (file-size discipline; the
 // same child-module pattern `md.rs` uses for its stream half).
@@ -198,6 +133,7 @@ impl FeedState {
                 return;
             }
             let i = inner.entries.len();
+            inner.mutations += 1;
             inner.index.insert(key, i);
             inner.entries.push(Entry {
                 kind: EntryKind::Static(item.blocks),
@@ -223,6 +159,7 @@ impl FeedState {
     fn update_at(&self, i: usize, kind: EntryKind) {
         {
             let mut inner = self.inner.borrow_mut();
+            inner.mutations += 1;
             inner.entries[i].kind = kind;
             inner.entries[i].segments = Vec::new();
             inner.typeset_entry(i, true);
@@ -240,10 +177,11 @@ impl FeedState {
             let styles = inner.tokens.as_ref().map(md_styles).unwrap_or_default();
             let kind = EntryKind::Stream(Box::new(StreamEntry {
                 raw: String::new(),
-                session: StreamSession::new(styles),
+                session: DocStreamSession::new(styles),
                 closed_seen: 0,
                 finished: false,
             }));
+            inner.mutations += 1;
             let existing = inner.index.get(&key).copied();
             let i = match existing {
                 Some(i) => {
@@ -268,9 +206,11 @@ impl FeedState {
         self.publish();
     }
 
-    /// Append a delta to a streaming item. Only the OPEN tail block
+    /// Append a delta to a streaming item. Only the OPEN tail region
     /// re-typesets; closed blocks are frozen (0110's contract carried
-    /// into pixels). Returns false for unknown keys or non-stream items.
+    /// into pixels — for the doc vocabulary the open region spans a
+    /// whole in-flight table, which seals at its first non-pipe line).
+    /// Returns false for unknown keys or non-stream items.
     pub fn stream_append(&self, key: &str, delta: &str) -> bool {
         {
             let mut inner = self.inner.borrow_mut();
@@ -282,6 +222,7 @@ impl FeedState {
             };
             stream.raw.push_str(delta);
             stream.session.append(delta);
+            inner.mutations += 1;
             inner.typeset_entry(i, false);
             inner.rebuild_prefix_from(i);
         }
@@ -289,8 +230,8 @@ impl FeedState {
         true
     }
 
-    /// Seal a streaming item (EOF-closes an open fence, freezes all
-    /// rows). The item stays updatable by key.
+    /// Seal a streaming item (EOF-closes an open fence or table,
+    /// freezes all rows). The item stays updatable by key.
     pub fn stream_finish(&self, key: &str) -> bool {
         {
             let mut inner = self.inner.borrow_mut();
@@ -302,6 +243,7 @@ impl FeedState {
             };
             stream.session.finish();
             stream.finished = true;
+            inner.mutations += 1;
             inner.typeset_entry(i, false);
             inner.rebuild_prefix_from(i);
         }
@@ -317,6 +259,7 @@ impl FeedState {
     pub fn clear(&self) {
         {
             let mut inner = self.inner.borrow_mut();
+            inner.mutations += 1;
             inner.entries.clear();
             inner.index.clear();
             inner.prefix.clear();
@@ -344,6 +287,27 @@ impl FeedState {
     /// blocks typeset exactly once — cost tests pin deltas on this.
     pub fn blocks_typeset_total(&self) -> u64 {
         self.inner.borrow().blocks_typeset
+    }
+
+    /// ITEM mutations since creation (push/update/stream/clear — theme
+    /// rebinds and geometry publishes never count). Crate-internal:
+    /// the sync bridge's one-writer detector (cycle-2 review C-1) —
+    /// a drain that finds this moved past its own record knows a
+    /// foreign write happened and self-heals with a rebuild.
+    pub(super) fn mutation_count(&self) -> u64 {
+        self.inner.borrow().mutations
+    }
+
+    /// The item's first content row at the current typeset width —
+    /// the scroll-to-key hook: put the feed inside a `Scroll` with a
+    /// bound offset signal and set it to `row_of(key)` to bring an
+    /// item to the top. `None` for unknown keys; 0 for every item
+    /// before the first draw discovers a width (same warmup contract
+    /// as [`FeedState::total_rows`]).
+    pub fn row_of(&self, key: &str) -> Option<i32> {
+        let inner = self.inner.borrow();
+        let i = *inner.index.get(key)?;
+        Some(inner.prefix.get(i).copied().unwrap_or(0))
     }
 
     /// Publish after a mutation: sync the extent signal (lawful here —
@@ -383,6 +347,7 @@ impl FeedState {
 pub struct Feed {
     state: FeedState,
     gap: i32,
+    selected: Option<Signal<Option<String>>>,
     layout: Option<LayoutStyle>,
 }
 
@@ -391,8 +356,22 @@ impl Feed {
         Feed {
             state: state.clone(),
             gap: 1,
+            selected: None,
             layout: None,
         }
+    }
+
+    /// Bind a selection-by-key signal (the 0100 item-6 gap): while
+    /// `Some(key)`, that item's row band is highlighted with the
+    /// theme's `selection_bg` (item inks stay — a transcript keeps its
+    /// severity/syntax colors; code-fence rows keep their own ground).
+    /// Selection is app-driven state, not a keyboard behavior: the app
+    /// writes the signal (and can pair it with [`FeedState::row_of`]
+    /// to scroll the selected item into view). Unknown keys highlight
+    /// nothing.
+    pub fn selected_key(mut self, key: Signal<Option<String>>) -> Feed {
+        self.selected = Some(key);
+        self
     }
 
     /// Blank rows between items (default 1).
@@ -464,12 +443,16 @@ impl Feed {
         }
 
         let version = state.version;
+        let selected = self.selected;
         el.child(dyn_view(
             LayoutStyle::default()
                 .width(Dimension::Percent(1.0))
                 .height(Dimension::Percent(1.0)),
             move || {
                 version.get(); // the re-render key: any mutation repaints
+                               // Selection is a tracked read too: a key change
+                               // repaints (draw closures never read signals — RT1-2).
+                let sel = selected.and_then(|s| s.get());
                 let state = state.clone();
                 Element::new()
                     .style(
@@ -477,7 +460,9 @@ impl Feed {
                             .width(Dimension::Percent(1.0))
                             .height(Dimension::Percent(1.0)),
                     )
-                    .draw(move |canvas, rect| draw_feed(&state, &tokens, canvas, rect))
+                    .draw(move |canvas, rect| {
+                        draw_feed(&state, &tokens, sel.as_deref(), canvas, rect)
+                    })
                     .build()
             },
         ))
@@ -487,7 +472,13 @@ impl Feed {
 /// Windowed paint: only entries intersecting `rect ∩ canvas bounds`
 /// touch the canvas. Custom draws run after the state borrow releases
 /// (they are app code).
-fn draw_feed(state: &FeedState, t: &TokenSet, canvas: &mut dyn StyledCanvas, rect: Rect) {
+fn draw_feed(
+    state: &FeedState,
+    t: &TokenSet,
+    selected: Option<&str>,
+    canvas: &mut dyn StyledCanvas,
+    rect: Rect,
+) {
     let mut customs: Vec<(SharedDrawFn, Rect)> = Vec::new();
     {
         let mut inner = state.inner.borrow_mut();
@@ -508,6 +499,22 @@ fn draw_feed(state: &FeedState, t: &TokenSet, canvas: &mut dyn StyledCanvas, rec
         let first_row = band.y - rect.y;
         let last_row = first_row + band.h; // exclusive
         let inner = &*inner;
+        // Selection highlight: ground the selected item's band FIRST —
+        // rows paint over with transparent backgrounds, so item inks
+        // stay and the tint shows through (code-fence rows keep their
+        // own ground by design).
+        if let Some(i) = selected.and_then(|k| inner.index.get(k).copied()) {
+            let top = inner.prefix[i];
+            let h = inner.entries[i].height;
+            if top < last_row && top + h > first_row {
+                canvas.fill(
+                    Rect::new(rect.x, rect.y + top, rect.w, h),
+                    ' ',
+                    t.selection_fg,
+                    t.selection_bg,
+                );
+            }
+        }
         // First entry whose span can reach the band (binary search on
         // prefix starts, then step back one).
         let mut i = inner
@@ -565,3 +572,8 @@ fn draw_feed(state: &FeedState, t: &TokenSet, canvas: &mut dyn StyledCanvas, rec
 #[cfg(test)]
 #[path = "feed_tests.rs"]
 mod tests;
+
+// Rich-block + selection tests, split for the file-size discipline.
+#[cfg(test)]
+#[path = "feed_rich_tests.rs"]
+mod rich_tests;

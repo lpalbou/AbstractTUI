@@ -13,10 +13,12 @@ item records the workaround so the engine fix can delete it.
 | 0260 | Disclosure widget — graphical per-item fold/unfold (maintainer ask) | feature |
 | 0280 | Feed custom blocks cannot host widgets — protocol images degrade to mosaic | capability gap |
 | 0290 | Selection region lingers after the release-copy — `c`/Enter keep being swallowed | footgun/UX |
+| 0291 | TextArea placeholder never paints on an autofocused composer — opt-in placeholder-while-focused (renumbered from 0310: band collision with control-plane, wave-3 CLOSER) | API gap |
 | 0292 | Completion triggers fire on any mid-text token — no position policy (renumbered from 0300: band collision with control-plane) | API gap |
 | 0294 | Anchored panel places short lists over the chrome below instead of flipping up (renumbered from 0310) | UX defect |
 | 0297 | Disposal safety engine-wide — the 0250 ruling stopped at List/Table; Button's post-callback write forces the consumer's one-tick retire deferral (FIELD §3.1, filed convergence cycle 2) | footgun/API |
 | 0298 | Stale frame band above the live frame after a workflow-picker close (resize suspected) | rendering bug |
+| 0299 | Public full-redraw verb (poison-prev semantics) + optional focus-regain repaint — external clears leave the terminal desynced forever (renumbered from 0300: band collision with control-plane, wave-3 CLOSER) | API gap |
 
 Completed (moved to `../../completed/first-app/`, 2026-07-21 wave cycle 1):
 

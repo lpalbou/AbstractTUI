@@ -41,8 +41,8 @@
 use std::sync::Arc;
 
 use crate::base::{Point, Rect, Rgba};
+use crate::gfx::decode_image;
 use crate::gfx::mosaic::{MosaicMode, MosaicRenderer};
-use crate::gfx::png;
 // RT8-4: `Image::from_bitmap` takes `Arc<Bitmap>` — the type is
 // re-exported here so image apps find it beside the widget.
 pub use crate::gfx::Bitmap;
@@ -114,16 +114,17 @@ impl Image {
         })
     }
 
-    /// Decode an image file at view-build time. PNG only (the engine's
-    /// decoder); other formats produce the labeled broken-image state,
-    /// never a panic and never a silent blank.
+    /// Decode an image file at view-build time. PNG + baseline JPEG
+    /// (the engine's decoders, magic-routed — widened from PNG-only in
+    /// the 0144 wave); other formats produce the labeled broken-image
+    /// state, never a panic and never a silent blank.
     pub fn from_path(path: impl AsRef<std::path::Path>) -> Image {
         let path = path.as_ref();
         let source = match std::fs::read(path) {
             Err(e) => Err(format!("unreadable: {e}")),
-            Ok(bytes) => match png::decode(&bytes) {
+            Ok(bytes) => match decode_image(&bytes) {
                 Ok(bmp) => Ok(Arc::new(bmp)),
-                Err(e) => Err(format!("undecodable (png only in v1): {e}")),
+                Err(e) => Err(format!("undecodable: {e}")),
             },
         };
         Image::new(source)
@@ -405,13 +406,35 @@ mod tests {
 
     #[test]
     fn non_png_is_labeled_undecodable() {
-        // A real file that is not a PNG: this source file itself.
+        // A real file that is not an image: this crate's manifest.
         let img = Image::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
         assert!(
             img.error().unwrap().contains("undecodable"),
             "{:?}",
             img.error()
         );
+    }
+
+    #[test]
+    fn from_path_decodes_a_real_file_through_the_unified_decoder() {
+        // 0144 widening: from_path routes by magic (PNG + JPEG), not a
+        // PNG-only call. Round-trip a generated PNG through a temp file.
+        // Token-rule-safe constants only (the directory lint forbids
+        // color construction even in tests — see `stripes` above);
+        // pixel variety is irrelevant to the routing under test.
+        let bmp = Bitmap::from_fn(
+            5,
+            3,
+            |x, _| if x % 2 == 0 { Rgba::WHITE } else { Rgba::BLACK },
+        );
+        let path = std::env::temp_dir().join(format!(
+            "abstracttui_image_probe_{}.png",
+            std::process::id()
+        ));
+        std::fs::write(&path, crate::gfx::png_encode::encode(&bmp)).unwrap();
+        let img = Image::from_path(&path);
+        assert!(img.error().is_none(), "{:?}", img.error());
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

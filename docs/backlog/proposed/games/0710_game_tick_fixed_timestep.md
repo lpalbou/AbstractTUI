@@ -30,6 +30,13 @@ can register one, so every other time-driven consumer builds its clock
 from timers and ASSUMES its cadence held.
 
 ## Current code reality
+- **A second crate-internal consumer exists since wave 3 (2026-07-23)**:
+  `reactive::register_frame_task` was widened to `pub(crate)` for the
+  meter ballistics (`widgets::meter`, media-av/0620 — a task that drops
+  itself at the fixpoint, the animate.rs pattern). The PUBLIC frame-task
+  surface remains THIS item's decision — the widening deliberately did
+  not preempt it, and the meter is a ready migration case for whatever
+  shape 0710 picks.
 - **Pacing exists**: while `frame_tasks_pending() > 0` the drive loop
   waits at most `FRAME_INTERVAL` = 16 ms per turn (~60 fps,
   src/app/mod.rs:363-377); otherwise it blocks on the earliest timer

@@ -16,11 +16,8 @@ Media capabilities the engine owes applications, in two families:
 
 | ID | Title | Family |
 | --- | --- | --- |
-| 0610 | Push-to-talk input contract (consumes games/0700 key state) | voice |
-| 0620 | `widgets::Meter` + `widgets::AudioScope` (ballistics over the chart substrate) | voice |
 | 0630 | Speaking-highlight primitive (offset-driven, shares 0148's text↔cells mapping) | voice |
 | 0640 | External audio-process lifecycle pattern (docs + example; engine code NOT needed — verified) | voice |
-| 0650 | `examples/voice-mock.rs` — the no-audio, no-network voice demo | voice |
 | 0660 | Images inside `Feed`/content widgets via protocol placement | image |
 | 0665 | Animated image sessions (kitty `a=f` frames; mosaic timer fallback) | image |
 | 0670 | Cell-pixel-size refresh on resize (font zoom re-renders sixel/3D scale) | image |
@@ -33,3 +30,11 @@ Completed 2026-07-22 (moved to `../../completed/media-av/`):
 | ID | Title | Family |
 | --- | --- | --- |
 | 0685 | Probed-capabilities signal (`use_caps`) — discharged by first-app 0295 (one accessor, both consumers); the images example's channel label is truthful now | image |
+
+Completed 2026-07-23, wave 3 INPUTAV (moved to `../../completed/media-av/`):
+
+| ID | Title | Family |
+| --- | --- | --- |
+| 0610 | Push-to-talk input contract — `app::PushToTalk` over games/0700 (Hold on kitty-true fidelity, labeled Latch elsewhere, FocusLost always stops) | voice |
+| 0620 | `widgets::Meter` + `widgets::AudioScope` — ballistics (instant attack, frame-clocked decay, peak hold), dB mapping, token zones; the idle fixpoint law test-pinned | voice |
+| 0650 | `examples/voice_mock.rs` — the no-audio, no-network voice demo (0700/0610/0620 validation vehicle; 0630/0640 keep their own vehicles) | voice |

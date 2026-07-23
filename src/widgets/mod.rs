@@ -16,6 +16,7 @@
 //!
 //! File ownership header convention: each widget file names its owner.
 
+pub mod audio_scope;
 pub mod badge;
 pub mod block;
 pub mod button;
@@ -29,6 +30,7 @@ pub mod input;
 pub mod list;
 pub mod logo;
 pub mod markdown;
+pub mod meter;
 pub mod progress;
 pub mod radio;
 pub mod richtext;
@@ -69,6 +71,16 @@ pub use textarea::{SubmitPolicy, TextArea, TextAreaState};
 pub use viewport3d::Viewport3D;
 // Appended (0140 diff slice): the diff twin of `code_token_color`.
 pub use code::diff_token_color;
+// Appended (0104): the Signal<Vec<T>> -> keyed-feed diffing bridge.
+pub use feed::SyncSpec;
+// Appended (0190): the chart history ring + its reactive handle.
+pub use chart::{TimeSeries, TimeSeriesState};
+// Appended (wave 3, media-av/0620): live level rendering.
+pub use audio_scope::AudioScope;
+pub use meter::Meter;
+// Appended (wave 3, reader enablers 0146/0148): outline entries with
+// typeset rows + search matches for the markdown reader surface.
+pub use markdown::{MdSearchMatch, OutlineEntry};
 
 /// Shared callback-slot shape for interactive widgets: the builder's
 /// `Option<Box<dyn FnMut(..)>>` moved behind `Rc<RefCell<..>>` so
@@ -124,15 +136,20 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 26] = [
+    const SOURCES: [(&str, &str); 34] = [
         ("mod.rs", include_str!("mod.rs")),
+        ("audio_scope.rs", include_str!("audio_scope.rs")),
+        ("meter.rs", include_str!("meter.rs")),
         ("badge.rs", include_str!("badge.rs")),
         ("block.rs", include_str!("block.rs")),
         ("button.rs", include_str!("button.rs")),
         ("chart.rs", include_str!("chart.rs")),
+        ("chart_time.rs", include_str!("chart_time.rs")),
         ("checkbox.rs", include_str!("checkbox.rs")),
         ("code.rs", include_str!("code.rs")),
         ("feed.rs", include_str!("feed.rs")),
+        ("feed_item.rs", include_str!("feed_item.rs")),
+        ("feed_sync.rs", include_str!("feed_sync.rs")),
         ("feed_typeset.rs", include_str!("feed_typeset.rs")),
         ("grid.rs", include_str!("grid.rs")),
         ("image.rs", include_str!("image.rs")),
@@ -140,6 +157,11 @@ mod lint_tests {
         ("list.rs", include_str!("list.rs")),
         ("logo.rs", include_str!("logo.rs")),
         ("markdown.rs", include_str!("markdown.rs")),
+        // Markdown's private shipped siblings (reader wave 3): widget
+        // source too, listed by hand like feed_typeset.rs.
+        ("markdown_doc.rs", include_str!("markdown_doc.rs")),
+        ("markdown_image.rs", include_str!("markdown_image.rs")),
+        ("markdown_search.rs", include_str!("markdown_search.rs")),
         ("progress.rs", include_str!("progress.rs")),
         ("radio.rs", include_str!("radio.rs")),
         ("richtext.rs", include_str!("richtext.rs")),

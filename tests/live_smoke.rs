@@ -376,6 +376,23 @@ fn live_images() {
     assert_clean("images", &r);
 }
 
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_voice_mock() {
+    // Latch a talk phase on (space), let the fake mic + transcription
+    // run, latch off, focus-out escape (capture must stop if somehow
+    // still on), then quit. The pty wire is legacy (no kitty flags
+    // negotiated by the harness), so space toggles — exactly the
+    // Degraded path the fidelity footer names.
+    let r = smoke(
+        "voice_mock",
+        Duration::from_millis(2000),
+        &[b" ", b" ", b"\x1b[O", b"q"],
+        Duration::from_secs(10),
+    );
+    assert_clean("voice_mock", &r);
+}
+
 /// CHILD half of the RT5-1 characterization (spawned by the probe below
 /// under a pty): opens /dev/tty, polls it with input already queued,
 /// prints the revents for both /dev/tty and stdin.
@@ -471,4 +488,55 @@ fn live_ctty_input_reaches_app() {
         r.exit_code, 0,
         "keystroke 'q' must reach the app over the ctty path"
     );
+}
+
+/// Appended (wave 3, READER): the markdown reader end-to-end — search
+/// (`/needle` + Enter jumps + `n` next), TOC panel jump, theme cycle,
+/// scroll, quit. The embedded sample exercises tables (0142), lazy
+/// in-flow images incl. an honest missing one (0144), anchors (0146)
+/// and the highlight overlay (0148) under a real pty.
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_reader() {
+    let r = smoke(
+        "reader",
+        Duration::from_millis(1500),
+        &[
+            b"/",       // open search
+            b"needle",  // type the query
+            b"\r",      // submit: jump to first match
+            b"n",       // next match (wraps)
+            b"t",       // TOC panel
+            b"\r",      // activate the selected heading (jump + close)
+            b"\x14",    // Ctrl+T: theme cycle
+            b"\x1b[B",  // scroll down
+            b"\x1b[6~", // PageDown
+            b"q",
+        ],
+        Duration::from_secs(10),
+    );
+    assert_clean("reader", &r);
+}
+
+/// Appended (wave 3, INTEGRATOR — feed doc-vocabulary adoption): the
+/// streaming transcript under a real pty. The scripted stream runs a
+/// couple of turns during warmup (doc-session typesetting live), then
+/// the composer path exits: `/quit` opens the command completion,
+/// Enter accepts the candidate, Enter submits. Exit 0 through the
+/// composer is the proof the whole surface (Feed + DocStreamSession +
+/// TextArea + Completion) survives a real wire.
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_transcript() {
+    let r = smoke(
+        "transcript",
+        Duration::from_millis(2500),
+        &[
+            b"/quit", // completion dropdown opens, filtered to /quit
+            b"\r",    // accept the candidate (inserts "/quit ")
+            b"\r",    // submit: the command quits the app
+        ],
+        Duration::from_secs(12),
+    );
+    assert_clean("transcript", &r);
 }

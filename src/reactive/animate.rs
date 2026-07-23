@@ -104,9 +104,11 @@ where
     out
 }
 
-/// Register a per-frame callback (false = done, drop it). Internal to
-/// the reactive layer; `animate` is the public consumer.
-fn register_frame_task(task: impl FnMut(Instant) -> bool + 'static) {
+/// Register a per-frame callback (false = done, drop it). Crate-internal:
+/// `animate` and the meter ballistics (widgets/meter, media-av 0620) are
+/// the consumers — a PUBLIC frame-task surface is games/0710's decision,
+/// deliberately not preempted here.
+pub(crate) fn register_frame_task(task: impl FnMut(Instant) -> bool + 'static) {
     with_rt(|rt| rt.frame_tasks.push(Box::new(task)));
 }
 

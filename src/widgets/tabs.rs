@@ -280,6 +280,29 @@ mod tests {
         );
     }
 
+    /// Disposal-safety law (backlog 0297): Tabs writes `active` BEFORE
+    /// `on_change`, so the callback may dispose the Tabs' scope
+    /// synchronously. Audited clean at filing; pinned.
+    #[test]
+    fn on_change_may_dispose_the_tabs_scope() {
+        let t = &default_theme().tokens;
+        let mut tree = crate::ui::UiTree::new(Size::new(20, 3));
+        let (root, ()) = crate::reactive::create_root(|cx| {
+            let modal_cx = cx.child();
+            let view = Tabs::new()
+                .tab("one", || text("p1"))
+                .tab("two", || text("p2"))
+                .on_change(move |_| modal_cx.dispose())
+                .element(modal_cx, t)
+                .build();
+            tree.mount(modal_cx, view);
+        });
+        tree.layout();
+        click(&mut tree, 7, 0); // "two" -> switch -> on_change -> dispose
+        assert_eq!(tree.instance_count(), 0, "subtree unmounted by dispose");
+        root.dispose();
+    }
+
     #[test]
     fn click_selects_a_tab_and_fires_on_change() {
         let t = &default_theme().tokens;

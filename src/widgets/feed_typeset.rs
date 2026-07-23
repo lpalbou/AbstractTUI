@@ -8,15 +8,15 @@
 
 use std::collections::HashMap;
 
-use crate::render::md::{self, Block, StreamSession};
+use crate::render::md::{self, Block, DocBlock, DocStreamSession};
 use crate::render::{RichLine, RichText};
 use crate::theme::TokenSet;
 
 use super::super::markdown::{BlockTypesetter, Row};
-use super::{FeedBlock, SharedDrawFn};
+use super::item::{ItemBlock, SharedDrawFn};
 
 pub(super) enum EntryKind {
-    Static(Vec<FeedBlock>),
+    Static(Vec<ItemBlock>),
     /// Boxed: the session dwarfs the static variant and entries live in
     /// a big Vec (clippy::large_enum_variant).
     Stream(Box<StreamEntry>),
@@ -26,7 +26,12 @@ pub(super) struct StreamEntry {
     /// Full raw source (kept so a theme rebind can re-parse; the
     /// session itself never revisits closed content).
     pub(super) raw: String,
-    pub(super) session: StreamSession,
+    /// DOC-vocabulary session (wave 3): streamed answers get tables,
+    /// in-flow images, task lists and strikethrough — same freeze
+    /// contract as the core session (closed blocks never re-parse; a
+    /// table seals only once its closing line arrives, so a streamed
+    /// table is the OPEN region until then).
+    pub(super) session: DocStreamSession,
     /// Closed blocks already typeset into `segments` (freeze line).
     pub(super) closed_seen: usize,
     pub(super) finished: bool,
@@ -76,6 +81,12 @@ pub(super) struct FeedInner {
     /// Diagnostics: blocks typeset since creation (cost pins — closed
     /// stream blocks must typeset exactly once).
     pub(super) blocks_typeset: u64,
+    /// ITEM mutations since creation (push/update/stream/clear — never
+    /// theme rebinds or geometry publishes). The sync bridge's
+    /// one-writer detector: a drain finding this moved past its own
+    /// record knows a foreign write happened and takes the rebuild
+    /// path (cycle-2 review C-1). One u64 compare per drain.
+    pub(super) mutations: u64,
 }
 
 impl FeedInner {
@@ -89,6 +100,7 @@ impl FeedInner {
             tokens: None,
             fixup_scheduled: false,
             blocks_typeset: 0,
+            mutations: 0,
         }
     }
 
@@ -137,7 +149,7 @@ impl FeedInner {
                     // Theme/width reset: re-parse the raw source once
                     // through a fresh session (closed content is only
                     // ever re-parsed HERE, never on append).
-                    let mut s = StreamSession::new(ts.styles().clone());
+                    let mut s = DocStreamSession::new(ts.styles().clone());
                     s.append(&stream.raw);
                     if stream.finished {
                         s.finish();
@@ -157,7 +169,7 @@ impl FeedInner {
                     };
                     for b in &closed[stream.closed_seen..] {
                         self.blocks_typeset += 1;
-                        ts.push_block(rows, b, width, true);
+                        ts.push_doc_block(rows, b, width, true);
                     }
                     stream.closed_seen = closed.len();
                 }
@@ -171,14 +183,14 @@ impl FeedInner {
                 for (bi, b) in open.iter().enumerate() {
                     self.blocks_typeset += 1;
                     // The blank separator between the frozen rows and
-                    // the first open block mirrors push_block's policy
-                    // (out non-empty), which cannot see across the
-                    // segment boundary: list items stack tight,
-                    // everything else gets one blank row.
-                    if bi == 0 && closed_rows > 0 && !matches!(b, Block::ListItem { .. }) {
+                    // the first open block mirrors push_doc_block's
+                    // policy (out non-empty), which cannot see across
+                    // the segment boundary: list/task items stack
+                    // tight, everything else gets one blank row.
+                    if bi == 0 && closed_rows > 0 && doc_block_separates(b) {
                         rows.push(Row::plain(RichLine::new()));
                     }
-                    ts.push_block(&mut rows, b, width, bi > 0);
+                    ts.push_doc_block(&mut rows, b, width, bi > 0);
                 }
                 entry.segments[1] = Segment::Rows(rows);
                 entry.recount();
@@ -194,11 +206,34 @@ impl FeedInner {
     }
 }
 
+/// Would `push_doc_block(out, b, _, separate=true)` open with a blank
+/// separator row when `out` is non-empty? Mirrored here for the ONE
+/// place the typesetter cannot see prior content — the stream's
+/// closed/open segment boundary. Kept in lockstep with the per-arm
+/// `blank(...)` calls in `push_block`/`push_doc_block`: list items and
+/// task items stack tight; future doc kinds typeset to nothing
+/// (`push_doc_block`'s wildcard), so no separator either. Pinned by
+/// `streamed_item_matches_static_item_pixels` across the doc
+/// vocabulary — drift shows up as a pixel diff at the boundary.
+fn doc_block_separates(b: &DocBlock) -> bool {
+    match b {
+        DocBlock::Core(core) => !matches!(core, Block::ListItem { .. }),
+        DocBlock::Table(_) | DocBlock::Image(_) => true,
+        DocBlock::Task(_) => false,
+        // Future doc blocks typeset to nothing (push_doc_block's
+        // wildcard) — no separator either. Unreachable in-crate today
+        // (non_exhaustive binds downstream only): same precedent as
+        // push_doc_block's own wildcard arm.
+        #[allow(unreachable_patterns)]
+        _ => false,
+    }
+}
+
 /// Typeset a static block list into segments (rows runs split around
 /// custom blocks). Separator policy matches the markdown document
 /// rhythm: one blank row before every non-list block after content.
 fn typeset_static(
-    blocks: &[FeedBlock],
+    blocks: &[ItemBlock],
     ts: &BlockTypesetter,
     tokens: &TokenSet,
     width: i32,
@@ -208,7 +243,7 @@ fn typeset_static(
     let mut any_content = false;
     for b in blocks {
         match b {
-            FeedBlock::Text(s) => {
+            ItemBlock::Text(s) => {
                 if any_content && current.is_empty() {
                     current.push(Row::plain(RichLine::new()));
                 }
@@ -218,16 +253,36 @@ fn typeset_static(
                 }
                 any_content = true;
             }
-            FeedBlock::Markdown(src) => {
+            ItemBlock::Rich(text) => {
+                // Backlog 0102: span-model lines through the SAME
+                // span-preserving wrap (`RichText::wrap`) and the same
+                // row walk (`draw_rows` -> `print_span_clipped`) as
+                // every other block — one renderer, one more face.
+                // Spans are stored VERBATIM (no ink stamping): fg-less
+                // spans inherit the item ink at draw time, so the
+                // theme patch rule survives typesetting. Separator
+                // policy mirrors `Text` (its sibling class).
                 if any_content && current.is_empty() {
                     current.push(Row::plain(RichLine::new()));
                 }
-                for block in md::parse(src, ts.styles()) {
-                    ts.push_block(&mut current, &block, width, true);
+                for line in text.wrap(width.max(4)).lines {
+                    current.push(Row::plain(line));
                 }
                 any_content = true;
             }
-            FeedBlock::Code { lang, source } => {
+            ItemBlock::Markdown(src) => {
+                if any_content && current.is_empty() {
+                    current.push(Row::plain(RichLine::new()));
+                }
+                // DOC vocabulary (wave 3): tables, in-flow images (lazy
+                // mosaic), task lists — one recipe with MarkdownView
+                // (`layout_doc` walks the same parse + typeset pair).
+                for block in md::parse_doc(src, ts.styles()) {
+                    ts.push_doc_block(&mut current, &block, width, true);
+                }
+                any_content = true;
+            }
+            ItemBlock::Code { lang, source } => {
                 if any_content && current.is_empty() {
                     current.push(Row::plain(RichLine::new()));
                 }
@@ -238,7 +293,7 @@ fn typeset_static(
                 ts.push_block(&mut current, &block, width, true);
                 any_content = true;
             }
-            FeedBlock::Custom(c) => {
+            ItemBlock::Custom(c) => {
                 if !current.is_empty() {
                     segments.push(Segment::Rows(std::mem::take(&mut current)));
                 }

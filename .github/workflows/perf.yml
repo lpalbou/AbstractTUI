@@ -1,0 +1,103 @@
+# Scheduled deep gates (backlog 0180, want #2): the release-mode perf
+# budgets, the byte-emission ratchets, the big fuzz campaigns and the
+# 10k-frame soak — the suites that are #[ignore]d in the tree and
+# deliberately NOT run per-PR (ci.yml's documented omission).
+#
+# LOAD SENSITIVITY (reviews/study2/quality-perf.md): the TIMING budgets
+# carry 30-70 % headroom over quiet-host medians, but they are
+# load-sensitive by nature — a busy runner can push a healthy suite
+# over budget (the RT6-4 precedent: a "regression" that was load
+# average 75). Policy here: hosted runners are the quiet-runner class
+# this job wants, and each TIMING suite retries ONCE on failure to
+# absorb scheduler noise, then fails honestly. Fuzz and soak are
+# deterministic — they never retry (a failure there is a real bug and
+# would only repeat). Byte ratchets inside perf_app_surfaces are
+# load-INDEPENDENT facts; a ratchet breach fails even on the retry.
+#
+# Failures open visibly (a red scheduled run), never block PRs.
+# The printed measurements upload as a run artifact so drift is
+# eyeballable across weeks without digging through logs.
+
+name: perf
+
+on:
+  schedule:
+    # Weekly, Monday 03:17 UTC (off the :00 rush for quieter hosts).
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RUST_BACKTRACE: "1"
+
+jobs:
+  perf:
+    name: perf + fuzz + soak (release, serial)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        # EXPLICIT bash = `-o pipefail` (the implicit default shell is
+        # `bash -e {0}` WITHOUT pipefail — `cargo test | tee` would
+        # otherwise report tee's exit code and mask every failure).
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Prebuild (release tests + both example profiles)
+        # Compile OUTSIDE the measured runs: the perf suites measure
+        # within-process, but the startup test spawns example binaries
+        # and builds both profiles in-test — warm them here so no
+        # measurement window pays a cold cargo build.
+        run: |
+          cargo test --release --no-run
+          cargo build --examples
+          cargo build --examples --release
+      - name: Perf suites (timing budgets + byte ratchets, retry-once)
+        run: |
+          out=perf-report.txt
+          {
+            echo "== abstracttui scheduled perf run =="
+            date -u +"%Y-%m-%dT%H:%M:%SZ"
+            uname -a
+            nproc
+            uptime || true
+            echo
+          } | tee "$out"
+          # One retry for the LOAD-SENSITIVE timing suites only
+          # (budgets have 30-70 % quiet-host headroom; a single retry
+          # absorbs scheduler noise without hiding a real regression —
+          # two consecutive breaches fail the run honestly).
+          run_timing_suite() {
+            local name="$1"; shift
+            echo "--- $name (attempt 1) ---" | tee -a "$out"
+            if "$@" 2>&1 | tee -a "$out"; then
+              return 0
+            fi
+            echo "::warning title=$name::first attempt failed — retrying once (load-noise absorption; see quality-perf.md)"
+            echo "--- $name (attempt 2, after 30s settle) ---" | tee -a "$out"
+            sleep 30
+            "$@" 2>&1 | tee -a "$out"
+          }
+          run_timing_suite "perf_budgets" \
+            cargo test --test perf_budgets --release -- --ignored --test-threads=1 --nocapture
+          run_timing_suite "perf_app_surfaces" \
+            cargo test --test perf_app_surfaces --release -- --ignored --test-threads=1 --nocapture
+      - name: Fuzz campaigns (deterministic, no retry)
+        run: |
+          echo "--- fuzz_big ---" | tee -a perf-report.txt
+          cargo test --test fuzz_big --release -- --ignored --test-threads=1 --nocapture 2>&1 | tee -a perf-report.txt
+      - name: Soak (10k frames, no retry)
+        run: |
+          echo "--- soak ---" | tee -a perf-report.txt
+          cargo test --test soak --release -- --ignored --test-threads=1 --nocapture 2>&1 | tee -a perf-report.txt
+      - name: Upload measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report-${{ github.run_id }}
+          path: perf-report.txt
+          retention-days: 90

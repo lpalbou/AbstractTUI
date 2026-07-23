@@ -34,7 +34,7 @@ use abstracttui::prelude::*;
 use abstracttui::reactive::after;
 use abstracttui::theme::themes;
 use abstracttui::ui::Canvas;
-use abstracttui::widgets::{ColWidth, Column, LineChart, Sparkline, TitleAlign};
+use abstracttui::widgets::{ColWidth, Column, LineChart, Sparkline, TimeSeriesState, TitleAlign};
 
 /// Data cadence: four ticks per second.
 const TICK: Duration = Duration::from_millis(250);
@@ -94,12 +94,36 @@ fn main() -> abstracttui::base::Result<()> {
         let viewport = use_viewport(cx);
         let help: Rc<RefCell<Option<Modal>>> = Rc::new(RefCell::new(None));
 
+        // Traffic history rides the engine's ring (backlog 0190): the
+        // hand-rolled WINDOW walk is gone — the tick pushes one sample
+        // and `TimeSeriesState` owns retention, gap padding and the
+        // axis span. Seeded with the deterministic back-history so the
+        // first frame shows a full window (same still the old walk
+        // produced); timestamps derive from the tick count, never wall
+        // clocks, so the demo stays capture-friendly.
+        let rx_hist = TimeSeriesState::new(cx, TICK, TICK * WINDOW as u32);
+        let tx_hist = TimeSeriesState::new(cx, TICK, TICK * WINDOW as u32);
+        for i in 0..WINDOW {
+            let t = TICK * i as u32;
+            rx_hist.push(t, rx_at((WINDOW - 1) as u64, i));
+            tx_hist.push(t, tx_at((WINDOW - 1) as u64, i));
+        }
+
         // Recurring timers via `reactive::interval` (cancellation rides
         // scope disposal; missed ticks coalesce instead of replaying
         // after a suspend). The full live-data pattern — background
         // producers feeding bounded ingestion into a Feed — lives in
         // `examples/feed.rs` and `docs/live-data.md`.
-        interval(cx, TICK, move || tick.update(|t| *t += 1));
+        {
+            let (rx_hist, tx_hist) = (rx_hist.clone(), tx_hist.clone());
+            interval(cx, TICK, move || {
+                tick.update(|t| *t += 1);
+                let now = WINDOW as u64 - 1 + tick.get_untracked();
+                let at = TICK * now as u32;
+                rx_hist.push(at, rx_at(now, WINDOW - 1));
+                tx_hist.push(at, tx_at(now, WINDOW - 1));
+            });
+        }
         interval(cx, Duration::from_secs(1), move || clock.set(clock_text()));
 
         // Startup notices (REACT's reactive bridge): every notice —
@@ -212,6 +236,7 @@ fn main() -> abstracttui::base::Result<()> {
                         .child(body(
                             &t,
                             tick,
+                            (rx_hist.clone(), tx_hist.clone()),
                             nav,
                             session,
                             sort,
@@ -305,6 +330,7 @@ fn styled_text_right(s: String) -> View {
 fn body(
     t: &TokenSet,
     tick: Signal<u64>,
+    traffic: (TimeSeriesState, TimeSeriesState),
     nav: Signal<usize>,
     session: Signal<usize>,
     sort: Signal<(usize, bool)>,
@@ -322,7 +348,7 @@ fn body(
                 .child(
                     Element::new()
                         .style(LayoutStyle::row().grow(3.0).gap(1))
-                        .child(traffic_panel(t, tick))
+                        .child(traffic_panel(t, traffic.0, traffic.1))
                         .child(load_panel(t, tick))
                         .child(mark_panel(t, tick, show_mark, mark_model))
                         .build(),
@@ -369,7 +395,7 @@ fn sidebar(t: &TokenSet, nav: Signal<usize>, nav_focus: Signal<bool>) -> View {
     })
 }
 
-fn traffic_panel(t: &TokenSet, tick: Signal<u64>) -> View {
+fn traffic_panel(t: &TokenSet, rx_hist: TimeSeriesState, tx_hist: TimeSeriesState) -> View {
     let tokens = *t;
     Block::new()
         .title("traffic — rx/tx (MB/s)")
@@ -378,15 +404,16 @@ fn traffic_panel(t: &TokenSet, tick: Signal<u64>) -> View {
         .fill(tokens.surface)
         .layout(LayoutStyle::column().grow(2.0))
         .child(dyn_view(LayoutStyle::default().grow(1.0), move || {
-            let now = tick.get();
-            let rx: Vec<f32> = (0..WINDOW).map(|i| rx_at(now, i)).collect();
-            let tx: Vec<f32> = (0..WINDOW).map(|i| tx_at(now, i)).collect();
+            // Tracked ring reads: this panel re-renders per push; the
+            // relative time axis labels the span the ring covers.
+            let span = rx_hist.span();
             Element::new()
                 .style(LayoutStyle::column().grow(1.0))
                 .child(legend(&tokens))
                 .child(
-                    LineChart::new(vec![rx, tx])
+                    LineChart::new(vec![rx_hist.samples(), tx_hist.samples()])
                         .range(0.0, 100.0)
+                        .time_axis(span)
                         .layout(LayoutStyle::default().grow(1.0))
                         .element(&tokens)
                         .build(),

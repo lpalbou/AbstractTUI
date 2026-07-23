@@ -46,16 +46,23 @@ through ordinary reactivity.*
   bars, spinners, modals, toasts, tooltips — arranged by a flexbox-style solver
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
-- **Transcripts and streams** — `Feed` renders append-only conversations and
-  logs with keyed rich blocks (markdown, code with syntax and diff tinting,
-  custom draw) and streaming markdown items that re-typeset only the open
-  block per token;
-  `Scroll::follow_tail` pins to the bottom until the user scrolls and re-pins
-  at the edge.
+- **Transcripts and documents** — `Feed` renders append-only conversations
+  and logs with keyed rich blocks (markdown, code with syntax and diff
+  tinting, multi-ink rich lines, custom draw); streaming markdown items
+  re-typeset only the open block per token and speak the full doc
+  vocabulary — GFM tables (a streamed table renders as a table live), task
+  lists, strikethrough, and lazy in-flow images. `MarkdownView` adds the
+  reading surface: heading outline with anchor jumps, and find-in-document
+  with highlighted matches. `Scroll::follow_tail` pins to the bottom until
+  the user scrolls and re-pins at the edge.
 - **Live data** — feed the UI from background threads through
   `channel_source` / `latest_source` / `bounded_source` (drop or coalesce
   policies with honest drop counters), a cancellable `interval` timer, and
-  waker deduplication; an idle app still costs zero.
+  waker deduplication; `TimeSeries` history rings put relative time axes
+  under the charts (a sampling pause draws as a hole, never a compressed
+  x-axis), and `reactive::connection` owns the reconnect lifecycle with
+  jittered exponential backoff. An idle app still costs zero — offline
+  included.
 - **Selection + clipboard** — drag to select rendered text (wide-glyph safe,
   pane-clamped), copy via OSC 52; or suspend mouse capture for native
   terminal selection.
@@ -67,6 +74,12 @@ through ordinary reactivity.*
   kitty keyboard protocol and xterm modifyOtherKeys decoded automatically when
   present, bracketed paste hardened against multi-megabyte and hostile input,
   focus events, key chords with modifiers.
+- **Voice and AV plumbing** — key press/release state with honest fidelity
+  (true hold detection where the terminal reports releases; never a
+  fabricated "held" on legacy wires), a `PushToTalk` gesture built on it
+  (hold-to-talk, labeled latch fallback, capture stops on focus loss), and
+  `Meter` / `AudioScope` widgets that render live levels with real
+  ballistics and go fully idle when the signal does.
 - **Images** — PNG and baseline JPEG decoding built in, drawn through the best
   channel your terminal offers: kitty graphics, iTerm2, sixel, or unicode mosaic
   (half-block / quadrant / sextant / braille). Capability detection is automatic
@@ -129,7 +142,7 @@ cd abstracttui
 cargo run --example dashboard
 ```
 
-Fourteen runnable examples live in [examples/](examples/README.md), and every one
+Sixteen runnable examples live in [examples/](examples/README.md), and every one
 exits cleanly with a notice when no interactive terminal is present, so they are
 safe to run anywhere. Start with these five:
 
@@ -172,8 +185,9 @@ Measured (release build, M-class laptop): a full 200×60 diff+present costs
 ~0.5 ms, a keystroke reaches the painted frame in ~50 µs through the real event
 loop, and an idle app costs zero — zero bytes written, zero heap allocations,
 zero wakeups. The allocation budgets gate every CI run; the release-mode
-timing budgets are in-tree suites run explicitly (see CONTRIBUTING) —
-budgets, not aspirations, with the honest split stated.
+timing budgets and byte-emission ratchets gate on a weekly scheduled job
+(`perf.yml`, also runnable by hand — see CONTRIBUTING) — budgets, not
+aspirations, with the honest split stated.
 
 ## Documentation
 

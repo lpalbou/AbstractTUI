@@ -11,17 +11,22 @@
 > channel the terminal proves (kitty graphics, iTerm2, sixel, or unicode mosaic),
 > software-rasterized 3D from GLB files (textures, animation, skinning — no GPU),
 > cell-shader animation with tweens, easings, and timelines, streaming transcripts
-> (`Feed` + follow-tail scroll + a multiline composer with completion), a live-data lane
-> for background producers (bounded ingestion, honest drop counters), text selection with
-> OSC 52 clipboard copy, an optional boot splash, and a headless testing harness that
-> drives the production pipeline without a pty. One crate,
+> (`Feed` + follow-tail scroll + a multiline composer with completion) speaking the full
+> markdown doc vocabulary (GFM tables that render live while streaming, task lists, lazy
+> in-flow images) with a document reader surface (heading outline and anchor jumps,
+> find-in-document highlights), a live-data lane for background producers (bounded
+> ingestion, honest drop counters, `TimeSeries` history rings with relative time axes on
+> the charts) plus an engine-owned connection lifecycle with jittered-backoff reconnect,
+> key press/release state with honest fidelity (push-to-talk, level meters, and a
+> waveform scope for voice surfaces), text selection with OSC 52 clipboard copy, an
+> optional boot splash, and a headless testing harness that drives the production
+> pipeline without a pty. One crate,
 > five small dependencies (unicode-width, unicode-segmentation, miniz_oxide, plus libc on
 > unix / windows-sys on Windows). MIT licensed.
 
 This file aggregates the full AbstractTUI documentation verbatim: the README followed by
 every guide under docs/, each introduced by a `===== FILE: <path> =====` separator, with
 package facts at the end.
-
 
 ===== FILE: README.md =====
 
@@ -73,16 +78,23 @@ through ordinary reactivity.*
   bars, spinners, modals, toasts, tooltips — arranged by a flexbox-style solver
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
-- **Transcripts and streams** — `Feed` renders append-only conversations and
-  logs with keyed rich blocks (markdown, code with syntax and diff tinting,
-  custom draw) and streaming markdown items that re-typeset only the open
-  block per token;
-  `Scroll::follow_tail` pins to the bottom until the user scrolls and re-pins
-  at the edge.
+- **Transcripts and documents** — `Feed` renders append-only conversations
+  and logs with keyed rich blocks (markdown, code with syntax and diff
+  tinting, multi-ink rich lines, custom draw); streaming markdown items
+  re-typeset only the open block per token and speak the full doc
+  vocabulary — GFM tables (a streamed table renders as a table live), task
+  lists, strikethrough, and lazy in-flow images. `MarkdownView` adds the
+  reading surface: heading outline with anchor jumps, and find-in-document
+  with highlighted matches. `Scroll::follow_tail` pins to the bottom until
+  the user scrolls and re-pins at the edge.
 - **Live data** — feed the UI from background threads through
   `channel_source` / `latest_source` / `bounded_source` (drop or coalesce
   policies with honest drop counters), a cancellable `interval` timer, and
-  waker deduplication; an idle app still costs zero.
+  waker deduplication; `TimeSeries` history rings put relative time axes
+  under the charts (a sampling pause draws as a hole, never a compressed
+  x-axis), and `reactive::connection` owns the reconnect lifecycle with
+  jittered exponential backoff. An idle app still costs zero — offline
+  included.
 - **Selection + clipboard** — drag to select rendered text (wide-glyph safe,
   pane-clamped), copy via OSC 52; or suspend mouse capture for native
   terminal selection.
@@ -94,6 +106,12 @@ through ordinary reactivity.*
   kitty keyboard protocol and xterm modifyOtherKeys decoded automatically when
   present, bracketed paste hardened against multi-megabyte and hostile input,
   focus events, key chords with modifiers.
+- **Voice and AV plumbing** — key press/release state with honest fidelity
+  (true hold detection where the terminal reports releases; never a
+  fabricated "held" on legacy wires), a `PushToTalk` gesture built on it
+  (hold-to-talk, labeled latch fallback, capture stops on focus loss), and
+  `Meter` / `AudioScope` widgets that render live levels with real
+  ballistics and go fully idle when the signal does.
 - **Images** — PNG and baseline JPEG decoding built in, drawn through the best
   channel your terminal offers: kitty graphics, iTerm2, sixel, or unicode mosaic
   (half-block / quadrant / sextant / braille). Capability detection is automatic
@@ -156,7 +174,7 @@ cd abstracttui
 cargo run --example dashboard
 ```
 
-Fourteen runnable examples live in [examples/](examples/README.md), and every one
+Sixteen runnable examples live in [examples/](examples/README.md), and every one
 exits cleanly with a notice when no interactive terminal is present, so they are
 safe to run anywhere. Start with these five:
 
@@ -199,8 +217,9 @@ Measured (release build, M-class laptop): a full 200×60 diff+present costs
 ~0.5 ms, a keystroke reaches the painted frame in ~50 µs through the real event
 loop, and an idle app costs zero — zero bytes written, zero heap allocations,
 zero wakeups. The allocation budgets gate every CI run; the release-mode
-timing budgets are in-tree suites run explicitly (see CONTRIBUTING) —
-budgets, not aspirations, with the honest split stated.
+timing budgets and byte-emission ratchets gate on a weekly scheduled job
+(`perf.yml`, also runnable by hand — see CONTRIBUTING) — budgets, not
+aspirations, with the honest split stated.
 
 ## Documentation
 
@@ -324,10 +343,12 @@ The same one-import surface covers the rest of a form or chat screen:
 `Select`/`Combobox`/`MultiSelect` for choices (a one-row trigger opening an
 anchored popup), `TextArea` + `TextAreaState` for a multiline composer that
 grows with its content, and `Feed` (`abstracttui::widgets`) with
-`Scroll::follow_tail` for streaming transcripts. The
+`Scroll::follow_tail` for streaming transcripts — markdown items speak the
+full doc vocabulary, GFM tables and task lists included. The
 [API guide](api.md#widgets--the-built-in-library) walks each one;
 `cargo run --example transcript` and `--example components` show them
-composed.
+composed, and `--example reader` is the document side: tables, in-flow
+images, a TOC panel, and find-in-document.
 
 ## Layout basics
 
@@ -520,8 +541,11 @@ that way.
   compositor, and the render pipeline.
 - [API guide](api.md) — the public surface, module by module.
 - [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
-- [Examples catalog](../examples/README.md) — fourteen runnable programs, from
+- [Examples catalog](../examples/README.md) — sixteen runnable programs, from
   the 53-line `hello` to the full `dashboard`, with the keys each answers to.
+  For content-heavy apps start with `transcript` (streaming markdown chat),
+  `reader` (tables, images, TOC, search), and `voice_mock` (push-to-talk and
+  live meters, no audio required).
 
 
 ===== FILE: docs/architecture.md =====
@@ -629,7 +653,11 @@ Background threads reach this world through the live-data lane
 post values, a waker coalesces any burst into one wakeup, and the bound
 signal is written on the UI thread at the next frame's update phase — the
 single-writer rule is preserved by construction. Overflow policies and drop
-counters keep back-pressure honest; see [Live data](live-data.md).
+counters keep back-pressure honest. Reconnect rides the same lanes:
+`reactive::connection` owns the connection state machine and its jittered
+retry schedule (`Backoff`), with worker reports crossing on the posted-jobs
+lane and retries armed on the timer heap — offline costs zero wakeups until
+the retry is due. See [Live data](live-data.md).
 
 ## Pillar 2: the compositor
 
@@ -714,7 +742,12 @@ sealed when LAYOUT begins. Signal writes from other threads arrive only as
 posted jobs, and posted jobs run only in the USER phase — a write landing
 mid-frame wakes the loop and is drained by the next frame. Late damage is
 never lost and never double-painted, by construction rather than by
-discipline.
+discipline. One engine-owned addition happens inside DRAW itself: an image
+pre-pass folds the rects vacated by moved or removed image placements into
+the frame's damage (and, where a byte protocol left pixels the cell model
+cannot see, poisons the previous-frame model so the diff re-emits them) —
+deterministic driver bookkeeping, not user code, so the seal against
+re-entrant damage stands.
 
 The cursor follows the same economy. The default is the terminal's native
 cursor, parked by the presenter, so a focused-but-idle text field costs
@@ -742,7 +775,10 @@ and the guarantee holds through the whole app layer with the modern
 mounts in play — a streaming `Feed`, an armed `interval`, a parked
 `Select` popup, a parked protocol image — where sixteen idle turns
 through the real driver allocate nothing and write nothing
-(`alloc_budget::idle_turns_with_feed_interval_parked_popup_and_parked_image_allocate_nothing`).
+(`alloc_budget::idle_turns_with_feed_interval_parked_popup_and_parked_image_allocate_nothing`),
+and again with the AV surfaces mounted — a settled `Meter`, a quiet
+`AudioScope`, armed key state, and a bound push-to-talk
+(`alloc_budget::idle_turns_with_parked_meter_scope_and_key_state_allocate_nothing`).
 
 Idle really means idle: the event loop blocks in a terminal read with zero
 wakeups until input, a resize, a cross-thread wake, or a timer deadline
@@ -917,6 +953,41 @@ module: `animate(cx, source, easing, duration)` returns a signal following
 `after(delay, f)` runs a one-shot closure on the UI thread, costing zero
 wakeups until due.
 
+## reactive::connection — lifecycle + jittered reconnect
+
+`connection(cx, backoff, dial)` owns what every networked app
+hand-rolls around its transport: the state vocabulary, the retry
+schedule, the armed retry timer, and cancellation. The engine does NO
+network I/O — `dial` runs on the UI thread once per attempt, spawns
+the app's transport work (`spawn_worker` plus the HTTP client, socket,
+or subprocess of your choice — the transport stays the app's call),
+and reports through the `Clone + Send` `ConnectionEvents` reporter:
+`connected()`, `degraded(reason)`, `failed(reason)`, `closed()`
+(clean, terminal). Reports apply on the UI thread in the next phase U;
+reports from a SUPERSEDED attempt (a zombie worker racing the retry
+that replaced it) or after close are inert and counted
+(`stale_reports`, the `dead_sends` convention). Workers poll
+`is_closed()`/`is_current()` as their stop conditions.
+
+`conn.state()` is a `Signal<ConnState>` the UI renders like any other:
+`Connecting`, `Connected`, `Degraded(reason)`, `Reconnecting {
+attempt, next_in }` (render "retry #2 in 1.4s" from the fields),
+`Closed` — a closed vocabulary by design (transport semantics must not
+grow into it). `conn.close()` is the UI-side terminal close;
+`conn.retry_now()` skips a pending wait; scope disposal closes, cancels
+the armed timer, and drops the dial fn.
+
+`Backoff` is the pure schedule: FULL jitter — uniform in `[0,
+min(cap, base × 2^attempt)]` — with defaults base 500 ms, ×2, cap
+30 s, `reset()` on success (the machine calls it on connect), and
+`seeded(n)` for deterministic tests. Jitter is not optional
+politeness: un-jittered fleets retry in lockstep after a server
+restart (the thundering herd). While reconnecting the loop stays
+parked — the one armed one-shot costs zero wakeups until due, and a
+`Closed` connection costs nothing forever (test-pinned). See
+[live-data.md § "Connection lifecycle"](live-data.md#connection-lifecycle)
+for the state diagram and a worker-thread example.
+
 ## ui — elements, views, composition
 
 `Element` is the view-tree builder: layout style, children, focusability,
@@ -999,7 +1070,7 @@ widgets take just `&TokenSet`, no `Scope`. The catalog:
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
 - **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
 - **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`. Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected).
-- **Feed** — virtualized, append-only, keyed rich items (markdown, plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open markdown block; 10k items draw one screenful.
+- **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
 - **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override), and `follow_tail` binds the pinned-to-bottom idiom.
@@ -1009,11 +1080,14 @@ widgets take just `&TokenSet`, no `Scope`. The catalog:
 - **Spinner** — indeterminate activity glyph, pure over a caller-owned frame index.
 - **Badge** — small tinted label for status chips, counts, tags (`Tone`).
 - **Separator** — horizontal or vertical rule, optionally labeled.
-- **Charts** — `Sparkline`, `LineChart`, `BarChart` on sub-cell grids.
+- **Charts** — `Sparkline`, `LineChart`, `BarChart` on sub-cell grids, with
+  optional relative time axes fed from a `TimeSeries` history ring (see the
+  history-rings section below).
 - **Grid** — container widget over `Display::Grid`; spans ride each child's own style.
 - **Image** — bitmap display through the mosaic pipeline (`ImageFit`; `Bitmap` re-exported beside it).
 - **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals.
-- **MarkdownView / RichTextView / CodeView** — typeset markdown, wrapped styled spans, read-only highlighted code.
+- **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code.
+- **Meter / AudioScope** — live level rendering: dB meter with real ballistics (instant attack, timed decay, peak hold) and a rolling braille waveform — see the live-levels section below.
 - **Logo** — the AbstractTUI wordmark for headers, about screens, empty states.
 
 ### Code and diffs — lexers and their theme mappings
@@ -1093,9 +1167,15 @@ inside a `dyn_view_scoped` over your reveal signal.
 
 An app owns a cloneable `FeedState` handle and mutates it; the `Feed`
 widget windows over it. Items are keyed identities (`push` with a known
-key replaces); a streaming item rides `md::StreamSession`, so a token
-append costs one open block, never the document. `total_rows()` is the
-reactive content extent, and `clear()` rebuilds bounded windows:
+key replaces); a streaming item rides `md::DocStreamSession`, so a
+token append costs one open region, never the document. Markdown items
+speak the full DOC vocabulary: an agent answer streaming a GFM table
+renders as a TABLE live (the whole in-flight table is the open region
+until its first non-pipe line seals it), task lists wear checkboxes,
+`~~strikethrough~~` strikes, and `![alt](path)` images typeset from a
+header-only probe (decode happens lazily when an image row first
+draws — items measure and window without decoding). `total_rows()` is
+the reactive content extent, and `clear()` rebuilds bounded windows:
 
 ```rust
 use abstracttui::prelude::*;
@@ -1114,6 +1194,157 @@ fn transcript(cx: Scope) -> View {
         .view(cx)
 }
 ```
+
+### Feed — rich lines (multi-ink without a custom block)
+
+`FeedItem::rich` / `rich_lines` / `.rich_block` carry the engine's
+span model (`render::RichText`) into feed items: a severity-tinted log
+line or a chat header is spans, not a `FeedBlock::Custom` draw closure
+with hand-rolled wrapping. Rich blocks typeset through the same
+span-preserving wrap and row walk as every other block (cell-exact
+parity with `RichTextView`, test-pinned), so wrapping, windowing and
+damage behave exactly like `Text`. Span styles are patches: `fg: None`
+spans inherit the item's theme ink; explicit inks are resolved `Rgba`
+and render verbatim (rebuild items to retint on theme switch). Rich
+items are replace-on-update; token streaming stays `push_stream`:
+
+```rust
+use abstracttui::render::rich::{RichLine, Span};
+use abstracttui::render::Style;
+use abstracttui::widgets::FeedItem;
+
+fn log_line(t: &abstracttui::theme::TokenSet, ts: &str, body: &str) -> FeedItem {
+    FeedItem::rich_lines(vec![RichLine::from_spans(vec![
+        Span::new("ERROR ", Style::new().fg(t.error)),
+        Span::new(format!("{ts} "), Style::new().fg(t.text_muted)),
+        Span::plain(body), // fg-less: wears the item ink per theme
+    ])])
+}
+```
+
+(The public `FeedBlock` enum stays exhaustive through 0.2.x, so the
+rich kind rides `FeedItem` constructors; `FeedBlock::Rich` proper is
+budgeted for 0.3.)
+
+### Feed — syncing from a `Signal<Vec<T>>`
+
+When the transcript's source of truth is a FOLD (a vector recomputed
+by events) rather than an append-only stream, `FeedState::sync` owns
+the diff: keys are identities, fingerprints detect change, and the
+optional visibility closure is the one truth for filtering. Appends at
+the tail take the O(1) push path, changed fingerprints update in
+place, and anything violating push order — shrink, reorder, mid-list
+insert or visibility flip — takes the rebuild path inside the engine.
+A rebuild re-renders every visible item, so a source that reorders on
+every drain rebuilds on every drain — for feeds ordered by mutable
+rank, sync a stable order and sort at render time, or accept
+O(visible) per change. Float fingerprints must compare by bits
+(`f32::to_bits`) — NaN never equals itself and re-renders the item
+every drain.
+A synced feed has ONE writer (the bridge); foreign writes are not
+silent, though: the bridge detects them (a mutation counter) and
+self-heals at the next drain with a full rebuild — stray items
+evicted, order restored to source order. Render/key closures run on
+change, never per frame:
+
+```rust
+use abstracttui::widgets::{FeedItem, FeedState, SyncSpec};
+
+struct Msg { id: String, rev: u64, hidden: bool, text: String }
+
+fn wire(cx: abstracttui::reactive::Scope, feed: &FeedState,
+        items: abstracttui::reactive::Signal<Vec<Msg>>) {
+    feed.sync(cx, items, SyncSpec::new(
+        |m: &Msg| m.id.clone(),           // identity
+        |m| m.rev,                         // cheap change fingerprint
+        |m| FeedItem::markdown(&m.text),   // pixels, built on change
+    ).visible(|m| !m.hidden));
+}
+```
+
+### Feed — selection by key
+
+`Feed::selected_key(sig)` binds a `Signal<Option<String>>`: the
+selected item's row band grounds in the theme's `selection_bg` while
+item inks stay (a transcript keeps its severity/syntax colors).
+Selection is app-driven state — the app writes the signal and can pair
+it with `FeedState::row_of(key)` (the item's first content row) to
+drive a wrapping `Scroll`'s offset to the selected item. Unknown keys
+highlight nothing.
+
+### Charts — history rings and time axes
+
+Monitors stop hand-rolling sample rings: `TimeSeriesState` (reactive)
+or `TimeSeries` (plain) take `push(t, value)` — `t` is a `Duration` on
+the app's clock, never a wall-clock read — quantize time into cadence
+slots, and retain a bounded window (drop-by-age `new(cadence, window)`
+or drop-by-count `with_slots`). Missed slots pad with `NAN`, so a
+sampling pause draws as a HOLE through the charts' existing gap
+contract instead of compressing the x-axis. `LineChart::time_axis(span)`
+embeds relative labels in the axis rule row — "now" anchored at the
+plot's right edge, nice ticks leftward, density adapting to width —
+and `Sparkline::time_axis(span)` adds an optional label row. Feed the
+span from the ring so warmup labels the REAL covered time:
+
+```rust
+use std::time::Duration;
+use abstracttui::prelude::*;
+use abstracttui::widgets::{LineChart, TimeSeriesState};
+
+const TICK: Duration = Duration::from_millis(250);
+
+fn traffic(cx: Scope, t: &TokenSet, sample: impl Fn() -> f32 + 'static) -> View {
+    let rx = TimeSeriesState::new(cx, TICK, TICK * 72); // 18s window
+    {
+        let rx = rx.clone();
+        let mut n = 0u32;
+        interval(cx, TICK, move || {
+            n += 1;
+            rx.push(TICK * n, sample());
+        });
+    }
+    let tokens = *t;
+    dyn_view(LayoutStyle::default().grow(1.0), move || {
+        LineChart::new(vec![rx.samples()]) // tracked: re-renders per push
+            .range(0.0, 100.0)
+            .time_axis(rx.span())
+            .element(&tokens)
+            .build()
+    })
+}
+```
+
+### Meter and AudioScope — live levels
+
+`Meter` renders level data with real ballistics: instant attack, timed
+decay (default 20 dB/s over the meter span, frame-clocked and
+frame-rate-independent — a stalled stream shows a falling bar, not a
+frozen one), and a peak-hold marker (~1.5 s, then it falls to the
+level). One channel or N bands, eighth-block sub-cell fill, zone colors
+from the `ok`/`warn`/`error` theme tokens:
+
+```rust,ignore
+let level = cx.signal(0.0f32);              // fed by the recorder lane
+Meter::new(level).db_floor(-60.0).view(cx); // horizontal dB channel
+Meter::bands(band_frames).bar(3, 1).view(cx); // vertical spectrum bars
+```
+
+**The idle law (pinned by tests):** a silent meter decays to its
+fixpoint and STOPS requesting frames — unchanged input over any number
+of turns costs zero frames and zero allocations. Only real motion bills
+the frame loop.
+
+`AudioScope` draws a rolling waveform from a `Signal<Vec<f32>>` window
+on the braille chart substrate. Pair it with `bounded_source` and
+`OverflowPolicy::DropOldest`: the source's retained window IS the
+scope's ring (with honest drop accounting riding along). The scope owns
+no clock — when the data stops, the last frame stays and nothing
+re-renders.
+
+`examples/voice_mock.rs` composes all of it — push-to-talk, meters,
+scope, a fake transcription feed — with no audio and no network (the
+capture gesture itself is `app::PushToTalk`, described with the app
+runtime below).
 
 ### Scroll follow-tail
 
@@ -1167,9 +1398,10 @@ owns the durable wire: the value signal, the caret byte, focus, the
 history store, programmatic edits, and `caret_cell()` — the caret's
 solved screen cell, which anchors completion dropdowns. The widget soft
 wraps at its width, grows with content inside `rows(min, max)` and then
-scrolls internally; Enter submits while Alt+Enter (and Shift+Enter where
-the kitty protocol reports it) inserts a newline — flip it with
-`SubmitPolicy::EnterInserts`. Up/Down navigate the buffer first and
+scrolls internally; Enter submits while Alt+Enter, Ctrl+J (the universal
+chord — `0x0a` IS Ctrl+J on the legacy wire, so it works on every
+terminal) and Shift+Enter where the kitty protocol reports it insert a
+newline — flip it with `SubmitPolicy::EnterInserts`. Up/Down navigate the buffer first and
 reach for history only at the edges; the in-progress draft survives a
 recall round trip. Pastes insert whole, newlines included — never a
 submit:
@@ -1294,6 +1526,57 @@ the overlay store; `widgets` sits below `app` in the layer map), but
 they are plain token-consuming components with the standard
 `.view(cx)` / `.element(cx, &tokens)` builds.
 
+**Programmatic open — `SelectHandle`.** Command-summoned pickers
+(`/theme`, `/model` typed into a composer) open a face without a
+trigger gesture: build a cloneable `SelectHandle`, attach it with
+`.handle(&h)` on any of the three faces, and call `h.open()` from a
+command handler or shortcut — it returns `true` when the popup is open
+after the call. The popup anchors at the trigger's LAST-PAINTED rect,
+so a face that has never rendered refuses (`false`) — open on the
+frame after mounting (the documented one-frame caveat). Disabled
+faces, empty option lists, and unmounted faces (the wire dies with the
+face's scope; dyn_view regenerations rewire automatically) also return
+`false`, never panic:
+
+```rust
+use abstracttui::prelude::*;
+
+fn command_picker(cx: Scope) -> (View, SelectHandle) {
+    let picker = SelectHandle::new();
+    let view = Combobox::new(vec![
+        SelectOption::new("nord"),
+        SelectOption::new("aurora"),
+    ])
+    .handle(&picker)
+    .placeholder("theme…")
+    .view(cx);
+    (view, picker) // `/theme` handler calls picker.open()
+}
+```
+
+## The widget disposal-safety law
+
+**Every widget completes its own bookkeeping — every write to its
+scope-owned signals — BEFORE user callbacks run, so a callback may
+dispose the widget's scope synchronously.** Closing a modal from the
+button that confirmed it, from the list row that picked, from the
+composer that submitted, is the NORMAL shape, not a hazard; no
+one-tick "retire" deferral is needed anywhere. `EventCtx` calls
+(`stop_propagation`, focus/capture requests) are dispatch-owned flags
+and exempt — they are safe on either side of a callback.
+
+Covered and pinned by a disposal test per site: `Button::on_click`
+(both mouse and keyboard arms), `Checkbox`/`RadioGroup`/`Tabs`
+`on_change`, `TextInput` and `TextArea` `on_change`/`on_submit`,
+`List::on_select`/`on_activate`, `Table::on_select`/
+`on_sort_requested`, and the select faces' commit `on_change` (the
+popup follows its owner's scope down — the anchor-unmount cascade).
+`Popup::on_dismiss` fires after the popup's own teardown for the same
+reason. One knowable consequence: bookkeeping uses the state as the
+widget left it — a callback that mutates the widget's state (a
+submit-and-clear composer) sees that mutation rendered by the NEXT
+event, not retroactively applied to the one that fired it.
+
 ## app — the runtime
 
 `App::simple` is the whole happy path: mount a component, enter the
@@ -1343,9 +1626,79 @@ Around the core loop the module provides:
   widgets section for the completion and select details).
 - **Hooks** — `use_theme(cx)` (the app-level theme signal), `use_viewport(cx)`
   (terminal size as a signal), `use_startup_notices(cx)` (labeled startup
-  degradations as a reactive list).
+  degradations as a reactive list), and `use_caps(cx)` — the driver's LIVE
+  `Capabilities` (env pass at enter, upgraded as active-probe replies fold
+  in). Read it in a `dyn_view` for capability-honest UI: key hints that say
+  "Shift+Enter newline" only where the kitty protocol is actually live,
+  graphics-channel labels that flip when the probe proves a better channel.
+  Read-only by contract (writing capabilities stays the driver's job);
+  `current_caps()` is the untracked snapshot for plumbing.
 - **KeymapHelp** — a ready-made `?` help modal listing the shortcuts
   reachable from the current focus plus every registered global action.
+
+## app::keys — key press/release state (held keys)
+
+Real-time surfaces (games' move-while-held, voice push-to-talk) need key
+STATE over time, not key events. `use_key_state(cx)` arms a driver-fed
+service that taps the input stream BEFORE the routing seam drops
+releases:
+
+```rust,ignore
+use abstracttui::prelude::*; // use_key_state, KeyFidelity
+
+let keys = use_key_state(cx);
+// per frame / per tick:
+let diagonal = keys.is_down(Key::Up) && keys.is_down(Key::Right);
+// per turn edges (sealed by the driver's phase U):
+let fired = keys.pressed_chord(KeyChord::plain(Key::Char(' ')));
+```
+
+**Fidelity is the contract.** `keys.fidelity()` answers what this
+session can honestly report:
+
+- `KeyFidelity::Full` — kitty release events are live (the terminal
+  speaks the protocol AND the event-type flags are pushed; on
+  probe-proven terminals this flips on within the first frames when the
+  driver pushes the flags mid-session). `is_down`/`keys_down`/`released`
+  carry true key state.
+- `KeyFidelity::Degraded` — a legacy wire only ever reports presses.
+  Press edges (`pressed`, `pressed_chord`) stay honest; the down-set
+  stays EMPTY and releases never fire. There is deliberately no
+  repeat-timeout approximation: auto-repeat cadence cannot distinguish
+  "held" from "tapping fast", and a dropped repeat would fabricate a
+  release mid-hold. Apps fall back to latch/tap semantics and label the
+  gesture truthfully — `hold_gesture_label(fidelity, chord)` gives the
+  wording ("hold Space" vs "press Space to start/stop").
+
+Hygiene: the terminal losing focus clears the down-set and synthesizes
+release edges for held keys (`keys.focus_cleared()` tells them apart
+from wire releases) — a key released while unfocused never sticks down.
+Reads are tracked signals: `dyn_view`s and effects re-run on edges.
+Zero cost until the first `use_key_state` call arms the service, and
+zero per-turn cost while no keys move.
+
+## app::PushToTalk — the capture gesture
+
+The voice capture contract over the key-state service (one binding,
+three decisions owned):
+
+```rust,ignore
+let ptt = PushToTalk::bind(cx, KeyChord::plain(Key::Char(' ')))
+    .on_start(|| recorder.start())
+    .on_stop(|reason| recorder.stop(reason)); // Released | FocusLost | Cancelled
+
+let state = ptt.state();        // Signal<CaptureState>: Idle | Held | Latched
+let hint  = ptt.gesture_label(); // truthful per fidelity, updates live
+```
+
+On `Full` fidelity the chord is hold-to-talk (press starts, release
+stops; a same-turn tap fires start then stop, in order). On `Degraded`
+wires the same chord becomes toggle-to-talk (`PttMode::Latch`) — never
+a fake hold. The terminal losing focus stops capture in EVERY mode
+(`StopReason::FocusLost`), and capture never auto-restarts when focus
+returns mid-hold: a fresh press is required. `ptt.cancel()` is the
+programmatic stop. Terminals cannot see unfocused keys — there are no
+global hotkeys here; audio capture itself is app-side.
 
 ## app::selection — screen-text selection and clipboard copy
 
@@ -1375,8 +1728,20 @@ copy_to_clipboard("exact source text");
 While selection is enabled, the engine claims **left Down/Drag/Up only**:
 dragging paints the theme's `selection_fg`/`selection_bg` inks over the
 composed frame (damage-contract honest — only changed cells repaint), and
-releasing copies. While a selection is visible, Enter / `c` / Ctrl+C copy
-again and Esc or a click clears — Ctrl+C only quits when no selection is
+releasing copies. **Every copy ends the gesture** (0290): the region
+clears with the copy, so the app's next keystrokes — including Enter and
+`c` — route normally at once (a retained region used to silently eat
+them in composer-shaped apps). The key table while a region is visible
+(i.e. mid-drag):
+
+| Key            | Effect                                   |
+|----------------|------------------------------------------|
+| Enter          | copy the region, then clear (one-shot)   |
+| `c` / Ctrl+C   | copy the region, then clear (one-shot)   |
+| Esc            | cancel — clear without copying           |
+| anything else  | routes to the app normally               |
+
+A fresh left click re-anchors; Ctrl+C only quits when no region is
 visible. Wheel scrolling, hover, and every other key route normally the
 whole time. Copies travel as OSC 52 through the presenter's byte custody;
 terminals that did not advertise the capability still get the bytes
@@ -1479,8 +1844,9 @@ pipeline (text arriving over time: model output, a growing log). Closed
 blocks freeze — parsed once, never revisited — and only the open tail
 re-parses per append, with any chunking of the same bytes yielding
 blocks identical to `md::parse` of the whole source. An unclosed fence
-reports as code from the moment its opening line arrives. `Feed`'s
-streaming items ride it; it is widget-agnostic:
+reports as code from the moment its opening line arrives. It is
+widget-agnostic; `Feed`'s streaming items ride its doc-vocabulary twin,
+`md::DocStreamSession` (next section):
 
 ```rust
 use abstracttui::render::md::{self, MdStyles, StreamSession};
@@ -1495,6 +1861,53 @@ assert_eq!(
     md::parse("# Title\n\nStreaming **bold** text.", &styles)
 );
 ```
+
+## render::md — the doc vocabulary and the markdown reader surface
+
+The core `md::Block` enum shipped exhaustive, so the extended block
+kinds live in `md::DocBlock` (`#[non_exhaustive]`, wrapping the core
+set verbatim in `DocBlock::Core`): `Table(TableBlock)` — GFM header +
+alignment delimiter + body rows, inline styles inside cells, `\|`
+escapes; `Image(ImageBlock)` — a whole-line `![alt](src)`; and
+`Task(TaskBlock)` — `- [ ]` / `- [x]` items. `md::parse_doc` is the
+entry; for sources containing none of the extended constructs it is
+exactly `md::parse` wrapped in `Core` (test-pinned). Inline
+`~~strikethrough~~` joined the core span vocabulary (attribute-only:
+`Attrs::STRIKE`). `md::DocStreamSession` is the streaming twin of
+`StreamSession` for the doc vocabulary — same freeze/equivalence
+contract; a table OPENS once its header + delimiter lines are complete,
+grows a row per pipe line, and CLOSES (seals) at the first non-pipe
+line.
+
+`md::outline(source)` extracts headings as `Heading { level, text,
+anchor_id }` with GitHub-compatible, deduplicated slugs
+(`md::slugify`). Width-resolved positions live on the widget:
+`MarkdownView::outline_rows(source, &tokens, width)` pairs each heading
+with the typeset ROW its text starts at (the TOC jump target), and
+`MarkdownView::resolve_anchor(...)` answers `[text](#anchor)` links.
+
+`MarkdownView` AND `Feed` markdown items render the full doc
+vocabulary (one shared typeset recipe — a feed item and a reader pane
+can never typeset the same source differently): tables typeset
+through the Table widget's own column solver (one width policy —
+natural widths when they fit, proportional flex + per-cell ellipsis
+when they don't); images render as MOSAIC rows in the flow — sized from
+a header-only probe (`gfx::probe_dimensions`) at typeset, DECODED
+LAZILY on first draw and cached by (path, size), with alt-text captions
+and labeled decode-failure states (pixel-protocol images in scrollable
+flow are deliberately out of scope; mosaic cells are cell-safe in any
+scroll context). Streaming feed items ride `md::DocStreamSession`
+(see "Feed — streaming transcripts" above).
+
+Find-in-document: `MarkdownView::find(source, &tokens, width, query,
+case_insensitive)` returns `MdSearchMatch { row, bytes, cells }` over
+the TYPESET text (matches live in what the eye sees; offsets snap to
+grapheme clusters), and `.highlights(matches, current)` paints them
+non-destructively at draw in selection tones, the current match
+distinguished with BOLD+UNDERLINE. An empty query costs nothing. The
+underlying text↔cells mapping (byte offset ↔ column, both directions)
+is the shared substrate content selection (backlog 0160) will consume.
+`examples/reader.rs` composes all of it into an mdpad-class reader.
 
 ## gfx — images
 
@@ -1586,6 +1999,19 @@ term.leave()?; // also runs on Drop — the terminal always restores
 arbitrary chunk splits (mid-UTF-8, mid-escape), never panicking on any
 input. `input::EventReader` glues a terminal to the parser and owns the
 ESC-disambiguation deadlines.
+
+Kitty keyboard flags follow the PROBE, not just the environment: the env
+pass claims the protocol only for terminals that speak it out of the box
+(kitty, ghostty, foot — WezTerm ships it config-off, so its claim waits
+for probe evidence), and when the active probe proves the protocol on a
+terminal env could not claim (iTerm2 ≥ 3.5, VS Code/Cursor, Warp), the
+driver pushes the standard flags mid-session via
+`Terminal::set_kitty_keyboard` — Shift+Enter-class chords start working
+without a restart. The verb updates the terminal's session accounting,
+so `leave` pops exactly what was pushed and job-control suspend/resume
+stays symmetric (pop on suspend, re-push on resume). Embedders that
+enter with explicit `RunConfig::enter` options own their posture: the
+driver never upgrades it.
 
 ## testing — the headless harness
 
@@ -2352,6 +2778,106 @@ missed ticks coalesce, there are no catch-up storms. Between fires an
 armed interval costs zero wakeups (the loop sleeps until the deadline);
 timers never frame-pace.
 
+## Connection lifecycle
+
+Reconnect is the half of networking with no transport dependence at
+all, so the engine owns it: `reactive::connection` is the state
+machine, `reactive::Backoff` the retry schedule. The engine still does
+**no network I/O** — you supply the dial function; the transport stays
+your call. What you stop hand-rolling: the state enum, the backoff
+math, the retry timer, the cancellation story, and the answer to "what
+does the frame loop do while offline" (nothing — the one armed
+one-shot costs zero wakeups until due).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Connecting : connection(cx, backoff, dial)
+    Connecting --> Connected : events.connected()
+    Connecting --> Degraded : events.degraded(reason)
+    Connecting --> Reconnecting : events.failed(reason)
+    Connected --> Degraded : events.degraded(reason)
+    Degraded --> Connected : events.connected()
+    Connected --> Reconnecting : events.failed(reason)
+    Degraded --> Reconnecting : events.failed(reason)
+    Reconnecting --> Connecting : retry timer fires / retry_now()
+    Connecting --> Closed : close() / events.closed()
+    Connected --> Closed : close() / events.closed()
+    Degraded --> Closed : close() / events.closed()
+    Reconnecting --> Closed : close() (armed retry cancelled)
+    Closed --> [*]
+```
+
+Every transition is a signal write — the UI renders the state like any
+other signal, and each state carries what honest rendering needs
+(`Degraded(reason)`; `Reconnecting { attempt, next_in }` for
+"reconnecting (attempt 2) in 1.4s"). Success resets the schedule;
+`Closed` is terminal from either side (UI `close()`, transport
+`closed()`, or scope disposal) and costs nothing forever.
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::reactive::spawn_worker;
+
+let conn = connection(cx, Backoff::default(), move |events| {
+    // Runs on the UI thread once per attempt: spawn the blocking
+    // transport work and return immediately.
+    let events = events.clone();
+    spawn_worker("hub-stream", move || {
+        match dial_hub() {                       // your transport
+            Ok(stream) => {
+                events.connected();
+                while let Ok(msg) = stream.read() {
+                    if events.is_closed() { return; }  // stop condition
+                    tx.send(msg);                // the 0010/0020 lanes
+                }
+                events.failed("stream ended");   // drop -> reconnect
+            }
+            Err(e) => events.failed(e.to_string()),
+        }
+    });
+});
+// Render it honestly — a badge, a status line, dimmed panes:
+let state = conn.state();
+dyn_view(LayoutStyle::line(1), move || match state.get() {
+    ConnState::Connected => text("● online"),
+    ConnState::Degraded(r) => text(format!("◐ degraded: {r}")),
+    ConnState::Reconnecting { attempt, next_in } =>
+        text(format!("○ retry #{attempt} in {next_in:.1?}")),
+    ConnState::Connecting => text("… connecting"),
+    ConnState::Closed => text("· closed"),
+});
+```
+
+**Why full jitter.** A fleet of clients backing off `base × 2^n`
+with no jitter retries in lockstep after a server restart — every
+retry wave lands together and the herd re-kills the thing it is
+waiting for. The common hand-roll (linear `500ms × errors`, capped,
+no jitter) has exactly that failure mode. `Backoff` draws uniformly
+from `[0, min(cap, base × 2^n)]` (defaults: base 500 ms, cap 30 s),
+so retries decorrelate while pressure on a dead endpoint still decays
+exponentially. `Backoff::seeded(n)` makes tests deterministic.
+
+Three rules the machine enforces so you don't have to:
+
+- **Stale attempts can't lie.** Each dial gets a generation-stamped
+  reporter; once a failure is accepted, later reports from that
+  attempt (a zombie worker racing its replacement) are inert and
+  counted (`stale_reports`) — attempt N can never flip attempt N+1's
+  state. Workers poll `events.is_closed()`/`is_current()` to stop
+  early.
+- **Cancellation is scope death.** The connection dies with `cx` like
+  everything else: armed retry removed, dial fn dropped, workers see
+  `is_closed()`. `conn.close()` does the same on demand;
+  `conn.retry_now()` skips a pending wait (the "retry now" button).
+- **Offline is idle.** Between transitions the loop stays parked; the
+  only clock is the one armed one-shot. A visible countdown is an
+  ordinary `interval`, billed as such — never a poll loop.
+
+Catch-up after reconnect (cursors, replay, resubscription) is
+deliberately NOT here — it is transport/protocol policy (the app's
+dial fn re-subscribes; per-channel cursors in the reference domain),
+and the state enum must never grow transport-specific fields.
+
 ## Worker lifecycle
 
 Spawn producers with `reactive::spawn_worker(label, f)`: a worker
@@ -2871,8 +3397,8 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.2.2 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.2.2 (2026-07-22).
+- Crate: `abstracttui` 0.2.3 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.2.3 (2026-07-23).
 - Description: a reactive, compositor-grade terminal UI engine — fine-grained signals,
   layered rendering with damage tracking, streaming transcripts and live-data ingestion,
   text selection with OSC 52 copy, images (kitty/iTerm2/sixel/mosaic),
@@ -2887,7 +3413,7 @@ timeouts, and no sleeps.
   - `libc` 0.2 — Unix terminal FFI (unix targets only)
   - `windows-sys` 0.61 — Windows console FFI (windows targets only)
 - Test invocation (from CONTRIBUTING.md):
-  - `cargo test` — the whole suite (~1,470 tests: unit tests, integration suites under
+  - `cargo test` — the whole suite (~1,640 tests: unit tests, integration suites under
     `tests/`, and doctests).
   - `cargo test --test live_smoke -- --ignored --test-threads=1` — live pty smoke tests
     (spawn a real terminal session; run serially).

@@ -2,19 +2,33 @@
 
 ## Metadata
 - Created: 2026-07-22
-- Status: Proposed
+- Status: Completed (was: Proposed)
 - Track: games (band 0700–0790)
-- Completed: N/A
+- Completed: 2026-07-23 (wave 3, INPUTAV) — `app::keys`:
+  `use_key_state(cx)`/`key_state()` → `KeyState` (`is_down`,
+  `keys_down`, `any_down`, per-turn `pressed`/`pressed_chord`/
+  `released` edge sets, `focus_cleared`) + `KeyFidelity::{Full,
+  Degraded}` + `hold_gesture_label`. Driver tap is PRE-conversion and
+  PRE-routing (`Driver::handle_event`), edges seal at the top of phase
+  U (`keys::begin_turn`), fidelity publishes at enter AND at the 0293
+  probe-upgrade moment (`apply_caps_upgrade`). Zero cost until the
+  first consumer arms the service; idle-turn zero-alloc pinned in
+  `tests/alloc_budget.rs`. Games-lane proof:
+  `wasd_pan_moves_while_held_and_stops_on_release`
+  (tests/wave_inputav.rs) — chorded diagonal pan from `is_down` per
+  tick, per-axis stop on release, full stop on focus loss.
 - Depends on: nothing HARD for the service itself — the wire data
   already arrives on env-claimed terminals (see Current code reality);
   this is a routing/service gap, not a decode gap. FIDELITY
   prerequisite: **first-app/0293** (kitty enter-flags never follow the
-  probe) — on probe-proven terminals (iTerm2 ≥ 3.5, VS Code/Cursor,
-  Warp) the flags are never pushed, so releases never reach the wire
-  and this service would run repeat-approximated exactly where the
-  protocol is available. Dependency chain (convergence cycle 2):
-  **0293 (enable flags post-probe) → 0700 (expose state) → media-av
-  0610 (consume)**.
+  probe) — **SHIPPED in 0.2.2** (verified at completion:
+  `Driver::apply_caps_upgrade` pushes `KittyFlags::standard()` when the
+  probe proves the protocol, src/app/driver.rs — releases reach the
+  wire on iTerm2 ≥ 3.5, VS Code/Cursor, Warp mid-session, and this
+  service's fidelity flips to Full at that exact moment). Dependency
+  chain (convergence cycle 2): **0293 (enable flags post-probe, SHIPPED
+  0.2.2) → 0700 (this item, SHIPPED) → media-av 0610 (consume, SHIPPED
+  same wave)**.
 - Cross-band consumers: MEDIA's push-to-talk item (media-av/0610 —
   hold-to-record is press/release verbatim; it consumes this service
   and adds no second key-state machinery); any hold-to-act UI
@@ -121,10 +135,35 @@ routing opt-in).
 - Fidelity flag matches the terminal's kitty capability in both modes.
 
 ## Progress checklist
-- [ ] Design pass with the input/driver owner (where the pre-conversion
-      tap lives)
-- [ ] `app::keys` down-set + edges + fidelity flag
-- [ ] Legacy repeat-timeout approximation (virtual-clock tested)
-- [ ] Opt-in release routing for widgets
-- [ ] FocusLost hygiene + tests
-- [ ] docs: input section + capability note
+- [x] Design pass with the input/driver owner (where the pre-conversion
+      tap lives) — tap sits at the top of `Driver::handle_event`,
+      before selection/overlay/routing (key state is a physical fact,
+      observed even for consumed events)
+- [x] `app::keys` down-set + edges + fidelity flag
+- [x] ~~Legacy repeat-timeout approximation~~ — DROPPED BY RULING at
+      completion: media-av/0610's capture rule ("never fake a hold from
+      repeat cadence — a dropped repeat would stop recording
+      mid-sentence") generalizes to the whole service. On Degraded
+      wires the surface says so (`KeyFidelity::Degraded`): press edges
+      stay honest, `is_down` never claims held, releases never fire —
+      apps use latch/tap semantics with the truthful
+      `hold_gesture_label`. No synthetic releases exist anywhere.
+- [ ] Opt-in release routing for widgets — DEFERRED, honestly: both
+      named consumers (0610 push-to-talk, the WASD proof) are fully
+      served by the state/edge surface; routing release EVENTS through
+      the ui tree touches dispatch semantics and waits for a widget
+      that actually needs the event itself.
+- [x] FocusLost hygiene + tests (down-set clears, releases synthesized
+      + labeled via `focus_cleared`; unmatched release is a no-op)
+- [x] docs: input section + capability note (docs/api.md "app::keys",
+      CHANGELOG)
+
+## Games-band note (validation, 2026-07-23)
+Move-while-held is live on kitty-class terminals: the driver-level
+proof `wasd_pan_moves_while_held_and_stops_on_release`
+(tests/wave_inputav.rs) runs a 16 ms game tick reading `is_down` for
+WASD — diagonal chords compose, a release stops exactly its axis, and
+FocusLost stops the pan without any wire release. `examples/
+voice_mock.rs` puts the same primitive in front of a human as
+hold-to-talk. A real game example remains the 0710/0730 promotion
+trigger, not this item's.

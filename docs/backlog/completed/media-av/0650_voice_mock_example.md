@@ -2,11 +2,33 @@
 
 ## Metadata
 - Created: 2026-07-22
-- Status: Proposed
+- Status: Completed (was: Proposed)
 - Track: media-av (band 0600–0690)
-- Completed: N/A
-- Depends on: 0620 (meter/scope), 0630 (speaking highlight), 0610 (PTT;
-  degrades to latch in the demo when 0700 hasn't landed), 0640 (pattern).
+- Completed: 2026-07-23 (wave 3, INPUTAV) — shipped as
+  `examples/voice_mock.rs` (snake_case, matching the example set):
+  push-to-talk on Space through 0610/0700 (HOLD on kitty-class
+  terminals, labeled LATCH on legacy wires; the footer prints the
+  truthful `gesture_label()` + the live `KeyFidelity` + whether the
+  kitty keyboard is active via `use_caps`), a 30 ms timer-driven
+  deterministic sine+hash-noise fake mic through `bounded_source`
+  (`DropOldest`, window = the scope's ring) into the dB `Meter`, an
+  8-band spectrum `Meter::bands`, and a rolling `AudioScope`; a fake
+  transcription appends a word every ~360 ms into a `Feed` streaming
+  item while "talking" and finishes the line with the stop reason. The
+  synth interval exists ONLY while capturing (cancelled on stop) and
+  the meters decay to their fixpoint — the quiet app is byte-for-byte
+  idle, live. FocusLost stops capture (exercised in the smoke via the
+  `CSI O` escape). Headless guard: exits 0 with a one-line notice when
+  no tty. Joined the live pty smoke matrix (`live_voice_mock`:
+  space/space/focus-out/q → exit 0, zero unknown sequences, terminal
+  restored). SCOPE DELTA vs the draft, stated honestly: 0630 (speaking
+  highlight over markdown) and 0640's `--mock-recorder` KillOnDrop flag
+  are NOT included — both items remain Proposed and keep their own
+  validation vehicles; this example validates the 0700 → 0610 → 0620
+  chain it shipped with.
+- Depends on: 0620 (meter/scope — SHIPPED same wave), 0610 (PTT —
+  SHIPPED same wave, over games/0700), 0630 + 0640 (NOT consumed — see
+  the scope delta above).
 - Promotion trigger: lands as the VALIDATION VEHICLE of the voice items —
   the apps-as-validators principle (backlog overview) applied to media-av.
 
@@ -72,7 +94,13 @@ one screen; the smoke matrix proves it exits clean under a real pty.
   proves flaky-prone).
 
 ## Progress checklist
-- [ ] Fake synthesizer + word schedule
-- [ ] Fake mic levels + bands
-- [ ] PTT wiring with fidelity label
-- [ ] KillOnDrop flag + smoke case
+- [x] Fake synthesizer + word schedule (fake transcription into a Feed
+      streaming item; the 0630 markdown-highlight panel stays with 0630)
+- [x] Fake mic levels + bands (deterministic sine + hash noise — no
+      rand, no wall entropy; the dashboard precedent)
+- [x] PTT wiring with fidelity label (hold/latch + Full/Degraded footer)
+- [ ] KillOnDrop flag — NOT SHIPPED HERE: 0640's pattern keeps its own
+      item and validation; adding a child-process flag to this example
+      would blur the "zero external anything" claim it exists to prove.
+- [x] smoke case (`live_voice_mock` in tests/live_smoke.rs, incl. the
+      focus-out escape)

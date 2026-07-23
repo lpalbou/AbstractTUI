@@ -215,6 +215,36 @@ fn with_ink_maps_theme_colors_and_keeps_base_fgless() {
 }
 
 #[test]
+fn strikethrough_parses_and_degrades_like_the_other_markers() {
+    use crate::render::Attrs;
+    // Closed marker: STRIKE attribute merged onto the block style.
+    let blocks = parse_default("keep ~~gone~~ end");
+    let Block::Paragraph(l) = &blocks[0] else {
+        panic!("{blocks:?}");
+    };
+    assert_eq!(l.plain(), "keep gone end");
+    let struck = l.spans.iter().find(|s| s.text == "gone").unwrap();
+    assert!(struck.style.add.contains(Attrs::STRIKE), "{struck:?}");
+    // Unclosed / empty / escaped: literal, exactly like * and `.
+    for (src, want) in [
+        ("a ~~open", "a ~~open"),
+        ("~~~~", "~~~~"),
+        ("\\~~not struck\\~~", "~~not struck~~"),
+        ("lone ~ tilde", "lone ~ tilde"),
+    ] {
+        let blocks = parse_default(src);
+        let Block::Paragraph(l) = &blocks[0] else {
+            panic!("{src:?} -> {blocks:?}");
+        };
+        assert_eq!(l.plain(), want, "source {src:?}");
+        assert!(
+            l.spans.iter().all(|s| !s.style.add.contains(Attrs::STRIKE)),
+            "no STRIKE on degraded forms: {src:?}"
+        );
+    }
+}
+
+#[test]
 fn everything_parses_something() {
     // Hostile-ish inputs: no panics, no empty output for non-empty input.
     for src in [

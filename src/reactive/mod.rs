@@ -44,6 +44,7 @@
 
 mod animate;
 mod arena;
+mod connection;
 mod diag;
 mod effect;
 mod execute;
@@ -63,6 +64,7 @@ mod tests;
 pub use animate::{
     after, animate, frame_tasks_pending, next_timer_deadline, run_due_timers, run_frame_tasks,
 };
+pub use connection::{connection, Backoff, ConnState, Connection, ConnectionEvents};
 pub use diag::{diagnostics, enter_draw_phase, take_worker_failures, Diagnostics, DrawPhase};
 pub use effect::Effect;
 pub use ingest::{bounded_source, BoundedSender, CoalesceFn, IngestStats, OverflowPolicy};
@@ -78,3 +80,6 @@ pub use signal::Signal;
 pub use source::{channel_source, latest_source, SourceSender};
 
 pub(crate) use arena::{GenArena, Key};
+// Crate-internal frame-task registration (widgets/meter ballistics);
+// the public frame-task surface is games/0710's decision.
+pub(crate) use animate::register_frame_task;

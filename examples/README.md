@@ -24,7 +24,9 @@ capability report and exit — the diagnostic surface, no tty needed.
 | `components.rs` | REAL — the shareable-component reference (props/children/events) |
 | `grid.rs` | REAL — track-grid reflow: fr/cells/percent tracks + spans |
 | `feed.rs` | REAL — live background data: bursty worker → bounded ingestion → Feed with follow-tail; drop counter, events/sec, zero-idle proof |
-| `transcript.rs` | REAL — streaming conversation: markdown answers typeset live block-by-block, code tint, follow-tail break/re-pin, 10k stress |
+| `transcript.rs` | REAL — streaming conversation: markdown answers typeset live block-by-block (doc vocabulary: a table streams in as a TABLE, task lists, strikethrough), code tint, follow-tail break/re-pin, 10k stress |
+| `voice_mock.rs` | REAL — the voice surface with no audio/network: push-to-talk (hold/latch per key-state fidelity), dB meter + band spectrum + rolling scope, fake transcription feed |
+| `reader.rs` | REAL — mdpad-class markdown reader: GFM tables, lazy in-flow images, TOC/anchor jumps, search highlights with live count |
 | `capture.rs` | TOOL — deterministic screenshot pipeline into `docs/captures/` |
 | `common/` | shared helpers (small-terminal guard, key legend) — not a target |
 
@@ -42,8 +44,9 @@ ergonomics bar from the vision doc (a real app in < 60 lines).
 ## dashboard
 
 The flagship. Header bar (mark + UTC clock + theme name), nav sidebar
-(List), braille rx/tx line chart with legend, load cluster (ramped
-Progress + Sparkline histories), live event log tail (level-coherent,
+(List), braille rx/tx line chart with legend riding a `TimeSeriesState`
+history ring + relative time axis ("-15s … now"), load cluster
+(ramped Progress + Sparkline histories), live event log tail (level-coherent,
 ellipsis-clipped), sortable sessions Table, toasts, focus-trapped help
 modal, optional spinning 3D mark panel. Startup degradations arrive as
 staggered auto-dismissing toasts (REACT's reactive notices bridge);
@@ -188,10 +191,12 @@ paints the highlight, releasing (or `c`) copies via OSC 52.
 ## transcript
 
 The streaming-conversation proof: scripted turns stream in token by
-token through `Feed` + `md::StreamSession` — closed blocks freeze,
-only the open block re-typesets, code fences tint from their opening
-line — while follow-tail breaks on scroll-up and re-pins at the
-bottom; an `s` stress toggle rebuilds with 10,000 history items to
+token through `Feed` + `md::DocStreamSession` — closed blocks freeze,
+only the open region re-typesets, code fences tint from their opening
+line, and the fourth answer streams a markdown TABLE that renders as
+a table live (growing a row per line) plus task-list checkboxes and
+strikethrough — while follow-tail breaks on scroll-up and re-pins at
+the bottom; an `s` stress toggle rebuilds with 10,000 history items to
 prove windowed drawing. The bottom composer is a `TextArea` (grows
 1..4 rows, Enter sends, Alt+Enter newline, ↑↓ history at the buffer
 edges) with `/` command + `@` mention completion in an anchored
@@ -204,6 +209,27 @@ dropdown at the caret.
 - Needs: any tty.
 - Looks like: a chat client answering itself — markdown typesetting
   live under a composer that completes your commands.
+
+## voice_mock
+
+The whole voice-app surface, zero external anything: Space is
+push-to-talk through the key-state service — HOLD-to-talk where kitty
+release events are live, PRESS-to-toggle on legacy wires, with the
+footer printing the truthful gesture label and the key-state fidelity
+(`Full`/`Degraded`).
+While "talking", a 30 ms timer synthesizes a deterministic sine+noise
+envelope through `bounded_source` into a dB `Meter` (instant attack,
+timed decay, peak hold), an 8-band spectrum, and a rolling `AudioScope`
+waveform; a fake transcription appends words into a `Feed`. Release (or
+toggle off, or focus loss — the mic-privacy rule) stops the synth, the
+meters decay to their fixpoint, and the app parks fully idle.
+
+- Keys: Space talk (hold or toggle per fidelity) · `c` clear transcript
+  · `q`/Ctrl+C quit.
+- Needs: any tty; a kitty-protocol terminal shows Hold mode, everything
+  else shows the labeled Latch mode.
+- Looks like: a broadcast level meter breathing under your spacebar,
+  words landing in the transcript while you "speak".
 
 ## splash
 
@@ -222,6 +248,26 @@ drift test pins the shared beats). The brand sign-off surface.
 - Looks like: three planes flying into an A, a spark burst on the
   alignment beat, the wordmark tracking open — gone in two seconds.
 
+## reader
+
+The mdpad-class markdown reader: loads a `.md` file from the first
+argument or an embedded sample exercising the whole doc vocabulary —
+GFM tables with alignment + per-cell ellipsis, in-flow mosaic images
+decoded LAZILY on first view including a generated PNG and an
+honestly-missing one, heading anchors + intra-doc links, and
+find-in-document with a highlight overlay, live match count and
+next/previous hopping. The TOC panel is a `List` over
+`MarkdownView::outline_rows`; jumps scroll via anchor rows from the
+same typeset fold that draws — position and pixels cannot drift.
+
+- Keys: `/` search (type, Enter jumps + keeps the query, Esc clears) ·
+  `n`/`N` next/previous match · `t` TOC (Enter jumps) · arrows/PgUp/
+  PgDn/Home/End + wheel scroll · Ctrl+T theme · `q` quit.
+- Needs: any tty. `cargo run --example reader -- README.md` reads a
+  real file.
+- Looks like: a document you can actually read — tables aligned,
+  pictures in the flow, search hits glowing in selection tones.
+
 ## capture (tool)
 
 The deterministic screenshot pipeline: runs the built examples under a
@@ -232,8 +278,9 @@ the registry), in-process splash stills (2D/3D at the burst and settled
 beats), and in-process APP stills driven headlessly through
 `Driver` + `CaptureTerm` (streaming transcript with the completion
 dropdown open, an open Select popup, a diff-tinted `CodeView`, a feed
-with follow-tail broken) — those four are clockless and
-byte-deterministic. The docs cycle embeds these as fenced "screenshots".
+with follow-tail broken, a doc-vocabulary reader table) — those five
+are clockless and byte-deterministic. The docs cycle embeds these as
+fenced "screenshots".
 
 - Run: `cargo build --examples && cargo run --example capture`
   (`-- themes|splash|shots|apps` for one family).
