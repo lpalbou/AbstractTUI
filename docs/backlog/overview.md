@@ -34,9 +34,13 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | --- | --- |
 | Planned | 5 |
 | Proposed | 82 |
-| Completed | 60 |
+| Completed | 61 |
 | Deprecated | 0 |
 | Recurrent | 0 |
+
+(2026-07-26: +1 completed — app-kits/1250 reasoning controls, filed
+directly in completed/ per the same-wave precedent; the app-kits band
+continues at 1250, see the bands note below.)
 
 Counting rule: `NNNN_*.md` files on disk under each lifecycle directory
 (topic subfolders included). The completed ledger below additionally
@@ -173,6 +177,7 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0595 | Theme modes + `ThemeSwitcher` — `ThemeMode` + `toggle_mode()` (remembered choice per mode) + the drop-in ☾/☼ control; abstractuic survey re-run: strict superset, zero drift — completed 2026-07-25 | completed/app-kits/ |
 | 0605 | Block close affordance: `Block::on_close` panel ✕ (mouse-only, never focusable; title-yields-first truncation ladder; disposal-safe) — completed 2026-07-25 (ledger row added 2026-07-25) | completed/app-kits/ |
 | 0273 | File-attachment surfaces: `TextInput`/`TextArea` `on_paste` intercept (`PasteAction`), `input::paste::classify` cross-terminal drop classifier, `FilePicker` over the `FileSource` seam + `examples/attachments.rs` — completed 2026-07-25, attachments wave (ledger row added 2026-07-25) | completed/first-app/ |
+| 1250 | Reasoning controls (operator-ordered cross-seat plan, tui section): `ReasoningSelect` three-state effort picker (capable/locked/unknown+override, facts AS DATA, screen-anchored popup) + `reasoning_label`/`reasoning_label_glyph` parity grammar (⊘ U+2298 research recorded; plain form canonical) + `ThinkingFold` streaming reasoning fold (folded default, last-wins complete, data-driven indicator, zero idle) + `Disclosure::title_muted`/`detail_signal` + `examples/reasoning.rs` — completed 2026-07-26 | completed/app-kits/ |
 
 ## Proposed ledger — general bands
 
@@ -423,7 +428,10 @@ a11y-completeness + redaction-at-source clause (drafted in
   unique, flagged),
   games 0700–0790, field-agora 0800–0890 (overflowed 0895–0910),
   field-gateway 0900–0990 (overflowed 1000–1050), field-core
-  1100–1190, wave-13 architecture/md-lane filings 1200+. Full bands
+  1100–1190, wave-13 architecture/md-lane filings 1200–1249
+  (1200/1210/1220 on disk), app-kits CONTINUATION 1250–1290 (the
+  0500–0590 band + 0595/0605 spills is full; 1250 = the next free
+  fifty, taken 2026-07-26 by the reasoning-controls item). Full bands
   continue at the next free fifty and record it in their README
   (`proposed/field-core/README.md` states the rule). Leave gaps for
   insertion.

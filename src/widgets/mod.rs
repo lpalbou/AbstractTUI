@@ -43,6 +43,7 @@ pub mod spinner;
 pub mod table;
 pub mod tabs;
 pub mod textarea;
+pub mod thinking_fold;
 pub mod viewport3d;
 
 /// Re-exported beside [`Image`] (RT8-4): the pixel type
@@ -95,6 +96,9 @@ pub use page_host::PageHost;
 // intercept's action vocabulary + the filesystem picker family.
 pub use file_picker::{FileEntry, FilePicker, FileSource, StdFileSource};
 pub use input::PasteAction;
+// Appended (app-kits 1250, the reasoning wave): the streaming
+// thinking-text fold.
+pub use thinking_fold::{ThinkingFold, ThinkingFoldState};
 
 /// Shared callback-slot shape for interactive widgets: the builder's
 /// `Option<Box<dyn FnMut(..)>>` moved behind `Rc<RefCell<..>>` so
@@ -174,7 +178,7 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 43] = [
+    const SOURCES: [(&str, &str); 44] = [
         ("mod.rs", include_str!("mod.rs")),
         ("audio_scope.rs", include_str!("audio_scope.rs")),
         ("meter.rs", include_str!("meter.rs")),
@@ -230,6 +234,7 @@ mod lint_tests {
         ("tabs.rs", include_str!("tabs.rs")),
         ("textarea.rs", include_str!("textarea.rs")),
         ("textarea_model.rs", include_str!("textarea_model.rs")),
+        ("thinking_fold.rs", include_str!("thinking_fold.rs")),
         ("viewport3d.rs", include_str!("viewport3d.rs")),
     ];
 

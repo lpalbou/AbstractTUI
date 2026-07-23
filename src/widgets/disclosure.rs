@@ -81,7 +81,9 @@ enum Body {
 
 pub struct Disclosure {
     title: String,
+    title_muted: bool,
     detail: Option<String>,
+    detail_signal: Option<Signal<String>>,
     body: Body,
     folded: Option<Signal<bool>>,
     initially_folded: bool,
@@ -97,7 +99,9 @@ impl Disclosure {
     pub fn new(title: impl Into<String>) -> Disclosure {
         Disclosure {
             title: title.into(),
+            title_muted: false,
             detail: None,
+            detail_signal: None,
             body: Body::None,
             folded: None,
             initially_folded: true,
@@ -142,6 +146,28 @@ impl Disclosure {
     /// it truncates, the detail drops).
     pub fn detail(mut self, detail: impl Into<String>) -> Disclosure {
         self.detail = Some(detail.into());
+        self
+    }
+
+    /// LIVE detail slot: the same trailing position as
+    /// [`Disclosure::detail`], driven by a signal — writes repaint the
+    /// title row without remounting it (hover/focus state survives —
+    /// the header's focusable element is stable; only its draw region
+    /// re-renders). The empty string means "no detail". When both are
+    /// set, the signal wins. First consumer: `ThinkingFold`'s streaming
+    /// activity indicator (frame + token count), which must update per
+    /// data arrival without dropping focus from a focused header.
+    pub fn detail_signal(mut self, detail: Signal<String>) -> Disclosure {
+        self.detail_signal = Some(detail);
+        self
+    }
+
+    /// Render the title in `text_muted` instead of `text` (hover and
+    /// focus tones still win — the state table is unchanged).
+    /// Secondary/ambient cards (a transcript's "Thinking" fold) read
+    /// quieter than primary panels this way.
+    pub fn title_muted(mut self, muted: bool) -> Disclosure {
+        self.title_muted = muted;
         self
     }
 
@@ -213,7 +239,9 @@ impl Disclosure {
         let sel_bg = t.selection_bg;
 
         let title = self.title;
+        let title_muted = self.title_muted;
         let detail = self.detail;
+        let detail_signal = self.detail_signal;
         let folded = self
             .folded
             .unwrap_or_else(|| cx.signal(self.initially_folded));
@@ -280,7 +308,16 @@ impl Disclosure {
                     let hover = hovered.get();
                     let focus = focused.get();
                     let title = title_for_dyn.clone();
-                    let detail = detail.clone();
+                    // The live slot wins over the static one; empty =
+                    // no detail (both reads tracked — a signal write
+                    // re-renders just this row).
+                    let detail = match detail_signal {
+                        Some(sig) => {
+                            let v = sig.get();
+                            (!v.is_empty()).then_some(v)
+                        }
+                        None => detail.clone(),
+                    };
                     Element::new()
                         .style(
                             LayoutStyle::default()
@@ -306,6 +343,7 @@ impl Disclosure {
                                     raised,
                                     sel_fg,
                                     sel_bg,
+                                    title_muted,
                                 },
                             );
                         })
@@ -436,6 +474,9 @@ struct HeaderInks {
     raised: crate::base::Rgba,
     sel_fg: crate::base::Rgba,
     sel_bg: crate::base::Rgba,
+    /// Base title tone is `muted` instead of `text_fg`
+    /// ([`Disclosure::title_muted`]); focus/hover tones still win.
+    title_muted: bool,
 }
 
 /// Paint the title row: `[pad][glyph] [title…] … [detail][pad]`.
@@ -490,6 +531,8 @@ fn draw_header(
         inks.sel_fg
     } else if hover {
         inks.accent
+    } else if inks.title_muted {
+        inks.muted
     } else {
         inks.text_fg
     };

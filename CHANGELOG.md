@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.24] - 2026-07-26
+
+### Added
+
+- app: `ReasoningSelect` — the reasoning-effort control (backlog
+  app-kits/1250, the cross-seat reasoning plan's tui section). The
+  effort ladder `none|minimal|low|medium|high|xhigh` + `auto`
+  (`REASONING_LADDER`/`REASONING_AUTO`); capability facts arrive AS
+  DATA (`ReasoningFacts::capable/non_reasoning/unknown`,
+  `#[non_exhaustive]`) and the widget enforces the three-state
+  coupling: capable offers auto/none + the DECLARED levels only
+  (verbatim, deduplicated); non-reasoning renders locked
+  (`r: none (locked) — model does not reason`), faint, unfocusable,
+  and refuses to open; unknown is locked-to-none with a
+  "set anyway (capability unknown — passed verbatim)" override row
+  that unlocks the full ladder per instance (remount-with-fresh-facts
+  is the documented model-change reset). Composes the select-family
+  core (movement, type-ahead, owned SCREEN-anchored popup — the
+  inside-a-Modal anchor pin carried over); `on_change(&str)` fires
+  once per changing commit against the EFFECTIVE value; the engine
+  mints no wire vocabulary (apps write the `thinking` key).
+- app: `reasoning_label`/`reasoning_label_glyph` + `LockState` — the
+  parity footer grammar (`r: <value>`, ` (locked)` /  ` ⊘` when
+  locked), ONE public source for code-tui/code/console footers,
+  golden-tested. Glyph research recorded: no padlock exists outside
+  emoji-data; `⊘` U+2298 is the one candidate narrow in BOTH
+  unicode-width conventions; the PLAIN form is canonical.
+- widgets: `ThinkingFold` + `ThinkingFoldState` — the reasoning-text
+  fold: a Disclosure-based card, FOLDED by default, muted "Thinking"
+  title, token-count detail slot, body through the shared markdown
+  typeset recipe (fences/tables tint mid-stream; capped at
+  `max_body_rows` with a scrollbar past it). Streaming semantics
+  pinned: `append(fragment)` re-typesets the open tail only and
+  advances a PER-APPEND dot indicator (data-driven — no timers, a
+  quiet or completed fold schedules nothing); `complete(aggregate)`
+  REPLACES the fragments (last-wins; double-complete replaces again);
+  post-complete fragments are refused. Input is result METADATA,
+  never parsed from reply prose.
+- widgets: `Disclosure::title_muted(bool)` +
+  `Disclosure::detail_signal(Signal<String>)` — the ambient-card title
+  tone and the LIVE detail slot (writes repaint the title row without
+  remounting it, so a focused header keeps focus; empty = none; the
+  signal wins over the static slot). ThinkingFold is the first
+  consumer.
+- examples: `reasoning.rs` — a fake chat turn streaming a ThinkingFold
+  (fragments, then the recomposed aggregate: last-wins visible on
+  screen) + a footer ReasoningSelect cycling three fake models
+  (capable / locked / unknown with override), the remount-reset
+  recipe, and the wire line showing the APP writing the `thinking`
+  key. Headless-safe (skips cleanly without a tty).
+
 ## [0.2.23] - 2026-07-25
 
 ### Documentation
@@ -1709,6 +1760,7 @@ First public release.
   theme browser, and 3D viewer.
 
 [Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.2.17...HEAD
+[0.2.24]: https://github.com/lpalbou/abstracttui/compare/v0.2.23...v0.2.24
 [0.2.23]: https://github.com/lpalbou/abstracttui/compare/v0.2.22...v0.2.23
 [0.2.22]: https://github.com/lpalbou/abstracttui/compare/v0.2.21...v0.2.22
 [0.2.21]: https://github.com/lpalbou/abstracttui/compare/v0.2.20...v0.2.21

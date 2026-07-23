@@ -31,6 +31,7 @@ the previous one:
 | 5 · content + live data | `transcript.rs` | streaming markdown chat: tables render live, composer with completion |
 | 5 · content + live data | `attachments.rs` | file attachments: terminal drops classified out of pastes into chips, `FilePicker` in a modal |
 | 5 · content + live data | `reader.rs` | the document surface: GFM tables, in-flow images, TOC, search |
+| 5 · content + live data | `reasoning.rs` | the reasoning controls: `ThinkingFold` streaming (last-wins), `ReasoningSelect` three capability states |
 | 5 · content + live data | `voice_mock.rs` | push-to-talk, dB meter, band spectrum, scope — no audio needed |
 | 6 · the app shell | `shell.rs` | `PageHost` full pages behind one tab bar + `Drawer` panels from both edges |
 | 6 · the app shell | `drawers.rs` | the drawer system alone: modal inspector vs passive nav panel |
@@ -248,6 +249,29 @@ same typeset fold that draws — position and pixels cannot drift.
   real file.
 - Looks like: a document you can actually read — tables aligned,
   pictures in the flow, search hits glowing in selection tones.
+
+## reasoning
+
+The reasoning-controls proof (app-kits/1250): one fake chat turn whose
+`ThinkingFold` streams reasoning fragments — folded by default, a dot
+indicator advancing PER FRAGMENT (no timer: pause the stream and it
+freezes), markdown fences/tables tinting live in the capped body —
+then receives the trailing COMPLETE aggregate and visibly recomposes
+(last wins). The footer `ReasoningSelect` cycles three fake models:
+capable (auto/none + its three declared levels only), non-reasoning
+(locked, refuses to open, why-line on the trigger) and
+capability-unknown (locked-to-none behind a "set anyway" override
+that unlocks the full ladder). Each swap REMOUNTS the control with
+fresh facts — the documented reset recipe — and the wire line shows
+the APP writing the `thinking` key from `on_change` (the engine mints
+no wire vocabulary). The footer-right label renders
+`reasoning_label`/`reasoning_label_glyph`, the parity grammar.
+
+- Keys: `m` cycle model · `p` replay the turn · Tab focus ·
+  Enter/click open the picker, toggle the fold · Ctrl+C quit.
+- Needs: any tty.
+- Looks like: an agent turn thinking out loud behind a muted fold,
+  with the effort picker and its `r: <value>` footer grammar below.
 
 ## voice_mock
 

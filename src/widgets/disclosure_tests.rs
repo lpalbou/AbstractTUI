@@ -530,3 +530,8 @@ fn focused_header_shows_a_visible_affordance() {
     );
     root.dispose();
 }
+
+// The 1250-wave header knobs (title_muted, detail_signal) — split
+// sibling (file-size discipline; helpers live in this parent module).
+#[path = "disclosure_tests_knobs.rs"]
+mod knobs;

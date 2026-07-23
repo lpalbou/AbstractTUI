@@ -623,8 +623,12 @@ feed's scope.
 ### Disclosure — the fold/unfold card
 
 Progressive disclosure for transcripts, message boards and settings
-panes: a one-row header — fold glyph (`▸`/`▾`), truncating title,
-optional right-aligned muted `detail` slot — over a body that mounts
+panes: a one-row header — fold glyph (`▸`/`▾`), truncating title
+(`title_muted(true)` renders it in `text_muted` for ambient cards),
+optional right-aligned muted `detail` slot (static string, or LIVE via
+`detail_signal(Signal<String>)` — writes repaint the row without
+remounting it, so a focused header keeps its focus; empty = no detail;
+the signal wins over the static slot) — over a body that mounts
 on expand and UNMOUNTS on fold (a folded card costs zero idle work).
 Click the title row, or Enter/Space while it is focused (one tab
 stop; focus wears the selection pair). The card is borderless
@@ -714,6 +718,47 @@ fn traffic(cx: Scope, t: &TokenSet, sample: impl Fn() -> f32 + 'static) -> View 
     })
 }
 ```
+
+### ThinkingFold — the reasoning-text fold
+
+The model-thinking card (app-kits/1250): a [`Disclosure`]-based fold,
+FOLDED by default (reasoning is detail, the answer is the content),
+with a muted "Thinking" title, an optional token-count `detail` slot,
+and streaming semantics on a cloneable state handle:
+
+```rust,ignore
+use abstracttui::prelude::*;
+
+let thinking = ThinkingFoldState::new(cx);
+let card = ThinkingFold::new(&thinking)
+    .max_body_rows(8)          // taller thoughts scroll inside the cap
+    .view(cx);
+// as reasoning DELTAS arrive from result metadata:
+thinking.append(fragment);      // open-tail re-typeset only
+thinking.set_detail("213 tk");  // the token-count slot
+// streams may deliver a trailing complete aggregate — LAST WINS:
+thinking.complete(aggregate);   // REPLACES the accumulated fragments
+```
+
+The input is **result metadata**, never parsed out of reply prose —
+what counts as reasoning is the app's (and its gateway's) call; the
+widget renders what it is handed. The body typesets through the same
+recipe as `MarkdownView`/`Feed` (fences and tables tint mid-stream),
+capped at `max_body_rows` (default 8) with a scrollbar past it.
+
+Streaming semantics, pinned by tests: `complete` replaces the
+fragments (providers recompose — the aggregate is the truth, and a
+second `complete` replaces again); fragments arriving AFTER `complete`
+are ignored (`append` returns `false` — a late straggler must not
+corrupt the completed text). The folded header carries a dot indicator
+while streaming that advances PER APPEND — data-driven, no timer: a
+quiet stream freezes it and the card schedules nothing (zero idle);
+completion clears it. Fold state survives streaming and fold cycles
+(`folded(Signal<bool>)` for the 0850 collapse-all policy); one MOUNTED
+card per state (the body feed typesets at one width). A ThinkingFold
+cannot live INSIDE a `Feed` item (feed blocks are draw-only,
+first-app/0280) — place it beside its feed segments in the turn
+column, as `examples/reasoning.rs` does.
 
 ### Meter and AudioScope — live levels
 
@@ -1477,6 +1522,89 @@ Mode vocabulary underneath: `ThemeMode`, `theme.mode()`,
 [docs/theming.md](theming.md#theme-modes--the-switcher). Demos:
 `examples/themes.rs` (both faces in the browser's toolbar),
 `examples/shell.rs` (footer placement).
+
+## app::ReasoningSelect — the reasoning-effort control
+
+The drop-in picker for a model's thinking effort (app-kits/1250), and
+the ONE label grammar console footers share. The effort ladder is
+`none | minimal | low | medium | high | xhigh` plus `auto` (provider
+default) — `REASONING_LADDER` / `REASONING_AUTO`. The UI word is
+"reasoning"; the wire key apps write is `thinking` — the engine mints
+NO wire vocabulary: the control renders and emits VALUES, the app does
+the writing.
+
+```rust,ignore
+use abstracttui::prelude::*;
+
+let effort = cx.signal(String::from("auto"));
+ReasoningSelect::new(ReasoningFacts::capable(["low", "medium", "high"]))
+    .value(effort)                       // controlled; omit for internal
+    .on_change(|v| write_wire_thinking(v)) // fires once per changing commit
+    .view(cx)
+```
+
+Capability facts arrive AS DATA (the thin-client rule): the app parses
+the gateway-served `reasoning{thinking_support, reasoning_levels}`
+block into a [`ReasoningFacts`] — `capable(levels)` /
+`non_reasoning()` / `unknown()` (block absent) — and the widget
+enforces the three-state coupling:
+
+- **capable** — the popup offers `auto`, `none` and the DECLARED
+  levels only (verbatim, deduplicated, declared order — an unknown
+  level string like `ultrathink` renders verbatim: the gateway is the
+  authority on what a model supports). Empty declared list = `auto` /
+  `none` alone.
+- **non-reasoning** — the control renders LOCKED
+  (`r: none (locked) — model does not reason`), faint, out of the
+  focus order, and refuses to open.
+- **unknown** — locked to `none` by default, but openable: one row,
+  `set anyway (capability unknown — passed verbatim)`, unlocks the
+  FULL ladder for this instance. The lock annotation clears only when
+  a value is actually committed through that ladder; committing `none`
+  changes nothing and keeps it.
+
+The popup rides the select-family machinery (arrows/Home/End/paging,
+type-ahead, Enter/click commits, Escape abandons, outside press
+dismisses) as an OWNED anchored popup: SCREEN-space anchored — inside
+a `Modal` or `Drawer` it opens adjacent to the trigger — flipping
+above when below is short. `on_change` fires once per commit and only
+when the committed value differs from the EFFECTIVE one (a locked
+display's effective value is `none`, so overriding an unknown model to
+`auto` DOES fire; the select-family 0250 rule otherwise —
+field-gateway 0905 tracks the same-value-recommit gap family-wide).
+The widget never writes the bound signal uninvited. Closed, it is
+zero-idle. A11y: `button "reasoning"` whose value names the lock and
+its why (`none (locked — capability unknown)`); the popup is a
+`menu "reasoning"` of `menuitem` rows.
+
+**Reset on model change (the recipe)**: facts are constructor data —
+the widget does NOT own provider/model coupling. Remount with fresh
+facts when the model changes (build inside a `dyn_view` reading the
+model signal); per-instance state — the unknown-state override, an
+uncontrolled value — dies with the instance, so a stale "set anyway"
+can never leak onto the next model. `examples/reasoning.rs` shows it.
+
+The footer grammar is public API — golden-tested, one source:
+
+```rust,ignore
+reasoning_label("high", LockState::Unlocked)      // "r: high"
+reasoning_label("none", LockState::Locked)        // "r: none (locked)"
+reasoning_label_glyph("none", LockState::Locked)  // "r: none ⊘"
+```
+
+The PLAIN form is canonical (self-describing, ASCII-safe, what a
+screen reader hears). The glyph form exists for width-tight footers:
+`⊘` U+2298 — chosen by the ThemeSwitcher-precedent width research
+(there is NO padlock outside Unicode emoji-data; `⚿`/`×`/`●` are
+East-Asian-Ambiguous and go double-width under ambiguous-wide
+terminals; U+2298 measures 1 in BOTH unicode-width conventions and
+sits in a block emoji-data never touches).
+
+These coupling rules mirror the shared abstractuic reasoning contract
+(the cross-seat plan's contract v1); parity with the uic kit's control
+is verified when its API lands. Reasoning TEXT belongs to
+[`ThinkingFold`](#thinkingfold--the-reasoning-text-fold) — metadata
+in, never prose-parsed.
 
 ## app::keys — key press/release state (held keys)
 

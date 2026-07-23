@@ -125,3 +125,12 @@ pub use crate::render::Screenshot;
 // listing, the one-click mode flip, and the drop-in chrome control.
 pub use crate::app::{toggle_mode, ThemeSwitcher};
 pub use crate::theme::{themes_by_mode, ThemeMode};
+
+// Reasoning controls (app-kits/1250) — appended with their wave: the
+// three-state effort picker + the shared footer label grammar, and the
+// streaming thinking-text fold.
+pub use crate::app::{
+    reasoning_label, reasoning_label_glyph, LockState, ReasoningFacts, ReasoningSelect,
+    REASONING_AUTO, REASONING_LADDER,
+};
+pub use crate::widgets::{ThinkingFold, ThinkingFoldState};

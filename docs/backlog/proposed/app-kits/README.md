@@ -1,8 +1,11 @@
-# App-kits backlog track — band 0500–0590
+# App-kits backlog track — band 0500–0590 (continuation 1250–1290)
 
 ## Status
 Proposed (roadmap study 2026-07-22, cycles 1–4 — final). Numbering band:
-**0500–0590 only** — this track never writes outside it. Sibling study
+**0500–0590** — full (0595/0605 spills recorded in the overview), so
+per the overview's rule the track CONTINUES at the next free fifty:
+**1250–1290** (first taken: 1250 reasoning controls, completed
+2026-07-26). Sibling study
 bands: control-plane 0300–0390 (`../control-plane/`, PLATFORM),
 extensions 0400–0490 (`../extensions/`, EXTENSIONS). Established bands:
 live-data 0010–0090, app-widgets 0100–0190, ports 0200–0290

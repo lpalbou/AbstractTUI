@@ -51,6 +51,7 @@ mod notices;
 pub mod overlays;
 pub mod popups;
 pub mod push_to_talk;
+pub mod reasoning;
 mod redraw;
 mod screenshot;
 pub mod select;
@@ -90,6 +91,12 @@ pub use choice_prompt::{
 // Appended (wave 8, app-kits/0585): the global drawer system.
 pub use drawer::{
     Drawer, DrawerCloseReason, DrawerEdge, DrawerFocus, DrawerHandle, DrawerSize, DRAWER_Z,
+};
+// Appended (app-kits/1250): the reasoning-effort control + the shared
+// footer label grammar.
+pub use reasoning::{
+    reasoning_label, reasoning_label_glyph, LockState, ReasoningFacts, ReasoningSelect,
+    REASONING_AUTO, REASONING_LADDER,
 };
 
 use std::cell::Cell;

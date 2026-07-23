@@ -24,7 +24,10 @@
 > ingestion, honest drop counters, `TimeSeries` history rings with relative time axes on
 > the charts) plus an engine-owned connection lifecycle with jittered-backoff reconnect,
 > key press/release state with honest fidelity (push-to-talk, level meters, and a
-> waveform scope for voice surfaces), file-attachment surfaces (a paste intercept
+> waveform scope for voice surfaces), reasoning controls for agent consoles (a
+> three-state thinking-effort picker driven by capability facts, the shared
+> `r: <value>` footer label grammar, and a streaming last-wins ThinkingFold for
+> reasoning text arriving from result metadata), file-attachment surfaces (a paste intercept
 > with a cross-terminal file-drop classifier plus a directory FilePicker widget, so
 > a dropped file becomes an attachment instead of pasted text), text selection with
 > OSC 52 clipboard copy, an
@@ -122,7 +125,7 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, 0.2.23 (2026-07-25) the current one —
+  (2026-07-21) is the first public release, 0.2.24 (2026-07-26) the current one —
   released alongside the first extension-family crates (`abstracttui-graph` 0.1.0,
   `abstracttui-mermaid` 0.1.0, each with its own changelog under `extensions/`).
 - [Contributing](CONTRIBUTING.md): Building, the test suite (~2,120 core tests; ~2,245
