@@ -27,6 +27,7 @@
 
 mod access;
 mod canvas;
+mod click;
 pub mod compose;
 mod draw;
 mod event;
@@ -37,6 +38,9 @@ mod view;
 
 pub use access::{focus_affordance_visible, AccessEntry, AccessSnapshot, Role};
 pub use canvas::{BufferCanvas, Canvas, ClippedCanvas, StyledCanvas, SurfaceCanvas};
+pub use click::{
+    event_time, set_event_time, ClickChain, DEFAULT_CLICK_TOLERANCE, DEFAULT_CLICK_WINDOW,
+};
 pub use compose::Callback;
 pub use event::{
     EventCtx, Key, KeyChord, KeyEvent, Mods, MouseButton, MouseEvent, MouseKind, Phase, UiEvent,

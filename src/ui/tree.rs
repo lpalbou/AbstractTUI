@@ -101,6 +101,14 @@ pub(super) struct TreeCore {
     /// writes would re-enter a running computation if fired inline
     /// (the 0220 mount-time "dependency cycle" panic).
     pub(super) pending_autofocus: Option<ViewId>,
+    /// Multi-click synthesis (`ui::click`): one chain per tree, folded
+    /// on every dispatched mouse event; handlers read the result via
+    /// `EventCtx::click_count`. Positional identity, deliberately not
+    /// ViewId identity — selection-driven re-renders dispose and remount
+    /// the very instance a click hit (List/Table regenerate their
+    /// `dyn_view` on click 1), so instance comparison would reset the
+    /// chain on exactly the presses that should chain.
+    pub(super) click_chain: super::click::ClickChain,
 }
 
 impl TreeCore {
@@ -153,6 +161,7 @@ impl UiTree {
                 dirty_subtrees: Vec::new(),
                 focus_memory: std::collections::HashMap::new(),
                 pending_autofocus: None,
+                click_chain: super::click::ClickChain::new(),
             })),
         }
     }
@@ -559,6 +568,11 @@ impl UiTree {
     /// capture = no-op. Returns whether a press was cancelled.
     pub(crate) fn cancel_pointer_press(&mut self) -> bool {
         self.layout(); // the heal below hit-tests at the press cell
+                       // The press that armed this capture was re-interpreted (it
+                       // became a selection drag): it must not seed a double-click —
+                       // same rule as the chain's own drag reset, applied at the one
+                       // place drags are consumed BEFORE this tree can see them.
+        self.core.borrow_mut().click_chain.reset();
         if self.validated_capture().is_none() {
             return false;
         }
@@ -622,6 +636,22 @@ impl UiTree {
 
     fn dispatch_inner(&mut self, event: &UiEvent) -> bool {
         self.layout(); // hit testing needs fresh rects
+                       // Multi-click synthesis: fold every mouse event into the tree's
+                       // chain BEFORE routing, so the count is readable by every
+                       // handler of this very press. Time comes from the ambient
+                       // event clock (driver-published each turn); without one,
+                       // presses stay isolated — deterministically count 1, never an
+                       // implicit wall-clock read (see ui::click's no-wall-clock rule).
+        let click_count = match event {
+            UiEvent::Mouse(m) => match super::click::event_time() {
+                Some(now) => self.core.borrow_mut().click_chain.observe(now, m),
+                None => {
+                    self.core.borrow_mut().click_chain.reset();
+                    u8::from(matches!(m.kind, MouseKind::Down(_)))
+                }
+            },
+            _ => 0,
+        };
         let target = match event {
             UiEvent::Mouse(m) => {
                 // Capture redirects every mouse event; a capture whose
@@ -653,6 +683,7 @@ impl UiTree {
         let mut ctx = EventCtx {
             target: Some(target),
             target_rect: self.rect_of(target),
+            click_count,
             ..EventCtx::default()
         };
 

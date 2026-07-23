@@ -22,9 +22,13 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | --- | --- |
 | Planned | 5 |
 | Proposed | 65 |
-| Completed | 50 |
+| Completed | 51 |
 | Deprecated | 0 |
 | Recurrent | 0 |
+
+(2026-07-24 double-click fold: app-kits/0535 filed directly in
+completed/ — same-wave delivery of the gateway-console double-click
+request; completed 50→51.)
 
 (Counted from the filesystem 2026-07-23, 0.2.6 field-wave fold:
 `[0-9]*.md` files under planned/, proposed/, completed/. This fold
@@ -128,6 +132,7 @@ composer wave).
 | 0260 | Disclosure card widget — fold/unfold title row, configurable initial state, capped body with scrollbar (`widgets::Disclosure`) — completed 2026-07-24 | completed/first-app/ |
 | 0850 | Feed message-card enablers — `Feed::on_item_press` + `item_at_row`, `Scroll::extent_signal`/`scrollbar_auto_hide`, the documented card recipe (Feed-native kind stays behind 0280) — completed 2026-07-24 | completed/field-agora/ |
 | 0585 | Global drawer system — `app::Drawer` edge-anchored overlay panels hosting full pages (Modal/Passive focus modes, scrim, slide via `animate` with the idle-zero pin, per-edge z slots below `MODAL_Z`, one-per-edge replace, resize re-clamp, bound-signal controlled mode) + the `animate` mid-flight disposal guard — completed 2026-07-24 | completed/app-kits/ |
+| 0535 | Double-click: engine click-chain synthesis (tree-embedded `ui::ClickChain`, ambient event clock off `Driver::set_clock`, `EventCtx::click_count()`) + `Table::on_activate` (Enter/Space when bound + double-click on the selected row; single/slow clicks only select) — List's picker gesture unchanged (subsumes double-click); delivers 0530 §3's activation slice — completed 2026-07-24 | completed/app-kits/ |
 
 ## Proposed ledger
 
@@ -266,7 +271,14 @@ consumer-earned items below.)
 - **The 0250 ruling** (selection follows movement; activation = Enter /
   click-when-selected; commit-on-move per-widget opt-in, default off) is
   recorded in `reviews/study/platform-on-appkits.md` and encoded by
-  0530/0550/0570; the List/Table engine fixes cite it.
+  0530/0550/0570; the List/Table engine fixes cite it. AMENDED
+  2026-07-24 by 0535: the ruling's "no double-click synthesis anywhere"
+  clause is retired — the engine synthesizes click counts
+  (`EventCtx::click_count`), `Table::on_activate` consumes them (timed
+  double-click; slow click-on-selected deliberately does NOT activate
+  on a table), and List's timing-free picker gesture stands unchanged
+  (it subsumes double-click). 0530's remaining scope (cells, actions,
+  identity, multi-select) builds ON 0535's activation event.
 - **Sibling extension crates inherit the dependency posture** (std +
   abstracttui + hand-rolled parsing); the TLS-class exception is not
   granted here — it rides live-data 0050's transport ADR.

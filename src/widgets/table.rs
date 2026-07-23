@@ -4,6 +4,22 @@
 //! `on_sort_requested(col)`; the app reorders its data and passes the
 //! resulting `sorted: (col, ascending)` back for the indicator.
 //!
+//! SELECTION vs ACTIVATION (the 0250 ruling, Table edition — app-kits
+//! 0535): selection FOLLOWS MOVEMENT (arrows/Page/Home/End/click;
+//! `on_select` is the notification); activation is the explicit "open
+//! this row" event — `on_activate` fires on Enter (always), on Space
+//! (single-select Table has no toggle meaning, so Space aliases Enter —
+//! the PLATFORM F5 rule; 0530's multi-select mode will claim Space as
+//! toggle WITHIN that mode), and on DOUBLE-CLICK: the second press of a
+//! click chain landing on the already-selected row (`EventCtx::
+//! click_count() >= 2`). Deliberately UNLIKE `List`, a slow second
+//! click on the selected row does NOT activate — a table is a browsing
+//! surface (re-clicking a row to focus the pane must never open its
+//! editor); a List is a picker, where click-the-selected-row-to-commit
+//! is the shipped 0250 gesture. Both presses of a double-click deliver
+//! normally: click 1 selects, click 2 activates — selection is never
+//! suppressed waiting for a second click.
+//!
 //! Same v1 data model as `List` (snapshot rows, virtualized painting;
 //! wrap in a `Dyn` on your data signal to change them) — the scaling
 //! note there applies.
@@ -53,6 +69,7 @@ pub struct Table {
     sorted: Option<(usize, bool)>,
     layout: Option<LayoutStyle>,
     on_select: Option<Box<dyn FnMut(usize)>>,
+    on_activate: Option<Box<dyn FnMut(usize)>>,
     on_sort_requested: Option<Box<dyn FnMut(usize)>>,
 }
 
@@ -66,6 +83,7 @@ impl Table {
             sorted: None,
             layout: None,
             on_select: None,
+            on_activate: None,
             on_sort_requested: None,
         }
     }
@@ -94,6 +112,21 @@ impl Table {
 
     pub fn on_select(mut self, f: impl FnMut(usize) + 'static) -> Table {
         self.on_select = Some(Box::new(f));
+        self
+    }
+
+    /// ACTIVATION: the user committed the selected row (the 0250 ruling
+    /// applied to Table — "open this row"). Fires with the current index
+    /// on Enter, on Space (no toggle meaning in a single-select table),
+    /// and on DOUBLE-CLICK — the second press of a click chain on the
+    /// already-selected row (see the module docs; a single click, or a
+    /// slow second click, only selects). When unbound, Enter and Space
+    /// pass through to app shortcuts exactly as before this event
+    /// existed. The callback runs after all Table bookkeeping, so it may
+    /// dispose the Table's scope synchronously (open-the-editor-modal is
+    /// the intended use).
+    pub fn on_activate(mut self, f: impl FnMut(usize) + 'static) -> Table {
+        self.on_activate = Some(Box::new(f));
         self
     }
 
@@ -144,6 +177,8 @@ impl Table {
         let offset = cx.signal(0i32);
         let on_select: crate::widgets::SharedCallback<usize> =
             Rc::new(RefCell::new(self.on_select));
+        let on_activate: crate::widgets::SharedCallback<usize> =
+            Rc::new(RefCell::new(self.on_activate));
         let on_sort: crate::widgets::SharedCallback<usize> =
             Rc::new(RefCell::new(self.on_sort_requested));
         let layout = self
@@ -181,11 +216,28 @@ impl Table {
         };
 
         let handler_widths = widths.clone();
+        let activate = on_activate;
         let handler = move |ctx: &mut EventCtx, ev: &UiEvent| {
             let rect = ctx.current_rect();
             let body_h = (rect.h - 1).max(1); // header takes row 0
             match ev {
                 UiEvent::Key(k) => {
+                    // Activation keys (module docs): Enter always;
+                    // Space aliases it while Table is single-select
+                    // (F5 — no toggle meaning exists to claim it).
+                    // Consumed ONLY when a callback is bound: an
+                    // activation-less Table leaves Enter/Space to the
+                    // app's own shortcuts (the 0980 lesson — never
+                    // claim a key without a consumer).
+                    if matches!(k.key, Key::Enter | Key::Char(' ')) {
+                        if len > 0 {
+                            if let Some(f) = activate.borrow_mut().as_mut() {
+                                f(selection.get_untracked().min(len - 1));
+                                ctx.stop_propagation();
+                            }
+                        }
+                        return;
+                    }
                     // Keyboard sort parity (a11y audit, cycle 6):
                     // 's' requests sorting the NEXT column round-robin
                     // (start after the currently sorted one) — the same
@@ -243,7 +295,28 @@ impl Table {
                         } else {
                             let row = (m.pos.y - rect.y - 1) + offset.get_untracked();
                             if row >= 0 && (row as usize) < len {
-                                select(row as usize, body_h);
+                                let idx = row as usize;
+                                // Single-click SELECTS; the second press
+                                // of a double-click (click_count ≥ 2)
+                                // ACTIVATES — gated on the row being the
+                                // ALREADY-selected one, which is the row
+                                // guard: a chained press that wiggled
+                                // onto a NEIGHBOR row (inside the chain's
+                                // cell tolerance) or a fast click-walk
+                                // down adjacent rows re-selects but never
+                                // activates. select() finishes all Table
+                                // bookkeeping first (0250 clause 4), and
+                                // on the activating press the selection
+                                // did not change, so on_select stays
+                                // silent and activate is the LAST call —
+                                // it may dispose the Table's scope.
+                                let was_selected = selection.get_untracked() == idx;
+                                select(idx, body_h);
+                                if was_selected && ctx.click_count() >= 2 {
+                                    if let Some(f) = activate.borrow_mut().as_mut() {
+                                        f(idx);
+                                    }
+                                }
                             }
                         }
                         ctx.stop_propagation();
@@ -420,183 +493,5 @@ pub(crate) fn solve_columns(widths: &[ColWidth], total: i32) -> Vec<i32> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::base::{Point, Size};
-    use crate::theme::default_theme;
-    use crate::ui::Key;
-    use crate::widgets::itest_util::{click, key, mount_widget, render};
-
-    fn sample(cx: Scope, on_sort: impl FnMut(usize) + 'static) -> Element {
-        let t = &default_theme().tokens;
-        Table::new(vec![
-            Column::new("name", ColWidth::Flex(1.0)),
-            Column::new("size", ColWidth::Cells(6)),
-        ])
-        .rows(
-            (0..12)
-                .map(|i| vec![format!("file-{i}"), format!("{i} kB")])
-                .collect(),
-        )
-        .sorted(0, true)
-        .on_sort_requested(on_sort)
-        .element(cx, t)
-    }
-
-    #[test]
-    fn header_body_selection_and_indicator_render() {
-        let size = Size::new(20, 5);
-        let (_root, mut tree) = mount_widget(size, |cx| sample(cx, |_| {}).build());
-        let canvas = render(&mut tree, size);
-        assert!(
-            canvas.row_text(0).contains("name▲"),
-            "{:?}",
-            canvas.row_text(0)
-        );
-        assert!(canvas.row_text(0).contains("size"));
-        assert!(canvas.row_text(1).starts_with("file-0"));
-        assert!(
-            canvas.attrs_at(Point::new(0, 0)).contains(Attrs::BOLD),
-            "header renders bold"
-        );
-        // Selected row 0 wears selection ground.
-        let theme = default_theme();
-        assert_eq!(
-            canvas.cell(Point::new(0, 1)).unwrap().2,
-            theme.tokens.selection_bg
-        );
-    }
-
-    #[test]
-    fn keyboard_navigates_rows_with_ensure_visible() {
-        let size = Size::new(20, 5); // 4 body rows
-        let (_root, mut tree) = mount_widget(size, |cx| sample(cx, |_| {}).build());
-        key(&mut tree, Key::Tab);
-        key(&mut tree, Key::End);
-        let canvas = render(&mut tree, size);
-        assert!(
-            canvas.row_text(4).starts_with("file-11"),
-            "{:?}",
-            canvas.row_text(4)
-        );
-    }
-
-    #[test]
-    fn s_key_requests_sort_round_robin_from_the_sorted_column() {
-        // Keyboard parity for header-click sorting (a11y audit): 's'
-        // fires on_sort_requested on the column AFTER the sorted one.
-        let size = Size::new(20, 5);
-        let requested: std::rc::Rc<std::cell::RefCell<Vec<usize>>> =
-            std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
-        let r = requested.clone();
-        let (_root, mut tree) = mount_widget(size, |cx| {
-            sample(cx, move |c| r.borrow_mut().push(c)).build()
-        });
-        key(&mut tree, Key::Tab); // focus the table
-        key(&mut tree, Key::Char('s'));
-        key(&mut tree, Key::Char('s'));
-        // sorted(0) is a static prop in this build, so each press asks
-        // for column 1 (the app would update `sorted` between presses).
-        assert_eq!(*requested.borrow(), vec![1, 1]);
-    }
-
-    #[test]
-    fn header_click_requests_sort_body_click_selects() {
-        let size = Size::new(20, 5);
-        let sorts: Rc<RefCell<Vec<usize>>> = Rc::new(RefCell::new(Vec::new()));
-        let s2 = sorts.clone();
-        let (_root, mut tree) = mount_widget(size, move |cx| {
-            sample(cx, move |c| s2.borrow_mut().push(c)).build()
-        });
-        click(&mut tree, 2, 0); // header, first (flex) column
-        assert_eq!(*sorts.borrow(), vec![0]);
-        click(&mut tree, 15, 0); // header, "size" column
-        assert_eq!(*sorts.borrow(), vec![0, 1]);
-        click(&mut tree, 2, 3); // body row 2
-        let theme = default_theme();
-        let canvas = render(&mut tree, size);
-        assert_eq!(
-            canvas.cell(Point::new(0, 3)).unwrap().2,
-            theme.tokens.selection_bg
-        );
-    }
-
-    /// Disposal-safety law (backlog 0297): `on_sort_requested` is the
-    /// LAST thing its arms run (no widget write follows on either the
-    /// 's'-key or the header-click path), so the callback may dispose
-    /// the Table's scope synchronously. Audited clean at filing; pinned.
-    #[test]
-    fn on_sort_requested_may_dispose_the_tables_scope() {
-        let t = default_theme().tokens;
-        let mut tree = crate::ui::UiTree::new(Size::new(20, 5));
-        let (root, ()) = crate::reactive::create_root(|cx| {
-            let modal_cx = cx.child();
-            let view = Table::new(vec![
-                Column::new("name", ColWidth::Flex(1.0)),
-                Column::new("size", ColWidth::Cells(6)),
-            ])
-            .rows(
-                (0..3)
-                    .map(|i| vec![format!("f{i}"), format!("{i}")])
-                    .collect(),
-            )
-            .on_sort_requested(move |_| modal_cx.dispose())
-            .element(modal_cx, &t)
-            .build();
-            tree.mount(modal_cx, view);
-        });
-        tree.layout();
-        key(&mut tree, Key::Tab); // focus
-        key(&mut tree, Key::Char('s')); // sort request -> dispose
-        assert_eq!(tree.instance_count(), 0, "subtree unmounted by dispose");
-        root.dispose();
-    }
-
-    /// 0250 ruling clause 4 mirrored onto Table: `on_select` runs AFTER
-    /// all widget bookkeeping (the ensure-visible `offset.update` used
-    /// to run after the callback — the same disposal hazard the List
-    /// field report names), so a callback may dispose the Table's scope
-    /// synchronously.
-    #[test]
-    fn on_select_may_dispose_the_tables_scope() {
-        let t = default_theme().tokens;
-        let mut tree = crate::ui::UiTree::new(Size::new(20, 5));
-        let (root, ()) = crate::reactive::create_root(|cx| {
-            let picker_cx = cx.child();
-            let view = Table::new(vec![
-                Column::new("name", ColWidth::Flex(1.0)),
-                Column::new("size", ColWidth::Cells(6)),
-            ])
-            .rows(
-                (0..12)
-                    .map(|i| vec![format!("file-{i}"), format!("{i} kB")])
-                    .collect(),
-            )
-            .on_select(move |_| picker_cx.dispose())
-            .element(picker_cx, &t)
-            .build();
-            tree.mount(picker_cx, view);
-        });
-        tree.layout();
-        key(&mut tree, Key::Tab);
-        key(&mut tree, Key::Down); // fires on_select -> dispose, mid-dispatch
-        assert_eq!(tree.instance_count(), 0, "subtree unmounted by dispose");
-        root.dispose();
-    }
-
-    #[test]
-    fn column_solver_tiles_exactly() {
-        let cols = solve_columns(
-            &[
-                ColWidth::Cells(4),
-                ColWidth::Percent(0.25),
-                ColWidth::Flex(1.0),
-                ColWidth::Flex(1.0),
-            ],
-            24,
-        );
-        let gaps = (cols.len() as i32) - 1;
-        assert_eq!(cols.iter().sum::<i32>() + gaps, 24, "{cols:?}");
-        assert_eq!(cols[0], 4);
-    }
-}
+#[path = "table_tests.rs"]
+mod tests;

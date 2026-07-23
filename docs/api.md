@@ -133,6 +133,48 @@ the endorsed pattern is a store struct of signals provided as context —
 Signals are `Copy` handles, so cloning the store shares state: no prop
 drilling, no reducer framework.
 
+### Double-click
+
+Terminals report only raw press/release — the engine synthesizes
+multi-click counts (same button, within 400 ms, within 1 cell; wheel,
+drags, and a different button reset the chain; modifiers don't break
+it). Every mouse-Down handler can read the press's chain position via
+`ctx.click_count()`: 1 = isolated press, 2 = a double-click's second
+press, 3 = a triple's third. Both presses deliver normally — nothing is
+delayed waiting for a second click — so the convention is one `if` in a
+press handler: **single-click selects, double-click activates** (click 1
+did the selecting; click 2 additionally commits). `Table::on_activate`
+ships exactly that; `List`'s click-on-selected picker gesture subsumes
+it without a timer. The recipe for hand-rolled rows (custom cards,
+graph nodes):
+
+```rust
+use abstracttui::ui::{MouseButton, MouseKind, UiEvent};
+
+// inside .on(Phase::Bubble, |ctx, ev| { ... })
+if let UiEvent::Mouse(m) = ev {
+    if matches!(m.kind, MouseKind::Down(MouseButton::Left)) {
+        // select the row under m.pos here (every press), then:
+        if ctx.click_count() >= 2 {
+            // open/commit the row — guard that BOTH presses hit the
+            // same logical row (Table gates on already-selected), or a
+            // fast click-walk down adjacent rows would spuriously open.
+        }
+    }
+}
+```
+
+Counts flow only where time flows: the driver publishes its
+(`set_clock`-injectable) clock as the ambient event time each turn, so
+apps under `App::run` get counts for free and tests script double-click
+timing through the same injected clock animations use. A bare `UiTree`
+driven directly has no time source and every press deterministically
+counts 1 — harnesses opt in with `ui::set_event_time(Some(t))`. Custom
+input paths outside tree dispatch can embed their own `ui::ClickChain`
+(the pure state machine: `observe(now, &event) -> count`, configurable
+`window`/`tolerance`) and read `ui::event_time()` for the engine's
+clock.
+
 ## layout — flex and grid
 
 The layout solver is a flexbox subset over integer cells: `Direction`
@@ -189,7 +231,7 @@ widgets take just `&TokenSet`, no `Scope`. The catalog:
 - **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
 - **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`. Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected).
 - **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful.
-- **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts).
+- **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
 - **Disclosure** — the fold/unfold card: a one-row title header (glyph + truncating title + muted detail slot) that expands a body in place. Click or Enter/Space toggles; `max_body_rows` caps the body behind a scrollbar; state is widget-internal (`initially_folded`) or app-owned (`folded(Signal<bool>)`).
 - **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override) and can be read back through `extent_signal`; `follow_tail` binds the pinned-to-bottom idiom; `scrollbar_auto_hide` hides the bar while content fits.
@@ -249,12 +291,15 @@ the highlight, and `on_select` is the selection-changed notification —
 never wire commitment, navigation, or destruction to it. Activation is
 the EXPLICIT "user chose this row" event: `on_activate` fires on Enter
 (always), on Space (a List has no toggle meaning), and on a click on
-the already-selected row; a click on an unselected row only selects,
-and there is no double-click synthesis. Both callbacks run after the
-List's own bookkeeping (selection write, ensure-visible), so an
-`on_activate` may close the surrounding modal — disposing the List's
-scope synchronously is safe. When `on_activate` is unbound, Enter and
-Space pass through to your shortcuts unchanged:
+the already-selected row; a click on an unselected row only selects.
+Double-clicks work by subsumption — click 1 selects, click 2 lands on
+the now-selected row and activates, with no timing requirement (the
+picker gesture is deliberately broader than `Table`'s timed
+double-click). Both callbacks run after the List's own bookkeeping
+(selection write, ensure-visible), so an `on_activate` may close the
+surrounding modal — disposing the List's scope synchronously is safe.
+When `on_activate` is unbound, Enter and Space pass through to your
+shortcuts unchanged:
 
 ```rust
 use abstracttui::prelude::*;
@@ -263,6 +308,40 @@ fn theme_picker(cx: Scope, apply_and_close: impl FnMut(usize) + 'static) -> View
     List::of(["dark", "light", "solarized"])
         .on_activate(apply_and_close) // Enter / Space / click-on-selected
         .view(cx) // browsing with arrows only moves the highlight
+}
+```
+
+### Table — selection vs activation
+
+Same split, browsing-surface edition: `on_select` notifies selection
+movement (arrows/Page/Home/End/click); `on_activate` is "open this row"
+— it fires on Enter (always), on Space (a single-select table has no
+toggle meaning; a future multi-select mode will claim Space as toggle
+within that mode), and on **double-click**: the second press of a click
+chain landing on the already-selected row. Deliberately unlike `List`,
+a slow second click on the selected row does NOT activate — re-clicking
+a row to focus the pane must never open its editor. Both presses of a
+double-click deliver normally (click 1 selects, click 2 activates;
+selection is never suppressed), a chained press that drifted onto a
+NEIGHBOR row only re-selects (fast click-walking down rows is browsing,
+not commitment), and a wheel between clicks resets the chain (the
+content under the cell moved). When `on_activate` is unbound, Enter and
+Space pass through to your shortcuts — same contract as List (and the
+gateway-console rule: a screen-level key must never be claimed by a
+widget with no consumer):
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::widgets::{ColWidth, Column};
+
+fn providers(cx: Scope, open_editor: impl FnMut(usize) + 'static) -> View {
+    Table::new(vec![
+        Column::new("provider", ColWidth::Flex(1.0)),
+        Column::new("status", ColWidth::Cells(12)),
+    ])
+    .rows(vec![/* ... */])
+    .on_activate(open_editor) // Enter / Space / double-click
+    .view(cx) // single-click only selects
 }
 ```
 
@@ -797,7 +876,7 @@ and exempt — they are safe on either side of a callback.
 Covered and pinned by a disposal test per site: `Button::on_click`
 (both mouse and keyboard arms), `Checkbox`/`RadioGroup`/`Tabs`
 `on_change`, `TextInput` and `TextArea` `on_change`/`on_submit`,
-`List::on_select`/`on_activate`, `Table::on_select`/
+`List::on_select`/`on_activate`, `Table::on_select`/`on_activate`/
 `on_sort_requested`, and the select faces' commit `on_change` (the
 popup follows its owner's scope down — the anchor-unmount cascade).
 `Popup::on_dismiss` fires after the popup's own teardown for the same

@@ -289,6 +289,9 @@ pub struct EventCtx {
     /// the deep hit target's rect scrolled by zero).
     pub(crate) current: Option<super::tree::ViewId>,
     pub(crate) current_rect: crate::base::Rect,
+    /// Chain position of a mouse-Down event (tree-synthesized — see
+    /// `ui::click`): 0 for every non-press event.
+    pub(crate) click_count: u8,
 }
 
 impl EventCtx {
@@ -343,6 +346,21 @@ impl EventCtx {
     /// this until widget-level damage lands).
     pub fn request_repaint(&mut self) {
         self.damage_all = true;
+    }
+
+    /// This mouse-Down's position in its click chain: 1 = an isolated
+    /// press, 2 = the second press of a double-click, 3 = a triple's
+    /// third (saturating at 255); 0 for every event that is not a
+    /// mouse press. Both presses of a double-click are delivered
+    /// normally — the second one ADDITIONALLY reads ≥ 2 here, so
+    /// "single-click selects, double-click activates" is one `if` in a
+    /// press handler (that is exactly how `Table::on_activate` works).
+    /// Synthesis needs a published event time (the driver provides it
+    /// every turn; harnesses call [`set_event_time`](super::set_event_time)) —
+    /// without one, every press reads 1. See `ui::click` for the chain
+    /// rules (window, tolerance, resets).
+    pub fn click_count(&self) -> u8 {
+        self.click_count
     }
 }
 

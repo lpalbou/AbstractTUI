@@ -102,6 +102,23 @@ note per ADR-0001 §2. Additive work never needs this list.
    keep working verbatim. New variants go at the END (entry 1's
    discriminant rule).
 
+6. **`ui::MouseEvent` gains a `clicks: u8` field — CANDIDATE, not
+   committed** (app-kits 0535's parked long-term home, 2026-07-24).
+   Click-chain synthesis shipped ADDITIVELY at 0.2.x: the tree
+   synthesizes the count and handlers read it via
+   `EventCtx::click_count()`, because `MouseEvent` is `Copy`, all-pub,
+   NOT `#[non_exhaustive]`, and plain-constructed across tests and
+   apps — adding a field today is `struct_pub_field_added`-class MAJOR
+   (every literal constructor breaks). The count's natural home is the
+   event itself (DOM `detail`; no ambient state needed at read sites).
+   If taken in the 0.3 window: add `clicks` (0 for non-press kinds,
+   else the chain count), decide `#[non_exhaustive]` + a constructor
+   fn at the same time (ADR-0003 §3 — otherwise the NEXT field pays
+   this entry again), keep `EventCtx::click_count()` as a delegating
+   accessor (no consumer breaks). Enters only if ruled before the
+   window opens; the additive surface is complete without it (entry-4
+   posture).
+
 ## Enforcement
 
 - The `semver` CI job (`.github/workflows/ci.yml`, wired 2026-07-22)

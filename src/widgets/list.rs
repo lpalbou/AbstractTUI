@@ -9,6 +9,14 @@
 //! Enter here), and on a click on the ALREADY-selected row. Never wire
 //! commitment, navigation, or destruction to `on_select`.
 //!
+//! Double-click (app-kits 0535): List's click-on-selected rule SUBSUMES
+//! it — a double-click's first press selects the row, so its second
+//! press lands on the already-selected row and activates, timing-free.
+//! The picker gesture is deliberately BROADER than a timed double-click
+//! (a slow second click commits too); `Table`, a browsing surface,
+//! takes the strict timed convention instead (`ctx.click_count() >= 2`)
+//! — the divergence is recorded in both widgets' docs.
+//!
 //! Disposal-safety law (ruling clause 4): the List completes ALL of its
 //! own bookkeeping (selection write, sticky-key write, ensure-visible
 //! scrolling) BEFORE any user callback runs, so a callback may dispose
@@ -167,11 +175,14 @@ impl List {
     /// ACTIVATION: the user committed the selected row (0250 ruling).
     /// Fires with the current index on Enter, on Space (no toggle
     /// meaning in a List), and on a click on the ALREADY-selected row —
-    /// a click on an unselected row only selects. No double-click
-    /// synthesis. When unbound, Enter/Space pass through to app
-    /// shortcuts exactly as before this event existed. The callback may
-    /// dispose the List's scope synchronously (close-the-picker is the
-    /// intended use).
+    /// a click on an unselected row only selects. Double-clicks work by
+    /// subsumption: click 1 selects, click 2 is a click on the selected
+    /// row (no timing requirement — the picker gesture, deliberately
+    /// broader than `Table`'s timed `click_count() >= 2` convention).
+    /// When unbound, Enter/Space pass through to app shortcuts exactly
+    /// as before this event existed. The callback may dispose the
+    /// List's scope synchronously (close-the-picker is the intended
+    /// use).
     pub fn on_activate(mut self, f: impl FnMut(usize) + 'static) -> List {
         self.on_activate = Some(Box::new(f));
         self
@@ -361,8 +372,11 @@ impl List {
                             if idx < len {
                                 // Click on the ALREADY-selected row
                                 // activates; on an unselected row it
-                                // only selects (0250 ruling clause 2 —
-                                // no double-click synthesis). select()
+                                // only selects (0250 ruling clause 2).
+                                // Deliberately NOT gated on the click
+                                // chain (`ctx.click_count()`): the
+                                // picker gesture subsumes double-click
+                                // — see the module docs. select()
                                 // finishes all bookkeeping first, so
                                 // the activate callback runs last and
                                 // may dispose the List's scope.

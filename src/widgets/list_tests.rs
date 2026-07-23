@@ -256,6 +256,46 @@ fn enter_space_and_click_on_selected_row_activate() {
     assert_eq!(*activates.borrow(), vec![1, 1, 3]);
 }
 
+/// Double-click on a List row (app-kits 0535): SUBSUMED by the
+/// click-on-selected rule — click 1 selects, click 2 lands on the
+/// now-selected row and activates. With the click chain live (scripted
+/// event time, as under the driver) the second press carries
+/// `click_count() == 2` AND satisfies was-selected; the activation
+/// must fire EXACTLY once — never once per rule.
+#[test]
+fn double_click_fires_on_activate_exactly_once() {
+    let t = default_theme().tokens;
+    let activates: Rc<RefCell<Vec<usize>>> = Rc::new(RefCell::new(Vec::new()));
+    let a = activates.clone();
+    let (_root, mut tree) = mount_widget(Size::new(12, 4), |cx| {
+        Element::new()
+            .style(
+                LayoutStyle::default()
+                    .width(Dimension::Percent(1.0))
+                    .height(Dimension::Percent(1.0)),
+            )
+            .child(
+                List::of((0..8).map(|i| format!("item {i}")))
+                    .on_activate(move |i| a.borrow_mut().push(i))
+                    .element(cx, &t)
+                    .build(),
+            )
+            .build()
+    });
+    let t0 = std::time::Instant::now();
+    crate::ui::set_event_time(Some(t0));
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), 2, 2);
+    assert!(activates.borrow().is_empty(), "click 1 selects only");
+    crate::ui::set_event_time(Some(t0 + std::time::Duration::from_millis(100)));
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), 2, 2);
+    assert_eq!(
+        *activates.borrow(),
+        vec![2],
+        "double-click activates exactly once"
+    );
+    crate::ui::set_event_time(None);
+}
+
 #[test]
 fn enter_and_space_pass_through_without_on_activate() {
     // Compatibility pin: an unbound List must leave Enter/Space to

@@ -294,6 +294,13 @@ impl Driver {
         // ---- phase U: posted jobs, timers, animation ticks, then input --
         drain_posted();
         let now = self.now();
+        // Publish the turn's clock as the ambient input timestamp:
+        // every tree dispatched into this turn (overlays + root) folds
+        // its click chain on THIS time, so one injected clock
+        // (`set_clock`) drives animations, timers, and double-click
+        // synthesis alike. Events of one turn deliberately share a
+        // timestamp — a burst-delivered double-click still chains.
+        crate::ui::set_event_time(Some(now));
         // One-shot timers (toast dismissal, debounce) fire here; the
         // outer loop sleeps until the earliest deadline, so a pending
         // timer costs zero wakeups until due.

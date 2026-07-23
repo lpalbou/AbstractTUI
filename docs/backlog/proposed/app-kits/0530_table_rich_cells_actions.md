@@ -111,6 +111,16 @@ the exact outcome the widget library exists to prevent.
    the widget finishes its own bookkeeping (ensure-visible offset
    math, table.rs:163-172) BEFORE invoking user callbacks — the 0250
    crash class designed out, test-pinned.
+   **SHIPPED 2026-07-24 as 0535** (completed/app-kits/), with one
+   deliberate change to this paragraph's click policy: the "own engine
+   item" (click-count synthesis) landed, so Table activation is Enter +
+   Space (single-select alias, F5 held) + TIMED DOUBLE-CLICK on the
+   selected row — a slow second click on the selected row does NOT
+   activate (the operator's "one click = select" convention; the
+   click-on-selected fallback proposed above existed only because no
+   synthesis did). Remaining §3 work for this item: Space→toggle when
+   §5's multi-select lands, and `on_activate` reporting the KEY once
+   §4's row identity exists.
 4. **Row identity**: `row_key_fn` + `selection_key: Signal<String>`
    mirroring `List` (list.rs:99-111) so refresh/sort keeps the same
    logical entity selected; `on_action`/`on_activate` report the KEY,

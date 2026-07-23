@@ -5,7 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.15] - 2026-07-24
+## [0.2.16] - 2026-07-24
+
+### Added
+
+- ui: double-click synthesis (app-kits 0535 — the gateway-console
+  request "single click selects; double click should open like Enter").
+  Terminals report only raw SGR press/release, so the ENGINE now
+  synthesizes multi-click counts: each `UiTree` folds mouse events
+  through an embedded chain (same button, ≤ 400 ms, ≤ 1 cell Chebyshev;
+  wheel/drag/other-button reset; modifiers don't break it; a
+  selection-layer gesture claim resets too) and every mouse-Down
+  handler reads the press's chain position via the new
+  `EventCtx::click_count()` (1 isolated, 2 = double-click's second
+  press, 3 = triple's third, saturating). Both presses deliver
+  normally — selection on click 1 is never suppressed; the second press
+  ADDITIONALLY reads ≥ 2. Time is never an implicit wall-clock read:
+  the driver publishes its (`set_clock`-injectable) clock as the
+  ambient event time each turn (`ui::set_event_time`/`event_time`), so
+  one injected clock drives animations, timers, AND double-click tests;
+  a bare `UiTree` without a published time counts every press 1,
+  deterministically. The pure state machine is public as
+  `ui::ClickChain` (`observe(now, &event) -> count`, configurable
+  `window`/`tolerance`) for custom input paths.
+- widgets: `Table::on_activate(usize)` — the "open this row" event
+  (the 0250 selection-vs-activation split applied to Table, delivering
+  the activation slice of app-kits 0530 §3): fires on Enter (always),
+  Space (single-select alias; a future multi-select mode claims Space
+  as toggle within that mode), and double-click (`click_count() >= 2`
+  on the ALREADY-selected row — the row guard: a chained press that
+  drifted onto a neighbor row only re-selects, so fast click-walking
+  down rows never spuriously opens). Deliberately unlike `List`, a slow
+  second click on the selected row does NOT activate (a table is a
+  browsing surface; re-clicking a row to focus the pane must never open
+  its editor — `List`'s timing-free click-on-selected picker gesture is
+  unchanged and subsumes double-click). Enter/Space are consumed ONLY
+  when a callback is bound (the field-gateway 0980 rule: an
+  activation-less Table leaves them to app shortcuts), and the callback
+  runs after all Table bookkeeping (disposal-safety law, test-pinned).
+- docs: api.md "Double-click" section (the convention, the ambient
+  clock rule, the custom-row recipe with the same-logical-row guard) +
+  a "Table — selection vs activation" section; List's sections updated
+  (the "no double-click synthesis" claim is superseded by subsumption).
+
+
 
 ### Fixed
 
@@ -1295,6 +1338,7 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[0.2.16]: https://github.com/lpalbou/abstracttui/compare/v0.2.15...v0.2.16
 [0.2.15]: https://github.com/lpalbou/abstracttui/compare/v0.2.14...v0.2.15
 [0.2.14]: https://github.com/lpalbou/abstracttui/compare/v0.2.13...v0.2.14
 [0.2.13]: https://github.com/lpalbou/abstracttui/compare/v0.2.12...v0.2.13

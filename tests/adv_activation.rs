@@ -10,8 +10,12 @@
 //!   no activation bound;
 //! - clause 2: Enter activates (always), Space activates in a List (no
 //!   toggle meaning), a click on the ALREADY-selected row activates
-//!   while a click on an unselected row only selects — no double-click
-//!   synthesis anywhere;
+//!   while a click on an unselected row only selects. (The clause's
+//!   original "no double-click synthesis anywhere" is superseded by
+//!   app-kits 0535: the engine now synthesizes click counts —
+//!   `EventCtx::click_count` — and `Table::on_activate` consumes them;
+//!   List's picker gesture is deliberately unchanged and SUBSUMES
+//!   double-click, which `tests/adv_double_click.rs` pins.);
 //! - compatibility: an activation-less List leaves Enter to the app's
 //!   own shortcuts (the pre-0250 field workaround keeps working);
 //! - 0510 §masked at the wire: a masked TextInput never puts plaintext
