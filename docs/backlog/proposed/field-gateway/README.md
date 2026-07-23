@@ -25,6 +25,9 @@ Each item carries a severity in its Metadata and in the row here:
 
 | ID | Title | Class | Severity |
 | --- | --- | --- | --- |
-
-(No findings filed yet — the build has not started. This table is the
-landing zone; the directory is the truth.)
+| 0900 | Table — oversubscribed fixed columns silently starve the Flex column to zero | footgun | P2 |
+| 0910 | Shortcuts on elements outside the focus path silently never fire | footgun | P2 |
+| 0920 | Wizard/tab navigation needs an input-immune key lane (0520 evidence) | capability gap | P3 |
+| 0930 | Widget `disabled` is build-time only — validation gating forces focus-dropping rebuilds (0510 evidence) | API gap | P2 |
+| 0940 | Modal::open builds content before the Modal exists — self-closing forms need an external-slot dance | API gap | P3 |
+| 0950 | reactive::connection assumes a persistent transport — probe-shaped clients cannot adopt it | API-fit evidence | P3 |

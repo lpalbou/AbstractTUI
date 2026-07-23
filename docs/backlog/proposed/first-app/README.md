@@ -15,7 +15,7 @@ item records the workaround so the engine fix can delete it.
 | 0282 | `FeedState::sync` source shape too narrow — fold-shaped stores cannot adopt (borrow-based `sync_with` ask) | API gap |
 | 0283 | Capped preview blocks — width-aware `max_rows` + honest overflow marker on Text/Rich feed blocks (+ hang-indent, tight-rhythm notes) | capability gap |
 | 0284 | TextArea/TextInput placeholder paints unclipped past the widget rect (both branches; surfaced by the 0291 adoption) | rendering defect |
-| 0286 | KeyChord shifted-letter shortcuts have two wire spellings — plain `Char('A')` is a dead key on kitty terminals | footgun |
+| 0289 | Typed uppercase inserts lowercase on kitty-spelling wires — `convert_event` drops the kitty `text` field; TextInput inserts the base char (found during the 0286/0288 verification) | bug |
 | 0292 | Completion triggers fire on any mid-text token — no position policy (renumbered from 0300: band collision with control-plane) | API gap |
 | 0294 | Anchored panel places short lists over the chrome below instead of flipping up (renumbered from 0310) | UX defect |
 
@@ -48,6 +48,14 @@ Completed 2026-07-23 (wave-5 field fix):
 | ID | Title | Class |
 | --- | --- | --- |
 | 0285 | Selection layer eats drag-less clicks — click-through shipped (layer claims only once the gesture DRAGS) + pointer-capture heal; buttons clickable with select mode on | UX defect |
+
+Completed 2026-07-23 (choice-fix wave):
+
+| ID | Title | Class |
+| --- | --- | --- |
+| 0286 | KeyChord shifted-letter two wire spellings — ONE fold (`KeyChord::normalized`) at every chord-match site (tree shortcuts, Actions, pressed_chord); both registration directions fire on both wires; the app's double registration can be deleted | footgun |
+| 0287 | ChoicePrompt body slot — `.body(\|mcx\| view)` + `body_rows(n)`: scrollable/reactive display region between prompt and options; options allocated first (0240), wheel-over-body scrolls the body, keys stay with the options | API gap |
+| 0288 | ChoicePrompt `option_key` uppercase dead on kitty — the same fold at the letter matcher (`KeyEvent::normalized`/`means_char`); `option_key(…, 'A')` fires on `CSI 97;2u`, lowercase-declared keys still refuse Shift+letter | bug |
 
 Table reconciliation (2026-07-23, by the consumer while filing 0281-0283):
 the open table above had gone stale against the directory — 0250 (fixed

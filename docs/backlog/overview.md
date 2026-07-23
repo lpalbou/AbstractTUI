@@ -21,8 +21,8 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | State | Count |
 | --- | --- |
 | Planned | 5 |
-| Proposed | 46 |
-| Completed | 44 |
+| Proposed | 56 |
+| Completed | 47 |
 | Deprecated | 0 |
 | Recurrent | 0 |
 
@@ -120,6 +120,9 @@ composer wave).
 | 0294 | Anchored-panel placement bias (`PanelPlacement`, AbovePreferred for bottom composers) — completed 2026-07-23 | completed/first-app/ |
 | 0515 | `ChoicePrompt`/`ChoiceSequence` — the modal decision gate (options + multiple + Other free-text + shortcut letters + danger tint + must-choose mode; charter-verified SHIP) — completed 2026-07-23 | completed/app-kits/ |
 | 0285 | Selection click-through: the layer claims only once the gesture DRAGS (plain clicks reach widgets; dismissal click consumed) + pointer-capture heal (press re-render no longer strands the capture) — completed 2026-07-23 | completed/first-app/ |
+| 0286 | KeyChord shifted-letter dual-spelling folded at every chord-match site (`KeyChord::normalized`; tree shortcuts, Actions, `pressed_chord`) — completed 2026-07-23 | completed/first-app/ |
+| 0287 | ChoicePrompt `.body(view)` slot — structured/scrollable/reactive display region; options-first height budget — completed 2026-07-23 | completed/first-app/ |
+| 0288 | ChoicePrompt `option_key` uppercase dead on kitty — letter matcher folds both wire spellings (`KeyEvent::means_char`) — completed 2026-07-23 | completed/first-app/ |
 
 ## Proposed ledger
 

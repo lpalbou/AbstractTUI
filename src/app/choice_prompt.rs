@@ -171,6 +171,10 @@ pub enum ChoiceOutcome {
 /// Boxed one-shot resolution callback.
 type ResolveFn = Box<dyn FnOnce(ChoiceOutcome)>;
 
+/// Boxed one-shot body builder (first-app 0287): runs in the MODAL
+/// scope when the gate's content mounts.
+type BodyFn = Box<dyn FnOnce(Scope) -> crate::ui::View>;
+
 /// Builder for one decision gate. Terminal verb: [`ChoicePrompt::open`]
 /// — the prompt opens over everything immediately (Modal semantics:
 /// focus-trapped, input-owning, centered).
@@ -182,6 +186,8 @@ pub struct ChoicePrompt {
     dismissable: bool,
     overlays: Option<Overlays>,
     on_resolve: Option<ResolveFn>,
+    body: Option<BodyFn>,
+    body_rows: i32,
 }
 
 impl ChoicePrompt {
@@ -199,6 +205,8 @@ impl ChoicePrompt {
             dismissable: true,
             overlays: None,
             on_resolve: None,
+            body: None,
+            body_rows: 8,
         }
     }
 
@@ -315,6 +323,34 @@ impl ChoicePrompt {
         self
     }
 
+    /// A structured BODY between the prompt heading and the options
+    /// (first-app 0287): per-call approval cards, an alternate JSON
+    /// view behind a caller-owned signal, a live status line — any
+    /// `View`. The closure receives the MODAL scope (state created
+    /// there dies on close): a scrollable body is
+    /// `.body(|mcx| Scroll::new(cards).view(mcx))`; a reactive one is
+    /// a `dyn_view` reading the caller's signals.
+    ///
+    /// Contract (v1): a DISPLAY region — clipped to its row budget,
+    /// panel-width, non-focusable. Keys stay with the options (the
+    /// gate autofocuses them); the WHEEL scrolls a `Scroll`-wrapped
+    /// body while the pointer is over it and moves the highlight
+    /// elsewhere. Height rides [`ChoicePrompt::body_rows`]; the
+    /// options are allocated FIRST — never crushed (the 0240 law).
+    pub fn body(mut self, body: impl FnOnce(Scope) -> crate::ui::View + 'static) -> ChoicePrompt {
+        self.body = Some(Box::new(body));
+        self
+    }
+
+    /// Preferred row budget for the body region (default 8, min 1):
+    /// the solved budget is what remains after the options, capped
+    /// here, floored at one row (a Scroll body keeps the rest
+    /// reachable under height pressure).
+    pub fn body_rows(mut self, rows: i32) -> ChoicePrompt {
+        self.body_rows = rows.max(1);
+        self
+    }
+
     /// Explicit overlay store (tests, exotic embeddings). Default: the
     /// app-provided reactive context.
     pub fn overlays(mut self, overlays: &Overlays) -> ChoicePrompt {
@@ -393,7 +429,13 @@ impl ChoicePrompt {
         let viewport = use_viewport(cx).get_untracked();
         let tokens = crate::widgets::theme_tokens(cx);
         let question = Rc::new(self.question);
-        let geo = parts::measure(&question, viewport, self.max_visible, self.dismissable);
+        let geo = parts::measure(
+            &question,
+            viewport,
+            self.max_visible,
+            self.dismissable,
+            self.body.as_ref().map(|_| self.body_rows),
+        );
         let initial_row = self
             .initial
             .as_deref()
@@ -411,6 +453,7 @@ impl ChoicePrompt {
         let panel = geo.panel;
         let spec_resolve = resolve.clone();
         let dismissable = self.dismissable;
+        let body = self.body;
         let modal = Modal::open(&overlays, cx, viewport, panel, move |mcx| {
             view::gate_content(
                 mcx,
@@ -422,6 +465,7 @@ impl ChoicePrompt {
                     initial_checked,
                     dismissable,
                     resolve: spec_resolve,
+                    body,
                 },
             )
         });

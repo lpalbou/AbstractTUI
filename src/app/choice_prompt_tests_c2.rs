@@ -97,6 +97,51 @@ fn option_letters_toggle_in_multiple_and_declared_key_beats_digit() {
     );
 }
 
+/// first-app 0288: the kitty wire spells Shift+A as `Char('a')` +
+/// SHIFT (base identity kept lowercase). The matcher must fold that
+/// spelling to the uppercase key — and never let it fire a
+/// lowercase-declared key (Shift+A means 'A').
+#[test]
+fn kitty_shift_spelling_folds_to_the_uppercase_option_key() {
+    let mut r = rig_sized(Size::new(56, 16));
+    let (outcomes, _h) = open_on(&r, approval);
+    r.send(&UiEvent::Key(KeyEvent::new(
+        Key::Char('a'),
+        crate::ui::Mods::SHIFT,
+    )));
+    assert_eq!(
+        outcomes.borrow().as_slice(),
+        [ChoiceOutcome::Answered(ChoiceAnswer {
+            selected: vec!["all".into()],
+            other: None,
+        })],
+        "Char('a')+SHIFT is the kitty spelling of the 'A' key (0288)"
+    );
+
+    // A gate declaring ONLY lowercase 'a': the shifted spelling means
+    // 'A' — undeclared — and must not commit anything.
+    let (outcomes, _h) = open_on(&r, |p| {
+        p.option_key("approve", "Approve", 'a')
+            .option("hold", "Hold")
+    });
+    r.send(&UiEvent::Key(KeyEvent::new(
+        Key::Char('a'),
+        crate::ui::Mods::SHIFT,
+    )));
+    assert!(
+        outcomes.borrow().is_empty(),
+        "Shift+letter must never fire a lowercase-declared key"
+    );
+    r.key(Key::Char('a')); // the declared key itself still commits
+    assert_eq!(
+        outcomes.borrow().as_slice(),
+        [ChoiceOutcome::Answered(ChoiceAnswer {
+            selected: vec!["approve".into()],
+            other: None,
+        })]
+    );
+}
+
 #[test]
 fn option_letters_type_into_a_focused_other_editor() {
     let mut r = rig();
@@ -258,6 +303,57 @@ fn a11y_tree_names_question_options_and_selection_state() {
     assert!(
         snap.contains("input") && snap.contains("[focused]"),
         "revealed editor is an Input with focus truth (A4):\n{snap}"
+    );
+}
+
+/// first-app 0287: the body must not disturb the QUESTION/OPTIONS a11y
+/// contract — every entry of the bare gate's tree survives verbatim
+/// (labels, roles, selection state, focus), and the body adds only its
+/// own honest display entries (a text row IS a text row to AT), never
+/// an input or a second focus stop.
+#[test]
+fn a11y_unchanged_for_question_and_options_with_a_body() {
+    // Strip geometry (`… @ x,y wxh`): the body legitimately moves rows
+    // down; the CONTRACT is the semantic entries.
+    fn semantic_lines(snap: &str) -> Vec<String> {
+        snap.lines()
+            .map(|l| match l.find(" @ ") {
+                Some(cut) => l[..cut].to_string(),
+                None => l.to_string(),
+            })
+            .collect()
+    }
+
+    let r = rig();
+    let (_o, _h) = open_on(&r, basic);
+    let bare = semantic_lines(&r.a11y());
+
+    let r = rig();
+    let (_o, _h) = open_on(&r, |p| {
+        basic(p).body(|_| crate::ui::text("three tool calls, tier: safe"))
+    });
+    let snap = r.a11y();
+    let with_body = semantic_lines(&snap);
+
+    for line in &bare {
+        assert!(
+            with_body.contains(line),
+            "bare-gate a11y entry {line:?} must survive a body:\n{snap}"
+        );
+    }
+    for line in &with_body {
+        assert!(
+            bare.contains(line) || line.trim_start().starts_with("text "),
+            "a body adds only display text entries, got {line:?}:\n{snap}"
+        );
+    }
+    assert!(
+        snap.contains("menu \"options\" = \"Alpha\" [focused]"),
+        "focus stays anchored on the options with a body present:\n{snap}"
+    );
+    assert!(
+        !snap.contains("input"),
+        "no phantom editor from the body:\n{snap}"
     );
 }
 

@@ -49,6 +49,9 @@ pub(crate) struct GateSpec {
     pub initial_checked: Vec<bool>,
     pub dismissable: bool,
     pub resolve: Rc<dyn Fn(ChoiceOutcome)>,
+    /// Caller body (first-app 0287), built in the modal scope; None =
+    /// the classic prompt→options gate.
+    pub body: Option<Box<dyn FnOnce(Scope) -> View>>,
 }
 
 /// Build the modal content: prompt (Heading), windowed option rows,
@@ -62,6 +65,7 @@ pub(crate) fn gate_content(mcx: Scope, t: TokenSet, spec: GateSpec) -> View {
         initial_checked,
         dismissable,
         resolve,
+        body,
     } = spec;
     let n = question.options.len();
     let has_other = question.other.is_some();
@@ -321,7 +325,14 @@ pub(crate) fn gate_content(mcx: Scope, t: TokenSet, spec: GateSpec) -> View {
         )
         // One tab stop for the whole list (the RadioGroup rule);
         // clicking a row focuses here (nearest focusable ancestor).
+        // AUTOFOCUS anchors the keyboard on the options from frame one
+        // (focus_init clause 1): without it a focusable BODY child (a
+        // Scroll wrapper is focusable by nature, and renders above)
+        // wins the first-focusable pick and arrows scroll the body
+        // instead of moving the highlight (0287's routing contract).
+        // Body-less gates: the same node focus_first already picked.
         .focusable()
+        .autofocus()
         .focus_signal(state.region_focused)
         .role(Role::Menu)
         .access_label("options")
@@ -538,6 +549,24 @@ pub(crate) fn gate_content(mcx: Scope, t: TokenSet, spec: GateSpec) -> View {
             cancel_esc()
         });
     }
+    // ---- caller body (first-app 0287): a clipped, non-focusable
+    // display region. Row budget solved at open (options first —
+    // 0240); `.clip()` keeps an overflowing static body off the rows
+    // below; shrink 2.0 yields before the region's 1.0 to its floor.
+    let body_view = body.map(|f| {
+        Element::new()
+            .style(
+                LayoutStyle::column()
+                    .width(Dimension::Percent(1.0))
+                    .height(Dimension::Cells(geo.body_rows))
+                    .min_h(1)
+                    .shrink(2.0)
+                    .clip(),
+            )
+            .child(f(mcx))
+            .build()
+    });
+
     let root_anchor = anchors.root.clone();
     let mut root = root
         // Capture runs root→target before target/bubble: the fallback
@@ -553,6 +582,9 @@ pub(crate) fn gate_content(mcx: Scope, t: TokenSet, spec: GateSpec) -> View {
         )
         .child(prompt_el)
         .child(blank_row());
+    if let Some(body) = body_view {
+        root = root.child(body).child(blank_row());
+    }
     if n > 0 {
         root = root.child(region_host);
     }

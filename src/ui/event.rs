@@ -64,6 +64,38 @@ pub struct KeyEvent {
     pub mods: Mods,
 }
 
+/// The shifted-letter wire fold (first-app 0286/0288). A shifted
+/// letter has TWO wire spellings: the legacy wire bakes the shift into
+/// the character (Shift+A → `Char('A')`, no modifier reported) while
+/// the kitty keyboard protocol reports the BASE key identity plus the
+/// modifier (Shift+A → `Char('a')` + SHIFT — deliberately, see
+/// `input/kitty.rs`). A matcher comparing exactly one spelling ships a
+/// key that is silently dead on the other wire, so every MATCH site
+/// folds both to one canonical form: the uppercase character with the
+/// SHIFT bit dropped.
+///
+/// Only CASED letters fold — a char with a real case distinction and a
+/// single-char uppercase mapping. Shift on `Char('?')`, a digit, or a
+/// caseless script conveys no case and stays untouched; multi-char
+/// uppercases ('ß' → "SS") cannot be a key identity and stay
+/// untouched. Shifted non-letter SYMBOLS keep their pre-existing split
+/// (kitty reports base + SHIFT there too, but the shifted symbol is
+/// layout-dependent — folding would guess; the honest partial cover
+/// recorded in 0286).
+fn fold_shifted_letter(key: Key, mods: Mods) -> (Key, Mods) {
+    if mods.contains(Mods::SHIFT) {
+        if let Key::Char(c) = key {
+            if c.is_lowercase() || c.is_uppercase() {
+                let mut up = c.to_uppercase();
+                if let (Some(u), None) = (up.next(), up.next()) {
+                    return (Key::Char(u), Mods(mods.0 & !Mods::SHIFT.0));
+                }
+            }
+        }
+    }
+    (key, mods)
+}
+
 impl KeyEvent {
     pub const fn new(key: Key, mods: Mods) -> Self {
         KeyEvent { key, mods }
@@ -81,6 +113,28 @@ impl KeyEvent {
             key: self.key,
             mods: self.mods,
         }
+    }
+
+    /// Canonical spelling for MATCHING (never for text input): the two
+    /// wire spellings of a shifted letter — legacy `Char('A')` and
+    /// kitty `Char('a')` + SHIFT — fold to one (`Char('A')`, SHIFT
+    /// dropped; other modifiers kept). Everything else is returned
+    /// unchanged. See [`KeyChord::normalized`] for the registration
+    /// side of the same fold.
+    pub fn normalized(self) -> KeyEvent {
+        let (key, mods) = fold_shifted_letter(self.key, self.mods);
+        KeyEvent { key, mods }
+    }
+
+    /// Does this event mean the declared character `c` as a plain key?
+    /// The letter-matching predicate (ChoicePrompt option keys, app
+    /// key vocabularies): an uppercase-declared `'A'` matches BOTH
+    /// wire spellings of Shift+A (`Char('A')` and `Char('a')`+SHIFT);
+    /// a lowercase-declared `'a'` matches only the unshifted
+    /// `Char('a')` — Shift+A means 'A', never 'a'. Case-sensitivity is
+    /// preserved; only the spelling is folded.
+    pub fn means_char(self, c: char) -> bool {
+        self.normalized() == KeyEvent::plain(Key::Char(c))
     }
 }
 
@@ -195,6 +249,20 @@ impl KeyChord {
             mods: Mods::CTRL,
         }
     }
+
+    /// Canonical chord spelling: `Char(cased letter)` + SHIFT folds to
+    /// the uppercase char with SHIFT dropped, so `plain(Char('A'))`
+    /// and `new(Mods::SHIFT, Char('a'))` are ONE chord. A shifted
+    /// letter has two wire spellings (legacy bakes the shift into the
+    /// char; kitty reports the base key + SHIFT) and neither the
+    /// registration nor the match may care which wire the user is on —
+    /// every chord-match site (tree shortcuts, `Actions`,
+    /// `KeyState::pressed_chord`) compares normalized forms.
+    /// Registrations keep their authored spelling for display.
+    pub fn normalized(self) -> KeyChord {
+        let (key, mods) = fold_shifted_letter(self.key, self.mods);
+        KeyChord { key, mods }
+    }
 }
 
 /// Handler control surface. Handlers receive `&mut EventCtx` and the
@@ -275,5 +343,71 @@ impl EventCtx {
     /// this until widget-level damage lands).
     pub fn request_repaint(&mut self) {
         self.damage_all = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shifted_letter_spellings_normalize_to_one_chord() {
+        // The three spellings of the uppercase key: legacy, kitty, and
+        // the shift-reported-with-uppercase middle ground.
+        let canon = KeyChord::plain(Key::Char('A')).normalized();
+        assert_eq!(
+            KeyChord::new(Mods::SHIFT, Key::Char('a')).normalized(),
+            canon
+        );
+        assert_eq!(
+            KeyChord::new(Mods::SHIFT, Key::Char('A')).normalized(),
+            canon
+        );
+        // The lowercase key stays its own chord.
+        assert_ne!(KeyChord::plain(Key::Char('a')).normalized(), canon);
+        // Other modifiers survive the fold: Ctrl+Shift+p = Ctrl+P.
+        assert_eq!(
+            KeyChord::new(Mods::CTRL | Mods::SHIFT, Key::Char('p')).normalized(),
+            KeyChord::new(Mods::CTRL, Key::Char('P'))
+        );
+        // Non-ASCII cased letters fold too (kitty base-layout identity).
+        assert_eq!(
+            KeyChord::new(Mods::SHIFT, Key::Char('с')).normalized(),
+            KeyChord::plain(Key::Char('С'))
+        );
+    }
+
+    #[test]
+    fn only_cased_single_uppercase_letters_fold() {
+        // Shifted symbols/digits carry no case: untouched (the honest
+        // partial cover — kitty's layout-dependent symbol split).
+        for k in [Key::Char('?'), Key::Char('1'), Key::Char(' ')] {
+            let c = KeyChord::new(Mods::SHIFT, k);
+            assert_eq!(c.normalized(), c);
+        }
+        // Multi-char uppercase ('ß' → "SS") cannot be a key identity.
+        let eszett = KeyChord::new(Mods::SHIFT, Key::Char('ß'));
+        assert_eq!(eszett.normalized(), eszett);
+        // Non-Char keys never fold.
+        let f5 = KeyChord::new(Mods::SHIFT, Key::F(5));
+        assert_eq!(f5.normalized(), f5);
+        // Caseless letters (CJK is alphabetic but uncased): untouched.
+        let cjk = KeyChord::new(Mods::SHIFT, Key::Char('中'));
+        assert_eq!(cjk.normalized(), cjk);
+    }
+
+    #[test]
+    fn means_char_is_the_letter_matching_predicate() {
+        // Uppercase-declared: both wire spellings match.
+        assert!(KeyEvent::plain(Key::Char('A')).means_char('A'));
+        assert!(KeyEvent::new(Key::Char('a'), Mods::SHIFT).means_char('A'));
+        assert!(KeyEvent::new(Key::Char('A'), Mods::SHIFT).means_char('A'));
+        assert!(!KeyEvent::plain(Key::Char('a')).means_char('A'));
+        // Lowercase-declared: Shift+letter must NOT fire.
+        assert!(KeyEvent::plain(Key::Char('a')).means_char('a'));
+        assert!(!KeyEvent::new(Key::Char('a'), Mods::SHIFT).means_char('a'));
+        assert!(!KeyEvent::plain(Key::Char('A')).means_char('a'));
+        // Non-shift modifiers never mean a plain char.
+        assert!(!KeyEvent::new(Key::Char('a'), Mods::CTRL).means_char('a'));
     }
 }

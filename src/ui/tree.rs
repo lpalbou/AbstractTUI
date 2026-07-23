@@ -682,15 +682,23 @@ impl UiTree {
         let mut consumed = ctx.stopped;
 
         // --- 2. shortcuts (key events not consumed by handlers) ----------
+        // Chords compare NORMALIZED (`KeyChord::normalized`): a shifted
+        // letter has two wire spellings (legacy Char('A'); kitty
+        // Char('a')+SHIFT) and a registration must fire on both
+        // (first-app 0286).
         if !consumed {
             if let UiEvent::Key(k) = event {
-                let chord = k.chord();
+                let chord = k.chord().normalized();
                 let mut winner: Option<Rc<RefCell<Vec<Shortcut>>>> = None;
                 for id in &path {
                     let core = self.core.borrow();
                     if let Some(inst) = core.insts.get(id.0) {
                         if let InstPayload::Element { shortcuts, .. } = &inst.payload {
-                            if shortcuts.borrow().iter().any(|s| s.chord == chord) {
+                            if shortcuts
+                                .borrow()
+                                .iter()
+                                .any(|s| s.chord.normalized() == chord)
+                            {
                                 winner = Some(shortcuts.clone());
                             }
                         }
@@ -698,7 +706,7 @@ impl UiTree {
                 }
                 if let Some(shortcuts) = winner {
                     let mut list = shortcuts.borrow_mut();
-                    if let Some(s) = list.iter_mut().find(|s| s.chord == chord) {
+                    if let Some(s) = list.iter_mut().find(|s| s.chord.normalized() == chord) {
                         (s.run)(&mut ctx);
                         consumed = true;
                     }

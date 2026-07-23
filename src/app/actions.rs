@@ -34,6 +34,11 @@ struct Entry {
 #[derive(Default)]
 struct Registry {
     entries: Vec<Entry>,
+    /// Keyed on NORMALIZED chords (`KeyChord::normalized`): the two
+    /// wire spellings of a shifted letter are one binding (first-app
+    /// 0286) — `plain(Char('A'))` and `SHIFT+Char('a')` collide at
+    /// registration and both dispatch. Entries keep their authored
+    /// spelling for `list()`/display.
     by_chord: HashMap<KeyChord, usize>,
 }
 
@@ -51,7 +56,10 @@ impl Actions {
     /// Register `name` with an optional chord. Returns false (and
     /// registers nothing) when the name is taken or the chord is bound —
     /// collisions are a programming error the caller should hear about,
-    /// not a silent last-writer-wins.
+    /// not a silent last-writer-wins. Chord collisions are judged on
+    /// the NORMALIZED spelling: `plain(Char('A'))` and
+    /// `SHIFT+Char('a')` are the same key (first-app 0286), so
+    /// registering both is a collision, not two bindings.
     pub fn register(
         &self,
         name: impl Into<String>,
@@ -64,11 +72,11 @@ impl Actions {
             return false;
         }
         if let Some(c) = chord {
-            if reg.by_chord.contains_key(&c) {
+            if reg.by_chord.contains_key(&c.normalized()) {
                 return false;
             }
             let idx = reg.entries.len();
-            reg.by_chord.insert(c, idx);
+            reg.by_chord.insert(c.normalized(), idx);
         }
         reg.entries.push(Entry {
             name,
@@ -93,7 +101,7 @@ impl Actions {
             .entries
             .iter()
             .enumerate()
-            .filter_map(|(i, e)| e.chord.map(|c| (c, i)))
+            .filter_map(|(i, e)| e.chord.map(|c| (c.normalized(), i)))
             .collect();
         reg.by_chord.extend(chords);
         true
@@ -107,16 +115,16 @@ impl Actions {
             return false;
         };
         if let Some(c) = chord {
-            if reg.by_chord.get(&c).is_some_and(|&j| j != i) {
+            if reg.by_chord.get(&c.normalized()).is_some_and(|&j| j != i) {
                 return false;
             }
         }
         if let Some(old) = reg.entries[i].chord {
-            reg.by_chord.remove(&old);
+            reg.by_chord.remove(&old.normalized());
         }
         reg.entries[i].chord = chord;
         if let Some(c) = chord {
-            reg.by_chord.insert(c, i);
+            reg.by_chord.insert(c.normalized(), i);
         }
         true
     }
@@ -148,12 +156,14 @@ impl Actions {
     }
 
     /// Fire the action bound to `chord`, if any. The driver calls this
-    /// with keys nothing in the UI consumed.
+    /// with keys nothing in the UI consumed. Matching is normalized
+    /// (`KeyChord::normalized`): either wire spelling of a shifted
+    /// letter reaches the one registered binding.
     pub fn dispatch_chord(&self, chord: KeyChord) -> bool {
         let name = {
             let reg = self.inner.borrow();
             reg.by_chord
-                .get(&chord)
+                .get(&chord.normalized())
                 .map(|&i| reg.entries[i].name.clone())
         };
         match name {

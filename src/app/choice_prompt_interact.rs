@@ -125,12 +125,14 @@ pub(crate) fn root_key_handler(
     };
     move |ctx: &mut EventCtx, ev: &UiEvent| match ev {
         UiEvent::Key(k) => {
-            // Plain keys, plus SHIFT-carrying UPPERCASE letters: an
-            // uppercase option key ('A') may arrive as Char('A') with
-            // or without a reported shift, protocol-dependent.
-            let shifted_upper =
-                k.mods == Mods::SHIFT && matches!(k.key, Key::Char(c) if c.is_uppercase());
-            if k.mods != Mods::NONE && !shifted_upper {
+            // The two wire spellings of a shifted letter fold to ONE
+            // canonical key before the gate (first-app 0288): kitty's
+            // Char('a')+SHIFT and legacy's Char('A') both mean the
+            // uppercase letter — matching runs on the normalized
+            // spelling, plain keys only. Shift on anything else
+            // (movement, Space, digits, symbols) still bounces here.
+            let k = k.normalized();
+            if k.mods != Mods::NONE {
                 return;
             }
             let h = s.highlight.get_untracked();
@@ -163,11 +165,14 @@ pub(crate) fn root_key_handler(
                 Key::Char(c) if !c.is_control() => {
                     // Declared option letters first (case-sensitive —
                     // 'a' and 'A' are distinct keys; the approval
-                    // consumer's vocabulary). A letter is an EXPLICIT
-                    // activation: select+commit in single mode,
-                    // jump-toggle in multiple. A focused Other editor
-                    // consumed printables before this handler (letters
-                    // type, never activate).
+                    // consumer's vocabulary — the normalization above
+                    // folds SPELLINGS, never case: Shift+A reads as
+                    // 'A' on both wires and can never fire a declared
+                    // 'a'). A letter is an EXPLICIT activation:
+                    // select+commit in single mode, jump-toggle in
+                    // multiple. A focused Other editor consumed
+                    // printables before this handler (letters type,
+                    // never activate).
                     if let Some(&(_, row)) = letters.iter().find(|(key, _)| *key == c) {
                         if d.multiple {
                             move_row(s, d, row);

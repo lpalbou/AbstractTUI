@@ -208,13 +208,16 @@ impl KeyState {
     }
 
     /// Exact chord press edge this turn (mods lock-stripped, same
-    /// matching rules as shortcuts).
+    /// matching rules as shortcuts — including the shifted-letter
+    /// fold: `plain(Char('A'))` sees the press on both wire spellings
+    /// of Shift+A, `KeyChord::normalized`).
     pub fn pressed_chord(self, chord: KeyChord) -> bool {
         let _ = self.gen.get();
+        let chord = chord.normalized();
         with_frame(|f| {
             f.pressed
                 .iter()
-                .any(|(k, m)| *k == chord.key && *m == chord.mods)
+                .any(|(k, m)| KeyChord { key: *k, mods: *m }.normalized() == chord)
         })
     }
 

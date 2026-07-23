@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.9] - 2026-07-23
+
+### Added
+
+- app: `ChoicePrompt::body(|mcx| view)` + `body_rows(n)` (first-app
+  0287) — a structured, optionally scrollable, reactive body between
+  the prompt heading and the options: per-call approval cards, an
+  alternate JSON view behind a caller signal, a live tier line
+  (`dyn_view`s inside the body re-render while the gate is up). The
+  body is a v1 DISPLAY region: clipped to its solved row budget, the
+  options are allocated first and never crushed (the 0240 law, floor
+  one row under pressure), the gate autofocuses the options so keys
+  stay the gate's vocabulary, and the wheel scrolls a
+  `Scroll`-wrapped body while the pointer is over it.
+  `examples/decide.rs` gate 2 demos it.
+- ui: `KeyChord::normalized()`, `KeyEvent::normalized()`, and
+  `KeyEvent::means_char(c)` — the shifted-letter spelling fold as
+  public API for app-side matchers.
+
+### Fixed
+
+- ui/app: a shifted letter has TWO wire spellings — legacy Shift+A
+  arrives as `Char('A')` with no mods, the kitty keyboard protocol
+  sends `Char('a')` + SHIFT (base-key identity) — and every matcher
+  compared exactly one, so the other wire's users pressed a DEAD key
+  (first-app 0288/0286; the first app's live P0). One shared fold now
+  covers every match surface: `ChoicePrompt` option keys
+  (`option_key(…, 'A')` fires on kitty terminals; a declared `'a'`
+  still never fires on Shift+A — case stays meaningful, only the
+  spelling folds), tree `Element::shortcut` resolution, the `Actions`
+  registry (collisions are judged on the normalized spelling), and
+  `KeyState::pressed_chord`. Registrations keep their authored
+  spelling for display. Shifted non-letter symbols keep their
+  documented wire split (layout-dependent; the engine does not guess).
+
 ## [0.2.8] - 2026-07-23
 
 ### Added
@@ -923,6 +958,8 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.2.8...HEAD
+[0.2.9]: https://github.com/lpalbou/abstracttui/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/lpalbou/abstracttui/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/lpalbou/abstracttui/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/lpalbou/abstracttui/compare/v0.2.5...v0.2.6

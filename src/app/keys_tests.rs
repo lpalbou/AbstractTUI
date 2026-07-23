@@ -132,6 +132,35 @@ fn lock_mods_strip_for_chord_matching() {
     reset();
 }
 
+/// first-app 0286: `pressed_chord` documents "same matching rules as
+/// shortcuts" — the shifted-letter fold included. The kitty wire
+/// spells Shift+A as `Char('a')` + SHIFT; both chord registrations
+/// (`plain('A')` and `SHIFT+'a'`) must see the press, and the
+/// lowercase chord `plain('a')` must NOT.
+#[test]
+fn pressed_chord_folds_the_two_shifted_letter_spellings() {
+    reset();
+    let ks = key_state();
+    publish_fidelity(true);
+    begin_turn();
+    // Kitty spelling of Shift+A.
+    on_key_event(&InKeyEvent::new(KeyCode::Char('a'), InMods::SHIFT));
+    assert!(ks.pressed_chord(KeyChord::plain(Key::Char('A'))));
+    assert!(ks.pressed_chord(KeyChord::new(Mods::SHIFT, Key::Char('a'))));
+    assert!(
+        !ks.pressed_chord(KeyChord::plain(Key::Char('a'))),
+        "Shift+A is 'A', never 'a'"
+    );
+
+    begin_turn();
+    // Legacy spelling of Shift+A: the char carries the shift.
+    on_key_event(&press(KeyCode::Char('A')));
+    assert!(ks.pressed_chord(KeyChord::plain(Key::Char('A'))));
+    assert!(ks.pressed_chord(KeyChord::new(Mods::SHIFT, Key::Char('a'))));
+    assert!(!ks.pressed_chord(KeyChord::plain(Key::Char('a'))));
+    reset();
+}
+
 #[test]
 fn generation_bumps_wake_subscribers_once_per_change() {
     reset();

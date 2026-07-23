@@ -1720,7 +1720,21 @@ Per-option SHORTCUT LETTERS (`option_key(id, label, 'a')` /
 `ChoiceOption::key`) are the explicit activation vocabulary:
 case-sensitive (`a` ≠ `A`), rendered as a dim `(a)` in the row, named
 in the hint, commit in single mode and jump-toggle in multiple; a
-declared key outranks the digit-jump lane. `allow_other(label)` appends
+declared key outranks the digit-jump lane. **The key-spelling
+guarantee**: a shifted letter has two wire spellings — the legacy wire
+bakes the shift into the char (Shift+A → `Char('A')`) while the kitty
+keyboard protocol reports the base key plus the modifier (Shift+A →
+`Char('a')` + SHIFT) — and a declared `'A'` fires on BOTH; a declared
+`'a'` never fires on Shift+A (case stays meaningful, only the spelling
+folds). The same fold covers every chord-match surface (`Element::
+shortcut`, `Actions`, `KeyState::pressed_chord`) via
+`KeyChord::normalized()` — `plain(Char('A'))` and
+`Mods::SHIFT + Char('a')` are one chord, so a single registration
+works on every terminal; `KeyEvent::means_char(c)` is the same
+predicate for hand-rolled letter matchers. (Shifted non-letter
+symbols — `?`, `~` — keep a wire split on kitty terminals: the shifted
+symbol is layout-dependent and the engine does not guess.)
+`allow_other(label)` appends
 an "Other" row; engaging it (highlight in single mode, checked in
 multiple) reveals an inline `TextInput` — autofocused, and its own key
 handling shields the list (digits and letters type, they never jump or
@@ -1741,6 +1755,28 @@ panel sizes itself from the question and clamps into the viewport. The
 a11y tree carries the question (`Heading`), the options
 (`MenuItem`+"selected" / `Checkbox`+on/off per mode) and the revealed
 editor (`Input`) — the frozen-Role vocabulary, honestly mapped.
+
+**The body slot** (`.body(|mcx| view)` + `.body_rows(n)`, default 8):
+a structured region between the prompt heading and the options — the
+approval surface's per-call cards, an alternate JSON view behind a
+caller-owned signal, a live tier line. The closure runs in the MODAL
+scope when the gate mounts (state created there dies on close), so a
+scrollable body is `.body(|mcx| Scroll::new(cards).view(mcx))` and a
+reactive one is a `dyn_view` reading the caller's signals — it
+re-renders live while the gate is up. Contract (v1): the body is a
+DISPLAY region — clipped to its solved row budget, panel-width, and
+the gate autofocuses the options so every key stays the options'
+vocabulary (letters/digits/Space/Enter/Esc; a body `Scroll` never
+sees keys unless the user explicitly clicks it, and even then
+letters/Enter bubble past it to the gate). The WHEEL scrolls a
+`Scroll`-wrapped body while the pointer is over it and moves the
+highlight elsewhere. Height honesty: the options are allocated FIRST
+(never crushed by a tall body — the 0240 law); the body absorbs what
+remains up to `body_rows`, floors at one row under pressure, and
+clips instead of painting over the rows below. The prompt string
+still wraps/ellipsizes as before — structure belongs in the body, not
+in a mile-long prompt. The body adds only its own honest display
+entries to the a11y tree; the question/options contract is untouched.
 
 `ChoiceSequence::new(vec![q1, q2]).on_resolve(..).open(cx)` chains
 several questions (each opens as the previous resolves);
@@ -3595,8 +3631,8 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.2.8 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.2.8 (2026-07-23).
+- Crate: `abstracttui` 0.2.9 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.2.9 (2026-07-23).
 - Description: a reactive, compositor-grade terminal UI engine — fine-grained signals,
   layered rendering with damage tracking, streaming transcripts and live-data ingestion,
   text selection with OSC 52 copy, images (kitty/iTerm2/sixel/mosaic),

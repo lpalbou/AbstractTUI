@@ -7,7 +7,11 @@
 //!   tinted option, an "Other" free-text escape, and MUST-CHOOSE mode
 //!   (`dismissable(false)`: Esc refuses visibly — destructive gates
 //!   should not be dismissable into limbo),
-//! - `2` a feature pick (multiple choice, pre-checked current state),
+//! - `2` a feature pick (multiple choice, pre-checked current state)
+//!   with a BODY (first-app 0287): a scrollable manifest of what the
+//!   agent asked for, rendered between the prompt and the options —
+//!   the wheel scrolls it while arrows/Space/Enter stay with the
+//!   options,
 //! - `3` a two-step setup sequence (`ChoiceSequence`).
 //!
 //! The status line renders the last outcome: the flow CONTINUES in
@@ -85,8 +89,32 @@ fn main() -> abstracttui::base::Result<()> {
                     .open(cx);
             })
             // -- gate 2: feature pick (multiple, pre-checked) -----------
+            // With a BODY (first-app 0287): the approval surface's
+            // "what am I deciding about" — a scrollable manifest
+            // between the prompt and the options. The wheel scrolls it
+            // while the pointer is over it; every key stays with the
+            // options.
             .shortcut(KeyChord::plain(Key::Char('2')), move |_| {
                 ChoicePrompt::new("Which capabilities may this agent use?")
+                    .body(|mcx| {
+                        let mut rows = Element::new().style(
+                            LayoutStyle::column()
+                                .width(Dimension::Percent(1.0))
+                                .shrink(0.0),
+                        );
+                        for line in [
+                            "requested by agent \"builder\":",
+                            "  1 write_file  src/main.rs (2.1 KB)",
+                            "  2 execute_command  cargo test",
+                            "  3 fetch_url  https://crates.io/api",
+                            "  4 write_file  Cargo.toml (0.4 KB)",
+                            "  5 execute_command  cargo run",
+                        ] {
+                            rows = rows.child(text(line));
+                        }
+                        Scroll::new(rows.build()).content_size(44, 6).view(mcx)
+                    })
+                    .body_rows(4)
                     .option_detail("fs", "File system", "read + write inside the workspace")
                     .option_detail("net", "Network", "outbound requests")
                     .option("shell", "Shell commands")

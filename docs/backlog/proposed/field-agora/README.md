@@ -28,6 +28,7 @@ Each item carries a severity in its Metadata and in the row here:
 
 | ID | Title | Class | Severity |
 | --- | --- | --- | --- |
-
-(No findings filed yet — the build has not started. The scaffold and the
-builder brief live in the app repo; see `LAUNCH-PROMPT.md` there.)
+| 0800 | use_startup_notices carries unbounded mid-session diagnostics | API gap | P3 |
+| 0810 | List rows are plain strings — no badge slot | capability gap | P3 |
+| 0820 | Connection has no app-initiated re-dial verb | API gap | P3 |
+| 0830 | reconnect countdown needs app-side deadline bookkeeping | API gap | P3 |

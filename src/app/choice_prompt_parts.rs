@@ -31,6 +31,12 @@ pub(crate) struct Geometry {
     pub prompt_lines: Vec<String>,
     /// Row budget of the (windowed) option region.
     pub region_rows: i32,
+    /// Row budget of the caller's body region (first-app 0287);
+    /// 0 = no body. Allocated AFTER the options claim theirs — a body
+    /// may absorb the remaining height, never crush the options (the
+    /// 0240 law), and keeps a 1-row floor so what the user is deciding
+    /// about stays reachable (a Scroll body scrolls the rest).
+    pub body_rows: i32,
 }
 
 /// Rows an option occupies (1, or 2 with a detail line).
@@ -64,6 +70,7 @@ pub(crate) fn measure(
     viewport: Size,
     max_visible: i32,
     dismissable: bool,
+    body_rows_pref: Option<i32>,
 ) -> Geometry {
     // Width: the widest content line wins, clamped into the viewport
     // (2-cell breathing margin each side beyond the Modal padding).
@@ -125,10 +132,12 @@ pub(crate) fn measure(
     }
 
     let region_full: i32 = q.options.iter().map(option_height).sum();
-    // Fixed rows: prompt + blank + [Other row + reserved input row] +
-    // blank + [buttons] + hint. The option region gets what remains.
+    // Fixed rows: prompt + blank + [body separator blank] + [Other row
+    // + reserved input row] + blank + [buttons] + hint. The option
+    // region gets what remains FIRST; a body absorbs the rest.
     let fixed = prompt_lines.len() as i32
         + 1
+        + i32::from(body_rows_pref.is_some())
         + if q.other.is_some() { 2 } else { 0 }
         + 1
         + i32::from(has_buttons(q.allow_multiple, dismissable))
@@ -138,14 +147,23 @@ pub(crate) fn measure(
         .min(max_visible)
         .min(avail)
         .max(i32::from(!q.options.is_empty()));
+    // The body allocates AFTER the options (they are never crushed by
+    // a tall body — the 0240 law), capped at the caller's preference,
+    // floored at 1 row (a vanished body would hide what the user is
+    // deciding about; a Scroll body keeps the rest reachable).
+    let body_rows = match body_rows_pref {
+        Some(pref) => (avail - region_rows).min(pref.max(1)).max(1),
+        None => 0,
+    };
     let panel = Size::new(
         (inner_w + 2).min(viewport.w),
-        (fixed + region_rows + 2).min(viewport.h),
+        (fixed + region_rows + body_rows + 2).min(viewport.h),
     );
     Geometry {
         panel,
         prompt_lines,
         region_rows,
+        body_rows,
     }
 }
 
