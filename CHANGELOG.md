@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.22] - 2026-07-25
+
+### Added
+
+- widgets: `Block::on_close` — the panel close affordance (backlog
+  app-kits/0605, operator order: "a cross … on each discussion panel so
+  I can close them and the other panels get more space"). Opt-in per
+  panel (callback presence, the `on_click`/`Drawer::on_close`
+  convention): a muted `✕` (U+2715 — East-Asian-narrow, emoji-data-free;
+  `×` U+00D7 is Ambiguous and was rejected) rides the title row's right
+  end inside the border corner; hover tints it `error` (a
+  consequence-bearing action, the diff-vocabulary tint), press adds
+  BOLD. MOUSE-ONLY and never focusable (a focusable ✕ steals a panel's
+  first focus — the drawer 0.2.12 lesson; keyboard close stays
+  app-side), activating on press + release-inside (the Button 0.2.20
+  capture convention — never fire-on-down). Truncation order pinned:
+  the title truncates and then disappears BEFORE the ✕ yields its
+  padded 3-cell run, the pads drop next (bare glyph), and at 1–2 total
+  columns the ✕ yields too — nothing ever paints on or outside the
+  frame, crushed blocks (zero area either axis) paint and hit nothing.
+  `on_close` may dispose the panel's scope synchronously (the 0297
+  disposal law — removing the pane in the callback IS the intended
+  usage; survivors re-flex into the space). Honest a11y: a `button`
+  labeled `Close {title}`, outside the tab order. Composes inside
+  `PageHost` pages, `Drawer` overlays (screen-space clicks translate
+  to the layer) and `Scroll`ed columns mid-scroll; parked closable
+  blocks cost zero idle bytes (all Driver-level test-pinned).
+  `examples/widgets.rs` gained a closable-panels row (restore button
+  included); docs/api.md gained the Block close-affordance section.
+
 ## [0.2.21] - 2026-07-25
 
 ### Added
@@ -1583,6 +1613,7 @@ First public release.
   theme browser, and 3D viewer.
 
 [Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.2.17...HEAD
+[0.2.22]: https://github.com/lpalbou/abstracttui/compare/v0.2.21...v0.2.22
 [0.2.21]: https://github.com/lpalbou/abstracttui/compare/v0.2.20...v0.2.21
 [0.2.20]: https://github.com/lpalbou/abstracttui/compare/v0.2.19...v0.2.20
 [0.2.19]: https://github.com/lpalbou/abstracttui/compare/v0.2.18...v0.2.19

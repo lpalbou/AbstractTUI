@@ -22,7 +22,7 @@ the previous one:
 | step | example | teaches |
 | --- | --- | --- |
 | 1 · first contact | `hello.rs` | the whole engine in 53 lines: one prelude import, a signal, a themed panel |
-| 2 · widgets | `widgets.rs` | the widget gallery: focus/hover/disabled states, tabs, scroll |
+| 2 · widgets | `widgets.rs` | the widget gallery: focus/hover/disabled states, tabs, scroll, closable panels (click ✕ — survivors re-flex) |
 | 2 · widgets | `components.rs` | HOW to build your own: props, children slots, typed events — plus the choice controls and `Disclosure` |
 | 2 · widgets | `gallery.rs` | the whole design system on one board; one keypress restyles it |
 | 2 · widgets | `themes.rs` | every built-in theme, applied live, with measured contrast ratios |

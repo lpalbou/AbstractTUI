@@ -172,12 +172,15 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 42] = [
+    const SOURCES: [(&str, &str); 43] = [
         ("mod.rs", include_str!("mod.rs")),
         ("audio_scope.rs", include_str!("audio_scope.rs")),
         ("meter.rs", include_str!("meter.rs")),
         ("badge.rs", include_str!("badge.rs")),
         ("block.rs", include_str!("block.rs")),
+        // Block's close-affordance sibling (app-kits 0605): widget
+        // source too, listed by hand like feed_typeset.rs.
+        ("block_close.rs", include_str!("block_close.rs")),
         ("button.rs", include_str!("button.rs")),
         ("chart.rs", include_str!("chart.rs")),
         ("chart_time.rs", include_str!("chart_time.rs")),

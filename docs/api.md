@@ -249,7 +249,7 @@ Controlled-mode bindings are named after the STATE they bind: `value`
 (`Scroll`) — new widgets follow the state-name rule; the one historical
 outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 
-- **Block** — the bordered panel primitive: title, fill, focus ring, `BorderKind`.
+- **Block** — the bordered panel primitive: title, fill, focus ring, `BorderKind`, and an opt-in close affordance (`on_close` — a mouse-only ✕ on the title row; see the Block section below).
 - **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
 - **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
@@ -275,6 +275,66 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code.
 - **Meter / AudioScope** — live level rendering: dB meter with real ballistics (instant attack, timed decay, peak hold) and a rolling braille waveform — see the live-levels section below.
 - **Logo** — the AbstractTUI wordmark for headers, about screens, empty states.
+
+### Block — the close affordance (`on_close`)
+
+Panels sometimes need to be closed to free their space for the
+siblings. `Block::on_close(f)` opts a panel in: a muted `✕` renders at
+the title row's right end (inside the border corner), hover tints it
+`error` (a consequence-bearing action — the diff-vocabulary precedent,
+not the neutral-accent hover rule), press adds BOLD, and a click runs
+`f`. Whether a panel is closable is the APP's decision, per panel, per
+build:
+
+```rust
+use abstracttui::widgets::Block;
+
+// The whole close story: `on_close` writes app state, the layout dyn
+// re-renders without the pane, the survivors re-flex into the space.
+fn pane(t: &abstracttui::theme::TokenSet, hidden: abstracttui::reactive::Signal<bool>)
+    -> abstracttui::ui::Element
+{
+    Block::new()
+        .title("Discussion")
+        .on_close(move || hidden.set(true))
+        .element(t)
+}
+```
+
+The rules, all deliberate:
+
+- **Mouse-only, never focusable.** A focusable ✕ becomes the panel's
+  first tab stop and steals initial focus from the content (the drawer
+  0.2.12 lesson). Keyboard close stays APP-side — bind whatever key
+  the app means (agora-tui's `v`, a drawer's Esc) to the same state
+  the callback writes.
+- **Click = press + release inside the ✕ run** (the Button
+  convention): press-and-drag-out cancels; the release deciding cell
+  is the run the frame shows. Clicking the border corner glyph, the
+  title, or the body never closes.
+- **Truncation order** (pinned): the TITLE yields first — it truncates
+  and then disappears entirely before the ✕ gives up its padded 3-cell
+  run (` ✕ `); under more pressure the pads drop (bare `✕` at the last
+  interior cell); at 1–2 total columns the ✕ yields too — corners
+  only, nothing ever paints on or outside the frame, and a
+  zero-area-crushed block paints (and hits) nothing at all.
+- **`on_close` may remove the panel synchronously** — disposing the
+  block's scope from inside the callback is the normal usage (the
+  engine-wide disposal law; widget bookkeeping lands first). After the
+  panel dies its callback can never re-fire; a second click at the
+  same screen cell acts on whatever LIVE panel re-flexed under it
+  (browser-tab close-spam semantics).
+- **A11y**: the affordance reports as a `button` labeled
+  `Close {title}` (or `Close panel`) in the accessibility tree; it
+  never joins the tab order.
+- **Borderless blocks** (`BorderKind::None`) have no chrome row, so
+  the ✕ floats over the top-right content cells — the app opted into
+  both; wrap in a bordered block when that reads wrong.
+
+Composition is unrestricted: the affordance works inside `PageHost`
+pages, `Drawer` overlays (screen-space clicks translate to the layer),
+and `Scroll`ed columns mid-scroll — all test-pinned — and parked
+closable blocks cost zero idle bytes.
 
 ### Code and diffs — lexers and their theme mappings
 

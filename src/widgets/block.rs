@@ -1,5 +1,5 @@
 //! Block: the bordered panel primitive — a box with optional title,
-//! optional surface fill, and a focus ring.
+//! optional surface fill, a focus ring, and an opt-in close affordance.
 //!
 //! ```ignore
 //! use abstracttui::widgets::{Block, BorderKind, TitleAlign};
@@ -10,6 +10,7 @@
 //!     .title_align(TitleAlign::Left)
 //!     .fill(t.surface)
 //!     .focused(is_focused)
+//!     .on_close(move || open.set(false)) // ✕ on the title row (opt-in)
 //!     .child(body_view)
 //!     .element(&t)
 //!     .build();
@@ -21,12 +22,46 @@
 //! omit to keep the underlying ground). Colors resolve at view build —
 //! the draw closure captures plain `Rgba` (damage contract §5).
 //!
+//! ## The close affordance (`on_close`)
+//!
+//! Opt-in per panel — whether a panel can be closed is the APP's
+//! decision. A muted `✕` rides the title row's right end (inside the
+//! border corner); hover tints it `error` (a consequence-bearing
+//! action, the diff-vocabulary precedent), press adds BOLD. Activation
+//! is MOUSE-ONLY and follows the Button convention: press + release
+//! with the release still inside the run — never fire-on-down. The
+//! affordance is deliberately NOT focusable (a focusable ✕ steals a
+//! panel's first-focus from its content — the drawer 0.2.12 lesson);
+//! keyboard close stays app-side, wired to whatever key the app means.
+//!
+//! Truncation order is pinned: the TITLE yields before the ✕ (a close
+//! affordance you can't see can't free the space you want back), and
+//! at 1–2 total columns the ✕ yields too — nothing paints on or
+//! outside the frame. Borderless closable blocks float the ✕ over the
+//! top-right content cells (they reserved no chrome row; the app
+//! chose both).
+//!
+//! `on_close` may synchronously remove the panel (dispose the block's
+//! scope): all widget bookkeeping lands before the callback runs (the
+//! 0297 disposal law).
+//!
 //! OWNER: DESIGN.
+
+use std::cell::Cell;
+use std::rc::Rc;
 
 use crate::base::{Point, Rect, Rgba};
 use crate::layout::{Edges, Style as LayoutStyle};
 use crate::theme::TokenSet;
 use crate::ui::{Canvas, Element, View};
+
+// The close affordance's geometry + interactive overlay — private
+// shipped sibling (file-size discipline, the feed_typeset.rs pattern).
+#[path = "block_close.rs"]
+mod close;
+#[cfg(test)]
+use close::CLOSE_GLYPH;
+use close::{close_child, close_run, close_text, panel_rect};
 
 /// Border glyph families. `None` keeps layout parity (no padding) with
 /// zero strokes.
@@ -61,8 +96,9 @@ pub enum TitleAlign {
 }
 
 /// The panel container: an optional border (plain/rounded/double/heavy)
-/// with an optional title, a ground fill, a cell-space drop shadow, and
-/// the focus ring (`border_focus` ink when [`focused`](Block::focused)).
+/// with an optional title, a ground fill, a cell-space drop shadow, the
+/// focus ring (`border_focus` ink when [`focused`](Block::focused)),
+/// and an opt-in close affordance ([`on_close`](Block::on_close)).
 ///
 /// Blocks are how an app builds its chrome — cards, panes, sidebars:
 /// children lay out inside the border box. Stateless: build with
@@ -77,6 +113,7 @@ pub struct Block {
     shadow: Option<Rgba>,
     layout: LayoutStyle,
     children: Vec<View>,
+    on_close: Option<Box<dyn FnMut()>>,
 }
 
 impl Block {
@@ -90,6 +127,7 @@ impl Block {
             shadow: None,
             layout: LayoutStyle::default(),
             children: Vec::new(),
+            on_close: None,
         }
     }
 
@@ -145,6 +183,19 @@ impl Block {
         self
     }
 
+    /// Opt into the close affordance: a `✕` at the title row's right
+    /// end, MOUSE-ONLY (press + release inside — the Button convention),
+    /// never focusable. `f` runs when the user clicks it — removing the
+    /// panel from the app's layout inside `f` is the normal body (the
+    /// widget's own bookkeeping lands first, so disposing the block's
+    /// scope synchronously is safe — the 0297 disposal law). Keyboard
+    /// close stays app-side. See the [module docs](crate::widgets::block)
+    /// for the truncation order and visuals.
+    pub fn on_close(mut self, f: impl FnMut() + 'static) -> Block {
+        self.on_close = Some(Box::new(f));
+        self
+    }
+
     /// Resolve tokens and build the element. Returned as [`Element`] so
     /// callers can still attach handlers/shortcuts before `.build()`.
     /// Canonical one-call build (RT8-3 uniformity): same shape as the
@@ -163,18 +214,39 @@ impl Block {
             t.border
         };
         let title_fg = if self.focused { t.text } else { t.text_muted };
+        // Close inks resolve NOW like every Block color (§5): muted at
+        // rest, `error` hot — a consequence-bearing action, not a
+        // neutral accent one (the diff-vocabulary precedent).
+        let close_muted = t.text_muted;
+        let close_hot = t.error;
         let border = self.border;
         let title = self.title;
+        // The close child's a11y label wants the title too; clone before
+        // the draw closure takes ownership below.
+        let access_title = if self.on_close.is_some() {
+            title.clone()
+        } else {
+            None
+        };
         let align = self.title_align;
         let fill = self.fill;
         let shadow = self.shadow;
+        let bordered = border.glyphs().is_some();
+        let closable = self.on_close.is_some();
+        // Geometry probe (closable blocks only): the root draw publishes
+        // the PANEL rect every paint, and the close child does ALL its
+        // hit/paint math against it — one geometry owner, so the ✕ the
+        // frame shows and the ✕ the mouse hits can never disagree. Zero
+        // until the first paint: clicks before anything is visible are
+        // honestly inert.
+        let geom: Option<Rc<Cell<Rect>>> = closable.then(|| Rc::new(Cell::new(Rect::ZERO)));
 
         // Chrome insets ride a PROTECTED padding floor, not the plain
         // style: a caller's later `.style(grow)` on the returned Element
         // then sizes the panel WITHOUT dropping content onto the border
         // (RT8-7 — the worst first-use trap of the cycle-8 review).
         let mut chrome = Edges::ZERO;
-        if border.glyphs().is_some() {
+        if bordered {
             chrome = Edges::all(1);
         }
         if shadow.is_some() {
@@ -185,14 +257,24 @@ impl Block {
         }
         let layout = self.layout;
 
+        let geom_probe = geom.clone();
         let mut el =
             Element::new()
                 .style(layout)
                 .padding_floor(chrome)
                 .draw(move |canvas, rect| {
-                    let panel = if let Some(ground) = shadow {
-                        let panel =
-                            Rect::new(rect.x, rect.y, (rect.w - 1).max(0), (rect.h - 1).max(0));
+                    let panel = panel_rect(rect, shadow.is_some());
+                    if let Some(g) = &geom_probe {
+                        // Published BEFORE the degenerate-rect guard (and on
+                        // culled paints — `probe_when_culled` below), so a
+                        // crushed block retracts its ✕ the same frame it
+                        // collapses.
+                        g.set(panel);
+                    }
+                    if rect.w <= 0 || rect.h <= 0 {
+                        return;
+                    }
+                    if let Some(ground) = shadow {
                         // Offset strip: right column + bottom row, shifted one
                         // cell down-right — reads as light from the top-left.
                         for y in (rect.y + 1)..rect.bottom() {
@@ -201,9 +283,11 @@ impl Block {
                         for x in (rect.x + 1)..rect.right() {
                             canvas.put(Point::new(x, rect.bottom() - 1), ' ', ground, ground);
                         }
-                        panel
+                    }
+                    let close = if closable {
+                        close_run(panel, bordered).map(|run| (run, close_muted))
                     } else {
-                        rect
+                        None
                     };
                     draw_block(
                         canvas,
@@ -214,10 +298,25 @@ impl Block {
                         title.as_deref(),
                         title_fg,
                         align,
+                        close,
                     );
                 });
+        if closable {
+            // Zero-area paints are normally skipped (the fusion rule);
+            // the geometry probe must keep publishing through them.
+            el = el.probe_when_culled();
+        }
         for child in self.children {
             el = el.child(child);
+        }
+        if let (Some(geom), Some(on_close)) = (geom, self.on_close) {
+            el = el.child(close_child(
+                geom,
+                bordered,
+                access_title,
+                close_hot,
+                on_close,
+            ));
         }
         el
     }
@@ -239,6 +338,7 @@ fn draw_block(
     title: Option<&str>,
     title_fg: Rgba,
     align: TitleAlign,
+    close: Option<(Rect, Rgba)>,
 ) {
     if rect.w <= 0 || rect.h <= 0 {
         return;
@@ -246,11 +346,17 @@ fn draw_block(
     if let Some(ground) = fill {
         canvas.fill(rect, ' ', ground, ground);
     }
-    let Some([tl, top, tr, left, right, bl, bottom, br]) = border.glyphs() else {
-        return;
-    };
     let keep = Rgba::TRANSPARENT; // alpha-0 bg: keep what's beneath
     let bg = fill.unwrap_or(keep);
+    let Some([tl, top, tr, left, right, bl, bottom, br]) = border.glyphs() else {
+        // Borderless: no strokes, no title — but the close affordance
+        // still paints (floating over the top-right content cells; the
+        // app opted into both).
+        if let Some((run, ink)) = close {
+            canvas.print(Point::new(run.x, run.y), close_text(run.w), ink, bg);
+        }
+        return;
+    };
     let (x0, y0) = (rect.x, rect.y);
     let (x1, y1) = (rect.right() - 1, rect.bottom() - 1);
 
@@ -269,9 +375,17 @@ fn draw_block(
         canvas.put(Point::new(x1, y1), br, stroke, bg);
     }
 
-    // Title rides the top stroke, padded, truncated to the available run.
+    // The close run paints over the top stroke, at rest in its muted ink
+    // (the hot restyle is the close child's — same geometry, one owner).
+    if let Some((run, ink)) = close {
+        canvas.print(Point::new(run.x, run.y), close_text(run.w), ink, bg);
+    }
+
+    // Title rides the top stroke, padded, truncated to the run LEFT of
+    // the close affordance — the title yields first (pinned order).
     let Some(title) = title else { return };
-    let avail = (rect.w - 4).max(0) as usize; // corners + one pad each side
+    let title_end = close.map(|(run, _)| run.x).unwrap_or(x1); // exclusive
+    let avail = (title_end - (x0 + 1) - 2).max(0) as usize;
     if avail == 0 || title.is_empty() {
         return;
     }
@@ -280,169 +394,12 @@ fn draw_block(
     let tx = match align {
         TitleAlign::Left => x0 + 1,
         TitleAlign::Center => x0 + (rect.w - w).max(0) / 2,
-        TitleAlign::Right => x1 - w,
+        TitleAlign::Right => title_end - w,
     }
-    .clamp(x0 + 1, (x1 - w).max(x0 + 1));
+    .clamp(x0 + 1, (title_end - w).max(x0 + 1));
     canvas.print(Point::new(tx, y0), &format!(" {shown} "), title_fg, bg);
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::base::Size;
-    use crate::theme::default_theme;
-    use crate::widgets::test_util::{draw_into, row};
-
-    const SIZE: Size = Size { w: 20, h: 5 };
-
-    #[test]
-    fn rounded_border_with_left_title() {
-        let t = default_theme().tokens;
-        let view = Block::new()
-            .border(BorderKind::Rounded)
-            .title("Log")
-            .element(&t);
-        let c = draw_into(view, SIZE);
-        assert_eq!(row(&c, 0), format!("╭ Log {}╮", "─".repeat(13)));
-        assert_eq!(row(&c, 4), format!("╰{}╯", "─".repeat(18)));
-        assert_eq!(c.cell(crate::base::Point::new(0, 2)).unwrap().0, '│');
-        // Border color is the border token; title is muted.
-        assert_eq!(
-            c.cell(crate::base::Point::new(5, 0)).unwrap().1,
-            t.text_muted
-        );
-        assert_eq!(c.cell(crate::base::Point::new(0, 0)).unwrap().1, t.border);
-    }
-
-    #[test]
-    fn focus_ring_switches_to_border_focus() {
-        let t = default_theme().tokens;
-        let view = Block::new().focused(true).element(&t);
-        let c = draw_into(view, SIZE);
-        assert_eq!(
-            c.cell(crate::base::Point::new(0, 0)).unwrap().1,
-            t.border_focus
-        );
-    }
-
-    #[test]
-    fn fill_paints_interior_and_none_border_draws_nothing() {
-        let t = default_theme().tokens;
-        let view = Block::new()
-            .border(BorderKind::None)
-            .fill(t.surface)
-            .element(&t);
-        let c = draw_into(view, SIZE);
-        assert_eq!(row(&c, 0).trim(), "");
-        assert_eq!(c.cell(crate::base::Point::new(3, 2)).unwrap().2, t.surface);
-    }
-
-    #[test]
-    fn title_truncates_and_double_heavy_render() {
-        let t = default_theme().tokens;
-        let view = Block::new()
-            .border(BorderKind::Double)
-            .title("A very long title that cannot possibly fit")
-            .element(&t);
-        let c = draw_into(view, Size::new(12, 3));
-        let top = row(&c, 0);
-        assert!(top.starts_with('╔') && top.ends_with('╗'), "{top:?}");
-        assert!(top.contains(" A very l "), "truncated to the run: {top:?}");
-
-        let view = Block::new().border(BorderKind::Heavy).element(&t);
-        let c = draw_into(view, Size::new(4, 2));
-        assert_eq!(row(&c, 0), "┏━━┓");
-        assert_eq!(row(&c, 1), "┗━━┛");
-    }
-
-    #[test]
-    fn shadow_strip_lifts_the_panel() {
-        let t = default_theme().tokens;
-        let view = Block::new()
-            .fill(t.surface)
-            .shadow(t.shadow_ground)
-            .element(&t);
-        let c = draw_into(view, Size::new(10, 4));
-        // Bottom-right strip wears the pre-composited shadow ground…
-        assert_eq!(
-            c.cell(crate::base::Point::new(9, 2)).unwrap().2,
-            t.shadow_ground
-        );
-        assert_eq!(
-            c.cell(crate::base::Point::new(5, 3)).unwrap().2,
-            t.shadow_ground
-        );
-        // …the offset corner cell (0, bottom) stays untouched…
-        assert_ne!(
-            c.cell(crate::base::Point::new(0, 3)).unwrap().2,
-            t.shadow_ground
-        );
-        // …and the panel chrome shrank to make room (border at w-2).
-        assert_eq!(c.cell(crate::base::Point::new(8, 0)).unwrap().0, '┐');
-        // No shadow: chrome spans the full rect.
-        let view = Block::new().element(&t);
-        let c = draw_into(view, Size::new(10, 4));
-        assert_eq!(c.cell(crate::base::Point::new(9, 0)).unwrap().0, '┐');
-    }
-
-    #[test]
-    fn degenerate_rects_never_panic() {
-        let t = default_theme().tokens;
-        for size in [
-            Size::new(0, 0),
-            Size::new(1, 1),
-            Size::new(2, 1),
-            Size::new(1, 4),
-        ] {
-            let view = Block::new().title("x").element(&t);
-            let _ = draw_into(view, size);
-        }
-    }
-
-    #[test]
-    fn bordered_block_pads_children() {
-        let t = default_theme().tokens;
-        let el = Block::new().element(&t);
-        // The stroke room rides the PROTECTED floor now (RT8-7), not
-        // the plain style — mount applies it.
-        assert_eq!(el.padding_floor, Some(Edges::all(1)));
-        let el = Block::new().border(BorderKind::None).element(&t);
-        assert_eq!(el.padding_floor, Some(Edges::ZERO));
-    }
-
-    #[test]
-    fn rt8_7_user_style_on_block_element_keeps_the_border_inset() {
-        // THE cycle-8 first-use trap: `.style(grow)` on the returned
-        // Element used to clobber the border padding, dropping content
-        // onto the frame. The floor survives it now.
-        use crate::base::Size;
-        use crate::reactive::create_root;
-        use crate::ui::{text, BufferCanvas, UiTree};
-        let t = default_theme().tokens;
-        let mut tree = UiTree::new(Size::new(12, 4));
-        let (root, ()) = create_root(|cx| {
-            let view = Block::new()
-                .title("Panel")
-                .child(text("inner"))
-                .element(&t)
-                // The newcomer's line, verbatim:
-                .style(crate::layout::LayoutStyle::default().grow(1.0))
-                .build();
-            tree.mount(cx, view);
-        });
-        let mut canvas = BufferCanvas::new(Size::new(12, 4));
-        tree.draw(&mut canvas);
-        let top = canvas.row_text(0);
-        assert!(
-            top.contains("Panel"),
-            "title intact on the frame row: {top:?}"
-        );
-        assert!(
-            canvas.row_text(1).contains("inner"),
-            "content INSIDE the border, not on it: {:?}",
-            canvas.row_text(1)
-        );
-        assert!(!top.contains("inner"), "content never lands on the frame");
-        root.dispose();
-    }
-}
+#[path = "block_tests.rs"]
+mod tests;

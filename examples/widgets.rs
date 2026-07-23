@@ -44,6 +44,9 @@ fn main() -> abstracttui::base::Result<()> {
         let tab = cx.signal(0usize);
         let spin = cx.signal(0u64);
         let theme_ix = cx.signal(0usize);
+        // Alive-mask for the closable panels row (app-owned: whether a
+        // panel can close is the app's decision — and so is restoring).
+        let panes = cx.signal(0b111u32);
 
         Element::new()
             .style(LayoutStyle::column().padding(Edges::all(1)).gap(1))
@@ -78,7 +81,14 @@ fn main() -> abstracttui::base::Result<()> {
                         Tabs::new()
                             .tab("interactive", {
                                 move || {
-                                    interactive_panel(cx, &theme.get().tokens, clicks, name, pick)
+                                    interactive_panel(
+                                        cx,
+                                        &theme.get().tokens,
+                                        clicks,
+                                        name,
+                                        pick,
+                                        panes,
+                                    )
                                 }
                             })
                             .tab("visual", {
@@ -121,13 +131,15 @@ fn guard_layout() -> LayoutStyle {
 }
 
 /// REACT's widgets under the §3 state table: focus = selection pair,
-/// hover = accent ink, disabled = text_faint outside the focus order.
+/// hover = accent ink, disabled = text_faint outside the focus order —
+/// plus the panel ✕ (click it: the survivors re-flex into the space).
 fn interactive_panel(
     cx: Scope,
     t: &TokenSet,
     clicks: Signal<u32>,
     name: Signal<String>,
     pick: Signal<usize>,
+    panes: Signal<u32>,
 ) -> View {
     let items: Vec<String> = [
         "abstract-dark",
@@ -191,6 +203,7 @@ fn interactive_panel(
                 }))
             },
         ))
+        .child(closable_panes_row(cx, t, panes))
         .child(
             Block::new()
                 .title("list — arrows move, wheel scrolls")
@@ -207,6 +220,47 @@ fn interactive_panel(
                 .build(),
         )
         .build()
+}
+
+/// The operator's panel ✕ (app-kits 0605): each pane opts into
+/// `Block::on_close`, the callback clears its bit, the row's dyn
+/// re-renders and the SURVIVORS RE-FLEX into the freed space. Closing
+/// is the app's decision — and so is coming back (the restore button).
+fn closable_panes_row(cx: Scope, t: &TokenSet, panes: Signal<u32>) -> View {
+    let t = *t;
+    dyn_view(LayoutStyle::default().h(4).shrink(0.0), move || {
+        let mask = panes.get();
+        if mask == 0 {
+            return Element::new()
+                .style(LayoutStyle::row().gap(2).h(4))
+                .child(
+                    Button::new("restore panes")
+                        .on_click(move || panes.set(0b111))
+                        .element(cx, &t)
+                        .build(),
+                )
+                .child(text("all panes closed — the ✕ freed their space"))
+                .build();
+        }
+        let mut row = Element::new().style(LayoutStyle::row().gap(1).h(4));
+        for (i, label) in ["pane 1 — click ✕", "pane 2", "pane 3"].iter().enumerate() {
+            if mask & (1 << i) == 0 {
+                continue;
+            }
+            row = row.child(
+                Block::new()
+                    .border(BorderKind::Rounded)
+                    .title(*label)
+                    .fill(t.surface)
+                    .on_close(move || panes.update(|m| *m &= !(1 << i)))
+                    .layout(LayoutStyle::column().grow(1.0))
+                    .child(text("survivors re-flex"))
+                    .element(&t)
+                    .build(),
+            );
+        }
+        row.build()
+    })
 }
 
 /// DESIGN's visual widgets, inside a Scroll so overflow is explorable.
