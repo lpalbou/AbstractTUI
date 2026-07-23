@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] - 2026-07-23
+
+### Fixed
+
+- examples/images (field bug, tall-narrow terminals — but width-
+  independent): the four mosaic panes rendered as ~2-column EMPTY
+  bordered strips bunched left. The pane row had no `grow`, so inside
+  the growing `dyn_view` HOST it sat at its intrinsic width (four
+  border-only panes + gaps = 11 cells) and the `grow(1.0)` panes split
+  2 cells each — all chrome, zero interior (the RT8-6 multi-pane
+  collapse class hidden behind a dyn_view boundary; the checked-in
+  docs capture showed the same strips at 100 cols). The row now grows
+  and the panes carry an explicit zero basis (exact quarters);
+  `docs/captures/images{,.styled}.txt` regenerated. Regression-pinned
+  headlessly at 70x60, 70x45, 100x30 and 110x30
+  (`tests/wave_images_layout.rs`).
+- widgets: `Image` answered 0x0 to `Auto` sizing (draw-only element, no
+  measure) — the same collapse class at the widget level: images in
+  unsized rows or content-sized panels vanished entirely. The widget
+  now measures as its native cell footprint through the mosaic mode's
+  subpixel density (CSS natural-size analog; broken sources answer the
+  labeled state's 7x2 footprint so the label survives). Explicitly
+  sized/grown compositions are unaffected.
+- widgets: `Image` fit math (`resolve_fit`) is now total — degenerate
+  rects/empty sources resolve to an empty target instead of a clamp
+  panic when called directly, and any rect >= 1x1 keeps a >= 1x1
+  target at every hostile aspect ratio (tall-narrow panes, one-cell
+  strips, 1000x2 sources; unit-pinned).
+
+### Added
+
+- ui: `Element::measure(fn(Size) -> Size)` — intrinsic content size for
+  draw widgets, the same contract text leaves fulfil through
+  `text::measure`. A measured element mounts as a layout leaf; the
+  measure wins over children aggregation. This is the engine door the
+  `Image` fix rides through (and any custom chart/canvas widget with a
+  real content size).
+- term: pinned env-evidence test for `TERM_PROGRAM=vscode` (VS Code,
+  Cursor and forks — xterm.js): truecolor + OSC 8 hyperlinks
+  (xterm.js >= 4.3) + focus reporting (DEC 1004) claimed; OSC 52,
+  kitty keyboard/graphics, sixel and undercurl stay probe-gated. The
+  detection itself already existed; the claims are now test-pinned
+  with a citation comment.
+
 ## [0.2.4] - 2026-07-23
 
 ### Added
@@ -715,6 +759,7 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[0.2.5]: https://github.com/lpalbou/abstracttui/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/lpalbou/abstracttui/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/lpalbou/abstracttui/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/lpalbou/abstracttui/compare/v0.2.1...v0.2.2

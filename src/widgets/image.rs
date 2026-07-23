@@ -179,38 +179,67 @@ impl Image {
         self.element(&t).build()
     }
 
+    /// Native cell footprint of `source` through `mode`'s subpixel
+    /// density — the CSS "natural size" analog and the widget's
+    /// intrinsic answer (one source pixel per mosaic subpixel, so the
+    /// aspect stays correct in cell space). Broken sources answer the
+    /// labeled state's footprint ("⌧ image" + one message row) so the
+    /// label survives `Auto` contexts instead of collapsing away.
+    fn natural_cells(source: &Result<Arc<Bitmap>, String>, mode: MosaicMode) -> crate::base::Size {
+        match source {
+            Ok(bitmap) => {
+                let (subw, subh) = mode.cell_pixels();
+                crate::base::Size::new(
+                    (bitmap.width().div_ceil(subw) as i32).max(1),
+                    (bitmap.height().div_ceil(subh) as i32).max(1),
+                )
+            }
+            Err(_) => crate::base::Size::new(7, 2), // "⌧ image" + message
+        }
+    }
+
     pub fn element(self, t: &TokenSet) -> Element {
         let faint = t.text_faint;
         let fit = self.fit;
         let mode = self.mode;
         let (ah, av) = (self.align_h, self.align_v);
+        // Intrinsic size (RT8-6 collapse fix): a draw-only element
+        // answers ZERO to `Auto` sizing, so images in unsized rows or
+        // content-sized panels used to vanish entirely. The widget now
+        // measures as its natural cell footprint — flex grow/shrink and
+        // the fit modes reconcile it with the rect actually granted,
+        // exactly as they would for an overlong text leaf.
+        let natural = Self::natural_cells(&self.source, mode);
         let source = self.source;
         // FnMut state: the mosaic renderer's buffers persist across
         // draws (steady-state repaints allocate nothing new).
         let mut renderer = MosaicRenderer::new();
-        Element::new().style(self.layout).draw(move |canvas, rect| {
-            if rect.w <= 0 || rect.h <= 0 {
-                return;
-            }
-            let bitmap = match &source {
-                Ok(b) => b,
-                Err(label) => {
-                    // Labeled broken state: never blank, never fake.
-                    canvas.print(rect.origin(), "⌧ image", faint, Rgba::TRANSPARENT);
-                    let msg: String = label.chars().take(rect.w.max(0) as usize).collect();
-                    if rect.h > 1 {
-                        canvas.print(
-                            Point::new(rect.x, rect.y + 1),
-                            &msg,
-                            faint,
-                            Rgba::TRANSPARENT,
-                        );
-                    }
+        Element::new()
+            .style(self.layout)
+            .measure(move |_avail| natural)
+            .draw(move |canvas, rect| {
+                if rect.w <= 0 || rect.h <= 0 {
                     return;
                 }
-            };
-            draw_fitted(canvas, rect, bitmap, fit, mode, ah, av, &mut renderer);
-        })
+                let bitmap = match &source {
+                    Ok(b) => b,
+                    Err(label) => {
+                        // Labeled broken state: never blank, never fake.
+                        canvas.print(rect.origin(), "⌧ image", faint, Rgba::TRANSPARENT);
+                        let msg: String = label.chars().take(rect.w.max(0) as usize).collect();
+                        if rect.h > 1 {
+                            canvas.print(
+                                Point::new(rect.x, rect.y + 1),
+                                &msg,
+                                faint,
+                                Rgba::TRANSPARENT,
+                            );
+                        }
+                        return;
+                    }
+                };
+                draw_fitted(canvas, rect, bitmap, fit, mode, ah, av, &mut renderer);
+            })
     }
 }
 
@@ -225,6 +254,14 @@ fn resolve_fit(
     ah: ImageAlign,
     av: ImageAlign,
 ) -> (Rect, Option<(u32, u32, u32, u32)>) {
+    // Total on hostile inputs: a degenerate rect or an empty source
+    // resolves to an empty target (the draw shell skips it) instead of
+    // panicking inside clamp/division. Any rect >= 1x1 with a real
+    // source yields at least a 1x1 target — the fit never rounds a
+    // visible pane down to nothing.
+    if rect.w <= 0 || rect.h <= 0 || iw == 0 || ih == 0 {
+        return (Rect::new(rect.x, rect.y, 0, 0), None);
+    }
     // Physical aspect: a cell is 1 unit wide, 2 tall.
     let img_aspect = iw as f32 / ih as f32; // square-pixel image
     let (subw, subh) = mode.cell_pixels();
@@ -444,5 +481,147 @@ mod tests {
             let el = Image::from_bitmap(stripes()).element(&t);
             let _ = draw_into(el, size);
         }
+    }
+
+    // -- fit math at hostile aspect ratios (field-bug wave) ---------------
+
+    /// The fit must be total and never produce a zero-size target for
+    /// any rect >= 1x1 — tall-narrow panes (the 70x60 field class),
+    /// short-wide strips, single columns/rows, and extreme-aspect
+    /// sources all included. Aspect distortion at the 1-cell floor is
+    /// accepted; vanishing is not.
+    #[test]
+    fn fit_never_zero_for_visible_rects_at_hostile_aspects() {
+        let rects = [
+            Rect::new(0, 0, 3, 50),  // tall-narrow pane
+            Rect::new(0, 0, 200, 1), // one-row strip
+            Rect::new(0, 0, 1, 40),  // one-column strip
+            Rect::new(0, 0, 40, 1),  // short-wide sliver
+            Rect::new(0, 0, 1, 1),   // single cell
+            Rect::new(0, 0, 15, 51), // the field pane (70x60 quarter)
+        ];
+        let sources = [(160, 96), (8, 8), (1000, 2), (2, 1000), (1, 1)];
+        let modes = [
+            MosaicMode::HalfBlock,
+            MosaicMode::Quadrant,
+            MosaicMode::Sextant,
+            MosaicMode::Braille,
+        ];
+        let fits = [
+            ImageFit::Contain,
+            ImageFit::Cover,
+            ImageFit::Fill,
+            ImageFit::None,
+        ];
+        for rect in rects {
+            for (iw, ih) in sources {
+                for mode in modes {
+                    for fit in fits {
+                        let (target, crop) = resolve_fit(
+                            rect,
+                            iw,
+                            ih,
+                            fit,
+                            mode,
+                            ImageAlign::Center,
+                            ImageAlign::Center,
+                        );
+                        assert!(
+                            target.w >= 1 && target.h >= 1,
+                            "zero target {target:?} for rect {rect:?} img {iw}x{ih} {mode:?} {fit:?}"
+                        );
+                        assert!(
+                            target.w <= rect.w && target.h <= rect.h,
+                            "target {target:?} escapes rect {rect:?} ({mode:?} {fit:?})"
+                        );
+                        if let Some((_, _, cw, ch)) = crop {
+                            assert!(
+                                cw >= 1 && ch >= 1,
+                                "zero crop for rect {rect:?} img {iw}x{ih} {mode:?} {fit:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Degenerate rects and empty sources resolve to an EMPTY target
+    /// (the draw shell skips it) — total, no clamp panic, no division
+    /// blowup. The widget's draw guard makes these unreachable live;
+    /// the pure fn must still be safe to call directly.
+    #[test]
+    fn fit_is_total_on_degenerate_inputs() {
+        for rect in [
+            Rect::new(2, 3, 0, 10),
+            Rect::new(2, 3, 10, 0),
+            Rect::new(2, 3, 0, 0),
+        ] {
+            for fit in [
+                ImageFit::Contain,
+                ImageFit::Cover,
+                ImageFit::Fill,
+                ImageFit::None,
+            ] {
+                let (target, crop) = resolve_fit(
+                    rect,
+                    160,
+                    96,
+                    fit,
+                    MosaicMode::HalfBlock,
+                    ImageAlign::Start,
+                    ImageAlign::Start,
+                );
+                assert!(target.is_empty(), "{fit:?}: {target:?}");
+                assert!(crop.is_none());
+            }
+        }
+        // Empty source, healthy rect: same empty-target answer.
+        let (target, _) = resolve_fit(
+            Rect::new(0, 0, 10, 5),
+            0,
+            0,
+            ImageFit::Contain,
+            MosaicMode::HalfBlock,
+            ImageAlign::Start,
+            ImageAlign::Start,
+        );
+        assert!(target.is_empty());
+    }
+
+    /// The widget's intrinsic answer is its native cell footprint
+    /// through the mode's subpixel density (aspect-correct in cell
+    /// space), never zero; broken sources answer the labeled state's
+    /// footprint so the label survives `Auto` contexts.
+    #[test]
+    fn natural_cells_answers_mode_density() {
+        let src: Result<Arc<Bitmap>, String> = Ok(Arc::new(Bitmap::new(160, 96, Rgba::WHITE)));
+        assert_eq!(
+            Image::natural_cells(&src, MosaicMode::HalfBlock),
+            Size::new(160, 48)
+        );
+        assert_eq!(
+            Image::natural_cells(&src, MosaicMode::Quadrant),
+            Size::new(80, 48)
+        );
+        assert_eq!(
+            Image::natural_cells(&src, MosaicMode::Sextant),
+            Size::new(80, 32)
+        );
+        assert_eq!(
+            Image::natural_cells(&src, MosaicMode::Braille),
+            Size::new(80, 24)
+        );
+        // Odd sizes round UP (a 3x3 quadrant image still needs 2x2 cells).
+        let odd: Result<Arc<Bitmap>, String> = Ok(Arc::new(Bitmap::new(3, 3, Rgba::WHITE)));
+        assert_eq!(
+            Image::natural_cells(&odd, MosaicMode::Quadrant),
+            Size::new(2, 2)
+        );
+        let broken: Result<Arc<Bitmap>, String> = Err("unreadable".into());
+        assert_eq!(
+            Image::natural_cells(&broken, MosaicMode::HalfBlock),
+            Size::new(7, 2)
+        );
     }
 }

@@ -95,6 +95,10 @@ pub struct Element {
     /// change, applied to the live layout node WITHOUT remounting — the
     /// primitive scroll offsets and animated panes ride on.
     pub(crate) style_fn: Option<Box<dyn FnMut() -> Style>>,
+    /// Intrinsic-size callback (the RT8-6 collapse-class fix for draw
+    /// widgets): consulted when an `Auto` axis needs a content size,
+    /// exactly like a text leaf's measurement. See [`Element::measure`].
+    pub(crate) measure: Option<crate::layout::MeasureFn>,
     pub(crate) draw: Option<DrawFn>,
     pub(crate) handlers: Vec<Handler>,
     pub(crate) shortcuts: Vec<Shortcut>,
@@ -123,6 +127,7 @@ impl Element {
         Element {
             style: Style::default(),
             style_fn: None,
+            measure: None,
             draw: None,
             handlers: Vec::new(),
             shortcuts: Vec::new(),
@@ -154,6 +159,25 @@ impl Element {
     /// Paint callback over the element's solved rect.
     pub fn draw(mut self, f: impl FnMut(&mut dyn StyledCanvas, Rect) + 'static) -> Element {
         self.draw = Some(Box::new(f));
+        self
+    }
+
+    /// Intrinsic content size for `Auto`-sized axes: given the available
+    /// box, report the desired size — the same contract text leaves
+    /// fulfil through `text::measure`. Must be pure (called repeatedly
+    /// during solving).
+    ///
+    /// This is how a DRAW widget (an image, a chart canvas) declares a
+    /// real content size instead of the default zero: a draw-only
+    /// element with no measure contributes NOTHING to an `Auto` parent,
+    /// so an unsized flex row of such widgets collapses (the RT8-6
+    /// multi-pane trap — see `LayoutStyle::grow`). When present, the
+    /// measure wins over children aggregation (solver contract).
+    pub fn measure(
+        mut self,
+        f: impl Fn(crate::base::Size) -> crate::base::Size + 'static,
+    ) -> Element {
+        self.measure = Some(Box::new(f));
         self
     }
 

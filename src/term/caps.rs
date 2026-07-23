@@ -223,6 +223,13 @@ impl Capabilities {
         let iterm2 = term_program == "iTerm.app" || !get("ITERM_SESSION_ID").is_empty();
         let windows_terminal = !get("WT_SESSION").is_empty();
         let apple_terminal = term_program == "Apple_Terminal";
+        // TERM_PROGRAM=vscode: VS Code's integrated terminal and its
+        // forks (Cursor, VSCodium…) — all xterm.js. Env evidence covers
+        // truecolor, OSC 8 hyperlinks (xterm.js >= 4.3) and focus
+        // reporting (DEC 1004) through the `modern` set below. NOT
+        // claimed from env: OSC 52 (settings-gated permission prompt),
+        // kitty keyboard/graphics and sixel (absent or addon, off by
+        // default) — the active probe is the only door for those.
         let vscode = term_program == "vscode";
         let foot = term == "foot" || term.starts_with("foot-");
         let vte_version: u32 = get("VTE_VERSION").parse().unwrap_or(0);
@@ -758,6 +765,34 @@ mod tests {
         let c = env(&[("TERM", "xterm-256color")]);
         assert!(!c.osc52_copy && !c.osc9_notify && !c.osc99_notify);
         assert_eq!(c.notify_channel(), NotifyChannel::BellOnly);
+    }
+
+    #[test]
+    fn vscode_env_claims_xterm_js_facts_only() {
+        // VS Code + Cursor + forks set TERM_PROGRAM=vscode (xterm.js).
+        // Documented xterm.js facts claimed from env: truecolor, OSC 8
+        // hyperlinks (>= 4.3), focus reporting (mode 1004). Everything
+        // gated or absent stays off until the active probe proves it.
+        let c = env(&[
+            ("TERM_PROGRAM", "vscode"),
+            ("TERM", "xterm-256color"),
+            ("LANG", "en_US.UTF-8"),
+        ]);
+        assert!(c.truecolor && c.colors_256 && c.unicode_ok);
+        assert!(c.hyperlinks, "xterm.js >= 4.3 renders OSC 8 links");
+        assert!(c.focus_events, "xterm.js reports focus (DEC 1004)");
+        assert!(c.sgr_mouse && c.bracketed_paste);
+        assert!(
+            !c.osc52_copy,
+            "clipboard write is settings-gated in VS Code"
+        );
+        assert!(
+            !c.kitty_graphics && !c.iterm2_images && !c.sixel,
+            "no pixel-protocol claims from env for xterm.js"
+        );
+        assert!(!c.kitty_keyboard, "kitty keyboard needs probe evidence");
+        assert!(!c.undercurl, "no undercurl claim without evidence");
+        assert!(!c.dumb && !c.in_tmux);
     }
 
     #[test]

@@ -90,7 +90,10 @@ for the state diagram and a worker-thread example.
 ## ui — elements, views, composition
 
 `Element` is the view-tree builder: layout style, children, focusability,
-event handlers, keyboard shortcuts, and an optional draw closure.
+event handlers, keyboard shortcuts, an optional draw closure, and an
+optional intrinsic measure (`.measure(fn(Size) -> Size)`) so a draw
+widget can answer `Auto` sizing like a text leaf instead of defaulting
+to zero.
 Components are plain functions `fn(Scope, Props) -> View` — no trait, no
 registry. They run **once**; reactivity comes from `dyn_view(style, f)`,
 which re-runs `f` when the signals it reads change and re-renders only that
@@ -183,7 +186,7 @@ widgets take just `&TokenSet`, no `Scope`. The catalog:
   optional relative time axes fed from a `TimeSeries` history ring (see the
   history-rings section below).
 - **Grid** — container widget over `Display::Grid`; spans ride each child's own style.
-- **Image** — bitmap display through the mosaic pipeline (`ImageFit`; `Bitmap` re-exported beside it).
+- **Image** — bitmap display through the mosaic pipeline (`ImageFit`; `Bitmap` re-exported beside it). Measures as its native cell footprint, so it holds real space in `Auto`-sized rows/panels.
 - **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals.
 - **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code.
 - **Meter / AudioScope** — live level rendering: dB meter with real ballistics (instant attack, timed decay, peak hold) and a rolling braille waveform — see the live-levels section below.

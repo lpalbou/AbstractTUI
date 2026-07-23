@@ -40,7 +40,14 @@ pub(super) fn mount_view(
                 if let Some(floor) = el.padding_floor {
                     apply_padding_floor(&mut style, floor);
                 }
-                let layout = c.layout.add(style);
+                // An element with an intrinsic-size callback mounts as a
+                // measured leaf — the same door text nodes use — so draw
+                // widgets (images, chart canvases) can answer `Auto`
+                // sizing instead of defaulting to zero (RT8-6 class).
+                let layout = match el.measure.take() {
+                    Some(m) => c.layout.add_leaf(style, m),
+                    None => c.layout.add(style),
+                };
                 let id = ViewId(c.insts.insert(Inst {
                     parent,
                     children: Vec::new(),

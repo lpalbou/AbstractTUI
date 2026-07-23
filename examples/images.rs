@@ -137,7 +137,12 @@ fn main() -> abstracttui::base::Result<()> {
                 } else {
                     bitmap.clone()
                 };
-                let mut row = Element::new().style(LayoutStyle::row().gap(1));
+                // The dyn_view HOST grows, but the host is a container
+                // and this row is its flex item: without its own grow
+                // the row sits at intrinsic width — four border-only
+                // panes, 11 cells, empty strips (the RT8-6 collapse
+                // class across a dyn_view boundary; field bug 0.2.4).
+                let mut row = Element::new().style(LayoutStyle::row().gap(1).grow(1.0));
                 for (mode, label) in PANELS {
                     row = row.child(panel(&t, src.clone(), mode, label));
                 }
@@ -178,7 +183,10 @@ fn panel(t: &TokenSet, img: Arc<Bitmap>, mode: MosaicMode, label: &'static str) 
     Block::new()
         .title(label)
         .fill(t.surface)
-        .layout(LayoutStyle::column().grow(1.0))
+        // grow + zero basis: the four panes split the row into exact
+        // quarters (largest-remainder), instead of growing from their
+        // border-only intrinsic widths.
+        .layout(LayoutStyle::column().grow(1.0).basis(Dimension::Cells(0)))
         .child(
             Element::new()
                 .style(LayoutStyle::default().grow(1.0))
