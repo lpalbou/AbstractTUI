@@ -1,22 +1,24 @@
-# Prompt: upgrade abstractcode-tui to AbstractTUI 0.2.4
+# Prompt: upgrade abstractcode-tui to AbstractTUI 0.2.6
 
 Copy everything below the line into the abstractcode-tui session.
 
 ---
 
 Your project `~/tmp/abstractframework/abstractcode-tui` is built against
-`abstracttui = "0.2.1"`. **AbstractTUI 0.2.4 is released** (crates.io +
-https://github.com/lpalbou/AbstractTUI, ~1,640 tests green; 0.2.2 shipped
-yesterday, so you are two releases behind). Your open filings moved:
-0290/0293/0295/0296 landed in 0.2.2, 0297 in 0.2.3; your Card system and
+`abstracttui = "0.2.1"`. **AbstractTUI 0.2.6 is released** (crates.io +
+https://github.com/lpalbou/AbstractTUI, ~1,660 tests green; five releases
+landed since your 0.2.1). Your filings moved: 0290/0293/0295/0296 landed
+in 0.2.2, 0297 in 0.2.3, and 0299 + 0291 (your full-redraw and
+focused-placeholder asks, renumbered from 0300/0310 — band collision on
+our side) shipped in 0.2.6; your Card system and
 sync mirror motivated new engine surface (0102/0104), and your reconnect
 hand-roll is the named example in the new `reactive::connection` module
 doc. Upgrade and delete app-side machinery where the engine now
 owns the job — with the honest caveats below where it does NOT.
 
-**Dependency first**: set `abstracttui = "0.2.4"` in `Cargo.toml` (path
+**Dependency first**: set `abstracttui = "0.2.6"` in `Cargo.toml` (path
 dep `{ path = "../abstracttui" }` if the index lags). No breaking API
-changes 0.2.1 → 0.2.4 (`cargo semver-checks` clean both hops); MSRV stays
+changes 0.2.1 → 0.2.6 (`cargo semver-checks` clean at every hop); MSRV stays
 1.87, so your `rust-version` comment only needs the version string
 updated. ONE behavior change can move your screens: Feed markdown items
 now typeset the full doc vocabulary (see item 2) — any test fixture whose
@@ -104,7 +106,10 @@ renders "retry #2 in 1.4s" instead of a bare ✗. Optional, second pass.
   better, derive it.
 - Composer hints (`src/ui/mod.rs:374,380`) can teach the BEST chord per
   terminal, the engine's own transcript example is the pattern
-  (examples/transcript.rs:347-356):
+  (examples/transcript.rs:347-356). Related diagnostics you can point
+  /help at: `cargo run --example caps` (0.2.4) prints the live
+  capability report — which image channel the ladder picks, whether
+  kitty keyboard is live.
 
 ```rust
 let caps = abstracttui::app::use_caps(cx);
@@ -179,7 +184,10 @@ alive, and it is exactly the kind of item that lands (see the closer).
 - **Markdown in-flow images** — they decode from paths, lazily; your
   images are HTTP-fetched in-memory bitmaps. Your mosaic block stays
   (your 0280 filing remains the real ask) — just feed it `current_caps()`
-  (item 4).
+  (item 4). Note for your image panes: 0.2.5 fixed image widgets
+  collapsing in unsized rows (`Element::measure` — Image now answers its
+  native cell footprint), so if you ever saw skinny empty strips, that
+  class is dead.
 - **UPDATE (2026-07-23): 0299 and 0291 shipped in 0.2.6 — delete two of
   the three workarounds this bullet used to protect.** Your veil/heal
   machinery (Ctrl+L + `/redraw` + the 5s chrome-band heartbeat, the
@@ -222,8 +230,10 @@ alive, and it is exactly the kind of item that lands (see the closer).
 
 ## 8. Keep filing (the closer)
 
-The first-app record stands at 17 items born from your build: 11 fixed,
-6 open and queued — nothing filed there has been dropped. Three new
+The first-app record stands at 17 items born from your build: 13 fixed,
+4 open and queued (0260 disclosure, 0280 rich custom blocks, 0292
+completion position policy, 0294 panel flip) — nothing filed there has
+been dropped. Three new
 tensions verified in your current code deserve items — the 029x decade
 is exhausted, next free ids are **0281–0289** (then 0261+), format per
 `~/tmp/abstractframework/abstracttui/docs/backlog/proposed/first-app/`:
@@ -243,6 +253,6 @@ is exhausted, next free ids are **0281–0289** (then 0261+), format per
 
 Work incrementally — one section per commit-sized change, suite after
 each. Everything above was verified against your working tree and the
-engine's v0.2.3 tag on 2026-07-23; the full findings review (file:line
+engine's v0.2.6 tag on 2026-07-23; the full findings review (file:line
 on both sides, fit verdicts, deletion estimates) is at
 `~/tmp/abstractframework/abstracttui/reviews/abstractcode-tui-review-2026-07-23.md`.
