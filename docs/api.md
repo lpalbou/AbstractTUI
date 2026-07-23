@@ -995,6 +995,9 @@ let inspector = Drawer::new(DrawerEdge::Right)
     .size(DrawerSize::Percent(0.4))     // or Cells(n); cross axis fills
     .title("Inspector")                  // themed header + esc hint + ✕
     .motion(Duration::from_millis(160)) // Duration::ZERO = instant mode
+    // (ZERO is also the deterministic-test mode: in a wall-time-less
+    // headless harness a timed slide never advances, so the panel
+    // renders nothing until real frames elapse — console-tui field note)
     .on_close(|why| { /* DrawerCloseReason::{Api, Escape, ..} */ })
     .install(cx, |mount| inspector_page(mount));
 inspector.toggle();                      // open / close / is_open too
