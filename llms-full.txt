@@ -174,7 +174,7 @@ cd abstracttui
 cargo run --example dashboard
 ```
 
-Sixteen runnable examples live in [examples/](examples/README.md), and every one
+Seventeen runnable examples live in [examples/](examples/README.md), and every one
 exits cleanly with a notice when no interactive terminal is present, so they are
 safe to run anywhere. Start with these five:
 
@@ -541,7 +541,7 @@ that way.
   compositor, and the render pipeline.
 - [API guide](api.md) — the public surface, module by module.
 - [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
-- [Examples catalog](../examples/README.md) — sixteen runnable programs, from
+- [Examples catalog](../examples/README.md) — seventeen runnable programs, from
   the 53-line `hello` to the full `dashboard`, with the keys each answers to.
   For content-heavy apps start with `transcript` (streaming markdown chat),
   `reader` (tables, images, TOC, search), and `voice_mock` (push-to-talk and
@@ -2491,6 +2491,33 @@ wrapping every payload automatically. Known cosmetic limit: tmux cannot
 reflow passthrough images across scrolling or pane splits. Mosaic works
 everywhere regardless.
 
+### Verifying image support on your terminal
+
+Two commands answer "what does my terminal actually support?":
+
+```bash
+cargo run --example caps     # the capability report
+cargo run --example images   # see it: mosaic families + protocol placement
+```
+
+`caps` renders the live capability set — the probe's upgrades appear on
+screen moments after launch, and the `images via` line names the channel
+the ladder picked (`kitty graphics protocol`, `iterm2 inline images`,
+`sixel`, or `unicode mosaic`). Apps can read the same facts through
+`use_caps(cx)` / `current_caps()`. `images` then shows the result: the
+four mosaic glyph families side by side, and `p` places the same picture
+through the chosen pixel protocol, labeled with the channel in the
+footer.
+
+What to expect per terminal: kitty, WezTerm, and Ghostty take the kitty
+graphics path; iTerm2 and VS Code's terminal take OSC 1337 inline
+images; foot and mlterm take sixel; Terminal.app and most others render
+unicode mosaic — which is not a failure but the universal fallback, at
+character-cell resolution. Under tmux, protocols engage only when the
+passthrough probe proves `allow-passthrough on` (see above). If a
+protocol row reads `yes` but you see mosaic, check `cell pixel size` —
+without pixel geometry the ladder stays conservative.
+
 ## 3D end-to-end
 
 ### The five-line hello
@@ -3010,8 +3037,10 @@ best channel (upload once, cheap moves, true deletes); iTerm2-protocol
 terminals get inline images with full re-emits; sixel terminals get
 paletted rasters; **every** terminal gets unicode mosaic, which is plain
 colored glyphs and needs nothing. The engine probes and picks; run
-`cargo run --example images -- --caps` to see what your terminal offers.
-See [graphics-and-3d.md](graphics-and-3d.md) for the full ladder.
+`cargo run --example caps` for the live capability report (the
+`images via` line names your channel), and `cargo run --example images`
+to see the result. See [graphics-and-3d.md](graphics-and-3d.md) for the
+full ladder and the per-terminal expectations.
 
 ## Why is my emoji/wide-character layout off in one terminal?
 
@@ -3397,8 +3426,8 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.2.3 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.2.3 (2026-07-23).
+- Crate: `abstracttui` 0.2.4 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.2.4 (2026-07-23).
 - Description: a reactive, compositor-grade terminal UI engine — fine-grained signals,
   layered rendering with damage tracking, streaming transcripts and live-data ingestion,
   text selection with OSC 52 copy, images (kitty/iTerm2/sixel/mosaic),

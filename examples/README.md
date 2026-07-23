@@ -27,6 +27,7 @@ capability report and exit — the diagnostic surface, no tty needed.
 | `transcript.rs` | REAL — streaming conversation: markdown answers typeset live block-by-block (doc vocabulary: a table streams in as a TABLE, task lists, strikethrough), code tint, follow-tail break/re-pin, 10k stress |
 | `voice_mock.rs` | REAL — the voice surface with no audio/network: push-to-talk (hold/latch per key-state fidelity), dB meter + band spectrum + rolling scope, fake transcription feed |
 | `reader.rs` | REAL — mdpad-class markdown reader: GFM tables, lazy in-flow images, TOC/anchor jumps, search highlights with live count |
+| `caps.rs` | TOOL — the live terminal-capability report: what the probe detected, which image channel the ladder picks |
 | `capture.rs` | TOOL — deterministic screenshot pipeline into `docs/captures/` |
 | `common/` | shared helpers (small-terminal guard, key legend) — not a target |
 

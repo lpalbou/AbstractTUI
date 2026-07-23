@@ -301,7 +301,7 @@ that way.
   compositor, and the render pipeline.
 - [API guide](api.md) — the public surface, module by module.
 - [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
-- [Examples catalog](../examples/README.md) — sixteen runnable programs, from
+- [Examples catalog](../examples/README.md) — seventeen runnable programs, from
   the 53-line `hello` to the full `dashboard`, with the keys each answers to.
   For content-heavy apps start with `transcript` (streaming markdown chat),
   `reader` (tables, images, TOC, search), and `voice_mock` (push-to-talk and

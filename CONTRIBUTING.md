@@ -13,7 +13,7 @@ cargo build
 
 The crate targets stable Rust (edition 2021) and builds from std plus five
 small, permissively licensed dependencies (see `Cargo.toml`). To try it out,
-run any of the 16 examples:
+run any of the 17 examples:
 
 ```sh
 cargo run --example hello

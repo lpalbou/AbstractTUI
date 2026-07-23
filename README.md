@@ -142,7 +142,7 @@ cd abstracttui
 cargo run --example dashboard
 ```
 
-Sixteen runnable examples live in [examples/](examples/README.md), and every one
+Seventeen runnable examples live in [examples/](examples/README.md), and every one
 exits cleanly with a notice when no interactive terminal is present, so they are
 safe to run anywhere. Start with these five:
 

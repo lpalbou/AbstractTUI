@@ -32,8 +32,10 @@ best channel (upload once, cheap moves, true deletes); iTerm2-protocol
 terminals get inline images with full re-emits; sixel terminals get
 paletted rasters; **every** terminal gets unicode mosaic, which is plain
 colored glyphs and needs nothing. The engine probes and picks; run
-`cargo run --example images -- --caps` to see what your terminal offers.
-See [graphics-and-3d.md](graphics-and-3d.md) for the full ladder.
+`cargo run --example caps` for the live capability report (the
+`images via` line names your channel), and `cargo run --example images`
+to see the result. See [graphics-and-3d.md](graphics-and-3d.md) for the
+full ladder and the per-terminal expectations.
 
 ## Why is my emoji/wide-character layout off in one terminal?
 

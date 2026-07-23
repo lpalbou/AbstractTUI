@@ -20,7 +20,7 @@ mosaic), software-rasterized 3D (GLB), themes, and animation.
 ## Reference material
 
 - [`../examples/README.md`](../examples/README.md) — the examples
-  catalog: sixteen runnable programs from a 53-line hello to a full ops
+  catalog: seventeen runnable programs from a 53-line hello to a full ops
   dashboard, each documented with keys, requirements, and what it should
   look like. Every example exits cleanly without a tty, and
   `dashboard`/`viewer3d`/`images` take `--caps` to print the terminal

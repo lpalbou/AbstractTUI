@@ -94,6 +94,33 @@ wrapping every payload automatically. Known cosmetic limit: tmux cannot
 reflow passthrough images across scrolling or pane splits. Mosaic works
 everywhere regardless.
 
+### Verifying image support on your terminal
+
+Two commands answer "what does my terminal actually support?":
+
+```bash
+cargo run --example caps     # the capability report
+cargo run --example images   # see it: mosaic families + protocol placement
+```
+
+`caps` renders the live capability set — the probe's upgrades appear on
+screen moments after launch, and the `images via` line names the channel
+the ladder picked (`kitty graphics protocol`, `iterm2 inline images`,
+`sixel`, or `unicode mosaic`). Apps can read the same facts through
+`use_caps(cx)` / `current_caps()`. `images` then shows the result: the
+four mosaic glyph families side by side, and `p` places the same picture
+through the chosen pixel protocol, labeled with the channel in the
+footer.
+
+What to expect per terminal: kitty, WezTerm, and Ghostty take the kitty
+graphics path; iTerm2 and VS Code's terminal take OSC 1337 inline
+images; foot and mlterm take sixel; Terminal.app and most others render
+unicode mosaic — which is not a failure but the universal fallback, at
+character-cell resolution. Under tmux, protocols engage only when the
+passthrough probe proves `allow-passthrough on` (see above). If a
+protocol row reads `yes` but you see mosaic, check `cell pixel size` —
+without pixel geometry the ladder stays conservative.
+
 ## 3D end-to-end
 
 ### The five-line hello

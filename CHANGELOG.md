@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4] - 2026-07-23
+
+### Added
+
+- examples: `caps` — the live terminal-capability report (probe upgrades
+  render on screen; the `images via` line names the channel the image
+  ladder picks; headless runs print the environment-detected set).
+
+### Documentation
+
+- graphics-and-3d: new "Verifying image support on your terminal"
+  section — the two-command recipe, per-terminal expectations (kitty /
+  WezTerm / Ghostty / iTerm2 / VS Code / foot / Terminal.app / tmux),
+  and how to read the capability rows; FAQ image answer now points at
+  the `caps` report.
+
 ## [0.2.3] - 2026-07-23
 
 ### Added (input/AV wave — games/0700, media-av/0610 + 0620 + 0650)
@@ -699,6 +715,7 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[0.2.4]: https://github.com/lpalbou/abstracttui/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/lpalbou/abstracttui/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/lpalbou/abstracttui/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/lpalbou/abstracttui/compare/v0.2.0...v0.2.1
