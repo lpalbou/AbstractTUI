@@ -180,6 +180,49 @@ fn placeholder_shows_only_unfocused_empty() {
     assert!(!canvas.row_text(0).contains("type here"));
 }
 
+/// Backlog first-app/0291, TextInput parity: the opt-in paints the
+/// placeholder while focused-and-empty — caret block visible at the
+/// text area's first cell, hint one cell past it in `text_faint`,
+/// first typed character removes it.
+#[test]
+fn placeholder_while_focused_paints_beside_the_caret() {
+    let size = Size::new(16, 1);
+    let t = &default_theme().tokens;
+    let theme = default_theme();
+    let (_root, mut tree) = mount_widget(size, |cx| {
+        TextInput::new()
+            .placeholder("type here")
+            .placeholder_while_focused(true)
+            .element(cx, t)
+            .build()
+    });
+    key(&mut tree, Key::Tab); // focus
+    let canvas = render(&mut tree, size);
+    let caret = canvas.cell(Point::new(1, 0)).unwrap();
+    assert_eq!(caret.0, ' ', "caret cell is a styled blank");
+    assert_eq!(caret.2, theme.tokens.cursor, "caret bg is the cursor token");
+    assert_eq!(canvas.cell(Point::new(2, 0)).unwrap().0, 't');
+    assert_eq!(
+        canvas.cell(Point::new(2, 0)).unwrap().1,
+        theme.tokens.text_faint,
+        "focused placeholder keeps the text_faint ink"
+    );
+    assert!(canvas.row_text(0).contains("type here"));
+    type_str(&mut tree, "x");
+    let canvas = render(&mut tree, size);
+    assert!(
+        !canvas.row_text(0).contains("type here"),
+        "typing hides the focused placeholder: {:?}",
+        canvas.row_text(0)
+    );
+    assert_eq!(canvas.cell(Point::new(1, 0)).unwrap().0, 'x');
+    assert_eq!(
+        canvas.cell(Point::new(2, 0)).unwrap().2,
+        theme.tokens.cursor,
+        "caret advanced past the typed glyph"
+    );
+}
+
 /// A masked field mounted with a probe on its value signal.
 fn masked_input(size: Size) -> (crate::reactive::RootScope, UiTree, Signal<String>) {
     let t = &default_theme().tokens;

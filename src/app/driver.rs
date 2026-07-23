@@ -381,6 +381,15 @@ impl Driver {
                 app.push_startup_notice(format!("mouse capture: suspend verb unavailable ({e})"));
             }
         }
+        // Public full-redraw verb (first-app/0299,
+        // `app::request_full_redraw`): the terminal's content can no
+        // longer be trusted (external clear — Cmd+K, `\033c`), so
+        // resync exactly like suspend-resume does. Drained before the
+        // frame decision: a request from this turn's own key handler
+        // renders — and re-emits everything — this same turn.
+        if super::redraw::take_full_redraw_request() {
+            self.resync_unknown_screen();
+        }
         // Zero-collapse diagnostics drained from last frame's solve reach
         // the app here (phase U owns signal writes). The notices lane is
         // the in-session surface; stderr waits until teardown.
@@ -633,6 +642,17 @@ impl Driver {
         }
         match event {
             Event::Resize(size) => self.apply_resize(app, size),
+            // Focus-regain repaint (first-app/0299 ask 2, opt-in via
+            // `app::set_redraw_on_focus_gained`): an externally-cleared
+            // terminal is nearly always followed by a focus round-trip,
+            // so healing on focus-in makes the failure invisible.
+            // Routing drops terminal-focus events anyway (documented on
+            // `convert_event`), so consuming the event here loses
+            // nothing; with the policy off, the event falls through to
+            // the ordinary (dropping) path below.
+            Event::FocusGained if super::redraw::redraw_on_focus_gained() => {
+                self.resync_unknown_screen();
+            }
             Event::CapsReply(reply) => {
                 if let Some(probe) = &mut self.probe {
                     // Every fold that CHANGED a capability reaches the
@@ -861,8 +881,11 @@ impl Driver {
     /// apply_resize rule), damage every layer so the flatten produces
     /// regions for the diff to re-emit, and re-place images. Used by
     /// the suspend orchestration (`driver_suspend.rs`, cycle-2 review
-    /// I-2); backlog first-app/0299 asks for the component-reachable
-    /// public form of this verb.
+    /// I-2) and, since first-app/0299 shipped, as the drain target of
+    /// the public verbs: `app::request_full_redraw` (component-
+    /// reachable Ctrl+L class, drained in `turn`'s phase U) and the
+    /// opt-in `app::set_redraw_on_focus_gained` (FocusGained handling
+    /// in `handle_event`).
     pub(super) fn resync_unknown_screen(&mut self) {
         self.poison_prev();
         self.presenter.invalidate();
@@ -870,10 +893,33 @@ impl Driver {
         for layer in store.layers.iter_mut() {
             layer.surface_mut().damage_all();
         }
+        let image_keys: Vec<u64> = store.images.iter().map(|e| e.id).collect();
         for img in store.images.iter_mut() {
             img.dirty = true;
         }
         drop(store);
+        // The terminal-side IMAGE state (kitty uploads + placements,
+        // iTerm2/sixel pixels) is as unknown as the cells — and the
+        // dirty flag alone is not enough: `ImageSession::sync` answers
+        // `Unchanged` for an unmoved same-version slot. Forget what
+        // the session believes the terminal holds so the next sync
+        // re-emits in full: kitty through `release` (the delete bytes
+        // are harmless where the upload is already gone, and skipping
+        // them would leak the upload where it survived — the session's
+        // own no-forget rule), cursor-paint channels through
+        // `invalidate_slot`. Before this, a resumed/healed screen kept
+        // its cells but silently lost every protocol image.
+        let gfx_caps = self.caps.graphics();
+        for key in image_keys {
+            match self.image_session.slot_info(key) {
+                Some((crate::gfx::Channel::Kitty, _)) => {
+                    let mut sink = super::driver_images::BufSink(&mut self.pending_image_bytes);
+                    self.image_session.release(&mut sink, key, &gfx_caps);
+                }
+                Some(_) => self.image_session.invalidate_slot(key),
+                None => {}
+            }
+        }
         reactive::request_frame();
     }
 

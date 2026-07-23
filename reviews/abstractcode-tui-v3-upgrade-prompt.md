@@ -180,8 +180,21 @@ alive, and it is exactly the kind of item that lands (see the closer).
   images are HTTP-fetched in-memory bitmaps. Your mosaic block stays
   (your 0280 filing remains the real ask) — just feed it `current_caps()`
   (item 4).
-- Your veil/heal machinery, focused-placeholder overlay, and completion
-  whole-draft guard all STAY: 0299, 0291, 0292 are still open
+- **UPDATE (2026-07-23): 0299 and 0291 shipped in 0.2.6 — delete two of
+  the three workarounds this bullet used to protect.** Your veil/heal
+  machinery (Ctrl+L + `/redraw` + the 5s chrome-band heartbeat, the
+  translucent-veil trick and all its measured limits) dies: bind
+  Ctrl+L → `abstracttui::app::request_full_redraw()` (prelude
+  re-export) — real poison-prev + presenter-invalidate semantics, so
+  the first heal frame re-anchors instead of ghost-walking, images
+  re-place, and the transcript pane heals too (no chrome-band
+  confinement needed). Add `set_redraw_on_focus_gained(true)` at boot
+  and the heartbeat's job disappears entirely — the screen heals at the
+  next focus round-trip. Your focused-placeholder overlay (~40 lines)
+  dies too: `.placeholder_while_focused(true)` on the composer's
+  `TextArea` paints the hint beside the caret engine-side (default off,
+  so nothing changes until you opt in — delete the overlay in the same
+  commit). The completion whole-draft guard STAYS: 0292 is still open
   engine-side (0294 too).
 
 ## 7. New capabilities you haven't asked for but fit your app

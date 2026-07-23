@@ -1,6 +1,6 @@
 # 0299 — Public full-redraw verb (poison-prev semantics) + optional focus-regain repaint
 
-Status: proposed (field evidence from abstractcode-tui, 2026-07-23)
+Status: completed 2026-07-23 (0.2.6 field wave)
 Owner: engine (app/driver)
 Effort: S
 
@@ -102,3 +102,66 @@ The composer-placeholder gap is now its own item — **0291**
 band-collision class as this file). abstractcode-tui currently overlays
 its own hint (absolute element, content-derived height so it never eats
 caret clicks).
+
+## Completion report (2026-07-23, 0.2.6 field wave)
+
+- **Ask 1 shipped as asked**: `app::request_full_redraw()` (new
+  `src/app/redraw.rs`; re-exported in the prelude) — a thread-local
+  request flag in the `mouse_capture()` drain shape, exactly the
+  component-reachable form the item names (apps hold no driver after
+  `App::run`). The driver drains it once per turn in the phase-U
+  engine-verb section, BEFORE the frame decision, so a request from
+  this turn's own key handler renders — and re-emits everything — the
+  SAME turn. The drain target is the existing
+  `Driver::resync_unknown_screen` (the I-2 suspend pair): prev poison
+  + `Presenter::invalidate()` + damage-all on every layer + image
+  re-place + `request_frame()`. Idle after the healing frame is zero
+  bytes again (test-pinned).
+- **Ask 2 shipped as an OPT-IN**:
+  `app::set_redraw_on_focus_gained(true)` (+ `redraw_on_focus_gained()`
+  getter). The driver now handles `Event::FocusGained` — previously
+  always dropped — with the same resync when the policy is on. Default
+  OFF, the item's own hedge, for two reasons: (a) a full-frame emission
+  per focus-in is real byte cost under tmux pane-switching cadence and
+  would put an asterisk on "idle emits zero bytes" for every existing
+  session; (b) the item's `RunConfig` suggestion is unavailable
+  additively — `RunConfig` is a literal-constructible pub-field struct,
+  so a new field is semver-MAJOR (`constructible_struct_adds_field`);
+  the thread-local policy verb carries the opt-in instead.
+- **The image half went one layer deeper than the item's sketch**:
+  `img.dirty = true` alone does NOT re-place — `ImageSession::sync`
+  answers `Unchanged` for an unmoved same-version slot (the resize
+  path only re-emits because rects change). `resync_unknown_screen`
+  now forgets terminal-side image state per channel: kitty slots
+  `release` (delete bytes + full retransmit — the delete is harmless
+  where the upload is already gone and mandatory where it survived,
+  per the session's kitty no-forget rule), iTerm2/sixel/mosaic slots
+  `invalidate_slot`. This also FIXES suspend-resume, which previously
+  restored every cell but silently lost every protocol image (the
+  suspend tests asserted text only).
+- **Tests**: `tests/wave_redraw.rs` —
+  `ctrl_l_full_redraw_re_emits_every_cell_then_idles` (end-to-end: the
+  app binds Ctrl+L → verb via `Element::shortcut`, `0x0c` through the
+  wire; BYTE EVIDENCE: the verb frame's bytes alone, fed to a fresh
+  `VtScreen`, rebuild every row — a diff frame against a live model
+  would leave a fresh screen blank; then 4 idle turns at zero bytes),
+  `full_redraw_re_places_byte_channel_images` (kitty `\x1b_G` re-emits
+  on the verb; parked turns stay silent), and
+  `redraw_on_focus_gained_is_opt_in` (default: focus round-trip emits
+  nothing; opted in: focus-in re-presents the whole screen, then back
+  to zero). Unit pins in `app::redraw::tests` (one-shot drain,
+  default-off policy). The suspend wave (`wave_inputav`) stays green
+  over the shared resync.
+- **Docs**: api.md gained a full-redraw section beside the other
+  app-runtime verb sections (the `redraw` module itself stays private —
+  the verbs export at `app::` + prelude; no public types to house);
+  CHANGELOG under Unreleased; the consumer upgrade prompt now retires
+  the veil/heal workaround.
+- Whole-tree battery: 1,662 tests green, 0 failed (1,212 lib + 403
+  across 54 integration suites + 47 doctests; 96 ignored =
+  perf/soak/live-pty/fuzz gates + doc fragments — the 0.2.5 baseline
+  1,654 plus exactly this wave's 8 new tests), clippy `--all-targets
+  -- -D warnings` zero, fmt clean, alloc pins green (alloc_budget 10/10),
+  `cargo semver-checks --baseline-version 0.2.5` — 196 checks pass,
+  additive-clean at the 0.2.6 minor bump — and
+  `RUSTDOCFLAGS="-D warnings" cargo doc --no-deps` clean.

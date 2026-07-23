@@ -21,24 +21,25 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | State | Count |
 | --- | --- |
 | Planned | 3 |
-| Proposed | 50 |
-| Completed | 34 |
+| Proposed | 48 |
+| Completed | 36 |
 | Deprecated | 0 |
 | Recurrent | 0 |
 
-(Counted from the filesystem 2026-07-23, cycle-2 single-writer fold:
+(Counted from the filesystem 2026-07-23, 0.2.6 field-wave fold:
 `[0-9]*.md` files under planned/, proposed/, completed/. This fold
-records the whole cycle: the builder wave's moves (0102/0104/0190 +
-0142/0144/0146/0148 to completed/app-widgets/, 0610/0620/0650 to
-completed/media-av/, 0700 to completed/games/ — INPUTAV's rows below),
-0180 planned→completed (REVIEWER's scheduled-gates leg), 0297 + 0040
-proposed→completed (FIXNET), and one NEW filing counted in:
-first-app/0299. Renumber note (wave-3 CLOSER, cycle-3 close): that
-filing landed as first-app/0300 — colliding with control-plane/0300 —
-and was renumbered to 0299 per the cycle-2 review demand; a second
-mid-close filing landed as first-app/0310 — colliding with
-control-plane/0310 — and was renumbered to 0291 the same way. The
-proposed count is now 50 with the 0291 filing counted in.)
+moves first-app/0291 + first-app/0299 proposed→completed — the two
+consumer-requested items shipped as the 0.2.6 field wave (rows below);
+proposed 50→48, completed 34→36. The prior cycle-2 fold recorded the
+builder wave's moves (0102/0104/0190 + 0142/0144/0146/0148 to
+completed/app-widgets/, 0610/0620/0650 to completed/media-av/, 0700 to
+completed/games/), 0180 planned→completed (REVIEWER's scheduled-gates
+leg), 0297 + 0040 proposed→completed (FIXNET), and the 0299 filing.
+Renumber note (wave-3 CLOSER, cycle-3 close): that filing landed as
+first-app/0300 — colliding with control-plane/0300 — and was renumbered
+to 0299 per the cycle-2 review demand; a second mid-close filing landed
+as first-app/0310 — colliding with control-plane/0310 — and was
+renumbered to 0291 the same way.)
 
 ## Topic tracks
 
@@ -105,6 +106,8 @@ composer wave).
 | — | Feed adopts the md doc vocabulary (handoff-named seam, no backlog id — closes 0142's named follow-up): `FeedItem::markdown` → `parse_doc`; streams → `DocStreamSession`; tables/images/tasks/strike in Feed; streamed table = open region (cost-pinned); captures byte-identical on core sources — completed 2026-07-23 (wave 3, INTEGRATOR) | reviews/wave3/integrator-handoff.md |
 | 0297 | Disposal-safety law engine-wide (the 0250 ruling stated as law): Button mouse-Up fixed (`pressed` cleared before `on_click`), TextArea post-callback caret publish fixed (callbacks owed, fired LAST) — audit table of every callback site in-item; disposal test pinned per site (Button/Checkbox/Radio/Tabs/TextInput/TextArea/Table-sort/Select-commit); law stated in api.md; consumer may now delete its one-tick retire deferral — completed 2026-07-23 (fix wave 3, FIXNET) | completed/first-app/ |
 | 0040 | Connection lifecycle + jittered reconnect: `reactive::connection`/`ConnState`/`Connection`/`ConnectionEvents` (state as signals, retries on the timer heap, generation-stamped reporters, zero cost when Closed — pinned) + `reactive::Backoff` (FULL jitter, base 500ms ×2 cap 30s, seeded tests); engine does NO I/O — dial fn is the 0050 seam; docs/live-data.md state diagram — completed 2026-07-23 (fix wave 3, FIXNET; graduated directly from proposed/ on the fired trigger, per the in-item evidence section) | completed/live-data/ |
+| 0291 | Placeholder-while-focused opt-in: `TextArea::placeholder_while_focused` + `TextInput` parity (hint one cell past the caret, `text_faint` ink, caret block stays visible; default OFF — byte-stability for existing apps, decision in-item) — autofocused composers finally paint their teaching — completed 2026-07-23 (0.2.6 field wave) | completed/first-app/ |
+| 0299 | Public full-redraw verb: `app::request_full_redraw()` (thread-local drain → `resync_unknown_screen`: prev poison + presenter invalidate + damage-all + per-channel image re-place) + opt-in `set_redraw_on_focus_gained` (FocusGained heal; RunConfig field rejected — literal-constructible struct, semver-major); image re-place fixed for suspend-resume too (dirty alone read `Unchanged` from the session) — completed 2026-07-23 (0.2.6 field wave) | completed/first-app/ |
 
 ## Proposed ledger
 
@@ -120,10 +123,8 @@ composer wave).
 | 0210 | EPIC: a2a chat TUI over the agora hub | ports | Its widget + live-data dependencies land (Feed + TextArea 0120 DONE; lifecycle 0040/0050 remain). |
 | 0260 | Disclosure widget: per-item fold/unfold for transcripts (maintainer ask) | first-app | Fold into Feed's item model (0100 shipped — extend), or standalone on a second consumer. |
 | 0280 | Feed custom blocks cannot host widgets; protocol images degrade to mosaic in Feed | first-app | Filed 2026-07-22 (0.2.0 adoption wave); design with Feed's item model + the 0144 protocol-images-in-flow question. |
-| 0291 | TextArea placeholder never paints on an autofocused composer — opt-in `placeholder_while_focused` (renumbered from 0310: band collision with control-plane, wave-3 CLOSER) | first-app | Filed 2026-07-23 (field evidence: abstractcode-tui composer teaching never painted one pixel); draw-rule delta in `widgets/textarea.rs`. |
 | 0292 | Completion triggers fire on any mid-text token — no position policy (renumbered from 0300) | first-app | Filed 2026-07-22; add trigger-position policy to `Completion` (start-of-line/word options). |
 | 0294 | Anchored panel places short lists over the chrome below instead of flipping up (renumbered from 0310) | first-app | Filed 2026-07-22; placement scoring in `place_panel`. |
-| 0299 | Public full-redraw verb (poison-prev semantics) + optional focus-regain repaint — external clears (Cmd+K, `\033c`) leave the terminal desynced forever; only resize/caps-upgrade/suspend-resume reach the poison+invalidate pair today (renumbered from 0300: band collision with control-plane, wave-3 CLOSER; `Driver::resync_unknown_screen` — the I-2 suspend work — is the crate-private form of the asked verb) | first-app | Filed 2026-07-23 (field evidence: abstractcode-tui header blanked by external clear + toast). |
 | 0300 | App lifecycle events (boot/ready/resize/caps/focus/suspend/resume/quit + custom) — the band foundation | control-plane | Scheduling any of 0310/0340/0350, or the first app needing suspend/flush hooks. |
 | 0310 | Automation bus: inject input, query semantic tree + screen text, invoke named actions, subscribe to events | control-plane | 0300 + a driving consumer (port harness, embedder, or 0320). |
 | 0320 | JSONL control protocol + opt-in serve seam (default-OFF `control-server` feature; socket perms = auth) | control-plane | 0310 + the JSON-promotion precondition (with extensions 0410); closes only with the protocol ADR. |

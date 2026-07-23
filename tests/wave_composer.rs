@@ -351,3 +351,69 @@ fn mouse_click_accepts_a_candidate_through_the_wire() {
         "dropdown closed after the click"
     );
 }
+
+/// first-app/0291 through the real frame loop: the field failure was
+/// an `.autofocus()`ed composer whose placeholder NEVER painted one
+/// pixel (focused from boot; the classic rule paints it only when
+/// unfocused). With the opt-in, the VT screen must show the caret
+/// block (cursor-token bg) at the composer's first text cell and the
+/// hint beside it in `text_faint`; one typed character removes it.
+#[test]
+fn autofocused_composer_paints_placeholder_beside_caret_on_screen() {
+    let size = Size::new(W, H);
+    let mut app = App::new(size);
+    app.mount(move |cx| {
+        let t = use_theme(cx).get().tokens;
+        let composer = TextArea::new()
+            .placeholder("describe a task")
+            .placeholder_while_focused(true)
+            .rows(1, 3)
+            .element(cx, &t)
+            .autofocus()
+            .build();
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(text("== chrome =="))
+            .child(composer)
+            .build()
+    })
+    .expect("mount");
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, config()).expect("driver");
+    settle(&mut driver, &mut app, &mut term);
+
+    let tokens = current_theme().tokens;
+    let row = 1; // chrome line above; composer's single row below it
+    let hint_row = screen_lines(&term)[row as usize].clone();
+    assert!(
+        hint_row.contains("describe a task"),
+        "autofocused composer must paint its hint: {hint_row:?}"
+    );
+    // Caret block visible at the first text cell (x=1, past the
+    // stroke), cursor-token bg; the hint starts one cell past it.
+    let caret = term.screen().cell(1, row).expect("caret cell");
+    assert_eq!(
+        caret.paint.bg,
+        Some(tokens.cursor),
+        "caret bg is the cursor token"
+    );
+    let hint = term.screen().cell(2, row).expect("hint cell");
+    assert_eq!(hint.ch(), 'd');
+    assert_eq!(
+        hint.paint.fg,
+        Some(tokens.text_faint),
+        "hint ink is text_faint"
+    );
+
+    // One typed character hides the hint; the glyph takes the cell.
+    term.push_input(b"h");
+    settle(&mut driver, &mut app, &mut term);
+    let typed_row = screen_lines(&term)[row as usize].clone();
+    assert!(
+        !typed_row.contains("describe a task"),
+        "typing hides the focused placeholder: {typed_row:?}"
+    );
+    assert_eq!(term.screen().cell(1, row).expect("cell").ch(), 'h');
+    driver.finish(&mut term).expect("leave");
+    assert_eq!(term.screen().unknown_seq_count(), 0, "all bytes modeled");
+}

@@ -47,6 +47,7 @@ mod notices;
 pub mod overlays;
 pub mod popups;
 pub mod push_to_talk;
+mod redraw;
 pub mod select;
 pub mod selection;
 mod theme;
@@ -68,6 +69,9 @@ pub use viewport::{current_viewport, use_viewport};
 // Appended (wave 3, games/0700 + media-av/0610): key state + push-to-talk.
 pub use keys::{hold_gesture_label, key_state, use_key_state, KeyFidelity, KeyState};
 pub use push_to_talk::{CaptureState, PttMode, PushToTalk, StopReason};
+// Appended (first-app/0299): the public full-redraw verb + the
+// focus-regain repaint opt-in.
+pub use redraw::{redraw_on_focus_gained, request_full_redraw, set_redraw_on_focus_gained};
 
 use std::cell::Cell;
 use std::rc::Rc;

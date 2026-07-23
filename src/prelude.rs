@@ -71,3 +71,7 @@ pub use crate::widgets::{MarkdownView, MdSearchMatch, OutlineEntry};
 // Connection lifecycle + jittered reconnect (live-data 0040) —
 // appended with its wave.
 pub use crate::reactive::{connection, Backoff, ConnState, Connection, ConnectionEvents};
+
+// Full-redraw verb + focus-regain repaint opt-in (first-app/0299) —
+// appended with its wave.
+pub use crate::app::{request_full_redraw, set_redraw_on_focus_gained};

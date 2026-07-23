@@ -50,6 +50,7 @@ pub(crate) type TextCallback = Rc<RefCell<Option<BoxedTextFn>>>;
 pub struct TextInput {
     value: Option<Signal<String>>,
     placeholder: String,
+    placeholder_while_focused: bool,
     masked: bool,
     layout: Option<LayoutStyle>,
     on_change: Option<BoxedTextFn>,
@@ -120,6 +121,7 @@ impl TextInput {
         TextInput {
             value: None,
             placeholder: String::new(),
+            placeholder_while_focused: false,
             masked: false,
             layout: None,
             on_change: None,
@@ -136,6 +138,17 @@ impl TextInput {
 
     pub fn placeholder(mut self, text: impl Into<String>) -> TextInput {
         self.placeholder = text.into();
+        self
+    }
+
+    /// Paint the placeholder while focused-and-empty too, beside the
+    /// caret (backlog first-app/0291 — `TextArea` parity). Default OFF:
+    /// the classic yield-to-caret rule keeps existing apps
+    /// byte-identical; see
+    /// [`TextArea::placeholder_while_focused`](crate::widgets::TextArea::placeholder_while_focused)
+    /// for the full rationale.
+    pub fn placeholder_while_focused(mut self, on: bool) -> TextInput {
+        self.placeholder_while_focused = on;
         self
     }
 
@@ -206,6 +219,7 @@ impl TextInput {
         });
         let focused = cx.signal(false);
         let placeholder = self.placeholder;
+        let placeholder_while_focused = self.placeholder_while_focused;
         let masked = self.masked;
         let on_change: TextCallback = Rc::new(RefCell::new(self.on_change));
         let on_submit: TextCallback = Rc::new(RefCell::new(self.on_submit));
@@ -304,6 +318,18 @@ impl TextInput {
                                     &Style::new().fg(placeholder_fg).bg(bg),
                                 );
                                 return;
+                            }
+                            // Focused-and-empty opt-in (first-app/0291):
+                            // hint one cell PAST the caret cell, same ink;
+                            // the trailing-cursor paint below keeps the
+                            // caret block visible at column 0. `tw > 1`
+                            // guards the one-column degenerate field.
+                            if text.is_empty() && focused && placeholder_while_focused && tw > 1 {
+                                canvas.print_styled(
+                                    crate::base::Point::new(tx + 1, rect.y),
+                                    &placeholder,
+                                    &Style::new().fg(placeholder_fg).bg(bg),
+                                );
                             }
                             // Cluster-indexed paint: selection and cursor
                             // highlight whole clusters — a wide emoji

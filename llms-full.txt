@@ -1427,6 +1427,16 @@ fn composer(cx: Scope) -> View {
 }
 ```
 
+**Placeholder while focused** (first-app/0291): by default the
+placeholder paints only while the field is empty AND unfocused — the
+classic yield-to-the-caret rule — which means an `.autofocus()`ed
+composer (focused from boot) never shows its hint at all. Opt in with
+`.placeholder_while_focused(true)`: the hint then also paints while
+focused-and-empty, one cell past the caret in the same `text_faint`
+ink, so the caret block stays visible beside it — the convention
+modern editors ship. The default stays off so existing apps render
+byte-identically; `TextInput` has the same option.
+
 ### Completion dropdown (anchored panel)
 
 `app::anchored` ships the passive half of the anchored-popup substrate
@@ -1776,6 +1786,43 @@ Selection semantics, stated plainly:
 platform note: job-control suspend (`Ctrl+Z`) re-enters with the original
 options, re-arming reporting — suspend again after resume if you keep it
 off.
+
+## app — the full-redraw verb (Ctrl+L class)
+
+The damage contract trusts the terminal to keep every cell the engine
+painted. When that breaks EXTERNALLY — Cmd+K in Terminal.app,
+`printf '\033c'` from a stray process, an emulator glitch — model-side
+repaints cannot heal it: cells whose bytes did not change emit
+nothing, so the loss is permanent. Two verbs (first-app/0299, exported
+at `app::` and re-exported in the prelude) reach the driver's "screen
+is unknown" resync — the same pair resize and suspend-resume run
+(previous-frame model poisoned, presenter re-anchored, every layer
+damaged, protocol images re-placed):
+
+```rust
+use abstracttui::prelude::*;
+
+// The Ctrl+L binding every terminal app owes its users:
+Element::new().shortcut(KeyChord::new(Mods::CTRL, Key::Char('l')), |_| {
+    request_full_redraw() // next frame re-emits EVERY cell + re-places images
+});
+
+// Opt-in auto-heal: full redraw whenever the terminal reports
+// focus-in (an external clear is nearly always followed by a focus
+// round-trip, so the damage fixes itself before anyone looks):
+set_redraw_on_focus_gained(true);
+```
+
+`request_full_redraw()` is callable from any component handler or
+posted job on the app thread; the driver drains it at its next turn
+(a call from a key handler is honored within the same turn). Cost is
+bounded and honest: one full-frame emission, then idle returns to
+zero bytes. The focus-regain opt-in defaults OFF — a full frame per
+focus-in is real byte cost under tmux pane-switching cadence, so
+existing sessions stay byte-identical unless the app asks
+(`app::redraw_on_focus_gained()` reads the policy back). Use these for
+terminal-side damage only; for ordinary content changes, signals and
+tree damage already repaint exactly what changed.
 
 ## theme — design tokens
 
@@ -3429,8 +3476,8 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.2.5 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.2.5 (2026-07-23).
+- Crate: `abstracttui` 0.2.6 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.2.6 (2026-07-23).
 - Description: a reactive, compositor-grade terminal UI engine — fine-grained signals,
   layered rendering with damage tracking, streaming transcripts and live-data ingestion,
   text selection with OSC 52 copy, images (kitty/iTerm2/sixel/mosaic),

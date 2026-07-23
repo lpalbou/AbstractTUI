@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-07-23
+
+### Added
+
+- app: `request_full_redraw()` — the public Ctrl+L-class verb
+  (first-app/0299). Component-reachable (thread-local request drained
+  by the driver's next turn, the `mouse_capture()` shape): the next
+  frame re-emits EVERY cell with absolute anchoring and re-places
+  protocol images, healing terminal content destroyed externally
+  (Cmd+K, `printf '\033c'`) that model-side damage can never repair.
+  One full-frame emission, then idle returns to zero bytes. Re-exported
+  in the prelude.
+- app: `set_redraw_on_focus_gained(bool)` / `redraw_on_focus_gained()`
+  — opt-in auto-heal (first-app/0299 ask 2): a full redraw whenever
+  the terminal reports focus-in (DEC 1004), so an externally cleared
+  screen fixes itself at the next focus round-trip. Default OFF:
+  existing sessions stay byte-identical (tmux pane switches fire focus
+  events constantly). Not a `RunConfig` field — that struct is
+  literal-constructible, so a new field would be a semver-major
+  change.
+- widgets: `TextArea::placeholder_while_focused(bool)` and
+  `TextInput::placeholder_while_focused(bool)` (first-app/0291) —
+  opt-in placeholder while focused-and-empty, painted one cell past
+  the caret in the same `text_faint` ink (the caret block stays
+  visible). Without it, an `.autofocus()`ed composer never renders its
+  placeholder at all (focused from boot; the classic rule paints only
+  when unfocused). Default OFF: existing apps render byte-identically.
+
+### Fixed
+
+- app: suspend-resume (and the new full-redraw verb) now genuinely
+  re-place protocol images. `resync_unknown_screen` marked image
+  overlays dirty, but `ImageSession::sync` answers `Unchanged` for an
+  unmoved same-version slot — so a resumed screen restored every cell
+  and silently lost every kitty/iTerm2/sixel placement. The resync now
+  forgets terminal-side image state per channel (kitty: `release` —
+  delete + full retransmit, leak-free either way; cursor-paint
+  channels: `invalidate_slot`) so the next sync re-emits in full.
+
 ## [0.2.5] - 2026-07-23
 
 ### Fixed
@@ -759,6 +798,7 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
+[0.2.6]: https://github.com/lpalbou/abstracttui/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/lpalbou/abstracttui/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/lpalbou/abstracttui/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/lpalbou/abstracttui/compare/v0.2.2...v0.2.3

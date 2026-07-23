@@ -582,6 +582,56 @@ fn placeholder_disabled_and_a11y() {
     );
 }
 
+/// Backlog first-app/0291: an `.autofocus()`ed composer is focused from
+/// boot, so the classic empty-AND-unfocused rule never paints its
+/// placeholder. The opt-in paints the hint beside the caret: caret
+/// block at column 0 of the text area (visible — "where am I typing"
+/// beats one hint word), hint one cell past it in `text_faint`, and
+/// the first typed character removes the hint.
+#[test]
+fn placeholder_while_focused_paints_beside_the_caret() {
+    let t = &default_theme().tokens;
+    let theme = default_theme();
+    let size = Size::new(20, 3);
+    let (_root, mut tree) = mount_widget(size, move |cx| {
+        TextArea::new()
+            .placeholder("say it")
+            .placeholder_while_focused(true)
+            .element(cx, t)
+            .build()
+    });
+    key(&mut tree, Key::Tab); // focus — the autofocused-composer state
+    let canvas = render(&mut tree, size);
+    // The caret block stays visible at the text area's first cell.
+    let caret = canvas.cell(Point::new(1, 0)).unwrap();
+    assert_eq!(caret.0, ' ', "caret cell is a styled blank");
+    assert_eq!(caret.2, theme.tokens.cursor, "caret bg is the cursor token");
+    // The hint starts ONE CELL PAST the caret, in placeholder ink.
+    assert_eq!(canvas.cell(Point::new(2, 0)).unwrap().0, 's');
+    assert_eq!(
+        canvas.cell(Point::new(2, 0)).unwrap().1,
+        theme.tokens.text_faint,
+        "focused placeholder keeps the text_faint ink"
+    );
+    assert!(canvas.row_text(0).contains("say it"));
+    // One typed character hides the hint; the glyph takes column 0.
+    type_str(&mut tree, "h");
+    crate::reactive::flush_effects();
+    tree.layout();
+    let canvas = render(&mut tree, size);
+    assert!(
+        !canvas.row_text(0).contains("say it"),
+        "typing hides the focused placeholder: {:?}",
+        canvas.row_text(0)
+    );
+    assert_eq!(canvas.cell(Point::new(1, 0)).unwrap().0, 'h');
+    assert_eq!(
+        canvas.cell(Point::new(2, 0)).unwrap().2,
+        theme.tokens.cursor,
+        "caret advanced past the typed glyph"
+    );
+}
+
 #[test]
 fn replace_range_snaps_to_cluster_boundaries() {
     let (_root, _tree, state, _) = composer(Size::new(20, 4));

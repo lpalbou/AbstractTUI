@@ -170,6 +170,7 @@ impl TextAreaState {
 pub struct TextArea {
     state: Option<TextAreaState>,
     placeholder: String,
+    placeholder_while_focused: bool,
     min_rows: i32,
     max_rows: i32,
     policy: SubmitPolicy,
@@ -184,6 +185,7 @@ impl TextArea {
         TextArea {
             state: None,
             placeholder: String::new(),
+            placeholder_while_focused: false,
             min_rows: 1,
             max_rows: 6,
             policy: SubmitPolicy::default(),
@@ -202,6 +204,22 @@ impl TextArea {
 
     pub fn placeholder(mut self, text: impl Into<String>) -> TextArea {
         self.placeholder = text.into();
+        self
+    }
+
+    /// Paint the placeholder while the field is focused-and-empty too,
+    /// beside the caret (backlog first-app/0291). By default the
+    /// placeholder yields to the caret — classic form UX — which means
+    /// an `.autofocus()`ed composer NEVER renders its hint (it is
+    /// focused from boot). Opting in follows the convention every
+    /// modern toolkit ships (VS Code, browsers' `::placeholder`,
+    /// iTerm2's palette): the hint paints one cell PAST the caret cell
+    /// in the same `text_faint` ink, so the caret block stays visible.
+    /// Default OFF deliberately: existing apps stay byte-identical,
+    /// and the field consumer's own overlay workaround would
+    /// double-paint under a silent default flip.
+    pub fn placeholder_while_focused(mut self, on: bool) -> TextArea {
+        self.placeholder_while_focused = on;
         self
     }
 
@@ -271,6 +289,7 @@ impl TextArea {
         let focused = state.inner.focused;
         let caret_cell = state.inner.caret_cell;
         let placeholder = self.placeholder;
+        let placeholder_while_focused = self.placeholder_while_focused;
         let (min_rows, max_rows) = (self.min_rows, self.max_rows);
         let policy = self.policy;
         let disabled = self.disabled;
@@ -422,6 +441,20 @@ impl TextArea {
                                 &Style::new().fg(placeholder_fg).bg(bg),
                             );
                             return;
+                        }
+                        // Focused-and-empty opt-in (backlog first-app/0291):
+                        // the hint paints one cell PAST the caret cell —
+                        // "where am I typing" beats one hint word — in the
+                        // same placeholder ink; the caret block itself
+                        // paints below via the normal path, over column 0.
+                        // `tw > 1` guards the degenerate one-column field
+                        // (only the caret cell exists there).
+                        if text.is_empty() && focused && placeholder_while_focused && tw > 1 {
+                            canvas.print_styled(
+                                Point::new(tx + 1, rect.y),
+                                &placeholder,
+                                &Style::new().fg(placeholder_fg).bg(bg),
+                            );
                         }
                         let rows = RowMap::build(&text, tw);
                         let total = rows.len() as i32;
