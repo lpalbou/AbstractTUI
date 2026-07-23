@@ -45,7 +45,8 @@ pub use compose::Callback;
 pub use event::{
     EventCtx, Key, KeyChord, KeyEvent, Mods, MouseButton, MouseEvent, MouseKind, Phase, UiEvent,
 };
-pub use tree::{UiTree, ViewId};
+pub(crate) use tree::publish_layer_origin;
+pub use tree::{layer_origin, UiTree, ViewId};
 pub use view::{
     dyn_view, dyn_view_scoped, styled_text, text, DrawFn, Element, HandlerFn, ShortcutFn, View,
 };

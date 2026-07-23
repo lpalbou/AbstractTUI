@@ -22,6 +22,9 @@ impl UiTree {
         // makes a tracked signal read in any of them a debug panic
         // (release: counted, see reactive::diagnostics).
         let _phase = enter_draw_phase();
+        // Draw closures capturing anchor rects translate to SCREEN
+        // cells through the ambient origin (see tree.rs).
+        let _origin = super::tree::publish_layer_origin(self.core.borrow().layer_origin);
         let root = self.core.borrow().root;
         if let Some(root) = root {
             let vp = Rect::from_size(self.core.borrow().viewport);
@@ -37,6 +40,7 @@ impl UiTree {
     pub fn draw_damaged(&mut self, canvas: &mut dyn StyledCanvas, damage: &[Rect]) {
         self.layout();
         let _phase = enter_draw_phase();
+        let _origin = super::tree::publish_layer_origin(self.core.borrow().layer_origin);
         let root = self.core.borrow().root;
         let Some(root) = root else { return };
         for &rect in damage {

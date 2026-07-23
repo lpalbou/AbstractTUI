@@ -329,7 +329,12 @@ impl Combobox {
                     .map(|o| o.label.clone())
                     .unwrap_or_else(|| access_placeholder.clone())
             })
-            .draw(move |_canvas, rect| last_rect.set(Some(rect)))
+            .draw(move |_canvas, rect| {
+                // Anchors are SCREEN cells (the Select rule): translate
+                // the layer-local draw rect by the ambient layer origin.
+                let o = crate::ui::layer_origin();
+                last_rect.set(Some(rect.translate(o.x, o.y)));
+            })
             .hover_signal(hovered)
             .focus_signal(focused);
         if !disabled {
@@ -339,12 +344,12 @@ impl Combobox {
                     if (k.key == Key::Enter || k.key == Key::Char(' ')) && k.mods == Mods::NONE =>
                 {
                     if focused.get_untracked() {
-                        open(ctx.current_rect());
+                        open(ctx.current_rect_screen());
                         ctx.stop_propagation();
                     }
                 }
                 UiEvent::Mouse(m) if matches!(m.kind, MouseKind::Down(MouseButton::Left)) => {
-                    open(ctx.current_rect());
+                    open(ctx.current_rect_screen());
                     ctx.stop_propagation();
                 }
                 _ => {}
@@ -432,6 +437,11 @@ fn combobox_popup_content(
         let editor = crate::widgets::TextInput::new()
             .value(filter)
             .placeholder(placeholder)
+            // The filter editor mounts FOCUSED and empty; the hint is
+            // the affordance that typing filters — show it anyway
+            // (the placeholder_while_focused feature's motivating
+            // case, first-app 0310).
+            .placeholder_while_focused(true)
             .layout(
                 LayoutStyle::default()
                     .width(Dimension::Percent(1.0))

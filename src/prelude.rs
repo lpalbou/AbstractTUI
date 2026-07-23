@@ -76,6 +76,12 @@ pub use crate::reactive::{connection, Backoff, ConnState, Connection, Connection
 // appended with its wave.
 pub use crate::app::{request_full_redraw, set_redraw_on_focus_gained};
 
+// File-attachment surfaces (first-app/0273) — appended with their
+// wave: the paste intercept's action + the filesystem picker family
+// (the classifier stays behind `input::paste::classify` — input is an
+// explicit-import module by curation).
+pub use crate::widgets::{FileEntry, FilePicker, FileSource, PasteAction, StdFileSource};
+
 // Completion trigger-position policy + anchored-panel placement bias
 // (first-app/0292 + 0294) — appended with their wave.
 pub use crate::app::anchored::{PanelPlacement, TriggerPosition};

@@ -424,7 +424,14 @@ impl Select {
                     .map(|o| o.label.clone())
                     .unwrap_or_else(|| access_placeholder.clone())
             })
-            .draw(move |_canvas, rect| last_rect.set(Some(rect)))
+            .draw(move |_canvas, rect| {
+                // Anchors are SCREEN cells: translate the layer-local
+                // draw rect by the owning layer's ambient origin (ZERO
+                // on the root) — a trigger inside a Modal/Drawer must
+                // not anchor its popup at layer-local coordinates.
+                let o = crate::ui::layer_origin();
+                last_rect.set(Some(rect.translate(o.x, o.y)));
+            })
             .hover_signal(hovered)
             .focus_signal(focused);
         if !disabled {
@@ -434,12 +441,12 @@ impl Select {
                     if (k.key == Key::Enter || k.key == Key::Char(' ')) && k.mods == Mods::NONE =>
                 {
                     if focused.get_untracked() {
-                        open(ctx.current_rect());
+                        open(ctx.current_rect_screen());
                         ctx.stop_propagation();
                     }
                 }
                 UiEvent::Mouse(m) if matches!(m.kind, MouseKind::Down(MouseButton::Left)) => {
-                    open(ctx.current_rect());
+                    open(ctx.current_rect_screen());
                     ctx.stop_propagation();
                 }
                 _ => {}

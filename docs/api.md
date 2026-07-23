@@ -998,6 +998,94 @@ effects synchronously — no widget holds a borrow across a user
 callback (the invariant is documented on `widgets::SharedCallback`
 and pinned by reentrancy tests on List and Select).
 
+One deliberate refinement for the paste INTERCEPT (`on_paste` below):
+an interceptor decides whether widget writes happen at all, so it runs
+FIRST — the law's guarantee is preserved from both arms (on `Consume`
+no widget write follows the hook; on `Insert` the widget re-checks its
+signals' liveness and treats a hook that disposed the scope as
+consumed, never a dead-signal panic).
+
+## File attachments — paste intercept, drop classifier, FilePicker
+
+Terminals have no drop protocol: **dropping a file onto every major
+terminal PASTES its path**, and the spelling varies per terminal. The
+engine owns the three surfaces a file-attaching app needs
+(`examples/attachments.rs` is the wired recipe; backlog
+first-app/0273):
+
+**1. The paste intercept.** `TextInput::on_paste` and
+`TextArea::on_paste` (uniform semantics) run when `UiEvent::Paste`
+reaches the focused editor, BEFORE insertion, with the RAW paste text:
+
+```rust,ignore
+TextArea::new()
+    .on_paste(|pasted| match abstracttui::input::paste::classify(pasted) {
+        Some(paths) => { attach(paths); PasteAction::Consume } // no text lands
+        None => PasteAction::Insert, // byte-identical to an unhooked editor
+    })
+```
+
+`PasteAction::Insert` = today's behavior exactly (TextInput folds line
+breaks to spaces, TextArea normalizes newlines); `Consume` = the
+editor inserts NOTHING, fires no `on_change`, touches neither caret
+nor history. The hook fires in `masked` fields too — return `Consume`
+unconditionally to block pasting into a password field. The enum is
+`#[non_exhaustive]` (ADR-0003 §3): foreign `match`es carry a `_` arm.
+
+**2. The drop classifier.** `input::paste::classify(&str) ->
+Option<Vec<String>>` — pure string parsing, zero I/O — answers "is
+this paste a file drop?" against the researched spellings of the real
+terminals (the corpus, with sources, lives in the `input::paste`
+module docs):
+
+| terminal | drop spelling |
+| --- | --- |
+| Terminal.app | backslash-escaped specials, space-joined multi-drop |
+| iTerm2 ≥ 3.4 | backslash-escaped (advanced pref: single-quoted) |
+| Ghostty | backslash-escaped; GTK multi-drop is NEWLINE-joined |
+| WezTerm | `SpacesOnly` default; `Posix`/`Windows*` = double-quoted; `None` = raw |
+| kitty | raw path as-is (no escaping, by policy) |
+| Windows Terminal | double-quoted when spaces; WSL tabs single-quote |
+| GNOME Terminal (VTE) | `file://` URIs converted to single-quoted paths |
+| MATE Terminal (bug class) | raw `file://` uri-list reaches the app |
+
+Accepted shapes per token: POSIX absolute, `~/` home-relative
+(returned as-is — expansion is YOURS), Windows drive/UNC, `file://`
+URLs (percent-decoded, empty/`localhost` host only). **The asymmetry
+policy**: a false positive EATS user text, a false negative just
+pastes — so every ambiguous case returns `None`: raw unescaped spaces
+(`/a/My File.txt` from kitty), unterminated quotes, interior blank
+lines, control characters, relative paths, non-`file:` URLs, and
+prose ("see /usr/bin for details"). Existence-checking stays app-side
+(the engine never touches the filesystem in the input path): fs-check
+the returned paths and offer a visible undo before silently attaching.
+
+**3. The picker.** `FilePicker` — breadcrumb header (left-truncated),
+live type-to-filter input (the single focus stop), entry rows with
+kind glyphs + an optional size column, keyboard nav, opt-in
+multi-select, `on_pick(Vec<String>)`:
+
+```rust,ignore
+FilePicker::new(StdFileSource::default())   // std::fs, dirs-first,
+    .start_in("/Users/me/Documents")        // hidden files skipped
+    .multi_select(true)                     // Space marks, badge counts
+    .on_pick(|paths| attach(paths))         // may close the modal (law)
+    .view(cx)
+```
+
+Keys: Enter descends a directory or picks a file (marked set when
+non-empty, else the current file); Backspace/Left go to the PARENT
+when the filter is empty (otherwise they edit the filter); Up/Down/
+Page move the selection; **Esc is never consumed** — the host modal
+owns dismissal (wire it like every modal: a `shortcut` that closes).
+The widget is PURE: entries come from the `FileSource` seam
+(`read_dir(path) -> Result<Vec<FileEntry>, String>`), so tests stay
+hermetic and archives/remote listings slot in; `StdFileSource` reads
+synchronously once per navigation (local fs is fine; a stalling
+network mount is the app's risk — the seam is the escape hatch).
+Errors render honestly in the list area ("cannot read: …"), and a
+parked picker costs zero idle bytes.
+
 ## app — the runtime
 
 `App::simple` is the whole happy path: mount a component, enter the

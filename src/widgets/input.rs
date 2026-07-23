@@ -39,6 +39,12 @@ use crate::render::Style;
 use crate::theme::TokenSet;
 use crate::ui::{dyn_view, Element, EventCtx, Key, Mods, Phase, UiEvent};
 
+#[path = "paste_hook.rs"]
+mod paste_hook;
+
+pub use paste_hook::PasteAction;
+pub(crate) use paste_hook::{run_paste_hook, PasteHook, PasteHookFn};
+
 /// Boxed text callback (`on_change`/`on_submit` builder slots).
 pub(crate) type BoxedTextFn = Box<dyn FnMut(&str)>;
 /// The same callback SHARED between the key handler and Enter
@@ -66,6 +72,7 @@ pub struct TextInput {
     layout: Option<LayoutStyle>,
     on_change: Option<BoxedTextFn>,
     on_submit: Option<BoxedTextFn>,
+    on_paste: Option<PasteHookFn>,
 }
 
 /// Editing state shared between the key handler and the renderer.
@@ -137,6 +144,7 @@ impl TextInput {
             layout: None,
             on_change: None,
             on_submit: None,
+            on_paste: None,
         }
     }
 
@@ -177,7 +185,10 @@ impl TextInput {
     /// secret's word structure through caret positions.
     /// The placeholder is not secret and renders as usual. A reveal
     /// toggle is a rebuild with `masked(false)` (wrap the field in your
-    /// `dyn_view_scoped` on the reveal signal).
+    /// `dyn_view_scoped` on the reveal signal). The
+    /// [`on_paste`](TextInput::on_paste) intercept still fires in
+    /// masked fields — return [`PasteAction::Consume`] to block
+    /// pasting into a password field.
     pub fn masked(mut self, masked: bool) -> TextInput {
         self.masked = masked;
         self
@@ -195,6 +206,26 @@ impl TextInput {
 
     pub fn on_submit(mut self, f: impl FnMut(&str) + 'static) -> TextInput {
         self.on_submit = Some(Box::new(f));
+        self
+    }
+
+    /// Intercept pastes BEFORE insertion (backlog first-app/0273): the
+    /// hook receives the RAW paste text exactly as the terminal
+    /// delivered it (line breaks intact — the single-line fold to
+    /// spaces happens only on the [`PasteAction::Insert`] path) and
+    /// decides. [`PasteAction::Insert`] = today's behavior,
+    /// byte-identical; [`PasteAction::Consume`] = the field inserts
+    /// NOTHING and the event is consumed — the app already acted (a
+    /// terminal file DROP arrives as a paste of the file's path; see
+    /// [`input::paste::classify`](crate::input::paste::classify)).
+    ///
+    /// The hook fires in [`masked`](TextInput::masked) fields too — an
+    /// app may want to BLOCK pastes into password fields (return
+    /// `Consume` unconditionally). Disposal-safe from both arms: a
+    /// hook that disposes the field's scope is treated as consumed
+    /// even when it answers `Insert` (nothing left to insert into).
+    pub fn on_paste(mut self, f: impl FnMut(&str) -> PasteAction + 'static) -> TextInput {
+        self.on_paste = Some(Box::new(f));
         self
     }
 
@@ -234,6 +265,7 @@ impl TextInput {
         let masked = self.masked;
         let on_change: TextCallback = Rc::new(RefCell::new(self.on_change));
         let on_submit: TextCallback = Rc::new(RefCell::new(self.on_submit));
+        let on_paste: PasteHook = Rc::new(RefCell::new(self.on_paste));
 
         // shrink 0: the input's one row never vanishes under column
         // overflow (0240 #2); width stays flexible through grow.
@@ -258,6 +290,27 @@ impl TextInput {
                         }
                     }
                     UiEvent::Paste(s) => {
+                        // Paste intercept (0273): the hook sees the RAW
+                        // text before any insertion and decides; it
+                        // fires in masked fields too. Unbound = None =
+                        // today's path, byte-identical.
+                        match run_paste_hook(&on_paste, s) {
+                            Some(PasteAction::Consume) => {
+                                ctx.stop_propagation();
+                                return;
+                            }
+                            // The hook may have disposed this field's
+                            // scope while answering Insert: with the
+                            // signals gone there is nothing to insert
+                            // into — consume instead of panicking on
+                            // dead signals (the 0297 law, interceptor
+                            // arm).
+                            Some(PasteAction::Insert) if !value.is_alive() => {
+                                ctx.stop_propagation();
+                                return;
+                            }
+                            Some(PasteAction::Insert) | None => {}
+                        }
                         // Single-line field: fold line breaks to spaces.
                         let clean: String = s
                             .chars()
@@ -648,3 +701,7 @@ fn edit_key(
 #[cfg(test)]
 #[path = "input_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "input_paste_tests.rs"]
+mod paste_tests;

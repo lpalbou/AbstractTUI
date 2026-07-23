@@ -346,3 +346,10 @@ pub use owned::{DismissReason, Popup, Tooltip};
 #[cfg(test)]
 #[path = "anchored_tests.rs"]
 mod tests;
+
+// Screen-space anchor pins (select-inside-modal P1, console field
+// report 1050): the family's anchors are SCREEN cells even when the
+// opener lives on a positioned overlay layer.
+#[cfg(test)]
+#[path = "anchored_layer_tests.rs"]
+mod layer_tests;

@@ -50,6 +50,16 @@ impl LayerHandle {
 
     pub fn set_offset(&self, offset: Point) {
         self.with_layer(|l| l.set_origin(offset));
+        // A mounted tree's SCREEN origin must follow its layer: modal
+        // re-clamps and drawer slides move whole worlds, and anchor
+        // captures inside them (`EventCtx::current_rect_screen`, the
+        // draw-time ambient) translate by the tree-carried origin.
+        // Separate short borrow: `tree()` returns None while the store
+        // is mid-phase, but that path already debug-panicked above
+        // (layer ops are forbidden inside draw closures).
+        if let Some(mut tree) = self.tree() {
+            tree.set_layer_origin(offset);
+        }
     }
 
     pub fn set_opacity(&self, opacity: f32) {

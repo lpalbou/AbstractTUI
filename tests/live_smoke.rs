@@ -625,6 +625,27 @@ fn live_shell() {
 
 #[test]
 #[ignore = "live: spawns real example processes under a PTY"]
+fn live_attachments() {
+    // Appended (first-app 0273): a bracketed-paste file DROP becomes a
+    // chip (never composer text), Ctrl+O opens the FilePicker modal,
+    // Esc (the host's) closes it, Ctrl+C quits — the composer owns
+    // plain letters, so quit rides the default Ctrl+C path.
+    let r = smoke(
+        "attachments",
+        Duration::from_millis(1500),
+        &[
+            b"\x1b[200~/tmp/live\\ smoke.png \x1b[201~", // drop -> chip
+            b"\x0f",                                     // Ctrl+O: picker modal
+            b"\x1b", // Esc: the host closes the modal (drawers precedent)
+            b"\x03", // Ctrl+C: quit
+        ],
+        Duration::from_secs(10),
+    );
+    assert_clean("attachments", &r);
+}
+
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
 fn live_screenshot() {
     // Capture once (s writes text/ansi/svg artifacts), then quit.
     let r = smoke(

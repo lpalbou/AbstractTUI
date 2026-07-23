@@ -197,6 +197,11 @@ impl UiTree {
     /// then-live instance — and `Dyn` disposal/remounting happens when
     /// the batch closes, after this function's routing work.
     pub fn dispatch(&mut self, event: &UiEvent) -> bool {
+        // Publish the tree's layer origin AROUND the batch: handlers
+        // read it via `EventCtx::layer_origin`, and effects flushed at
+        // the batch close (a completion controller reacting to a caret
+        // write) still see the dispatching tree's truth ambiently.
+        let _origin = super::publish_layer_origin(self.core.borrow().layer_origin);
         batch(|| self.dispatch_inner(event))
     }
 
@@ -250,6 +255,7 @@ impl UiTree {
             target: Some(target),
             target_rect: self.rect_of(target),
             click_count,
+            layer_origin: self.core.borrow().layer_origin,
             ..EventCtx::default()
         };
 

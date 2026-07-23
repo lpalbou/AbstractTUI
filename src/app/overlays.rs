@@ -200,6 +200,13 @@ impl Overlays {
         view: View,
     ) -> LayerHandle {
         let mut tree = UiTree::new(bounds.size());
+        // The tree lays out LAYER-LOCAL; it must know its layer's
+        // SCREEN origin so anchor captures inside it (select popups,
+        // tooltips, completion carets) translate to screen cells.
+        // Seeded BEFORE mount so mount-time focus delivery already
+        // carries the truth; `LayerHandle::set_offset` keeps it in
+        // sync when the layer moves (modal re-clamp, drawer slide).
+        tree.set_layer_origin(bounds.origin());
         tree.mount(cx, view);
         if modal {
             tree.focus_init();
@@ -480,6 +487,10 @@ impl Overlays {
                     {
                         let mut canvas = SurfaceCanvas::new(&mut surface);
                         let _guard = crate::reactive::enter_draw_phase();
+                        // Draw-closure layers paint layer-local too:
+                        // publish their screen origin like tree draws
+                        // do, so `ui::layer_origin()` stays truthful.
+                        let _origin = crate::ui::publish_layer_origin(bounds.origin());
                         paint(&mut canvas, Rect::from_size(bounds.size()));
                     }
                     let mut store = self.store.borrow_mut();

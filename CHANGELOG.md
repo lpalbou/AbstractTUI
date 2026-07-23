@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.20] - 2026-07-25
+
+### Added
+
+- widgets: file-attachment surfaces (backlog first-app/0273, the
+  code-tui field request — commons#5407/5408). Three additive pieces:
+  `TextInput::on_paste` + `TextArea::on_paste(FnMut(&str) ->
+  PasteAction)` intercept every paste BEFORE insertion with the raw
+  text (`PasteAction::{Insert, Consume}`, `#[non_exhaustive]`;
+  `Insert` is byte-identical to an unhooked editor, `Consume` inserts
+  nothing — no `on_change`, caret/history untouched; fires in masked
+  fields; disposal-safe from both arms); `input::paste::classify` —
+  the pure, zero-I/O file-drop classifier corpus-tested against the
+  researched drop spellings of Terminal.app, iTerm2, Ghostty
+  (incl. the GTK newline-joined multi-drop), WezTerm (all five
+  `quote_dropped_files` modes), kitty, Windows Terminal (incl. WSL
+  single-quoting), GNOME/VTE (`g_shell_quote`d paths) and raw
+  `file://` uri-lists, with the documented refuse-when-ambiguous
+  policy (a false positive eats user text; a false negative just
+  pastes); and `FilePicker` — the modal-friendly picker widget
+  (breadcrumb, live type-to-filter, kind glyphs + optional size
+  column, keyboard nav, opt-in multi-select with cross-directory
+  marks, `on_pick`) over the pure `FileSource` seam with
+  `StdFileSource` (`std::fs`, dirs-first case-insensitive, hidden
+  toggle) beside it. New example `examples/attachments.rs` wires all
+  three; api.md gains the "File attachments" section with the
+  terminal-drop reality table.
+
 ## [0.2.19] - 2026-07-25
 
 ### Fixed
@@ -1508,6 +1536,7 @@ First public release.
   theme browser, and 3D viewer.
 
 [Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.2.17...HEAD
+[0.2.20]: https://github.com/lpalbou/abstracttui/compare/v0.2.19...v0.2.20
 [0.2.19]: https://github.com/lpalbou/abstracttui/compare/v0.2.18...v0.2.19
 [0.2.18]: https://github.com/lpalbou/abstracttui/compare/v0.2.17...v0.2.18
 [0.2.17]: https://github.com/lpalbou/abstracttui/compare/v0.2.16...v0.2.17

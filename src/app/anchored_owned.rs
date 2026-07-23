@@ -414,7 +414,15 @@ impl Tooltip {
                     let generation = {
                         let mut s = state.borrow_mut();
                         s.generation += 1;
-                        s.anchor = ctx.current_rect();
+                        // SCREEN cells: the tip places in viewport
+                        // space, and the hovered element may live on a
+                        // positioned overlay (a GraphView card inside
+                        // a Drawer). Captured at hover time — a layer
+                        // still mid-slide when the delay fires keeps
+                        // the hover-time position (the pre-existing
+                        // capture-once contract, now in the right
+                        // space).
+                        s.anchor = ctx.current_rect_screen();
                         s.generation
                     };
                     let state = state.clone();

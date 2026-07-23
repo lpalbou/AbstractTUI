@@ -44,9 +44,13 @@ impl UiTree {
         // delivery (focus transitions do not bubble; the signal helpers
         // hear them because bubble-registered handlers hear the target
         // phase).
+        let layer_origin = self.core.borrow().layer_origin;
         if let Some(old_id) = old {
             self.core.borrow_mut().focus = None;
-            let mut ctx = EventCtx::default();
+            let mut ctx = EventCtx {
+                layer_origin,
+                ..EventCtx::default()
+            };
             self.run_handlers(old_id, Phase::Target, &UiEvent::FocusOut, &mut ctx);
             let rect = self.rect_of(old_id);
             self.core.borrow_mut().damage_rect(rect);
@@ -55,7 +59,10 @@ impl UiTree {
             if self.core.borrow().insts.contains(new_id.0) {
                 self.core.borrow_mut().focus = Some(new_id);
                 self.record_focus_memory(new_id);
-                let mut ctx = EventCtx::default();
+                let mut ctx = EventCtx {
+                    layer_origin,
+                    ..EventCtx::default()
+                };
                 self.run_handlers(new_id, Phase::Target, &UiEvent::FocusIn, &mut ctx);
                 let rect = self.rect_of(new_id);
                 self.core.borrow_mut().damage_rect(rect);
@@ -97,10 +104,12 @@ impl UiTree {
         if new_path == old_path {
             return;
         }
+        let layer_origin = self.core.borrow().layer_origin;
         for id in old_path.iter().rev().filter(|id| !new_path.contains(id)) {
             let mut ctx = EventCtx {
                 target: Some(*id),
                 target_rect: self.rect_of(*id),
+                layer_origin,
                 ..EventCtx::default()
             };
             self.run_handlers(*id, Phase::Target, &UiEvent::MouseLeave, &mut ctx);
@@ -109,6 +118,7 @@ impl UiTree {
             let mut ctx = EventCtx {
                 target: Some(*id),
                 target_rect: self.rect_of(*id),
+                layer_origin,
                 ..EventCtx::default()
             };
             self.run_handlers(*id, Phase::Target, &UiEvent::MouseEnter, &mut ctx);

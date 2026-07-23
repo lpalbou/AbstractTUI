@@ -38,7 +38,9 @@ use crate::reactive::{Scope, Signal};
 use crate::render::Style;
 use crate::theme::TokenSet;
 use crate::ui::{dyn_view, Element, EventCtx, Key, Phase, UiEvent};
-use crate::widgets::input::{notify, BoxedTextFn, TextCallback};
+use crate::widgets::input::{
+    notify, run_paste_hook, BoxedTextFn, PasteAction, PasteHook, PasteHookFn, TextCallback,
+};
 
 #[path = "textarea_model.rs"]
 mod model;
@@ -178,6 +180,7 @@ pub struct TextArea {
     layout: Option<LayoutStyle>,
     on_change: Option<BoxedTextFn>,
     on_submit: Option<BoxedTextFn>,
+    on_paste: Option<PasteHookFn>,
 }
 
 impl TextArea {
@@ -193,6 +196,7 @@ impl TextArea {
             layout: None,
             on_change: None,
             on_submit: None,
+            on_paste: None,
         }
     }
 
@@ -263,6 +267,26 @@ impl TextArea {
         self
     }
 
+    /// Intercept pastes BEFORE insertion (backlog first-app/0273): the
+    /// hook receives the RAW paste text exactly as the terminal
+    /// delivered it (line endings intact — newline normalization
+    /// happens only on the [`PasteAction::Insert`] path) and decides.
+    /// [`PasteAction::Insert`] = today's behavior, byte-identical;
+    /// [`PasteAction::Consume`] = the composer inserts NOTHING and the
+    /// event is consumed: no `on_change`, caret/selection/history
+    /// untouched. The attachment use case: a terminal file DROP
+    /// arrives as a paste of the file's path — classify it with
+    /// [`input::paste::classify`](crate::input::paste::classify) and
+    /// turn it into an attachment chip instead of composer text.
+    ///
+    /// Disposal-safe from both arms: a hook that disposes the
+    /// composer's scope is treated as consumed even when it answers
+    /// `Insert` (nothing left to insert into).
+    pub fn on_paste(mut self, f: impl FnMut(&str) -> PasteAction + 'static) -> TextArea {
+        self.on_paste = Some(Box::new(f));
+        self
+    }
+
     /// One-call build with tokens from the app's theme context.
     pub fn view(self, cx: Scope) -> crate::ui::View {
         let t = crate::widgets::theme_tokens(cx);
@@ -295,6 +319,7 @@ impl TextArea {
         let disabled = self.disabled;
         let on_change: TextCallback = Rc::new(RefCell::new(self.on_change));
         let on_submit: TextCallback = Rc::new(RefCell::new(self.on_submit));
+        let on_paste: PasteHook = Rc::new(RefCell::new(self.on_paste));
 
         // Wrap width last seen by an event handler (rect.w - 2 strokes).
         // Read untracked by the growth style below: exact after any
@@ -315,6 +340,27 @@ impl TextArea {
                         handle_key(&state, k.key, k.mods, width, min_rows, max_rows, policy)
                     }
                     UiEvent::Paste(s) => {
+                        // Paste intercept (0273): the hook sees the RAW
+                        // text before any insertion and decides.
+                        // Unbound = None = today's path, byte-identical.
+                        // Consume returns EARLY — no widget signal
+                        // writes (caret publish included) may run after
+                        // user code that could have disposed our scope
+                        // (the 0297 law, interceptor arm).
+                        match run_paste_hook(&on_paste, s) {
+                            Some(PasteAction::Consume) => {
+                                ctx.stop_propagation();
+                                return;
+                            }
+                            // Hook disposed us while answering Insert:
+                            // nothing left to insert into — treat as
+                            // consumed.
+                            Some(PasteAction::Insert) if !value.is_alive() => {
+                                ctx.stop_propagation();
+                                return;
+                            }
+                            Some(PasteAction::Insert) | None => {}
+                        }
                         // Block paste: whole insertion, newlines KEPT
                         // (normalized), never a submit (0120 §5).
                         let clean = normalize_newlines(s);
@@ -641,3 +687,7 @@ mod disposal_tests;
 #[cfg(test)]
 #[path = "textarea_placeholder_tests.rs"]
 mod placeholder_tests;
+
+#[cfg(test)]
+#[path = "textarea_paste_tests.rs"]
+mod paste_tests;

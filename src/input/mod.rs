@@ -33,6 +33,7 @@
 #![warn(missing_docs)]
 
 pub mod parser;
+pub mod paste;
 pub mod reader;
 
 mod kitty;

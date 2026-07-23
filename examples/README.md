@@ -31,6 +31,7 @@ the previous one:
 | 4 · interaction | `decide.rs` | the modal decision gate (`ChoicePrompt`): confirmations, multi-pick, chains |
 | 5 · content + live data | `feed.rs` | background threads → bounded ingestion → `Feed` with follow-tail |
 | 5 · content + live data | `transcript.rs` | streaming markdown chat: tables render live, composer with completion |
+| 5 · content + live data | `attachments.rs` | file attachments: terminal drops classified out of pastes into chips, `FilePicker` in a modal |
 | 5 · content + live data | `reader.rs` | the document surface: GFM tables, in-flow images, TOC, search |
 | 5 · content + live data | `voice_mock.rs` | push-to-talk, dB meter, band spectrum, scope — no audio needed |
 | 6 · the app shell | `shell.rs` | `PageHost` full pages behind one tab bar + `Drawer` panels from both edges |

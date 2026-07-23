@@ -292,6 +292,12 @@ pub struct EventCtx {
     /// Chain position of a mouse-Down event (tree-synthesized — see
     /// `ui::click`): 0 for every non-press event.
     pub(crate) click_count: u8,
+    /// SCREEN origin of the layer whose tree is dispatching this event
+    /// (`Point::ZERO` on the root layer) — set by the tree at every
+    /// EventCtx construction. Rects and positions in this context are
+    /// LAYER-LOCAL; anchors handed to viewport-space APIs translate by
+    /// this (see [`EventCtx::current_rect_screen`]).
+    pub(crate) layer_origin: crate::base::Point,
 }
 
 impl EventCtx {
@@ -317,7 +323,12 @@ impl EventCtx {
         self.capture_request = Some(None);
     }
 
-    /// The event target's solved rect (screen coordinates).
+    /// The event target's solved rect, in the dispatching tree's own
+    /// (layer-local) coordinates — the same space event positions
+    /// arrive in, so position-to-content math needs no translation.
+    /// Identical to screen cells on the root layer; on a positioned
+    /// overlay (Modal, Drawer) use [`EventCtx::target_rect_screen`]
+    /// for anything handed to a viewport-space API.
     pub fn target_rect(&self) -> crate::base::Rect {
         self.target_rect
     }
@@ -331,9 +342,37 @@ impl EventCtx {
     /// THE rect for a widget's own geometry math (row under the pointer,
     /// scrollbar proportions, page size): under bubbling or capture the
     /// TARGET can be a deep descendant — or, mid-drag, the captured node
-    /// — while this is always yours.
+    /// — while this is always yours. Layer-local, like every position
+    /// in this context; capture popup anchors from
+    /// [`EventCtx::current_rect_screen`] instead.
     pub fn current_rect(&self) -> crate::base::Rect {
         self.current_rect
+    }
+
+    /// The SCREEN origin of the layer whose tree is dispatching this
+    /// event — `Point::ZERO` on the root layer. Every rect and mouse
+    /// position in this context is LAYER-LOCAL (the compositor applies
+    /// the origin at paint); anything handed to a viewport-space API
+    /// (anchored popups, `place_panel`) must translate by this.
+    pub fn layer_origin(&self) -> crate::base::Point {
+        self.layer_origin
+    }
+
+    /// [`EventCtx::current_rect`] translated to SCREEN cells: the
+    /// anchor to capture when opening anchored popups/panels — correct
+    /// on any layer (on the root it equals `current_rect`). The select
+    /// family and `Tooltip` capture through this, so a trigger inside
+    /// a Modal or Drawer opens its popup adjacent to itself instead of
+    /// displaced by the layer's origin.
+    pub fn current_rect_screen(&self) -> crate::base::Rect {
+        self.current_rect
+            .translate(self.layer_origin.x, self.layer_origin.y)
+    }
+
+    /// [`EventCtx::target_rect`] translated to SCREEN cells.
+    pub fn target_rect_screen(&self) -> crate::base::Rect {
+        self.target_rect
+            .translate(self.layer_origin.x, self.layer_origin.y)
     }
 
     /// The node whose handler is running right now.

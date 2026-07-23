@@ -25,6 +25,7 @@ pub mod checkbox;
 pub mod code;
 pub mod disclosure;
 pub mod feed;
+pub mod file_picker;
 pub mod grid;
 pub mod image;
 pub mod input;
@@ -88,6 +89,10 @@ pub use markdown::{MdSearchMatch, OutlineEntry};
 pub use disclosure::Disclosure;
 // Appended (wave 8, app-kits 0545): the page-level tab host.
 pub use page_host::PageHost;
+// Appended (first-app 0273, the attachments wave): the paste
+// intercept's action vocabulary + the filesystem picker family.
+pub use file_picker::{FileEntry, FilePicker, FileSource, StdFileSource};
+pub use input::PasteAction;
 
 /// Shared callback-slot shape for interactive widgets: the builder's
 /// `Option<Box<dyn FnMut(..)>>` moved behind `Rc<RefCell<..>>` so
@@ -167,7 +172,7 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 38] = [
+    const SOURCES: [(&str, &str); 42] = [
         ("mod.rs", include_str!("mod.rs")),
         ("audio_scope.rs", include_str!("audio_scope.rs")),
         ("meter.rs", include_str!("meter.rs")),
@@ -184,9 +189,20 @@ mod lint_tests {
         ("feed_item.rs", include_str!("feed_item.rs")),
         ("feed_sync.rs", include_str!("feed_sync.rs")),
         ("feed_typeset.rs", include_str!("feed_typeset.rs")),
+        ("file_picker.rs", include_str!("file_picker.rs")),
+        // FilePicker's private shipped siblings (first-app 0273):
+        // widget source too, listed by hand like feed_typeset.rs.
+        (
+            "file_picker_source.rs",
+            include_str!("file_picker_source.rs"),
+        ),
+        ("file_picker_view.rs", include_str!("file_picker_view.rs")),
         ("grid.rs", include_str!("grid.rs")),
         ("image.rs", include_str!("image.rs")),
         ("input.rs", include_str!("input.rs")),
+        // TextInput/TextArea's shared paste-intercept sibling
+        // (first-app 0273): widget source, listed by hand.
+        ("paste_hook.rs", include_str!("paste_hook.rs")),
         ("list.rs", include_str!("list.rs")),
         ("logo.rs", include_str!("logo.rs")),
         ("markdown.rs", include_str!("markdown.rs")),

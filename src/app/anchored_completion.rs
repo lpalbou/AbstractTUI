@@ -14,7 +14,7 @@
 //!
 //! OWNER: REACT.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::base::{Point, Size};
@@ -230,6 +230,18 @@ impl Completion {
         // Reused across sessions: zero per-session signal accumulation.
         let candidates: Signal<Vec<CompletionCandidate>> = cx.signal(Vec::new());
         let highlight: Signal<usize> = cx.signal(0usize);
+        // The composer tree's SCREEN origin (P1 fix): `caret_cell`
+        // publishes LAYER-LOCAL (the textarea's own `current_rect`),
+        // while the panel places in viewport space — inside a Modal or
+        // Drawer the dropdown used to open displaced by the layer's
+        // origin. Refreshed from BOTH capture points: the wrapper's
+        // capture-phase handler (every event routed to the composer,
+        // which is when carets publish) and a draw-time probe (the
+        // ambient origin, for turns that repaint without an event).
+        // Honest edge: a draft whose caret already sits in a trigger
+        // token when the layer FIRST opens anchors at ZERO until the
+        // first event/paint refresh — the next interaction corrects.
+        let composer_origin: Rc<Cell<Point>> = Rc::new(Cell::new(Point::ZERO));
 
         // Accept: replace the token (trigger included) with the pick.
         let accept: Rc<dyn Fn(usize)> = Rc::new({
@@ -361,6 +373,7 @@ impl Completion {
             let triggers = triggers.clone();
             let overlays = overlays.clone();
             let build = build.clone();
+            let composer_origin = composer_origin.clone();
             cx.effect_labeled("completion-controller", move || {
                 let text = state.value().get();
                 let caret = state.caret_byte();
@@ -400,7 +413,11 @@ impl Completion {
                     return;
                 }
                 let content = measure_candidates(&cands, max_visible);
-                let anchor = PanelAnchor::cell(cell.expect("checked above"));
+                // Local caret cell -> SCREEN anchor (the PanelAnchor
+                // contract): translate by the composer tree's origin.
+                let cell = cell.expect("checked above");
+                let origin = composer_origin.get();
+                let anchor = PanelAnchor::cell(Point::new(cell.x + origin.x, cell.y + origin.y));
                 let mut s = session.borrow_mut();
                 let same_token = matches!(
                     &s.open,
@@ -458,7 +475,13 @@ impl Completion {
         let handler = {
             let session = session.clone();
             let accept = accept.clone();
+            let composer_origin = composer_origin.clone();
             move |ctx: &mut EventCtx, ev: &UiEvent| {
+                // Refresh the composer's screen origin on EVERY event
+                // routed through the wrapper (capture phase runs
+                // before the textarea publishes its caret, so the
+                // effect's translation below is same-turn fresh).
+                composer_origin.set(ctx.layer_origin());
                 let UiEvent::Key(k) = ev else { return };
                 if k.mods != Mods::NONE {
                     return;

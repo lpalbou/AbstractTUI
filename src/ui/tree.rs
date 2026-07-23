@@ -108,6 +108,15 @@ pub(super) struct TreeCore {
     /// `dyn_view` on click 1), so instance comparison would reset the
     /// chain on exactly the presses that should chain.
     pub(super) click_chain: super::click::ClickChain,
+    /// SCREEN origin of the layer this tree is mounted on
+    /// (`Point::ZERO` for the root tree and bare trees). Overlay trees
+    /// lay out LAYER-LOCAL — the compositor applies the origin at
+    /// paint — so anchor captures that feed viewport-space APIs
+    /// (`app::anchored::place_panel`) must translate by this. The
+    /// overlay store maintains it (layer creation + every
+    /// `LayerHandle::set_offset`: modal re-clamps and drawer slides
+    /// move mounted trees).
+    pub(super) layer_origin: Point,
 }
 
 impl TreeCore {
@@ -161,6 +170,7 @@ impl UiTree {
                 focus_memory: std::collections::HashMap::new(),
                 pending_autofocus: None,
                 click_chain: super::click::ClickChain::new(),
+                layer_origin: Point::ZERO,
             })),
         }
     }
@@ -447,6 +457,27 @@ impl UiTree {
             .unwrap_or(Rect::ZERO)
     }
 
+    /// The SCREEN origin of the layer this tree is mounted on —
+    /// `Point::ZERO` for the root tree and bare trees. Every rect this
+    /// tree solves or reports (`rect_of`, `EventCtx::current_rect`,
+    /// draw closure rects) is LAYER-LOCAL; translating by this yields
+    /// screen cells. See [`UiTree::set_layer_origin`].
+    pub fn layer_origin(&self) -> Point {
+        self.core.borrow().layer_origin
+    }
+
+    /// Declare the SCREEN origin of the layer this tree is mounted on.
+    /// The engine's overlay store maintains this automatically (at
+    /// layer creation and on every `LayerHandle::set_offset` — modal
+    /// re-clamps and drawer slides move whole mounted worlds); apps
+    /// embedding a `UiTree` on a custom positioned surface set it so
+    /// screen-space anchor captures (`EventCtx::current_rect_screen`,
+    /// the ambient [`layer_origin`]) stay truthful. Pure bookkeeping:
+    /// no damage, no layout, no frame request.
+    pub fn set_layer_origin(&mut self, origin: Point) {
+        self.core.borrow_mut().layer_origin = origin;
+    }
+
     pub fn focused(&self) -> Option<ViewId> {
         self.core.borrow().focus
     }
@@ -458,3 +489,49 @@ impl UiTree {
 
 #[path = "tree_dispatch.rs"]
 mod dispatch;
+
+// ---------------------------------------------------------------------------
+// Ambient layer origin (the event-time pattern, `ui::click`): draw
+// closures have a fixed signature and cannot receive the origin as a
+// parameter, so the tree PUBLISHES it around its draw walk (and around
+// dispatch, so effects flushed at the batch close see it too). Widgets
+// capturing anchor rects at draw time read it to store SCREEN cells —
+// the select family's programmatic-open anchors ride this.
+// ---------------------------------------------------------------------------
+
+thread_local! {
+    /// The publishing tree's layer origin; `Point::ZERO` when no tree
+    /// is drawing/dispatching (bare direct-driven trees ARE at origin).
+    static AMBIENT_LAYER_ORIGIN: std::cell::Cell<Point> = const { std::cell::Cell::new(Point::ZERO) };
+}
+
+/// The SCREEN origin of the layer whose tree is currently drawing or
+/// dispatching — `Point::ZERO` on the root layer and outside those
+/// windows. Draw closures capturing anchor rects translate by this to
+/// store screen cells (`rect.translate(o.x, o.y)`); event handlers
+/// should prefer [`EventCtx::layer_origin`](super::EventCtx::layer_origin)
+/// / [`EventCtx::current_rect_screen`](super::EventCtx::current_rect_screen),
+/// which carry the same truth on the context.
+pub fn layer_origin() -> Point {
+    AMBIENT_LAYER_ORIGIN.with(|c| c.get())
+}
+
+/// Publish `origin` for the duration of the returned guard (draw walk /
+/// dispatch of one tree); restores the previous value on drop, so
+/// nested publications (a draw-closure overlay painted while another
+/// tree's value is live) stay balanced.
+pub(crate) fn publish_layer_origin(origin: Point) -> LayerOriginGuard {
+    AMBIENT_LAYER_ORIGIN.with(|c| LayerOriginGuard {
+        prev: c.replace(origin),
+    })
+}
+
+pub(crate) struct LayerOriginGuard {
+    prev: Point,
+}
+
+impl Drop for LayerOriginGuard {
+    fn drop(&mut self) {
+        AMBIENT_LAYER_ORIGIN.with(|c| c.set(self.prev));
+    }
+}
