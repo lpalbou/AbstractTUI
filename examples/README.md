@@ -26,6 +26,7 @@ the previous one:
 | 2 · widgets | `themes.rs` | every built-in theme, applied live, with measured contrast ratios |
 | 3 · layout | `grid.rs` | track grids (`fr`/cells/percent/auto), spans, live reflow |
 | 4 · interaction | `activate.rs` | selection vs activation on `List` and `Table`; double-click, honestly |
+| 4 · interaction | `presence_board.rs` | rich list rows + trailing × accessory + timed double-click body (chat sidebar pattern) |
 | 4 · interaction | `decide.rs` | the modal decision gate (`ChoicePrompt`): confirmations, multi-pick, chains |
 | 5 · content + live data | `feed.rs` | background threads → bounded ingestion → `Feed` with follow-tail |
 | 5 · content + live data | `transcript.rs` | streaming markdown chat: tables render live, composer with completion |
@@ -156,6 +157,21 @@ visible per keystroke and per click.
 - Needs: any tty; a mouse to feel the click gestures.
 - Looks like: two panes answering the same gestures differently, with a
   caption explaining each answer as it happens.
+
+## presence_board
+
+The chat-sidebar pattern: styled agent rows inside a bordered panel,
+double-click the body to open a DM, click the trailing × (or `×N` unread
+badge) for moderation — separate hit targets with engine-owned column
+widths (no manual `m.pos.x - rect.x` math). An action log at the bottom
+records every DM and moderation click so you can verify the gestures.
+
+- Keys: click body selects · double-click body opens DM · click × moderates
+  · wheel scrolls when the list overflows · `q` quit.
+- Needs: any tty; a mouse to exercise body vs accessory clicks.
+- Run: `cargo run --example presence_board`
+- Looks like: a rounded "agents" block with accent-colored names, unread
+  counts on the accessory column, and a two-line action log.
 
 ## decide
 

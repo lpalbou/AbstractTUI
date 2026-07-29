@@ -523,3 +523,129 @@ fn callback_reentrancy_pin_controlled_write_and_flush_mid_callback() {
         "rebuilt list renders"
     );
 }
+
+#[test]
+fn accessory_click_does_not_change_selection() {
+    let t = default_theme().tokens;
+    let mut sel_probe = None;
+    let accessory_hits: Rc<RefCell<Vec<usize>>> = Rc::new(RefCell::new(Vec::new()));
+    let hits = accessory_hits.clone();
+    let (_root, mut tree) = mount_widget(Size::new(20, 4), |cx| {
+        let sel = cx.signal(0usize);
+        sel_probe = Some(sel);
+        Element::new()
+            .style(
+                LayoutStyle::default()
+                    .width(Dimension::Percent(1.0))
+                    .height(Dimension::Percent(1.0)),
+            )
+            .child(
+                List::of(["alpha", "beta", "gamma"])
+                    .accessory_width(3)
+                    .row_accessory(|_, _| Some("×".into()))
+                    .selection(sel)
+                    .on_accessory_click(move |i| hits.borrow_mut().push(i))
+                    .element(cx, &t)
+                    .build(),
+            )
+            .build()
+    });
+    let sel = sel_probe.unwrap();
+    // Accessory column is the three cells before the (absent) scrollbar.
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), 17, 0);
+    assert_eq!(*accessory_hits.borrow(), vec![0]);
+    assert_eq!(sel.get_untracked(), 0, "accessory must not move selection");
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), 2, 1);
+    assert_eq!(sel.get_untracked(), 1, "body click selects");
+}
+
+#[test]
+fn timed_row_double_click_supersedes_on_activate() {
+    let t = default_theme().tokens;
+    let activates: Rc<RefCell<Vec<usize>>> = Rc::new(RefCell::new(Vec::new()));
+    let doubles: Rc<RefCell<Vec<usize>>> = Rc::new(RefCell::new(Vec::new()));
+    let (a, d) = (activates.clone(), doubles.clone());
+    let (_root, mut tree) = mount_widget(Size::new(12, 4), |cx| {
+        Element::new()
+            .style(
+                LayoutStyle::default()
+                    .width(Dimension::Percent(1.0))
+                    .height(Dimension::Percent(1.0)),
+            )
+            .child(
+                List::of((0..8).map(|i| format!("item {i}")))
+                    .on_activate(move |i| a.borrow_mut().push(i))
+                    .on_row_double_click(move |i| d.borrow_mut().push(i))
+                    .element(cx, &t)
+                    .build(),
+            )
+            .build()
+    });
+    let t0 = std::time::Instant::now();
+    crate::ui::set_event_time(Some(t0));
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), 2, 2);
+    crate::ui::set_event_time(Some(t0 + std::time::Duration::from_millis(100)));
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), 2, 2);
+    assert!(activates.borrow().is_empty(), "double uses timed path only");
+    assert_eq!(*doubles.borrow(), vec![2]);
+    crate::ui::set_event_time(None);
+}
+
+#[test]
+fn scrollbar_column_does_not_select_row() {
+    let t = default_theme().tokens;
+    let mut sel_probe = None;
+    let (_root, mut tree) = mount_widget(Size::new(12, 3), |cx| {
+        let sel = cx.signal(0usize);
+        sel_probe = Some(sel);
+        Element::new()
+            .style(
+                LayoutStyle::default()
+                    .width(Dimension::Percent(1.0))
+                    .height(Dimension::Percent(1.0)),
+            )
+            .child(
+                List::of((0..20).map(|i| format!("row {i}")))
+                    .selection(sel)
+                    .element(cx, &t)
+                    .build(),
+            )
+            .build()
+    });
+    let sel = sel_probe.unwrap();
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), 11, 1);
+    assert_eq!(sel.get_untracked(), 0, "scrollbar column is inert");
+}
+
+#[test]
+fn rich_items_render_styled_body() {
+    use crate::render::rich::{RichLine, RichText, Span};
+    use crate::render::Style as Ink;
+    let t = default_theme().tokens;
+    let (_root, mut tree) = mount_widget(Size::new(24, 3), |cx| {
+        let rich = vec![
+            RichText::from_lines(vec![RichLine::from_spans(vec![
+                Span::plain("● "),
+                Span::new("alpha", Ink::new().fg(t.accent)),
+            ])]),
+            RichText::from_lines(vec![RichLine::from_spans(vec![Span::plain("beta")])]),
+        ];
+        Element::new()
+            .style(
+                LayoutStyle::default()
+                    .width(Dimension::Percent(1.0))
+                    .height(Dimension::Percent(1.0)),
+            )
+            .child(
+                List::of(["alpha", "beta"])
+                    .rich_items(rich)
+                    .element(cx, &t)
+                    .build(),
+            )
+            .build()
+    });
+    crate::reactive::flush_effects();
+    tree.layout();
+    let canvas = render(&mut tree, Size::new(24, 3));
+    assert!(canvas.row_text(0).contains("alpha"));
+}

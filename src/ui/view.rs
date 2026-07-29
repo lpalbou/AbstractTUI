@@ -10,6 +10,8 @@ use crate::base::Rect;
 use crate::layout::Style;
 use crate::reactive::Signal;
 
+use crate::widgets::PasteAction;
+
 use super::canvas::StyledCanvas;
 use super::event::{EventCtx, KeyChord, Phase, UiEvent};
 
@@ -213,6 +215,23 @@ impl Element {
     /// Bubble-phase sugar.
     pub fn on_event(self, f: impl FnMut(&mut EventCtx, &UiEvent) + 'static) -> Element {
         self.on(Phase::Bubble, f)
+    }
+
+    /// Capture-phase paste intercept on this subtree: runs on the path
+    /// from root toward the focused widget BEFORE the focus target's
+    /// handlers. Return [`PasteAction::Consume`] to stop routing (the
+    /// focused editor inserts nothing); [`PasteAction::Insert`] lets the
+    /// event continue to the focus target. Use on the app root for idle-
+    /// surface file-path paste while a composer elsewhere holds focus.
+    pub fn on_paste(self, mut f: impl FnMut(&str) -> PasteAction + 'static) -> Element {
+        self.on(Phase::Capture, move |ctx, ev| {
+            if let UiEvent::Paste(text) = ev {
+                match f(text) {
+                    PasteAction::Consume => ctx.stop_propagation(),
+                    PasteAction::Insert => {}
+                }
+            }
+        })
     }
 
     /// Register a shortcut on this subtree. Resolution walks root -> focus

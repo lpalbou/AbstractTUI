@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.26] - 2026-07-29
+
+### Added
+
+- widgets: `List::row_accessory` / `on_accessory_click` — trailing column with
+  its own hit target (engine-owned body/accessory/scrollbar widths; no manual
+  column math). `List::rich_items` draws styled spans on the body column.
+  `List::on_row_double_click` — Table-style timed double-click on the row
+  body (`EventCtx::click_count() >= 2`); supersedes `on_activate` for that
+  press when bound.
+- ui: `Element::on_paste` — Capture-phase paste intercept on the path toward
+  focus (`PasteAction::Consume` stops before the focused editor).
+- examples: `presence_board.rs` — agent sidebar with rich rows, double-click
+  DM, trailing × moderation affordance.
+
+### Documentation
+
+- `docs/api.md`, `docs/faq.md`: List accessories, `click_count()` semantics,
+  scrollable rich list recipe, app-level paste hook.
+- `examples/README.md`: `presence_board` on the learning path.
+
 ## [0.2.25] - 2026-07-28
 
 ### Added

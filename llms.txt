@@ -59,12 +59,14 @@
   (including double-click synthesis: `click_count()`, the ambient event-time rule, and
   the single-click-selects / double-click-activates convention), layout (with the
   small-terminals & content-pressure guarantees and recipes),
-  the widget catalog (`List` and `Table` selection-vs-activation, masked `TextInput`,
+  the widget catalog (`List` and `Table` selection-vs-activation, `List` row
+  accessories and `on_row_double_click`, masked `TextInput`,
   diff-aware `CodeView`,
   `Feed` streaming/rich lines/sync/selection-by-key, chart history rings with time axes,
   `Meter`/`AudioScope` levels, the `PageHost` page-level tab host, the `Block`
   close affordance `on_close`), the widget
-  disposal-safety law, the file-attachment surfaces (`TextInput`/`TextArea`
+  disposal-safety law, the file-attachment surfaces (`Element::on_paste` capture hook,
+  `TextInput`/`TextArea`
   `on_paste` with `PasteAction`, the `input::paste::classify` drop classifier
   with its per-terminal spelling table, and the `FilePicker` widget over the
   pluggable `FileSource` seam), the `canvas` sub-cell vector layer (braille/quadrant dot grids,
@@ -111,7 +113,8 @@
   comparison with ratatui/Textual/Bubble Tea/notcurses/Ink (update models, media,
   testing, maturity limits), SSH, which terminals support
   images, wide-character widths, headless testing, screenshots, letting users switch
-  themes (`ThemeSwitcher`), attaching files dropped onto the terminal, embedding in an
+  themes (`ThemeSwitcher`), `click_count()` and scrollable rich lists, attaching files
+  dropped onto the terminal, embedding in an
   existing event loop,
   the near-zero dependency policy, theme readability, `NO_COLOR`/dumb terminals, Windows
   status, crate size, shareable components, damage debugging, and the clipboard policy.
@@ -125,7 +128,7 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, 0.2.24 (2026-07-26) the current one —
+  (2026-07-21) is the first public release, **0.2.26** (2026-07-29) the current one —
   released alongside the first extension-family crates (`abstracttui-graph` 0.1.0,
   `abstracttui-mermaid` 0.1.0, each with its own changelog under `extensions/`).
 - [Contributing](CONTRIBUTING.md): Building, the test suite (~2,120 core tests; ~2,245
@@ -152,7 +155,8 @@
 - [examples/](examples/README.md): The catalog of the twenty-three runnable examples,
   ordered as a learning path —
   `hello`,
-  `widgets`, `components`, `gallery`, `themes`, `grid`, `activate`, `decide`, `feed`,
+  `widgets`, `components`, `gallery`, `themes`, `grid`, `activate`, `presence_board`,
+  `decide`, `feed`,
   `transcript`, `attachments`, `reader`, `voice_mock`, `shell`, `drawers`, `dashboard`,
   `images`,
   `effects`, `splash`, `viewer3d`,

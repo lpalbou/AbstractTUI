@@ -54,3 +54,7 @@ pub use view::{
 #[cfg(test)]
 #[path = "mod_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "paste_dispatch_tests.rs"]
+mod paste_dispatch_tests;

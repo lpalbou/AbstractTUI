@@ -9,13 +9,21 @@
 //! Enter here), and on a click on the ALREADY-selected row. Never wire
 //! commitment, navigation, or destruction to `on_select`.
 //!
-//! Double-click (app-kits 0535): List's click-on-selected rule SUBSUMES
-//! it — a double-click's first press selects the row, so its second
-//! press lands on the already-selected row and activates, timing-free.
-//! The picker gesture is deliberately BROADER than a timed double-click
-//! (a slow second click commits too); `Table`, a browsing surface,
-//! takes the strict timed convention instead (`ctx.click_count() >= 2`)
-//! — the divergence is recorded in both widgets' docs.
+//! Double-click (app-kits 0535): by default List's click-on-selected
+//! rule SUBSUMES it — click 1 selects, click 2 on the already-selected
+//! row activates via [`List::on_activate`], timing-free (the picker
+//! gesture, deliberately broader than a timed double-click). For
+//! browsing surfaces that need strict SGR double-click (open-on-double,
+//! slow re-click only re-selects), bind [`List::on_row_double_click`]
+//! instead — it fires only when `EventCtx::click_count() >= 2` on the
+//! row body and takes precedence over `on_activate` for that press.
+//! `Table` uses the same timed convention.
+//!
+//! Row accessories (field-agora 0810): optional trailing column via
+//! [`List::row_accessory`] + [`List::on_accessory_click`]. The engine
+//! owns body/accessory/scrollbar column widths — no app-side X math.
+//! Accessory clicks do not change selection. Rich labels ride
+//! [`List::rich_items`] (styled spans on the body column only).
 //!
 //! Disposal-safety law (ruling clause 4): the List completes ALL of its
 //! own bookkeeping (selection write, sticky-key write, ensure-visible
@@ -67,12 +75,60 @@ use std::rc::Rc;
 
 use crate::layout::{Dimension, Style as LayoutStyle};
 use crate::reactive::{Scope, Signal};
+use crate::render::rich::RichText;
 use crate::render::Style;
 use crate::theme::TokenSet;
 use crate::ui::{dyn_view, Element, EventCtx, Key, MouseButton, MouseKind, Phase, UiEvent};
+use crate::widgets::richtext::draw_rich_lines;
 
 type HeightFn = Box<dyn Fn(usize, &str) -> i32>;
 type KeyFn = Box<dyn Fn(usize, &str) -> String>;
+type AccessoryFn = Box<dyn Fn(usize, &str) -> Option<String>>;
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum ListHitZone {
+    Body,
+    Accessory,
+    Scrollbar,
+}
+
+/// Column widths for one list viewport (content coordinates).
+struct ListColumns {
+    body_w: i32,
+    accessory_w: i32,
+    bar_w: i32,
+}
+
+fn list_columns(viewport_w: i32, show_bar: bool, accessory_w: i32) -> ListColumns {
+    let bar_w = i32::from(show_bar);
+    let accessory_w = accessory_w.max(0);
+    let body_w = (viewport_w - bar_w - accessory_w).max(0);
+    ListColumns {
+        body_w,
+        accessory_w,
+        bar_w,
+    }
+}
+
+fn list_hit_zone(local_x: i32, cols: ListColumns) -> ListHitZone {
+    if cols.bar_w > 0 && local_x >= cols.body_w + cols.accessory_w {
+        ListHitZone::Scrollbar
+    } else if cols.accessory_w > 0 && local_x >= cols.body_w {
+        ListHitZone::Accessory
+    } else {
+        ListHitZone::Body
+    }
+}
+
+fn accessory_column_width(items: &[String], accessory: &AccessoryFn) -> i32 {
+    items
+        .iter()
+        .enumerate()
+        .filter_map(|(i, s)| accessory(i, s))
+        .map(|label| unicode_width::UnicodeWidthStr::width(label.as_str()) as i32 + 1)
+        .max()
+        .unwrap_or(0)
+}
 
 /// A virtualized, selectable vertical list — the picker surface.
 ///
@@ -94,6 +150,11 @@ pub struct List {
     layout: Option<LayoutStyle>,
     on_select: Option<Box<dyn FnMut(usize)>>,
     on_activate: Option<Box<dyn FnMut(usize)>>,
+    accessory_fn: Option<AccessoryFn>,
+    accessory_width: Option<i32>,
+    on_accessory_click: Option<Box<dyn FnMut(usize)>>,
+    on_row_double_click: Option<Box<dyn FnMut(usize)>>,
+    rich_items: Option<Vec<RichText>>,
 }
 
 impl List {
@@ -121,6 +182,11 @@ impl List {
             layout: None,
             on_select: None,
             on_activate: None,
+            accessory_fn: None,
+            accessory_width: None,
+            on_accessory_click: None,
+            on_row_double_click: None,
+            rich_items: None,
         }
     }
 
@@ -185,15 +251,54 @@ impl List {
     /// Fires with the current index on Enter, on Space (no toggle
     /// meaning in a List), and on a click on the ALREADY-selected row —
     /// a click on an unselected row only selects. Double-clicks work by
-    /// subsumption: click 1 selects, click 2 is a click on the selected
-    /// row (no timing requirement — the picker gesture, deliberately
-    /// broader than `Table`'s timed `click_count() >= 2` convention).
-    /// When unbound, Enter/Space pass through to app shortcuts exactly
-    /// as before this event existed. The callback may dispose the
-    /// List's scope synchronously (close-the-picker is the intended
-    /// use).
+    /// subsumption when [`List::on_row_double_click`] is unbound: click 1
+    /// selects, click 2 is a click on the selected row (no timing
+    /// requirement — the picker gesture). When `on_row_double_click` IS
+    /// bound, a timed double-click (`click_count() >= 2`) fires that
+    /// callback instead of this one for the second press. When unbound,
+    /// Enter/Space pass through to app shortcuts exactly as before this
+    /// event existed. The callback may dispose the List's scope
+    /// synchronously (close-the-picker is the intended use).
     pub fn on_activate(mut self, f: impl FnMut(usize) + 'static) -> List {
         self.on_activate = Some(Box::new(f));
+        self
+    }
+
+    /// Trailing column label per row (`None` = no accessory cell).
+    /// Width is the max label width unless [`List::accessory_width`]
+    /// pins it. Clicks in the accessory column route to
+    /// [`List::on_accessory_click`] and do not move selection.
+    pub fn row_accessory(mut self, f: impl Fn(usize, &str) -> Option<String> + 'static) -> List {
+        self.accessory_fn = Some(Box::new(f));
+        self
+    }
+
+    /// Fixed accessory column width in cells (default: max label width).
+    pub fn accessory_width(mut self, cells: i32) -> List {
+        self.accessory_width = Some(cells.max(1));
+        self
+    }
+
+    /// Fires when the user clicks the trailing accessory column.
+    pub fn on_accessory_click(mut self, f: impl FnMut(usize) + 'static) -> List {
+        self.on_accessory_click = Some(Box::new(f));
+        self
+    }
+
+    /// Browsing-surface double-click: fires on the row BODY when the
+    /// second press of a click chain lands on the already-selected row
+    /// (`EventCtx::click_count() >= 2`). Supersedes [`List::on_activate`]
+    /// for that press. Accessory and scrollbar columns are excluded.
+    pub fn on_row_double_click(mut self, f: impl FnMut(usize) + 'static) -> List {
+        self.on_row_double_click = Some(Box::new(f));
+        self
+    }
+
+    /// Per-row rich labels (same length as `items`). Body column only;
+    /// accessories stay plain text. Replaces the plain string on the
+    /// first visible row of each item.
+    pub fn rich_items(mut self, items: Vec<RichText>) -> List {
+        self.rich_items = Some(items);
         self
     }
 
@@ -266,6 +371,16 @@ impl List {
             Rc::new(RefCell::new(self.on_select));
         let on_activate: crate::widgets::SharedCallback<usize> =
             Rc::new(RefCell::new(self.on_activate));
+        let on_accessory_click: crate::widgets::SharedCallback<usize> =
+            Rc::new(RefCell::new(self.on_accessory_click));
+        let on_row_double_click: crate::widgets::SharedCallback<usize> =
+            Rc::new(RefCell::new(self.on_row_double_click));
+        let accessory_fn = self.accessory_fn.map(Rc::new);
+        let accessory_w = accessory_fn.as_ref().map_or(0, |f| {
+            self.accessory_width
+                .unwrap_or_else(|| accessory_column_width(&items, f))
+        });
+        let rich_items = self.rich_items.map(Rc::new);
         let layout = self
             .layout
             .unwrap_or_else(|| LayoutStyle::default().grow(1.0));
@@ -330,6 +445,9 @@ impl List {
 
         let prefix_for_handler = prefix.clone();
         let activate = on_activate;
+        let accessory_click = on_accessory_click;
+        let row_double_click = on_row_double_click;
+        let accessory_w_handler = accessory_w;
         let handler = move |ctx: &mut EventCtx, ev: &UiEvent| {
             let rect = ctx.current_rect();
             let h = rect.h.max(1);
@@ -374,6 +492,31 @@ impl List {
                         ctx.stop_propagation();
                     }
                     MouseKind::Down(MouseButton::Left) => {
+                        let local_x = m.pos.x - rect.x;
+                        let show_bar = total_rows > h;
+                        let cols = list_columns(rect.w, show_bar, accessory_w_handler);
+                        match list_hit_zone(local_x, cols) {
+                            ListHitZone::Scrollbar => {
+                                ctx.stop_propagation();
+                                return;
+                            }
+                            ListHitZone::Accessory => {
+                                let row = (m.pos.y - rect.y) + offset.get_untracked();
+                                if row >= 0 && row < total_rows {
+                                    let idx = prefix_for_handler
+                                        .partition_point(|&p| p <= row)
+                                        .saturating_sub(1);
+                                    if idx < len {
+                                        if let Some(f) = accessory_click.borrow_mut().as_mut() {
+                                            f(idx);
+                                        }
+                                    }
+                                }
+                                ctx.stop_propagation();
+                                return;
+                            }
+                            ListHitZone::Body => {}
+                        }
                         // Content row -> item index (binary search on
                         // the prefix; the row belongs to the item whose
                         // span contains it).
@@ -383,20 +526,16 @@ impl List {
                                 .partition_point(|&p| p <= row)
                                 .saturating_sub(1);
                             if idx < len {
-                                // Click on the ALREADY-selected row
-                                // activates; on an unselected row it
-                                // only selects (0250 ruling clause 2).
-                                // Deliberately NOT gated on the click
-                                // chain (`ctx.click_count()`): the
-                                // picker gesture subsumes double-click
-                                // — see the module docs. select()
-                                // finishes all bookkeeping first, so
-                                // the activate callback runs last and
-                                // may dispose the List's scope.
                                 let was_selected = selection.get_untracked() == idx;
                                 select(idx, h);
                                 if was_selected {
-                                    if let Some(f) = activate.borrow_mut().as_mut() {
+                                    if ctx.click_count() >= 2 {
+                                        if let Some(f) = row_double_click.borrow_mut().as_mut() {
+                                            f(idx);
+                                        } else if let Some(f) = activate.borrow_mut().as_mut() {
+                                            f(idx);
+                                        }
+                                    } else if let Some(f) = activate.borrow_mut().as_mut() {
                                         f(idx);
                                     }
                                 }
@@ -421,6 +560,9 @@ impl List {
             el = el.focus_signal(focused);
         }
         let prefix_for_draw = prefix;
+        let accessory_fn_draw = accessory_fn;
+        let accessory_w_draw = accessory_w;
+        let rich_items_draw = rich_items;
         el.on(Phase::Bubble, handler).child(dyn_view(
             LayoutStyle::default()
                 .width(Dimension::Percent(1.0))
@@ -430,6 +572,8 @@ impl List {
                 let first_row = offset.get().max(0);
                 let items = items.clone();
                 let prefix = prefix_for_draw.clone();
+                let accessory_fn_inner = accessory_fn_draw.clone();
+                let rich_items_inner = rich_items_draw.clone();
                 Element::new()
                     .style(
                         LayoutStyle::default()
@@ -444,7 +588,8 @@ impl List {
                         canvas.fill_styled(rect, ' ', &base);
                         let total = *prefix.last().unwrap_or(&0);
                         let show_bar = total > rect.h;
-                        let text_w = if show_bar { rect.w - 1 } else { rect.w };
+                        let cols = list_columns(rect.w, show_bar, accessory_w_draw);
+                        let text_w = cols.body_w;
                         // Virtualization: first visible item by
                         // binary search, walk until off-screen.
                         let mut idx = prefix
@@ -463,12 +608,13 @@ impl List {
                                 base
                             };
                             if selected {
-                                // The whole item area wears the pair.
+                                // Body + accessory wear the selection pair.
+                                let row_w = cols.body_w + cols.accessory_w;
                                 for r in 0..item_h {
                                     let y = rect.y + top + r;
                                     if y >= rect.y && y < rect.bottom() {
                                         canvas.fill_styled(
-                                            crate::base::Rect::new(rect.x, y, text_w, 1),
+                                            crate::base::Rect::new(rect.x, y, row_w, 1),
                                             ' ',
                                             &style,
                                         );
@@ -477,13 +623,48 @@ impl List {
                             }
                             let y = rect.y + top;
                             if y >= rect.y && y < rect.bottom() {
-                                let line =
-                                    crate::text::truncate_ellipsis(&items[idx], text_w.max(0));
-                                canvas.print_styled(
-                                    crate::base::Point::new(rect.x, y),
-                                    &line,
-                                    &style,
-                                );
+                                if let Some(rich) =
+                                    rich_items_inner.as_ref().and_then(|v| v.get(idx))
+                                {
+                                    let shaped = rich.wrap(text_w.max(0));
+                                    draw_rich_lines(
+                                        canvas,
+                                        crate::base::Rect::new(rect.x, y, text_w, 1),
+                                        shaped.lines.iter().take(1),
+                                        if selected { sel_fg } else { text_fg },
+                                        crate::render::rich::HAlign::Left,
+                                    );
+                                } else {
+                                    let line =
+                                        crate::text::truncate_ellipsis(&items[idx], text_w.max(0));
+                                    canvas.print_styled(
+                                        crate::base::Point::new(rect.x, y),
+                                        &line,
+                                        &style,
+                                    );
+                                }
+                            }
+                            if cols.accessory_w > 0 {
+                                if let Some(label) = accessory_fn_inner
+                                    .as_ref()
+                                    .and_then(|f| f(idx, &items[idx]))
+                                {
+                                    let acc = crate::text::truncate_ellipsis(
+                                        &label,
+                                        cols.accessory_w.max(0),
+                                    );
+                                    let acc_w =
+                                        unicode_width::UnicodeWidthStr::width(acc.as_str()) as i32;
+                                    let acc_x =
+                                        rect.x + cols.body_w + (cols.accessory_w - acc_w).max(0);
+                                    if y >= rect.y && y < rect.bottom() {
+                                        canvas.print_styled(
+                                            crate::base::Point::new(acc_x, y),
+                                            &acc,
+                                            &style,
+                                        );
+                                    }
+                                }
                             }
                             idx += 1;
                         }

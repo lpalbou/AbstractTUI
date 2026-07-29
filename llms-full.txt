@@ -90,7 +90,8 @@ through ordinary reactivity.*
   (`TextArea` with history and completion dropdowns), selects (`Select` /
   `Combobox` / `MultiSelect` over anchored popups that layer above modals),
   lists and sortable tables with distinct selection and activation events
-  (single click selects; Enter or double-click activates),
+  (single click selects; Enter or double-click activates; lists also support
+  trailing accessory columns and rich row labels — see `presence_board`),
   tabs, checkboxes, radio groups, scroll regions, panels (closable via an
   opt-in title-row ✕), a directory `FilePicker`, badges, progress
   bars, spinners, modals, toasts, tooltips — plus the app-shell pair:
@@ -1232,7 +1233,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
 - **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
-- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`. Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected).
+- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`. Optional trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), and timed double-click on the body (`on_row_double_click`). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
 - **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
@@ -1380,14 +1381,30 @@ never wire commitment, navigation, or destruction to it. Activation is
 the EXPLICIT "user chose this row" event: `on_activate` fires on Enter
 (always), on Space (a List has no toggle meaning), and on a click on
 the already-selected row; a click on an unselected row only selects.
-Double-clicks work by subsumption — click 1 selects, click 2 lands on
-the now-selected row and activates, with no timing requirement (the
-picker gesture is deliberately broader than `Table`'s timed
-double-click). Both callbacks run after the List's own bookkeeping
-(selection write, ensure-visible), so an `on_activate` may close the
-surrounding modal — disposing the List's scope synchronously is safe.
-When `on_activate` is unbound, Enter and Space pass through to your
-shortcuts unchanged:
+
+**Picker vs browsing gestures.** By default, double-clicks work by
+subsumption — click 1 selects, click 2 lands on the now-selected row
+and activates, with no timing requirement (the picker gesture is
+deliberately broader than `Table`'s timed double-click). For chat
+sidebars and other browsing surfaces that need strict SGR double-click
+(open-on-double, slow re-click only re-selects), bind
+[`List::on_row_double_click`](crate::widgets::List::on_row_double_click)
+instead — it fires when `EventCtx::click_count() >= 2` on the row body
+and supersedes `on_activate` for that press (same convention as
+`Table`).
+
+**Row accessories.** [`List::row_accessory`](crate::widgets::List::row_accessory)
++ [`List::on_accessory_click`](crate::widgets::List::on_accessory_click)
+add an optional trailing column (badge, ×, …). The engine owns
+body/accessory/scrollbar column widths — accessory clicks do not change
+selection; scrollbar-column clicks are inert. Styled body labels ride
+[`List::rich_items`](crate::widgets::List::rich_items) (same length as
+`items`; accessories stay plain text).
+
+Both callbacks run after the List's own bookkeeping (selection write,
+ensure-visible), so an `on_activate` may close the surrounding modal —
+disposing the List's scope synchronously is safe. When `on_activate` is
+unbound, Enter and Space pass through to your shortcuts unchanged:
 
 ```rust
 use abstracttui::prelude::*;
@@ -1398,6 +1415,24 @@ fn theme_picker(cx: Scope, apply_and_close: impl FnMut(usize) + 'static) -> View
         .view(cx) // browsing with arrows only moves the highlight
 }
 ```
+
+Presence-board pattern (rich rows, timed double-click, trailing action):
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::render::rich::{RichLine, RichText, Span};
+
+List::new(names)
+    .rich_items(rich_labels)
+    .accessory_width(3)
+    .row_accessory(|i, _| Some(format!("×{}", unread[i])))
+    .on_row_double_click(|i| open_dm(i))      // body: timed double-click
+    .on_accessory_click(|i| open_moderation(i)) // trailing column only
+    .view(cx)
+```
+
+See `cargo run --example presence_board` and docs/faq.md § "scrollable
+rich list".
 
 ### Table — selection vs activation
 
@@ -2118,9 +2153,17 @@ terminal PASTES its path**, and the spelling varies per terminal. The
 engine owns the three surfaces a file-attaching app needs
 (`examples/attachments.rs` is the wired recipe):
 
-**1. The paste intercept.** `TextInput::on_paste` and
-`TextArea::on_paste` (uniform semantics) run when `UiEvent::Paste`
-reaches the focused editor, BEFORE insertion, with the RAW paste text:
+**1. The paste intercept.** [`Element::on_paste`](crate::ui::Element::on_paste)
+runs in **Capture** phase on the path toward focus — before focused
+widget handlers — so you can classify paste on an idle app surface
+without mounting a hidden input. Return `PasteAction::Consume` to stop
+before the focus target; `PasteAction::Insert` lets the focused editor
+handle the paste normally.
+
+[`TextInput::on_paste`](crate::widgets::TextInput::on_paste) and
+[`TextArea::on_paste`](crate::widgets::TextArea::on_paste) (uniform semantics)
+run when `UiEvent::Paste` reaches the focused editor, BEFORE insertion,
+with the RAW paste text:
 
 ```rust,ignore
 TextArea::new()
@@ -4813,6 +4856,54 @@ polarity in curated order. The shipped examples honor
 `cargo run --example themes` is a complete picker UI — card grid, live
 preview, measured contrast ratios — you can crib from.
 
+## How does `click_count()` work for double-click?
+
+Terminals report raw press/release events only — the engine synthesizes
+multi-click counts in [`ClickChain`](src/ui/click.rs). On each
+`MouseKind::Down`, `EventCtx::click_count()` returns `1` for an isolated
+press, `2` for the second press of a chain, and so on (saturating at 255).
+
+A chain continues when the new press uses the **same button**, lands within
+**400 ms** (inclusive) of the previous press, and stays within **1 cell**
+(Chebyshev distance) of the previous press position. **Modifiers do not
+break** the chain. **`Up` and `Move` do not reset** it. **Wheel and drag
+events reset** the chain (content moved under the pointer). The driver
+publishes time via `set_event_time` each turn — without it, every press
+reads as `1` (deterministic in headless tests).
+
+**Widget conventions:** `List::on_activate` uses the **picker** gesture
+(click the already-selected row — timing-free; double-click subsumes when
+`on_row_double_click` is unbound). `Table` and `List::on_row_double_click`
+use the **browsing** gesture (`click_count() >= 2` on the already-selected
+row). Prefer these callbacks over hand-rolled Bubble handlers so reactive
+rebuilds do not drop selection state between presses.
+
+## How do I build a scrollable rich list (sidebar / presence board)?
+
+Use `List` inside a flex child (it virtualizes and scrolls internally).
+For styled rows bind [`List::rich_items`](src/widgets/list.rs). For a
+trailing action (unread badge, ×, …) use
+[`List::row_accessory`](src/widgets/list.rs) +
+[`List::on_accessory_click`](src/widgets/list.rs) — the engine computes
+body/accessory/scrollbar columns; do not hand-roll `m.pos.x - rect.x`
+math. For open-on-double-click bind
+[`List::on_row_double_click`](src/widgets/list.rs).
+
+`RichTextView` alone has **no intrinsic height** — wrap it in
+[`Scroll`](src/widgets/scroll.rs) and pass an explicit
+[`Scroll::content_size`](src/widgets/scroll.rs) (or mount content with a
+`measure` callback). See `cargo run --example presence_board` and the
+markdown scroll tests for composition patterns.
+
+## How do I handle paste on an idle app surface (not the composer)?
+
+`TextInput` / `TextArea` expose `on_paste` on the focused field. For
+app-level routing (classify a file-path paste before it reaches a focused
+editor), attach [`Element::on_paste`](src/ui/view.rs) on an ancestor in
+**Capture** phase — it runs on the path toward focus before the focus
+target. Return `PasteAction::Consume` to stop insertion;
+`PasteAction::Insert` lets the focused widget handle the paste normally.
+
 ## Can users attach files by dropping them onto the terminal?
 
 Yes, with one honest caveat: terminals have no drop protocol — dropping
@@ -5137,8 +5228,8 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.2.22 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.2.24 (2026-07-26).
+- Crate: `abstracttui` 0.2.26 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.2.26 (2026-07-29).
 - Extension family (sibling crates in the repo workspace, installed only when needed;
   ADR-0004 — public core API only, same MIT license and dependency discipline):
   - `abstracttui-graph` 0.1.0 — graph auto-layout (`GraphDesc -> Layout`: layered /
@@ -5152,8 +5243,9 @@ timeouts, and no sleeps.
   software-rasterized 3D (GLB), a sub-cell vector canvas, themes (with a drop-in
   theme switcher) and animation.
 - Examples: 23 runnable in-crate examples (`examples/README.md`, ordered as a learning
-  path) plus 3 extension-crate examples (`workflow`/`network` in `extensions/graph`,
-  `mermaid` in `extensions/mermaid`); every example exits cleanly without a tty.
+  path; includes `presence_board` for rich list rows with accessories) plus 3 extension-crate
+  examples (`workflow`/`network` in `extensions/graph`, `mermaid` in `extensions/mermaid`);
+  every example exits cleanly without a tty.
 - License: MIT.
 - Repository / homepage: https://github.com/lpalbou/abstracttui
 - API reference: https://docs.rs/abstracttui (family: https://docs.rs/abstracttui-graph,
@@ -5165,10 +5257,9 @@ timeouts, and no sleeps.
   - `libc` 0.2 — Unix terminal FFI (unix targets only)
   - `windows-sys` 0.61 — Windows console FFI (windows targets only)
 - Test invocation (from CONTRIBUTING.md):
-  - `cargo test` — the core suite (~2,120 tests: unit tests, integration suites under
+  - `cargo test` — the core suite (~1,570 tests: unit tests, integration suites under
     `tests/`, and doctests).
-  - `cargo test --workspace` — core plus the extension family (~2,245 tests; the CI
-    gate).
+  - `cargo test --workspace` — core plus the extension family (the CI gate).
   - `cargo test --test live_smoke -- --ignored --test-threads=1` — live pty smoke tests
     (spawn a real terminal session; run serially).
   - `cargo test --test perf_budgets --release -- --ignored --test-threads=1` —

@@ -81,10 +81,7 @@ fn copy_via_stdin_args(program_and_args: &[&str], text: &str) -> bool {
 #[cfg(windows)]
 fn copy_windows(text: &str) -> bool {
     // clip.exe expects UTF-16 LE on stdin without a BOM.
-    let mut wide: Vec<u8> = text
-        .encode_utf16()
-        .flat_map(|u| u.to_le_bytes())
-        .collect();
+    let mut wide: Vec<u8> = text.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
     wide.extend_from_slice(&[0, 0]);
     let mut child = match Command::new("cmd")
         .args(["/C", "clip"])

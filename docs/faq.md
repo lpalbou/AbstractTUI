@@ -286,6 +286,54 @@ polarity in curated order. The shipped examples honor
 `cargo run --example themes` is a complete picker UI — card grid, live
 preview, measured contrast ratios — you can crib from.
 
+## How does `click_count()` work for double-click?
+
+Terminals report raw press/release events only — the engine synthesizes
+multi-click counts in [`ClickChain`](src/ui/click.rs). On each
+`MouseKind::Down`, `EventCtx::click_count()` returns `1` for an isolated
+press, `2` for the second press of a chain, and so on (saturating at 255).
+
+A chain continues when the new press uses the **same button**, lands within
+**400 ms** (inclusive) of the previous press, and stays within **1 cell**
+(Chebyshev distance) of the previous press position. **Modifiers do not
+break** the chain. **`Up` and `Move` do not reset** it. **Wheel and drag
+events reset** the chain (content moved under the pointer). The driver
+publishes time via `set_event_time` each turn — without it, every press
+reads as `1` (deterministic in headless tests).
+
+**Widget conventions:** `List::on_activate` uses the **picker** gesture
+(click the already-selected row — timing-free; double-click subsumes when
+`on_row_double_click` is unbound). `Table` and `List::on_row_double_click`
+use the **browsing** gesture (`click_count() >= 2` on the already-selected
+row). Prefer these callbacks over hand-rolled Bubble handlers so reactive
+rebuilds do not drop selection state between presses.
+
+## How do I build a scrollable rich list (sidebar / presence board)?
+
+Use `List` inside a flex child (it virtualizes and scrolls internally).
+For styled rows bind [`List::rich_items`](src/widgets/list.rs). For a
+trailing action (unread badge, ×, …) use
+[`List::row_accessory`](src/widgets/list.rs) +
+[`List::on_accessory_click`](src/widgets/list.rs) — the engine computes
+body/accessory/scrollbar columns; do not hand-roll `m.pos.x - rect.x`
+math. For open-on-double-click bind
+[`List::on_row_double_click`](src/widgets/list.rs).
+
+`RichTextView` alone has **no intrinsic height** — wrap it in
+[`Scroll`](src/widgets/scroll.rs) and pass an explicit
+[`Scroll::content_size`](src/widgets/scroll.rs) (or mount content with a
+`measure` callback). See `cargo run --example presence_board` and the
+markdown scroll tests for composition patterns.
+
+## How do I handle paste on an idle app surface (not the composer)?
+
+`TextInput` / `TextArea` expose `on_paste` on the focused field. For
+app-level routing (classify a file-path paste before it reaches a focused
+editor), attach [`Element::on_paste`](src/ui/view.rs) on an ancestor in
+**Capture** phase — it runs on the path toward focus before the focus
+target. Return `PasteAction::Consume` to stop insertion;
+`PasteAction::Insert` lets the focused widget handle the paste normally.
+
 ## Can users attach files by dropping them onto the terminal?
 
 Yes, with one honest caveat: terminals have no drop protocol — dropping

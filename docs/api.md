@@ -253,7 +253,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
 - **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
-- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`. Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected).
+- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`. Optional trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), and timed double-click on the body (`on_row_double_click`). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
 - **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
@@ -401,14 +401,30 @@ never wire commitment, navigation, or destruction to it. Activation is
 the EXPLICIT "user chose this row" event: `on_activate` fires on Enter
 (always), on Space (a List has no toggle meaning), and on a click on
 the already-selected row; a click on an unselected row only selects.
-Double-clicks work by subsumption — click 1 selects, click 2 lands on
-the now-selected row and activates, with no timing requirement (the
-picker gesture is deliberately broader than `Table`'s timed
-double-click). Both callbacks run after the List's own bookkeeping
-(selection write, ensure-visible), so an `on_activate` may close the
-surrounding modal — disposing the List's scope synchronously is safe.
-When `on_activate` is unbound, Enter and Space pass through to your
-shortcuts unchanged:
+
+**Picker vs browsing gestures.** By default, double-clicks work by
+subsumption — click 1 selects, click 2 lands on the now-selected row
+and activates, with no timing requirement (the picker gesture is
+deliberately broader than `Table`'s timed double-click). For chat
+sidebars and other browsing surfaces that need strict SGR double-click
+(open-on-double, slow re-click only re-selects), bind
+[`List::on_row_double_click`](crate::widgets::List::on_row_double_click)
+instead — it fires when `EventCtx::click_count() >= 2` on the row body
+and supersedes `on_activate` for that press (same convention as
+`Table`).
+
+**Row accessories.** [`List::row_accessory`](crate::widgets::List::row_accessory)
++ [`List::on_accessory_click`](crate::widgets::List::on_accessory_click)
+add an optional trailing column (badge, ×, …). The engine owns
+body/accessory/scrollbar column widths — accessory clicks do not change
+selection; scrollbar-column clicks are inert. Styled body labels ride
+[`List::rich_items`](crate::widgets::List::rich_items) (same length as
+`items`; accessories stay plain text).
+
+Both callbacks run after the List's own bookkeeping (selection write,
+ensure-visible), so an `on_activate` may close the surrounding modal —
+disposing the List's scope synchronously is safe. When `on_activate` is
+unbound, Enter and Space pass through to your shortcuts unchanged:
 
 ```rust
 use abstracttui::prelude::*;
@@ -419,6 +435,24 @@ fn theme_picker(cx: Scope, apply_and_close: impl FnMut(usize) + 'static) -> View
         .view(cx) // browsing with arrows only moves the highlight
 }
 ```
+
+Presence-board pattern (rich rows, timed double-click, trailing action):
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::render::rich::{RichLine, RichText, Span};
+
+List::new(names)
+    .rich_items(rich_labels)
+    .accessory_width(3)
+    .row_accessory(|i, _| Some(format!("×{}", unread[i])))
+    .on_row_double_click(|i| open_dm(i))      // body: timed double-click
+    .on_accessory_click(|i| open_moderation(i)) // trailing column only
+    .view(cx)
+```
+
+See `cargo run --example presence_board` and docs/faq.md § "scrollable
+rich list".
 
 ### Table — selection vs activation
 
@@ -1139,9 +1173,17 @@ terminal PASTES its path**, and the spelling varies per terminal. The
 engine owns the three surfaces a file-attaching app needs
 (`examples/attachments.rs` is the wired recipe):
 
-**1. The paste intercept.** `TextInput::on_paste` and
-`TextArea::on_paste` (uniform semantics) run when `UiEvent::Paste`
-reaches the focused editor, BEFORE insertion, with the RAW paste text:
+**1. The paste intercept.** [`Element::on_paste`](crate::ui::Element::on_paste)
+runs in **Capture** phase on the path toward focus — before focused
+widget handlers — so you can classify paste on an idle app surface
+without mounting a hidden input. Return `PasteAction::Consume` to stop
+before the focus target; `PasteAction::Insert` lets the focused editor
+handle the paste normally.
+
+[`TextInput::on_paste`](crate::widgets::TextInput::on_paste) and
+[`TextArea::on_paste`](crate::widgets::TextArea::on_paste) (uniform semantics)
+run when `UiEvent::Paste` reaches the focused editor, BEFORE insertion,
+with the RAW paste text:
 
 ```rust,ignore
 TextArea::new()

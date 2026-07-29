@@ -42,7 +42,8 @@ through ordinary reactivity.*
   (`TextArea` with history and completion dropdowns), selects (`Select` /
   `Combobox` / `MultiSelect` over anchored popups that layer above modals),
   lists and sortable tables with distinct selection and activation events
-  (single click selects; Enter or double-click activates),
+  (single click selects; Enter or double-click activates; lists also support
+  trailing accessory columns and rich row labels — see `presence_board`),
   tabs, checkboxes, radio groups, scroll regions, panels (closable via an
   opt-in title-row ✕), a directory `FilePicker`, badges, progress
   bars, spinners, modals, toasts, tooltips — plus the app-shell pair:
