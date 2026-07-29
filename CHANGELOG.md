@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.25] - 2026-07-28
+
+### Added
+
+- term: `platform_clipboard` — when the terminal does not advertise OSC 52
+  copy, selection release-copy and explicit `copy_to_clipboard` calls use
+  the host clipboard (`pbcopy` on macOS, `wl-copy`/`xclip` on Linux,
+  `clip.exe` on Windows). The driver shows a one-time labeled notice when
+  the fallback path is used.
+
 ## [0.2.24] - 2026-07-26
 
 ### Added

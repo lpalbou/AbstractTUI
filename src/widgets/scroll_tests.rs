@@ -371,6 +371,41 @@ fn app_can_force_follow_to_jump_to_latest() {
     root.dispose();
 }
 
+#[test]
+fn plain_arrow_up_with_follow_at_tail_moves_one_row_not_to_head() {
+    // agora-tui plain_arrow harness: one ↑ must not snap to list head when
+    // follow was pinned at the tail (the app-side class lives in custom
+    // scroll_target; this pins engine Scroll behavior).
+    let size = Size::new(16, 4);
+    let (root, mut tree, rig) = mount_bound_feed(size);
+    for i in 0..20 {
+        rig.feed
+            .push(format!("m{i}"), FeedItem::text(format!("line {i}")));
+    }
+    let canvas = settle(&mut tree, size);
+    assert!(rig.follow.get_untracked(), "starts following at the tail");
+    let at_tail = rig.offset.get_untracked();
+    assert!(at_tail > 0, "tail pin must leave a non-zero offset");
+    assert!(
+        canvas.row_text(3).contains("line 19"),
+        "tail visible: {:?}",
+        (0..4).map(|y| canvas.row_text(y)).collect::<Vec<_>>()
+    );
+
+    key(&mut tree, Key::Tab);
+    key(&mut tree, Key::Up);
+    let canvas = settle(&mut tree, size);
+    let after = rig.offset.get_untracked();
+    assert!(!rig.follow.get_untracked(), "plain ↑ disengages follow");
+    assert_eq!(after, at_tail - 1, "one content row up, not a head snap");
+    assert!(
+        !canvas.row_text(0).contains("line 0"),
+        "viewport must not jump to the list head: {:?}",
+        (0..4).map(|y| canvas.row_text(y)).collect::<Vec<_>>()
+    );
+    root.dispose();
+}
+
 // ---------------------------------------------------------------------------
 // 0281 (first-app): offset repair when content shrinks under a bound
 // offset — the details-fold / session-switch void state.

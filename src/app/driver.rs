@@ -154,8 +154,9 @@ pub struct Driver {
     /// OSC 52 payloads awaiting presenter-custody emission (§6): cell
     /// runs first, then protocol payloads, one flush.
     pending_clipboard: Vec<Vec<u8>>,
-    /// One-time labeled notice latch: OSC 52 copy on an unadvertising
-    /// terminal (fire-and-forget — "may be ignored" is the honest claim).
+    /// Host clipboard fallback when OSC 52 is unavailable (see RunConfig).
+    platform_clipboard: bool,
+    /// One-time labeled notice latch for clipboard paths.
     osc52_noticed: bool,
     /// Zero-collapse diagnostics drained from the trees during phase L/D
     /// of the PREVIOUS frame, forwarded into the notices lane at the next
@@ -257,6 +258,7 @@ impl Driver {
             selection,
             mouse_capture: super::selection::mouse_capture(),
             pending_clipboard: Vec::new(),
+            platform_clipboard: !cfg!(test),
             osc52_noticed: false,
             collapse_pending: Vec::new(),
             collapse_log: Vec::new(),
@@ -905,15 +907,35 @@ impl Driver {
         if text.trim().is_empty() {
             return;
         }
-        if !self.caps.osc52_copy && !self.osc52_noticed {
-            self.osc52_noticed = true;
-            app.push_startup_notice(
-                "clipboard: OSC 52 not advertised by this terminal — copies may be ignored",
-            );
+        if self.caps.osc52_copy {
+            self.pending_clipboard
+                .push(crate::term::verbs::clipboard_copy_bytes(text));
+            reactive::request_frame();
+            return;
         }
-        self.pending_clipboard
-            .push(crate::term::verbs::clipboard_copy_bytes(text));
-        reactive::request_frame();
+        if self.platform_clipboard && crate::term::platform_clipboard::try_copy(text) {
+            if !self.osc52_noticed {
+                self.osc52_noticed = true;
+                app.push_startup_notice(
+                    "clipboard: OSC 52 unavailable — copied via platform clipboard",
+                );
+            }
+            return;
+        }
+        if !self.osc52_noticed {
+            self.osc52_noticed = true;
+            let msg = if self.platform_clipboard {
+                "clipboard: OSC 52 unavailable and platform copy failed — selection may not reach the clipboard"
+            } else {
+                "clipboard: OSC 52 not advertised by this terminal — copies may be ignored"
+            };
+            app.push_startup_notice(msg);
+        }
+        if !self.platform_clipboard {
+            self.pending_clipboard
+                .push(crate::term::verbs::clipboard_copy_bytes(text));
+            reactive::request_frame();
+        }
     }
 
     /// Make every cell of `prev` unequal to any real content so the next

@@ -89,6 +89,8 @@ pub struct Scroll {
     offset_x: Option<Signal<i32>>,
     follow: Option<Signal<bool>>,
     extent_out: Option<Signal<(i32, i32)>>,
+    /// Mirror of the viewport's solved size (cells); optional app tap.
+    viewport_out: Option<Signal<(i32, i32)>>,
     scrollbar_auto_hide: bool,
     layout: Option<LayoutStyle>,
 }
@@ -104,6 +106,7 @@ impl Scroll {
             offset_x: None,
             follow: None,
             extent_out: None,
+            viewport_out: None,
             scrollbar_auto_hide: false,
             layout: None,
         }
@@ -160,6 +163,14 @@ impl Scroll {
         self
     }
 
+    /// Mirror the viewport's solved width/height (cells) into an app
+    /// signal — use with [`extent_signal`](Scroll::extent_signal) to
+    /// compute `max_off = content_h - view_h` outside the widget.
+    pub fn viewport_size_signal(mut self, sig: Signal<(i32, i32)>) -> Scroll {
+        self.viewport_out = Some(sig);
+        self
+    }
+
     /// Auto-hide the vertical scrollbar while the content FITS the
     /// viewport (default `false`: the bar always renders, full-height
     /// thumb when nothing overflows — the pre-0.2.11 behavior,
@@ -193,6 +204,7 @@ impl Scroll {
         let ground = t.surface;
 
         let hint = self.content_size;
+        let viewport_out = self.viewport_out;
         // The reactive content extent: the hint verbatim, or the solved
         // size of the content wrapper read back by the probe below. A
         // caller-bound signal (`extent_signal`) REPLACES the internal
@@ -309,6 +321,12 @@ impl Scroll {
             // repair (0281), so the probe is unconditional now. Steady
             // frames record an unchanged size and schedule nothing.
             .draw(size_probe(view_box));
+
+        if let Some(out) = viewport_out {
+            cx.effect(move || {
+                out.set(view_box.get());
+            });
+        }
 
         // Follow-tail pin: while following, the offset tracks the
         // content bottom across appends (extent growth) and resizes

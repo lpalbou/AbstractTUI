@@ -18,6 +18,7 @@ use abstracttui::base::Size;
 use abstracttui::prelude::*;
 use abstracttui::term::Capabilities;
 use abstracttui::testing::CaptureTerm;
+use abstracttui::theme::default_theme;
 use abstracttui::ui::text;
 use abstracttui::widgets::{Feed, FeedItem, FeedState};
 
@@ -423,5 +424,146 @@ fn feed_sgr_click_reports_key_and_row_within_item() {
         log.borrow().as_slice(),
         &[("b".into(), 0), ("b".into(), 1)],
         "wire presses map to (key, row_within_item); the gap is silent"
+    );
+}
+
+// ===========================================================================
+// Outer Scroll over a column of Disclosures: wheel/keys must move by CONTENT
+// rows, not by card count (laurent 2026-07-28 — one panel ≠ one line).
+// ===========================================================================
+
+fn sgr_wheel_up(col: i32, row: i32) -> Vec<u8> {
+    format!("\x1b[<64;{col};{row}M").into_bytes()
+}
+
+fn key_down() -> Vec<u8> {
+    b"\x1b[B".to_vec()
+}
+
+fn key_up() -> Vec<u8> {
+    b"\x1b[A".to_vec()
+}
+
+#[test]
+fn scroll_column_of_unfolded_disclosures_wheel_moves_content_rows() {
+    let size = Size::new(40, 6);
+    let body_b = (0..10)
+        .map(|i| format!("body-{i}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut app = App::new(size);
+    app.mount(|cx| {
+        let t = default_theme().tokens;
+        let col = Element::new()
+            .style(LayoutStyle::column())
+            .child(text("row-0-anchor"))
+            .child(Disclosure::text("card-a", "hidden-a").view(cx))
+            .child(
+                Disclosure::text("card-b", body_b)
+                    .initially_folded(false)
+                    .max_body_rows(0)
+                    .view(cx),
+            )
+            .child(Disclosure::text("card-c", "hidden-c").view(cx))
+            .child(text("row-tail"));
+        Scroll::new(col.build()).element(cx, &t).build()
+    })
+    .expect("mount");
+    let mut term = CaptureTerm::new(size);
+    let mut driver = boot(&mut app, &mut term);
+    let lines = screen_lines(&term);
+    assert!(
+        lines[0].contains("row-0-anchor"),
+        "starts at the top: {lines:#?}"
+    );
+    assert!(
+        lines.iter().any(|l| l.contains("body-0")),
+        "the unfolded body is visible initially: {lines:#?}"
+    );
+
+    // Wheel down (+3 content rows): the anchor must scroll off.
+    term.push_input(&sgr_wheel_down(5, 3));
+    settle(&mut driver, &mut app, &mut term);
+    let after_wheel = screen_lines(&term);
+    assert!(
+        !after_wheel[0].contains("row-0-anchor"),
+        "wheel moved the pane by content rows, not one card: {after_wheel:#?}"
+    );
+    assert!(
+        after_wheel[0].contains("body-0") || after_wheel[0].contains("body-1"),
+        "after +3 the viewport head lands inside the long body: {after_wheel:#?}"
+    );
+
+    // Down arrow (+1 content row) from a focused scroll area.
+    term.push_input(b"\x1b[Z"); // focus scroll (tab may work too)
+    term.push_input(&key_down());
+    settle(&mut driver, &mut app, &mut term);
+    let after_down = screen_lines(&term);
+    assert_ne!(
+        after_down[0], after_wheel[0],
+        "Down moves one content row, not one card: before={:?} after={:?}",
+        after_wheel[0], after_down[0]
+    );
+}
+
+#[test]
+fn scroll_column_remeasures_when_a_disclosure_unfolds() {
+    let size = Size::new(40, 8);
+    let body = (0..8)
+        .map(|i| format!("line-{i}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let folded = Rc::new(RefCell::new(None::<Signal<bool>>));
+    let slot = folded.clone();
+    let mut app = App::new(size);
+    app.mount(move |cx| {
+        let t = default_theme().tokens;
+        let open = cx.signal(true);
+        *slot.borrow_mut() = Some(open);
+        let col = Element::new()
+            .style(LayoutStyle::column())
+            .child(text("TOP"))
+            .child(
+                Disclosure::text("deep", body)
+                    .folded(open)
+                    .max_body_rows(0)
+                    .view(cx),
+            )
+            .child(text("BOTTOM"));
+        Scroll::new(col.build()).element(cx, &t).build()
+    })
+    .expect("mount");
+    let mut term = CaptureTerm::new(size);
+    let mut driver = boot(&mut app, &mut term);
+    let folded_sig = folded.borrow().expect("signal");
+    let folded_start = screen_lines(&term);
+    assert!(
+        !folded_start.iter().any(|l| l.contains("line-0")),
+        "folded: body hidden: {folded_start:#?}"
+    );
+    assert!(
+        folded_start.iter().any(|l| l.contains("BOTTOM")),
+        "folded: tail visible in viewport: {folded_start:#?}"
+    );
+
+    folded_sig.set(false);
+    settle(&mut driver, &mut app, &mut term);
+    let unfolded = screen_lines(&term);
+    assert!(
+        unfolded.iter().any(|l| l.contains("line-0")),
+        "unfolded: body visible: {unfolded:#?}"
+    );
+
+    // Wheel should scroll inside the tall content, not jump the whole card band.
+    term.push_input(&sgr_wheel_down(5, 4));
+    settle(&mut driver, &mut app, &mut term);
+    let after_wheel = screen_lines(&term);
+    assert!(
+        !after_wheel.iter().any(|l| l.contains("TOP")),
+        "wheel scrolls the tall column, extent includes the body: {after_wheel:#?}"
+    );
+    assert!(
+        after_wheel.iter().any(|l| l.contains("line-")),
+        "still showing body lines after wheel: {after_wheel:#?}"
     );
 }

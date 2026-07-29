@@ -42,6 +42,7 @@
 
 pub mod caps;
 pub mod options;
+pub mod platform_clipboard;
 pub mod probe;
 pub mod verbs;
 pub mod waker;
