@@ -6,12 +6,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use super::tests::{settle, tall_content};
+use super::tests::tall_content;
 use super::*;
 use crate::base::Size;
 use crate::layout::Style as LayoutStyle;
 use crate::theme::default_theme;
 use crate::ui::{text, Element, MouseButton, MouseKind, View};
+use crate::widgets::itest_util::settle;
 use crate::widgets::itest_util::{mount_widget, mouse};
 
 /// Test slot for capturing the bound extent signal out of the mount.

@@ -30,6 +30,7 @@ fn config() -> RunConfig {
         })),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     }
 }
 
@@ -432,16 +433,8 @@ fn feed_sgr_click_reports_key_and_row_within_item() {
 // rows, not by card count (laurent 2026-07-28 — one panel ≠ one line).
 // ===========================================================================
 
-fn sgr_wheel_up(col: i32, row: i32) -> Vec<u8> {
-    format!("\x1b[<64;{col};{row}M").into_bytes()
-}
-
 fn key_down() -> Vec<u8> {
     b"\x1b[B".to_vec()
-}
-
-fn key_up() -> Vec<u8> {
-    b"\x1b[A".to_vec()
 }
 
 #[test]

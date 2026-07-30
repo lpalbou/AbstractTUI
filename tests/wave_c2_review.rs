@@ -652,6 +652,7 @@ fn fidelity_flip_mid_hold_recovers_via_repeat_without_faking() {
         })),
         enter: None,
         probe: true, // the 0293 shape: proof arrives mid-session
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     settle_driver(&mut driver, &mut app, &mut term);
@@ -719,6 +720,11 @@ fn key_state_observes_keys_the_selection_layer_consumes() {
         })),
         enter: None,
         probe: false,
+        // This test copies. Without this the driver would shell out to
+        // `pbcopy`/`xclip` and overwrite the clipboard of whoever ran
+        // `cargo test` (and block on a CI box with no X server).
+        platform_clipboard: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     abstracttui::app::selection::selection().set_enabled(true);

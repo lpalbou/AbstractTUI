@@ -63,6 +63,7 @@ fn probe_proof_pushes_kitty_flags_then_shift_enter_works_and_finish_pops() {
         caps: Some(plain_caps()),
         enter: None, // derived posture: the driver owns the kitty flags
         probe: true,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     driver.turn(&mut app, &mut term).expect("first frame");
@@ -125,6 +126,7 @@ fn explicit_enter_posture_is_never_upgraded() {
             ..EnterOptions::default()
         }),
         probe: true,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     driver.turn(&mut app, &mut term).expect("first frame");
@@ -177,6 +179,7 @@ fn use_caps_dyn_view_rerenders_channel_label_on_probe_upgrade() {
         caps: Some(plain_caps()),
         enter: None,
         probe: true,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     driver.turn(&mut app, &mut term).expect("first frame");

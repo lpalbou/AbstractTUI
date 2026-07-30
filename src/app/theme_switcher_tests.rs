@@ -141,6 +141,7 @@ fn rig(vp: Size, switcher: impl FnOnce(crate::reactive::Scope) -> View + 'static
         })),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     let scope = holder.borrow().expect("mount scope");
@@ -180,6 +181,15 @@ impl Rig {
 
     fn screen(&self) -> String {
         self.term.screen().to_text()
+    }
+
+    /// The switcher glyph's foreground — hover ink shows up here.
+    fn glyph_fg(&mut self) -> Option<crate::base::Rgba> {
+        self.driver
+            .screenshot()
+            .cell(0, 1)
+            .expect("glyph cell")
+            .fg()
     }
 
     /// The switcher glyph cell (row 1, column 0 in this rig).
@@ -230,6 +240,40 @@ fn menu_rig() -> Rig {
 }
 
 // --------------------------------------------------------- menu face
+
+#[test]
+fn menu_opens_on_mouse_click_at_glyph() {
+    assert!(set_theme_by_id("abstract-dark"));
+    let mut rig = menu_rig();
+    rig.settle();
+    assert_eq!(rig.glyph(), mode_glyph(ThemeMode::Dark));
+    rig.click(0, 1);
+    assert!(
+        rig.popup_bounds().is_some(),
+        "left click on the glyph opens the menu"
+    );
+}
+
+/// The glyph must INK on hover — a control that never changes under the
+/// pointer reads as broken even though its click works. Motion with no
+/// button held only arrives when the session armed it, so this is the
+/// behavior `RunConfig::hover_ink` exists to enable.
+#[test]
+fn glyph_inks_on_hover_and_clears_on_leave() {
+    assert!(set_theme_by_id("abstract-dark"));
+    let mut rig = menu_rig();
+    rig.settle();
+    let rest = rig.glyph_fg();
+
+    // SGR motion with no button held (mode 1003 reports button 35).
+    rig.input(b"\x1b[<35;1;2M");
+    let hot = rig.glyph_fg();
+    assert_ne!(hot, rest, "the glyph takes hover ink under the pointer");
+
+    // Moving away restores the resting ink.
+    rig.input(b"\x1b[<35;20;6M");
+    assert_eq!(rig.glyph_fg(), rest, "hover ink clears on leave");
+}
 
 #[test]
 fn menu_opens_grouped_below_the_trigger() {

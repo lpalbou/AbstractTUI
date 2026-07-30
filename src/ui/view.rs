@@ -324,7 +324,7 @@ impl Element {
         self
     }
 
-    /// THE hover recipe: bind a signal to this element's hover state.
+    /// Bind a signal to this element's hover state.
     /// MouseEnter/MouseLeave are delivered per-node (an ancestor is
     /// hovered whenever the pointer is anywhere in its subtree), so a
     /// button wrapping a text child still reads hovered over the text.

@@ -90,6 +90,7 @@ fn driver_rig() -> DriverRig {
         })),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     let scope = holder.borrow().expect("mount scope");
@@ -393,6 +394,7 @@ fn root_layer_select_popup_geometry_unchanged() {
         })),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     let mut settle = |app: &mut App, term: &mut CaptureTerm| {

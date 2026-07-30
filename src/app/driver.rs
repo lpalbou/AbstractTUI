@@ -31,7 +31,9 @@ use crate::reactive::{
     self, drain_posted, flush_effects, take_frame_request, take_worker_failures,
 };
 use crate::render::{Cell, Compositor, FrameDiff, Glyph, PresentCaps, Presenter, Surface};
-use crate::term::{ActiveProbe, Capabilities, EnterOptions, KittyFlags, Terminal, TerminalWaker};
+use crate::term::{
+    ActiveProbe, Capabilities, EnterOptions, KittyFlags, MouseMode, Terminal, TerminalWaker,
+};
 use crate::theme::TokenId;
 use crate::ui::SurfaceCanvas;
 
@@ -55,6 +57,27 @@ pub struct RunConfig {
     /// they arrive (RT1-6: first paint NEVER waits for this — env-pass
     /// caps draw frame 1, probe results upgrade later frames).
     pub probe: bool,
+    /// Arm motion reporting without a held button (`MouseMode::AnyMotion`,
+    /// mode 1003) so hover-reactive visuals receive `MouseEnter`/
+    /// `MouseLeave` while no button is down — `List` row ink, `Button`
+    /// hover, `ThemeSwitcher`'s glyph.
+    ///
+    /// Off by default: 1003 reports every pointer cell, so an app with no
+    /// hover visuals would wake the event loop on mouse movement it does
+    /// not use (heavier still across SSH/tmux). This flag is the explicit
+    /// opt-in that `MouseMode::AnyMotion` documents.
+    ///
+    /// It upgrades the mouse mode whether `enter` is derived or supplied,
+    /// so turning hover ink on never costs you the kitty-keyboard
+    /// auto-detection that a hand-built `EnterOptions` would.
+    pub hover_ink: bool,
+    /// Fall back to the host clipboard (`pbcopy` / `wl-copy` / `xclip`)
+    /// when the terminal does not advertise OSC 52.
+    ///
+    /// This spawns a child process synchronously from the UI thread, so
+    /// embedders and test harnesses can refuse it. Turning it off leaves
+    /// OSC 52 as the only copy route.
+    pub platform_clipboard: bool,
 }
 
 impl Default for RunConfig {
@@ -63,6 +86,8 @@ impl Default for RunConfig {
             caps: None,
             enter: None,
             probe: true,
+            hover_ink: false,
+            platform_clipboard: true,
         }
     }
 }
@@ -176,7 +201,7 @@ impl Driver {
     pub fn new(app: &mut App, term: &mut dyn Terminal, cfg: RunConfig) -> Result<Driver> {
         let caps = cfg.caps.unwrap_or_else(Capabilities::detect_env);
         let kitty_auto = cfg.enter.is_none();
-        let enter = cfg.enter.unwrap_or_else(|| EnterOptions {
+        let mut enter = cfg.enter.unwrap_or_else(|| EnterOptions {
             kitty_keyboard: if caps.kitty_keyboard {
                 KittyFlags::standard()
             } else {
@@ -184,6 +209,13 @@ impl Driver {
             },
             ..EnterOptions::default()
         });
+        // Hover ink is the one reason to pay for mode 1003, so it is the
+        // one thing that arms it — applied after the override above so an
+        // app can opt in without hand-building `EnterOptions` (and so
+        // without forfeiting kitty auto-detection).
+        if cfg.hover_ink {
+            enter.mouse = MouseMode::AnyMotion;
+        }
         term.enter(&enter)?;
         let size = term.size()?;
         // Through App::set_viewport, never tree-direct: App::viewport()
@@ -258,7 +290,7 @@ impl Driver {
             selection,
             mouse_capture: super::selection::mouse_capture(),
             pending_clipboard: Vec::new(),
-            platform_clipboard: !cfg!(test),
+            platform_clipboard: cfg.platform_clipboard,
             osc52_noticed: false,
             collapse_pending: Vec::new(),
             collapse_log: Vec::new(),
@@ -920,6 +952,10 @@ impl Driver {
                     "clipboard: OSC 52 unavailable — copied via platform clipboard",
                 );
             }
+            // The host clipboard already holds the FULL selection. Adding
+            // an OSC 52 write here would be a second, competing writer:
+            // terminals and tmux cap the payload, so a long selection the
+            // host stored whole could be overwritten by a truncated one.
             return;
         }
         if !self.osc52_noticed {
@@ -931,11 +967,13 @@ impl Driver {
             };
             app.push_startup_notice(msg);
         }
-        if !self.platform_clipboard {
-            self.pending_clipboard
-                .push(crate::term::verbs::clipboard_copy_bytes(text));
-            reactive::request_frame();
-        }
+        // No host clipboard, or it failed: OSC 52 is the only route left.
+        // The env pass is conservative (it advertises a short whitelist),
+        // so an unadvertised terminal may well honor these bytes — and one
+        // that does not simply ignores the frame.
+        self.pending_clipboard
+            .push(crate::term::verbs::clipboard_copy_bytes(text));
+        reactive::request_frame();
     }
 
     /// Make every cell of `prev` unequal to any real content so the next
@@ -1132,6 +1170,41 @@ mod tests {
         assert!(
             pc.underline_color,
             "underline color capability must reach the presenter"
+        );
+    }
+
+    /// `hover_ink` is the ONLY thing that arms mode 1003, and it does so
+    /// without the caller hand-building `EnterOptions` (which would cost
+    /// them kitty-keyboard auto-detection).
+    #[test]
+    fn hover_ink_opt_in_arms_any_motion_and_default_stays_button_drag() {
+        use crate::base::Size;
+        use crate::testing::CaptureTerm;
+
+        fn enter_with(hover_ink: bool) -> EnterOptions {
+            let mut app = App::new(Size::new(80, 24));
+            let mut term = CaptureTerm::new(Size::new(80, 24));
+            let _driver = Driver::new(
+                &mut app,
+                term.as_terminal(),
+                RunConfig {
+                    hover_ink,
+                    ..RunConfig::default()
+                },
+            )
+            .expect("driver");
+            *term.enter_options().expect("entered")
+        }
+
+        assert_eq!(
+            enter_with(false).mouse,
+            MouseMode::ButtonDrag,
+            "an app with no hover visuals must not pay for 1003 motion traffic"
+        );
+        assert_eq!(
+            enter_with(true).mouse,
+            MouseMode::AnyMotion,
+            "hover ink needs motion reports without a held button"
         );
     }
 }

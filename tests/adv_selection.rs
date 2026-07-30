@@ -59,6 +59,10 @@ fn cfg() -> RunConfig {
     RunConfig {
         caps: Some(caps()),
         probe: false,
+        // Never spawn `pbcopy`/`wl-copy`/`xclip` from the suite: it would
+        // overwrite the clipboard of whoever ran `cargo test`, and block
+        // on a CI box with no X server.
+        platform_clipboard: false,
         ..RunConfig::default()
     }
 }
@@ -417,6 +421,11 @@ fn unadvertised_osc52_still_copies_but_notices_once() {
     let cfg = RunConfig {
         caps: Some(plain),
         probe: false,
+        // No host clipboard: this pins the OSC-52-only route. Leaving it
+        // on would make the assertion depend on whether the machine
+        // running the suite happens to have `pbcopy`/`xclip` — and would
+        // overwrite the clipboard of whoever ran `cargo test`.
+        platform_clipboard: false,
         ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).unwrap();

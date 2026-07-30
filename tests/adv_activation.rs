@@ -39,6 +39,7 @@ fn config() -> RunConfig {
         })),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     }
 }
 

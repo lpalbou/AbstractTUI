@@ -46,6 +46,7 @@ fn config(caps: Capabilities) -> RunConfig {
         caps: Some(caps),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     }
 }
 

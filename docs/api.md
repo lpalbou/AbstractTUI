@@ -253,7 +253,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
 - **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
-- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`. Optional trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), and timed double-click on the body (`on_row_double_click`). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
+- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`, bindable `selection`/`offset_y`, hover ink. Removable rows in one call (`on_remove`), or the general trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), and timed double-click on the body (`on_row_double_click`). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
 - **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
@@ -413,13 +413,80 @@ instead — it fires when `EventCtx::click_count() >= 2` on the row body
 and supersedes `on_activate` for that press (same convention as
 `Table`).
 
+**Removable rows.** [`List::on_remove`](crate::widgets::List::on_remove)
+is the one-call dismiss affordance: it draws the trailing `✕`, routes the
+click, and re-settles selection on the rebuild. Remove the index from
+your own data and let your `Dyn` rebuild — the List never leaves
+`selection` naming a row that no longer exists. With
+[`List::key_fn`](crate::widgets::List::key_fn) +
+[`List::selection_key`](crate::widgets::List::selection_key) bound the
+selected item is re-found by key; when the selected row was the one
+removed, selection falls to the same slot clamped into the shorter list
+(the next row down, or the new last row).
+
+```rust
+use abstracttui::prelude::*;
+
+fn channels(cx: Scope, rows: Signal<Vec<String>>) -> View {
+    dyn_view(LayoutStyle::default().grow(1.0), move || {
+        List::of(rows.get())
+            .on_remove(move |i| rows.update(|v| { v.remove(i); }))
+            .view(cx)
+    })
+}
+```
+
 **Row accessories.** [`List::row_accessory`](crate::widgets::List::row_accessory)
 + [`List::on_accessory_click`](crate::widgets::List::on_accessory_click)
-add an optional trailing column (badge, ×, …). The engine owns
-body/accessory/scrollbar column widths — accessory clicks do not change
-selection; scrollbar-column clicks are inert. Styled body labels ride
+are the general form — a trailing column holding a badge, an unread
+count, or a per-row action. The engine owns body/accessory/scrollbar
+column widths. The accessory column is one click target edge to edge on
+the row that draws it; rows whose `row_accessory` returns `None` leave
+that column as ordinary body. Accessory clicks never change selection,
+and scrollbar-column clicks are inert. Styled body labels ride
 [`List::rich_items`](crate::widgets::List::rich_items) (same length as
 `items`; accessories stay plain text).
+
+**Hover ink.** Ink marks the hot ROW, bold marks the hot ZONE: the row
+under the pointer takes accent ink, and whichever of body/accessory the
+pointer is actually in adds bold. Moving from a row's text onto its `✕`
+therefore keeps the row lit. A hot [`List::on_remove`] dismiss draws in
+`error` — dismissal is consequence-bearing, the same ruling the `Block`
+close affordance follows — while a plain `row_accessory` badge draws in
+`accent`, because painting an unread count red would misreport it.
+Selected rows keep their audited selection pair and take bold only, since
+the hover inks are not contrast-audited against `selection_bg`. Rows
+built with `rich_items` take the hover ink as their BASE ink, so spans
+that set their own color keep it.
+
+Hover and clicks resolve through the same hit test, so the row that
+lights up is the row a press acts on. Motion with no button held is not
+reported by default — set
+[`RunConfig::hover_ink`](crate::app::RunConfig) (via
+[`App::run_with`](crate::app::App::run_with)) in apps that want it.
+
+**Viewport and filtering.** Bind
+[`List::offset_y`](crate::widgets::List::offset_y) whenever the items
+change under a `Dyn`: the internal offset is re-minted by a rebuild, so
+without it a dismissal scrolls the reader back to the top. Bind
+[`List::selection`](crate::widgets::List::selection) for the same reason.
+
+A `List` reports callback indices **positionally in the rows it was
+given**. When you hand it a filtered or sorted view, index `i` is a
+position in that view, not in your backing collection — carry the
+backing index alongside and map through it before mutating:
+
+```rust
+let shown: Vec<(usize, String)> = all.iter().cloned().enumerate()
+    .filter(|(_, c)| c.contains(query.as_str()))
+    .collect();
+let back: Vec<usize> = shown.iter().map(|(i, _)| *i).collect();
+List::of(shown.iter().map(|(_, c)| c.as_str()))
+    .on_remove(move |row| {
+        let Some(&real) = back.get(row) else { return };
+        data.update(|v| { v.remove(real); });
+    })
+```
 
 Both callbacks run after the List's own bookkeeping (selection write,
 ensure-visible), so an `on_activate` may close the surrounding modal —

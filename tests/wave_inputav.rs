@@ -35,6 +35,7 @@ fn rig(app: &mut App, caps: Capabilities) -> (Driver, CaptureTerm, Rc<Cell<Insta
         caps: Some(caps),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(app, &mut term, cfg).expect("driver");
     let now = Rc::new(Cell::new(Instant::now()));

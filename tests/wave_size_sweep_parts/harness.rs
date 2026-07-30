@@ -43,6 +43,7 @@ pub fn config() -> RunConfig {
             kitty_keyboard: KittyFlags(0),
         }),
         probe: false,
+        ..RunConfig::default()
     }
 }
 

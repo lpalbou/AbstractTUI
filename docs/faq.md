@@ -248,6 +248,15 @@ see — both in the
 If a copy never arrives, see
 [troubleshooting](troubleshooting.md#the-engines-copy-doesnt-reach-my-clipboard).
 
+When the terminal does not advertise OSC 52, copy falls back to the host
+clipboard (`pbcopy` / `wl-copy` / `xclip`), which spawns a child process
+on the UI thread. Set `RunConfig::platform_clipboard` to `false` to
+refuse that — worth doing in embeddings and in test harnesses, where a
+copy would otherwise overwrite the clipboard of whoever ran the suite.
+The two routes are exclusive: a copy the host clipboard accepted is not
+also written over OSC 52, because terminals and tmux cap that payload and
+the second write could truncate a long selection.
+
 ## Why doesn't Ctrl+Enter (or Shift+Enter) do anything?
 
 On the classic terminal wire, Ctrl+Enter, Shift+Enter, and Ctrl+Backspace
@@ -311,19 +320,33 @@ rebuilds do not drop selection state between presses.
 ## How do I build a scrollable rich list (sidebar / presence board)?
 
 Use `List` inside a flex child (it virtualizes and scrolls internally).
-For styled rows bind [`List::rich_items`](src/widgets/list.rs). For a
-trailing action (unread badge, ×, …) use
+For styled rows bind [`List::rich_items`](src/widgets/list.rs). To let
+readers dismiss a row, bind [`List::on_remove`](src/widgets/list.rs) —
+it draws the `✕`, routes the click, and keeps selection valid across the
+removal. For any other trailing action (unread badge, per-row menu) use
 [`List::row_accessory`](src/widgets/list.rs) +
 [`List::on_accessory_click`](src/widgets/list.rs) — the engine computes
 body/accessory/scrollbar columns; do not hand-roll `m.pos.x - rect.x`
 math. For open-on-double-click bind
 [`List::on_row_double_click`](src/widgets/list.rs).
 
+When the rows come from a signal that changes (a removal, a filter),
+bind [`List::selection`](src/widgets/list.rs) and
+[`List::offset_y`](src/widgets/list.rs) on a scope that outlives the
+rebuild. The internal ones are re-minted by each build, which resets the
+highlight and scrolls back to the top. If the rows are a filtered view,
+the callback index is a position in THAT view — map it back to your
+backing collection before mutating. See
+`cargo run --example interaction_affordances`.
+
 `RichTextView` alone has **no intrinsic height** — wrap it in
 [`Scroll`](src/widgets/scroll.rs) and pass an explicit
 [`Scroll::content_size`](src/widgets/scroll.rs) (or mount content with a
-`measure` callback). See `cargo run --example presence_board` and the
-markdown scroll tests for composition patterns.
+`measure` callback). Note that a `Scroll` whose only child GROWS can
+never move: the content solves to exactly the viewport, so give it
+fixed-height children when you want it to scroll. See
+`cargo run --example presence_board` and the markdown scroll tests for
+composition patterns.
 
 ## How do I handle paste on an idle app surface (not the composer)?
 

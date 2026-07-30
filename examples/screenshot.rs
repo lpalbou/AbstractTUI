@@ -117,6 +117,7 @@ fn headless_demo() -> abstracttui::base::Result<()> {
         caps: Some(caps),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg)?;
     for _ in 0..16 {

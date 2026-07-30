@@ -56,6 +56,7 @@ fn test_config() -> RunConfig {
             kitty_keyboard: abstracttui::term::KittyFlags(0),
         }),
         probe: false,
+        ..RunConfig::default()
     }
 }
 

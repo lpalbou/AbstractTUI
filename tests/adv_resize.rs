@@ -61,6 +61,7 @@ fn resize_storm_never_panics_and_stays_consistent() {
         caps: Some(Capabilities::default()),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("enter");
     // Settle initial frames.
@@ -183,6 +184,7 @@ fn resize_thrash_between_extremes_is_stable() {
         caps: Some(Capabilities::default()),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("enter");
     let _ = driver.turn(&mut app, &mut term);

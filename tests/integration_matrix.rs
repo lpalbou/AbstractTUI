@@ -45,6 +45,7 @@ fn run_one_app(seed: u64) -> String {
         caps: Some(Capabilities::default()),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("enter");
     let mut vt = VtScreen::new(size);
@@ -196,6 +197,7 @@ fn overlay_world_reuse_across_apps() {
             caps: Some(Capabilities::default()),
             enter: None,
             probe: false,
+            ..RunConfig::default()
         };
         let mut driver = Driver::new(&mut app, &mut term, cfg).expect("enter");
         for _ in 0..4 {

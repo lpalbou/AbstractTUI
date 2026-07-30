@@ -354,6 +354,7 @@ fn animation_completion_returns_to_zero_byte_idle() {
         caps: Some(Capabilities::default()),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("enter");
     // Settle the mount.

@@ -68,6 +68,7 @@ fn config() -> RunConfig {
         caps: Some(fixed_caps()),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     }
 }
 
@@ -513,6 +514,7 @@ fn perf_feed_scroll_with_parked_protocol_image_90x30() {
         caps: Some(caps),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     settle(&mut driver, &mut app, &mut term);

@@ -440,6 +440,7 @@ fn idle_turns_with_feed_interval_parked_popup_and_parked_image_allocate_nothing(
         })),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     // Injected clock, frozen: the interval stays armed-but-not-due for
@@ -548,6 +549,7 @@ fn idle_turns_with_parked_meter_scope_and_key_state_allocate_nothing() {
         })),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     let start = std::time::Instant::now();

@@ -102,32 +102,31 @@ fn main() -> abstracttui::base::Result<()> {
                     .child(text(
                         "tab focus · enter/space activate · ctrl+t theme · f2 spin · q quit",
                     ))
-                    .build()
-            }))
-            // Small-terminal guard: absolute overlay, painted LAST; a
-            // no-op above the minimum size (draw-time, follows resizes).
-            .child(dyn_view(guard_layout(), move || {
-                let t = theme.get().tokens;
-                Element::new()
-                    .style(guard_layout())
-                    .draw(move |canvas, rect| {
-                        common::too_small(canvas, rect, common::MIN_SIZE, &t);
-                    })
+                    .child(
+                        Element::new()
+                            .style_signal(move || {
+                                let vp = abstracttui::app::current_viewport();
+                                if vp.w >= common::MIN_SIZE.w && vp.h >= common::MIN_SIZE.h {
+                                    LayoutStyle::default().w(0).h(0).shrink(0.0)
+                                } else {
+                                    common::overlay_layout()
+                                }
+                            })
+                            .draw(move |canvas, rect| {
+                                let vp = abstracttui::app::current_viewport();
+                                if vp.w >= common::MIN_SIZE.w && vp.h >= common::MIN_SIZE.h {
+                                    return;
+                                }
+                                let t = theme.get().tokens;
+                                common::too_small(canvas, rect, common::MIN_SIZE, &t);
+                            })
+                            .build(),
+                    )
                     .build()
             }))
             .build()
     })?;
     app.run()
-}
-
-/// Full-viewport absolute layout for the too-small overlay.
-fn guard_layout() -> LayoutStyle {
-    LayoutStyle::default().absolute(abstracttui::layout::Inset {
-        left: Some(0),
-        right: Some(0),
-        top: Some(0),
-        bottom: Some(0),
-    })
 }
 
 /// REACT's widgets under the §3 state table: focus = selection pair,

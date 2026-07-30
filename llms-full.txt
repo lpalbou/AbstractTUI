@@ -46,6 +46,7 @@ every guide under docs/, each introduced by a `===== FILE: <path> =====` separat
 package facts at the end.
 
 ===== FILE: README.md =====
+
 # AbstractTUI
 
 **The terminal, composed.** A reactive, compositor-grade terminal UI engine for Rust.
@@ -287,6 +288,7 @@ aspirations, with the honest split stated.
 MIT — see [LICENSE](LICENSE).
 
 ===== FILE: docs/getting-started.md =====
+
 # Getting started
 
 From install to first pixels, step by step. Every snippet here compiles against
@@ -614,6 +616,7 @@ the headless-test recipe.
   `PageHost` tab bar plus `Drawer` panels from both edges).
 
 ===== FILE: docs/architecture.md =====
+
 # AbstractTUI Architecture
 
 AbstractTUI is a standalone Rust engine that treats the terminal as a real
@@ -978,6 +981,7 @@ must reproduce the intended screen — including wide-glyph pairs at scroll
 boundaries. The input parser is fuzzed with hostile corpora on every build.
 
 ===== FILE: docs/api.md =====
+
 # AbstractTUI API Guide
 
 A guided tour of the public API, module by module. This is not a reference —
@@ -1233,7 +1237,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
 - **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
-- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`. Optional trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), and timed double-click on the body (`on_row_double_click`). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
+- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`, bindable `selection`/`offset_y`, hover ink. Removable rows in one call (`on_remove`), or the general trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), and timed double-click on the body (`on_row_double_click`). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
 - **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
@@ -1393,13 +1397,80 @@ instead — it fires when `EventCtx::click_count() >= 2` on the row body
 and supersedes `on_activate` for that press (same convention as
 `Table`).
 
+**Removable rows.** [`List::on_remove`](crate::widgets::List::on_remove)
+is the one-call dismiss affordance: it draws the trailing `✕`, routes the
+click, and re-settles selection on the rebuild. Remove the index from
+your own data and let your `Dyn` rebuild — the List never leaves
+`selection` naming a row that no longer exists. With
+[`List::key_fn`](crate::widgets::List::key_fn) +
+[`List::selection_key`](crate::widgets::List::selection_key) bound the
+selected item is re-found by key; when the selected row was the one
+removed, selection falls to the same slot clamped into the shorter list
+(the next row down, or the new last row).
+
+```rust
+use abstracttui::prelude::*;
+
+fn channels(cx: Scope, rows: Signal<Vec<String>>) -> View {
+    dyn_view(LayoutStyle::default().grow(1.0), move || {
+        List::of(rows.get())
+            .on_remove(move |i| rows.update(|v| { v.remove(i); }))
+            .view(cx)
+    })
+}
+```
+
 **Row accessories.** [`List::row_accessory`](crate::widgets::List::row_accessory)
 + [`List::on_accessory_click`](crate::widgets::List::on_accessory_click)
-add an optional trailing column (badge, ×, …). The engine owns
-body/accessory/scrollbar column widths — accessory clicks do not change
-selection; scrollbar-column clicks are inert. Styled body labels ride
+are the general form — a trailing column holding a badge, an unread
+count, or a per-row action. The engine owns body/accessory/scrollbar
+column widths. The accessory column is one click target edge to edge on
+the row that draws it; rows whose `row_accessory` returns `None` leave
+that column as ordinary body. Accessory clicks never change selection,
+and scrollbar-column clicks are inert. Styled body labels ride
 [`List::rich_items`](crate::widgets::List::rich_items) (same length as
 `items`; accessories stay plain text).
+
+**Hover ink.** Ink marks the hot ROW, bold marks the hot ZONE: the row
+under the pointer takes accent ink, and whichever of body/accessory the
+pointer is actually in adds bold. Moving from a row's text onto its `✕`
+therefore keeps the row lit. A hot [`List::on_remove`] dismiss draws in
+`error` — dismissal is consequence-bearing, the same ruling the `Block`
+close affordance follows — while a plain `row_accessory` badge draws in
+`accent`, because painting an unread count red would misreport it.
+Selected rows keep their audited selection pair and take bold only, since
+the hover inks are not contrast-audited against `selection_bg`. Rows
+built with `rich_items` take the hover ink as their BASE ink, so spans
+that set their own color keep it.
+
+Hover and clicks resolve through the same hit test, so the row that
+lights up is the row a press acts on. Motion with no button held is not
+reported by default — set
+[`RunConfig::hover_ink`](crate::app::RunConfig) (via
+[`App::run_with`](crate::app::App::run_with)) in apps that want it.
+
+**Viewport and filtering.** Bind
+[`List::offset_y`](crate::widgets::List::offset_y) whenever the items
+change under a `Dyn`: the internal offset is re-minted by a rebuild, so
+without it a dismissal scrolls the reader back to the top. Bind
+[`List::selection`](crate::widgets::List::selection) for the same reason.
+
+A `List` reports callback indices **positionally in the rows it was
+given**. When you hand it a filtered or sorted view, index `i` is a
+position in that view, not in your backing collection — carry the
+backing index alongside and map through it before mutating:
+
+```rust
+let shown: Vec<(usize, String)> = all.iter().cloned().enumerate()
+    .filter(|(_, c)| c.contains(query.as_str()))
+    .collect();
+let back: Vec<usize> = shown.iter().map(|(i, _)| *i).collect();
+List::of(shown.iter().map(|(_, c)| c.as_str()))
+    .on_remove(move |row| {
+        let Some(&real) = back.get(row) else { return };
+        data.update(|v| { v.remove(real); });
+    })
+```
 
 Both callbacks run after the List's own bookkeeping (selection write,
 ensure-visible), so an `on_activate` may close the surrounding modal —
@@ -3359,6 +3430,7 @@ selection advice and worked examples is
   mermaid.live escape link.
 
 ===== FILE: docs/theming.md =====
+
 # Theming
 
 AbstractTUI widgets never name colors — they name **roles**. Every drawable
@@ -3722,6 +3794,7 @@ examples (`cargo run --example gallery`), and see
 [`../examples/README.md`](../examples/README.md).
 
 ===== FILE: docs/graphics-and-3d.md =====
+
 # Graphics and 3D
 
 AbstractTUI renders real pixels in the terminal: PNG/JPEG images through
@@ -4043,6 +4116,7 @@ cargo test --release -- --ignored perf_mosaic_200x60 --nocapture
 ```
 
 ===== FILE: docs/graphs-and-diagrams.md =====
+
 # Graphs and diagrams — the extension family
 
 Core stays lean; diagram-class capability ships as sibling crates you
@@ -4239,6 +4313,7 @@ path).
   computed — honest, not missing data).
 
 ===== FILE: docs/live-data.md =====
+
 # Live data: background sources into the UI
 
 How a networked, long-lived app gets data from a background thread into
@@ -4568,6 +4643,7 @@ arming). See [api.md § reactive](api.md#reactive--signals-memos-effects)
 for the one-clock story.
 
 ===== FILE: docs/faq.md =====
+
 # FAQ
 
 ## Why another TUI library?
@@ -4818,6 +4894,15 @@ see — both in the
 If a copy never arrives, see
 [troubleshooting](troubleshooting.md#the-engines-copy-doesnt-reach-my-clipboard).
 
+When the terminal does not advertise OSC 52, copy falls back to the host
+clipboard (`pbcopy` / `wl-copy` / `xclip`), which spawns a child process
+on the UI thread. Set `RunConfig::platform_clipboard` to `false` to
+refuse that — worth doing in embeddings and in test harnesses, where a
+copy would otherwise overwrite the clipboard of whoever ran the suite.
+The two routes are exclusive: a copy the host clipboard accepted is not
+also written over OSC 52, because terminals and tmux cap that payload and
+the second write could truncate a long selection.
+
 ## Why doesn't Ctrl+Enter (or Shift+Enter) do anything?
 
 On the classic terminal wire, Ctrl+Enter, Shift+Enter, and Ctrl+Backspace
@@ -4881,19 +4966,33 @@ rebuilds do not drop selection state between presses.
 ## How do I build a scrollable rich list (sidebar / presence board)?
 
 Use `List` inside a flex child (it virtualizes and scrolls internally).
-For styled rows bind [`List::rich_items`](src/widgets/list.rs). For a
-trailing action (unread badge, ×, …) use
+For styled rows bind [`List::rich_items`](src/widgets/list.rs). To let
+readers dismiss a row, bind [`List::on_remove`](src/widgets/list.rs) —
+it draws the `✕`, routes the click, and keeps selection valid across the
+removal. For any other trailing action (unread badge, per-row menu) use
 [`List::row_accessory`](src/widgets/list.rs) +
 [`List::on_accessory_click`](src/widgets/list.rs) — the engine computes
 body/accessory/scrollbar columns; do not hand-roll `m.pos.x - rect.x`
 math. For open-on-double-click bind
 [`List::on_row_double_click`](src/widgets/list.rs).
 
+When the rows come from a signal that changes (a removal, a filter),
+bind [`List::selection`](src/widgets/list.rs) and
+[`List::offset_y`](src/widgets/list.rs) on a scope that outlives the
+rebuild. The internal ones are re-minted by each build, which resets the
+highlight and scrolls back to the top. If the rows are a filtered view,
+the callback index is a position in THAT view — map it back to your
+backing collection before mutating. See
+`cargo run --example interaction_affordances`.
+
 `RichTextView` alone has **no intrinsic height** — wrap it in
 [`Scroll`](src/widgets/scroll.rs) and pass an explicit
 [`Scroll::content_size`](src/widgets/scroll.rs) (or mount content with a
-`measure` callback). See `cargo run --example presence_board` and the
-markdown scroll tests for composition patterns.
+`measure` callback). Note that a `Scroll` whose only child GROWS can
+never move: the content solves to exactly the viewport, so give it
+fixed-height children when you want it to scroll. See
+`cargo run --example presence_board` and the markdown scroll tests for
+composition patterns.
 
 ## How do I handle paste on an idle app surface (not the composer)?
 
@@ -4919,6 +5018,7 @@ is nothing to drag from. The wired recipe is
 [api.md § File attachments](api.md#file-attachments--paste-intercept-drop-classifier-filepicker).
 
 ===== FILE: docs/troubleshooting.md =====
+
 # Troubleshooting
 
 Symptom → cause → fix, for the problems terminal reality actually
@@ -5212,6 +5312,31 @@ known OSC 52 cap (tmux's historical ~74KB, kitty's default 8MB) sits far
 above them. As a last resort the modifier-bypass matrix above always
 works — it never involves the application.
 
+## Hover highlights never light up
+
+**Cause**: hover ink needs the terminal to report pointer motion with no
+button held (mode 1003). The default session arms button-and-drag
+tracking (1002) instead, so `MouseEnter` / `MouseLeave` only arrive
+during a drag. Clicks are unaffected — a control that looks dead on
+hover still works when pressed.
+
+**Fix**: opt in with `RunConfig::hover_ink`:
+
+```rust
+app.run_with(RunConfig {
+    hover_ink: true,
+    ..RunConfig::default()
+})
+```
+
+It is off by default because 1003 sends a report for every pointer cell
+crossed, which wakes the event loop of apps that have no hover visuals to
+paint — noticeably so over SSH or tmux. Set it when your UI reacts to
+hover (`List` row ink, `Button` hover, `ThemeSwitcher`'s glyph), and
+leave it off otherwise. Setting it keeps kitty-keyboard auto-detection;
+hand-building `EnterOptions` to reach `MouseMode::AnyMotion` would give
+that up.
+
 ## Tests hang forever
 
 **Cause**: the app was spawned in a harness with piped stdin that never
@@ -5228,8 +5353,8 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.2.26 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.2.26 (2026-07-29).
+- Crate: `abstracttui` 0.2.27 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.2.27 (2026-07-30).
 - Extension family (sibling crates in the repo workspace, installed only when needed;
   ADR-0004 — public core API only, same MIT license and dependency discipline):
   - `abstracttui-graph` 0.1.0 — graph auto-layout (`GraphDesc -> Layout`: layered /
@@ -5242,7 +5367,7 @@ timeouts, and no sleeps.
   text selection with OSC 52 copy, images (kitty/iTerm2/sixel/mosaic),
   software-rasterized 3D (GLB), a sub-cell vector canvas, themes (with a drop-in
   theme switcher) and animation.
-- Examples: 23 runnable in-crate examples (`examples/README.md`, ordered as a learning
+- Examples: 26 runnable in-crate examples (`examples/README.md`, ordered as a learning
   path; includes `presence_board` for rich list rows with accessories) plus 3 extension-crate
   examples (`workflow`/`network` in `extensions/graph`, `mermaid` in `extensions/mermaid`);
   every example exits cleanly without a tty.

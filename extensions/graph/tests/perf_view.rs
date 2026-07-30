@@ -155,6 +155,7 @@ fn render_full_frame_vs_badge_damage_bytes() {
         })),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     let settle = |driver: &mut Driver, app: &mut App, term: &mut CaptureTerm| {

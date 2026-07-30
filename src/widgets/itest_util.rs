@@ -26,6 +26,29 @@ pub(crate) fn render(tree: &mut UiTree, size: Size) -> BufferCanvas {
     canvas
 }
 
+/// Settle the deferred geometry loop: draw (probes record), fire due
+/// timers (probes publish), flush (pins apply), repeat until quiet.
+/// Mirrors what consecutive `Driver::turn`s do in a real app.
+///
+/// Any widget that measures its viewport through `scroll::size_probe`
+/// (`Scroll`, `Feed`, `List::scroll_to`) needs this rather than a bare
+/// `render` — one paint only RECORDS the size, it never publishes it.
+pub(crate) fn settle(tree: &mut UiTree, size: Size) -> BufferCanvas {
+    crate::reactive::flush_effects();
+    tree.layout();
+    let mut canvas = render(tree, size);
+    for _ in 0..4 {
+        let fired = crate::reactive::run_due_timers(std::time::Instant::now());
+        crate::reactive::flush_effects();
+        tree.layout();
+        canvas = render(tree, size);
+        if fired == 0 && !tree.has_pending_work() {
+            break;
+        }
+    }
+    canvas
+}
+
 pub(crate) fn key(tree: &mut UiTree, k: Key) -> bool {
     tree.dispatch(&UiEvent::Key(KeyEvent::plain(k)))
 }

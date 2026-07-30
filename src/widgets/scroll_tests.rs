@@ -6,10 +6,9 @@
 use super::*;
 use crate::base::Size;
 use crate::layout::Style as LayoutStyle;
-use crate::reactive::{flush_effects, run_due_timers};
 use crate::theme::default_theme;
-use crate::ui::{text, BufferCanvas, Element, Key, MouseButton, MouseKind, UiTree};
-use crate::widgets::itest_util::{key, mount_widget, mouse, render};
+use crate::ui::{text, Element, Key, MouseButton, MouseKind, UiTree};
+use crate::widgets::itest_util::{key, mount_widget, mouse, render, settle};
 use crate::widgets::{Feed, FeedItem, FeedState};
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -22,25 +21,6 @@ pub(super) fn tall_content() -> (View, i32) {
         col = col.child(text(format!("row {i}")));
     }
     (col.build(), 20)
-}
-
-/// Settle the deferred geometry loop: draw (probes record), fire due
-/// timers (probes publish), flush (pins apply), repeat until quiet.
-/// Mirrors what consecutive `Driver::turn`s do in a real app.
-pub(super) fn settle(tree: &mut UiTree, size: Size) -> BufferCanvas {
-    flush_effects();
-    tree.layout();
-    let mut canvas = render(tree, size);
-    for _ in 0..4 {
-        let fired = run_due_timers(std::time::Instant::now());
-        flush_effects();
-        tree.layout();
-        canvas = render(tree, size);
-        if fired == 0 && !tree.has_pending_work() {
-            break;
-        }
-    }
-    canvas
 }
 
 #[test]

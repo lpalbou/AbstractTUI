@@ -105,6 +105,7 @@ fn rig(size: Size, tooltips: bool) -> Rig {
         })),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     Rig {

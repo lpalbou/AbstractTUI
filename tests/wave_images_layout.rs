@@ -133,6 +133,7 @@ fn render_at(size: Size) -> VtScreen {
         })),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("enter");
     for _ in 0..6 {
@@ -345,6 +346,7 @@ fn assert_image_widget_row_sound(size: Size) {
         })),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("enter");
     for _ in 0..6 {

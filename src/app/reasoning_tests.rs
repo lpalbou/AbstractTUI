@@ -133,6 +133,7 @@ fn rig(vp: Size, control: impl FnOnce(Scope) -> View + 'static) -> Rig {
         })),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     let scope = holder.borrow().expect("mount scope");

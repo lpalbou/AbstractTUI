@@ -1,6 +1,6 @@
 [package]
 name = "abstracttui"
-version = "0.2.26"
+version = "0.2.27"
 edition = "2021"
 # MSRV (backlog 0180): the floor is set by the library's own std usage —
 # `is_multiple_of` (1.87: gfx/png, gfx/base64, three/validate, jpeg),

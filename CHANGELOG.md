@@ -5,6 +5,102 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.27] - 2026-07-30
+
+### Added
+
+- widgets: `List::on_remove` — removable rows in one call. Draws the
+  trailing `✕`, routes the click, and re-settles selection on the
+  rebuild so it can never name a row that no longer exists. Replaces
+  `row_accessory` + `accessory_width` + `on_accessory_click` + a
+  hand-rolled glyph for the dismiss case.
+- widgets: `List` hover ink — the row under the pointer takes accent ink
+  and the hot zone takes bold, so pointing at a row's accessory keeps the
+  row lit. A hot `on_remove` dismiss draws in `error`, matching the Block
+  close affordance; a plain `row_accessory` badge draws in `accent`,
+  because red would misreport an unread count. Selected rows keep their
+  audited selection pair. Hover and clicks resolve through one hit test,
+  so what lights up under the pointer is exactly what a press acts on.
+- widgets: `List::offset_y` — bind the first visible content row, the
+  `Scroll::offset_y` convention. Without it a rebuild starts back at the
+  top, so dismissing a row scrolled the reader to the head of the list.
+  A bound offset is clamped into range on every build.
+- app: `RunConfig::hover_ink` — opt in to `MouseMode::AnyMotion` (mode
+  1003) so hover-reactive visuals receive motion with no button held.
+  Off by default: 1003 reports every pointer cell, and an app with no
+  hover visuals should not wake its event loop for it. Setting the flag
+  keeps kitty-keyboard auto-detection, which hand-building `EnterOptions`
+  would forfeit.
+- app: `RunConfig::platform_clipboard` — refuse the host clipboard
+  fallback (`pbcopy` / `wl-copy` / `xclip`). It spawns a child process
+  synchronously from the UI thread, so embedders and test harnesses can
+  now decline it.
+- app: `App::run_with(cfg)` — `App::run` against the platform terminal
+  with an explicit `RunConfig`, so opting into the above needs no
+  hand-built `Terminal`.
+- examples: `interaction_affordances.rs` — hover ink, removable rows,
+  live filtering, and nested scroll wheel bubbling. The filter shows the
+  index-mapping rule: a filtered list reports positions in the subset it
+  was given, so the example maps back before touching its own data.
+
+### Fixed
+
+- widgets: removing the selected row left `selection` naming a row that
+  no longer existed — no row highlighted, `access_value` announced a
+  phantom row to screen readers, and the first arrow key moved the wrong
+  way. Selection is now re-derived on every build: by
+  [`List::selection_key`] when the key survives, otherwise the same slot
+  clamped into the shorter list.
+- widgets: `List::scroll_to` uses ensure-visible row math (not a raw row
+  top clamp), shares that math with keyboard selection, and resolves
+  against the measured viewport height; empty lists no longer panic.
+- widgets: `List` / `Scroll` wheel events bubble to a parent scroller
+  when the offset is already at the top or bottom, so a nested list has
+  no dead zone at its edges. An unmeasured `Scroll` still consumes the
+  gesture rather than handing it to an ancestor.
+- widgets: `Scroll` no longer skips the offset repair when content is
+  exactly viewport-height. The guard meant a measured pane that shrank to
+  its viewport kept a stale offset and rendered blank until a gesture
+  rescued it — the 0281 field bug the repair exists to prevent.
+- widgets: wheel-scrolling a follow-tail `Scroll` computes from the
+  pinned position in one write instead of two, so a wheel-up no longer
+  jumps to the head and each tick notifies the graph once.
+- widgets: hovering a `List` and then wheeling re-resolves the hot row —
+  the ink no longer lights a row the pointer has left.
+- widgets: `List` rows built with `rich_items` take hover ink too. It is
+  the row's base ink, so spans that set their own color keep it.
+- widgets: an empty `List` no longer announces a selected row through
+  `access_value`; it reports `0 items`.
+- examples/presence_board: the accessory glyph is `✕` U+2715. The
+  previous `×` U+00D7 is East-Asian-ambiguous and could take two cells,
+  overflowing the accessory column on terminals set to ambiguous-wide.
+- app: a copy that reached the host clipboard no longer also emits OSC
+  52. Terminals and tmux cap that payload, so the second write could
+  truncate a long selection the host had stored whole. When there is no
+  host clipboard (or it fails), OSC 52 is still sent even unadvertised.
+- app: `cargo test` no longer shells out to the host clipboard. The
+  previous `cfg!(test)` guard never covered integration tests, so the
+  suite overwrote the clipboard of whoever ran it.
+
+### Changed
+
+- widgets: the `List` accessory column is one click target edge to edge
+  on the row that draws it, and rows whose `row_accessory` returns `None`
+  leave that column as ordinary body. Accessory clicks still never move
+  selection.
+- app: `RunConfig` gained fields. Construct it with
+  `..RunConfig::default()`; exhaustive struct literals will not compile.
+
+### Performance
+
+- widgets: `List` resolves each row's accessory label once per build and
+  keeps it truncated and measured. Painting and hit-testing borrow it, so
+  hover motion and row painting no longer allocate per row per frame.
+- widgets: `List` measures its viewport through the shared `size_probe`
+  seam instead of writing a signal from its draw closure. Paint no longer
+  mutates reactive state (RT1-2), which could flush effects mid-walk and
+  tear the frame being painted.
+
 ## [0.2.26] - 2026-07-29
 
 ### Added

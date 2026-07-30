@@ -27,6 +27,7 @@ pub fn cfg() -> RunConfig {
             kitty_keyboard: abstracttui::term::KittyFlags(0),
         }),
         probe: false,
+        ..RunConfig::default()
     }
 }
 

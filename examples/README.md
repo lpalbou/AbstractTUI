@@ -27,6 +27,7 @@ the previous one:
 | 3 · layout | `grid.rs` | track grids (`fr`/cells/percent/auto), spans, live reflow |
 | 4 · interaction | `activate.rs` | selection vs activation on `List` and `Table`; double-click, honestly |
 | 4 · interaction | `presence_board.rs` | rich list rows + trailing × accessory + timed double-click body (chat sidebar pattern) |
+| 4 · interaction | `interaction_affordances.rs` | hover ink, removable rows, live filtering, nested scroll wheel bubbling |
 | 4 · interaction | `decide.rs` | the modal decision gate (`ChoicePrompt`): confirmations, multi-pick, chains |
 | 5 · content + live data | `feed.rs` | background threads → bounded ingestion → `Feed` with follow-tail |
 | 5 · content + live data | `transcript.rs` | streaming markdown chat: tables render live, composer with completion |
@@ -172,6 +173,36 @@ records every DM and moderation click so you can verify the gestures.
 - Run: `cargo run --example presence_board`
 - Looks like: a rounded "agents" block with accent-colored names, unread
   counts on the accessory column, and a two-line action log.
+
+## interaction_affordances
+
+Hover feedback, removable rows, live filtering, and scroll boundaries in
+one panel: a filter field, a button, and a list of removable channels
+inside an outer `Scroll`. Hover a row and it takes accent ink; slide onto
+its `✕` and the row stays lit while the glyph goes red and bold. Click
+the `✕` to remove the row (`List::on_remove` — selection and scroll
+position both survive). Tab to the filter and type: the list narrows on
+every keystroke, and the example maps the filtered index back to its
+backing data before removing, which is the rule any filtered list needs.
+
+Scroll the list to an edge and keep wheeling — the event bubbles to the
+outer `Scroll`, which moves the notes panel below the list into view
+(footer shows `oy > 0`). The list has a fixed height on purpose: a
+`Scroll` whose only child grows can never move, because the content
+solves to exactly the viewport.
+
+Motion with no button held is not reported by default, so this app opts
+in with `RunConfig::hover_ink` via `App::run_with` — the one line any
+hover-reactive app needs.
+
+- Keys: Tab focus the filter · type to narrow · click `✕` to remove a
+  row · wheel at list edge bubbles to outer scroll · `q` quit (when the
+  filter is not focused).
+- Needs: any tty; a mouse strongly recommended.
+- Run: `cargo run --example interaction_affordances`
+- Looks like: a "channels" block with a filter row, a scrollable list of
+  removable channels, a notes panel below it, and a footer showing the
+  match count and outer scroll offset.
 
 ## decide
 
@@ -350,7 +381,8 @@ while the inspector is open.
 
 ## dashboard
 
-The flagship. Header bar (mark + UTC clock + theme name), nav sidebar
+The flagship. Header bar (mark + UTC clock + theme name + top-right
+`ThemeSwitcher`), nav sidebar
 (List), braille rx/tx line chart with legend riding a `TimeSeriesState`
 history ring + relative time axis ("-15s … now"), load cluster
 (ramped Progress + Sparkline histories), live event log tail (level-coherent,
@@ -362,7 +394,8 @@ walks — no rand, no wall entropy.
 
 - Keys: Tab focus, Alt+arrows pane-hop (spatial nav by geometry), arrows
   select rows, `s` sort, `n` toast, `b` 3D mark (truecolor only), `?`
-  help, Ctrl+T theme, `q` quit.
+  help, Ctrl+T cycle themes, the header's top-right ☾/☼ `ThemeSwitcher`
+  opens the grouped theme menu, `q` quit.
 - Needs: 80x24 minimum (guarded below 40x10), gorgeous at 120x35;
   truecolor for the 3D mark. Env: `ABSTRACTTUI_START_THEME=<id>`,
   `ABSTRACTTUI_FIXED_CLOCK=<secs>` (capture determinism), `--caps`.

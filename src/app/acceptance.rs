@@ -51,6 +51,7 @@ fn test_config() -> RunConfig {
         // The probe would write query bytes into the capture log; the
         // upgrade path has its own driver tests.
         probe: false,
+        ..RunConfig::default()
     }
 }
 
@@ -493,6 +494,7 @@ fn image_overlay_session_lifecycle_on_kitty_terminal() {
         caps: Some(caps),
         probe: false,
         enter: Some(EnterOptions::default()),
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     driver.turn(&mut app, &mut term).expect("frame 1");

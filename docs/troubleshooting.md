@@ -291,6 +291,31 @@ known OSC 52 cap (tmux's historical ~74KB, kitty's default 8MB) sits far
 above them. As a last resort the modifier-bypass matrix above always
 works — it never involves the application.
 
+## Hover highlights never light up
+
+**Cause**: hover ink needs the terminal to report pointer motion with no
+button held (mode 1003). The default session arms button-and-drag
+tracking (1002) instead, so `MouseEnter` / `MouseLeave` only arrive
+during a drag. Clicks are unaffected — a control that looks dead on
+hover still works when pressed.
+
+**Fix**: opt in with `RunConfig::hover_ink`:
+
+```rust
+app.run_with(RunConfig {
+    hover_ink: true,
+    ..RunConfig::default()
+})
+```
+
+It is off by default because 1003 sends a report for every pointer cell
+crossed, which wakes the event loop of apps that have no hover visuals to
+paint — noticeably so over SSH or tmux. Set it when your UI reacts to
+hover (`List` row ink, `Button` hover, `ThemeSwitcher`'s glyph), and
+leave it off otherwise. Setting it keeps kitty-keyboard auto-detection;
+hand-building `EnterOptions` to reach `MouseMode::AnyMotion` would give
+that up.
+
 ## Tests hang forever
 
 **Cause**: the app was spawned in a harness with piped stdin that never

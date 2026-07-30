@@ -1,6 +1,6 @@
 //! presence_board — rich list rows for a chat sidebar (agora-tui pattern).
 //!
-//! Each agent row has styled body text, a trailing × (separate hit target),
+//! Each agent row has styled body text, a trailing ✕ (separate hit target),
 //! and double-click on the body opens a DM. The engine owns column layout
 //! (body | accessory | scrollbar) — no manual mouse X math.
 //!
@@ -11,7 +11,11 @@
 //! Gestures:
 //!   click body        — select row (watch the status line)
 //!   double-click body — open DM (400 ms / 1 cell; watch "DM log")
-//!   click ×           — open moderation (does not change selection)
+//!   click ✕           — open moderation (does not change selection)
+//!   hover ✕           — accent ink + bold (a badge, not a dismiss)
+//!   hover row body    — the row takes accent ink; spans that set their
+//!                       own color keep it
+//!   wheel / arrows    — scroll the list (↑↓ when focused; wheel over list)
 //!   q                 — quit
 //!
 //! Docs: docs/faq.md § "How does click_count() work" and
@@ -86,7 +90,7 @@ fn main() -> abstracttui::base::Result<()> {
             },
         ]);
         let status = cx.signal(String::from(
-            "click body to select · double-click body for DM · click × to moderate",
+            "click body to select · double-click body for DM · click ✕ to moderate",
         ));
         let dm_log = cx.signal(Vec::<String>::new());
         let mod_log = cx.signal(Vec::<String>::new());
@@ -141,9 +145,9 @@ fn main() -> abstracttui::base::Result<()> {
                                 .accessory_width(4)
                                 .row_accessory(move |i, _| {
                                     if unread.get(i).copied().unwrap_or(0) > 0 {
-                                        Some(format!("×{}", unread[i]))
+                                        Some(format!("✕{}", unread[i]))
                                     } else {
-                                        Some("×".into())
+                                        Some("✕".into())
                                     }
                                 })
                                 .on_select(move |i| {
@@ -205,7 +209,7 @@ fn main() -> abstracttui::base::Result<()> {
                         .child(text(format!(
                             "mod: {}",
                             if md.is_empty() {
-                                "(none yet — click the trailing ×)".into()
+                                "(none yet — click ✕; hover ✕ for accent ink)".into()
                             } else {
                                 md.join(" · ")
                             }
@@ -219,5 +223,9 @@ fn main() -> abstracttui::base::Result<()> {
             }))
             .build()
     })?;
-    app.run()
+    // Row and ✕ hover ink is the point of this example.
+    app.run_with(RunConfig {
+        hover_ink: true,
+        ..RunConfig::default()
+    })
 }

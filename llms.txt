@@ -59,8 +59,9 @@
   (including double-click synthesis: `click_count()`, the ambient event-time rule, and
   the single-click-selects / double-click-activates convention), layout (with the
   small-terminals & content-pressure guarantees and recipes),
-  the widget catalog (`List` and `Table` selection-vs-activation, `List` row
-  accessories and `on_row_double_click`, masked `TextInput`,
+  the widget catalog (`List` and `Table` selection-vs-activation, `List` removable
+  rows (`on_remove`), row accessories, hover ink, bindable `selection`/`offset_y`
+  and `on_row_double_click`, masked `TextInput`,
   diff-aware `CodeView`,
   `Feed` streaming/rich lines/sync/selection-by-key, chart history rings with time axes,
   `Meter`/`AudioScope` levels, the `PageHost` page-level tab host, the `Block`
@@ -123,12 +124,13 @@
   Ctrl+Enter behaving like Enter, the splash not playing, slow frames, wide-character
   misalignment, rows vanishing on small terminals, double-click not activating, file
   drops pasting a path instead of attaching, text selection under mouse capture,
-  copies not reaching the clipboard, and tests that hang.
+  copies not reaching the clipboard, hover highlights that never light up
+  (`RunConfig::hover_ink`), and tests that hang.
 
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, **0.2.26** (2026-07-29) the current one —
+  (2026-07-21) is the first public release, **0.2.27** (2026-07-30) the current one —
   released alongside the first extension-family crates (`abstracttui-graph` 0.1.0,
   `abstracttui-mermaid` 0.1.0, each with its own changelog under `extensions/`).
 - [Contributing](CONTRIBUTING.md): Building, the test suite (~2,120 core tests; ~2,245
@@ -152,7 +154,7 @@
 - [src/lib.rs](src/lib.rs): Crate root with the layer map — `base`, `term`, `input`,
   `render`, `text`, `anim`, `reactive`, `layout`, `ui`, `canvas`, `widgets`, `gfx`,
   `three`, `theme`, `app`, `boot`, `testing`.
-- [examples/](examples/README.md): The catalog of the twenty-three runnable examples,
+- [examples/](examples/README.md): The catalog of the twenty-six runnable examples,
   ordered as a learning path —
   `hello`,
   `widgets`, `components`, `gallery`, `themes`, `grid`, `activate`, `presence_board`,

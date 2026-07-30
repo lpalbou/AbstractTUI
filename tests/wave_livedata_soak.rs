@@ -78,6 +78,7 @@ fn config() -> RunConfig {
         caps: Some(fixed_caps()),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     }
 }
 

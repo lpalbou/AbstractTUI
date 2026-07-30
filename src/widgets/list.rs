@@ -73,10 +73,11 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::base::Point;
 use crate::layout::{Dimension, Style as LayoutStyle};
 use crate::reactive::{Scope, Signal};
 use crate::render::rich::RichText;
-use crate::render::Style;
+use crate::render::{Attrs, Style};
 use crate::theme::TokenSet;
 use crate::ui::{dyn_view, Element, EventCtx, Key, MouseButton, MouseKind, Phase, UiEvent};
 use crate::widgets::richtext::draw_rich_lines;
@@ -84,6 +85,13 @@ use crate::widgets::richtext::draw_rich_lines;
 type HeightFn = Box<dyn Fn(usize, &str) -> i32>;
 type KeyFn = Box<dyn Fn(usize, &str) -> String>;
 type AccessoryFn = Box<dyn Fn(usize, &str) -> Option<String>>;
+
+/// The dismiss glyph [`List::on_remove`] draws — `✕` U+2715, the same
+/// spelling the block close affordance uses. East-Asian-NARROW and
+/// absent from emoji-data, so it is single-width under every terminal
+/// convention; `×` U+00D7 is East-Asian-AMBIGUOUS and was rejected (the
+/// 0595 glyph-research method). Width 1 is test-pinned.
+const REMOVE_GLYPH: &str = "✕";
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 enum ListHitZone {
@@ -93,11 +101,26 @@ enum ListHitZone {
 }
 
 /// Column widths for one list viewport (content coordinates).
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 struct ListColumns {
     body_w: i32,
     accessory_w: i32,
     bar_w: i32,
 }
+
+/// Where a pointer landed: an item row plus its zone, or the scrollbar
+/// strip (which belongs to no row).
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum ListHit {
+    Row(usize, ListHitZone),
+    Scrollbar,
+}
+
+/// Accessory labels, resolved ONCE per build: the caller's closure runs
+/// exactly once per item, and the text is pre-truncated and pre-measured
+/// against the (build-fixed) accessory width. Hit-testing and painting
+/// then borrow — neither allocates, so hover motion is free.
+type AccessoryCells = Rc<Vec<Option<(String, i32)>>>;
 
 fn list_columns(viewport_w: i32, show_bar: bool, accessory_w: i32) -> ListColumns {
     let bar_w = i32::from(show_bar);
@@ -120,14 +143,61 @@ fn list_hit_zone(local_x: i32, cols: ListColumns) -> ListHitZone {
     }
 }
 
-fn accessory_column_width(items: &[String], accessory: &AccessoryFn) -> i32 {
-    items
-        .iter()
-        .enumerate()
-        .filter_map(|(i, s)| accessory(i, s))
-        .map(|label| unicode_width::UnicodeWidthStr::width(label.as_str()) as i32 + 1)
-        .max()
-        .unwrap_or(0)
+/// The ONE hit resolver: hover ink and clicks both route through it, so
+/// what lights up under the pointer is exactly what a press will act on.
+///
+/// The accessory zone is the whole column width on the row where the
+/// accessory is DRAWN (an item's first row) — a forgiving target — and
+/// only for rows that actually have one. Everything else is body.
+fn resolve_hit(
+    local: Point,
+    cols: ListColumns,
+    offset: i32,
+    prefix: &[i32],
+    len: usize,
+    cells: Option<&AccessoryCells>,
+) -> Option<ListHit> {
+    let zone = list_hit_zone(local.x, cols);
+    if zone == ListHitZone::Scrollbar {
+        return Some(ListHit::Scrollbar);
+    }
+    let row = local.y + offset;
+    let total_rows = *prefix.last()?;
+    if row < 0 || row >= total_rows {
+        return None;
+    }
+    let idx = prefix.partition_point(|&p| p <= row).saturating_sub(1);
+    if idx >= len {
+        return None;
+    }
+    let on_accessory = zone == ListHitZone::Accessory
+        && row == prefix[idx]
+        && cells.is_some_and(|c| c[idx].is_some());
+    Some(ListHit::Row(
+        idx,
+        if on_accessory {
+            ListHitZone::Accessory
+        } else {
+            ListHitZone::Body
+        },
+    ))
+}
+
+/// Scroll `offset` the least amount that brings item `idx` fully into a
+/// `view_h`-row viewport. Shared by keyboard/click selection and the
+/// `scroll_to` command so the two can never drift apart.
+fn ensure_visible(offset: Signal<i32>, prefix: &[i32], idx: usize, view_h: i32, total_rows: i32) {
+    let top = prefix[idx];
+    let bottom = prefix[idx + 1];
+    offset.update(|o| {
+        if top < *o {
+            *o = top;
+        }
+        if view_h > 0 && bottom > *o + view_h {
+            *o = bottom - view_h;
+        }
+        *o = (*o).clamp(0, (total_rows - view_h.max(1)).max(0));
+    });
 }
 
 /// A virtualized, selectable vertical list — the picker surface.
@@ -146,6 +216,7 @@ pub struct List {
     key_fn: Option<KeyFn>,
     heights: Option<HeightFn>,
     scroll_to: Option<Signal<Option<usize>>>,
+    offset_y: Option<Signal<i32>>,
     focused: Option<Signal<bool>>,
     layout: Option<LayoutStyle>,
     on_select: Option<Box<dyn FnMut(usize)>>,
@@ -153,6 +224,7 @@ pub struct List {
     accessory_fn: Option<AccessoryFn>,
     accessory_width: Option<i32>,
     on_accessory_click: Option<Box<dyn FnMut(usize)>>,
+    on_remove: Option<Box<dyn FnMut(usize)>>,
     on_row_double_click: Option<Box<dyn FnMut(usize)>>,
     rich_items: Option<Vec<RichText>>,
 }
@@ -178,6 +250,7 @@ impl List {
             key_fn: None,
             heights: None,
             scroll_to: None,
+            offset_y: None,
             focused: None,
             layout: None,
             on_select: None,
@@ -185,6 +258,7 @@ impl List {
             accessory_fn: None,
             accessory_width: None,
             on_accessory_click: None,
+            on_remove: None,
             on_row_double_click: None,
             rich_items: None,
         }
@@ -221,6 +295,21 @@ impl List {
     /// the list consumes the request (resets to `None`).
     pub fn scroll_to(mut self, request: Signal<Option<usize>>) -> List {
         self.scroll_to = Some(request);
+        self
+    }
+
+    /// Bind the first visible CONTENT ROW (the [`Scroll::offset_y`]
+    /// convention). Default is internal, which means a rebuild starts
+    /// back at the top — bind this whenever the caller's data changes
+    /// under a `Dyn`, so dismissing a row with [`List::on_remove`] does
+    /// not scroll the reader to the head of the list.
+    ///
+    /// The List clamps a bound offset into range on every build, so a
+    /// list that shrinks can never strand the viewport past its end.
+    ///
+    /// [`Scroll::offset_y`]: crate::widgets::Scroll::offset_y
+    pub fn offset_y(mut self, offset: Signal<i32>) -> List {
+        self.offset_y = Some(offset);
         self
     }
 
@@ -285,6 +374,26 @@ impl List {
         self
     }
 
+    /// Removable rows: draws a trailing `✕` on every row and fires `f`
+    /// with the row index when it is clicked. Remove that index from
+    /// YOUR data and let your `Dyn` rebuild — the List owns the rest.
+    ///
+    /// On the rebuild the List re-settles selection so it can never name
+    /// a row that no longer exists: with [`List::key_fn`] +
+    /// [`List::selection_key`] bound the selected item is re-found by
+    /// key, and when the selected item was the one removed (its key is
+    /// gone) selection falls to the same slot clamped into the shorter
+    /// list — the next row down, or the new last row.
+    ///
+    /// This is the one-call form of [`List::row_accessory`] +
+    /// [`List::accessory_width`] + [`List::on_accessory_click`]. Bind
+    /// those directly instead when the trailing column is a badge or a
+    /// per-row action rather than a dismiss.
+    pub fn on_remove(mut self, f: impl FnMut(usize) + 'static) -> List {
+        self.on_remove = Some(Box::new(f));
+        self
+    }
+
     /// Browsing-surface double-click: fires on the row BODY when the
     /// second press of a click chain lands on the already-selected row
     /// (`EventCtx::click_count() >= 2`). Supersedes [`List::on_activate`]
@@ -319,6 +428,7 @@ impl List {
         let sel_fg = t.selection_fg;
         let track = t.border;
         let thumb = t.text_muted;
+        let accent = t.accent;
 
         let items = Rc::new(self.items);
         let len = items.len();
@@ -343,6 +453,13 @@ impl List {
         let total_rows = *prefix.last().unwrap_or(&0);
 
         let selection = self.selection.unwrap_or_else(|| cx.signal(0usize));
+        let hover = cx.signal(None::<ListHit>);
+        // Solved viewport size, published by the root's `size_probe` one
+        // turn after a resize (RT1-2: paint never writes signals — the
+        // probe latches an `after(0)` instead). The `scroll_to` command
+        // is the only reader; event handlers measure from their own
+        // `ctx.current_rect()`, which is already authoritative.
+        let view_box = cx.signal((0i32, 0i32));
         // Sticky selection: the KEY re-finds its index at build time —
         // this is what survives data mutations (each mutation rebuilds
         // through the caller's Dyn).
@@ -355,30 +472,95 @@ impl List {
                     .collect::<Vec<_>>(),
             )
         });
-        if let (Some(key_sig), Some(keys)) = (self.selection_key, keys.as_ref()) {
-            let wanted = key_sig.get_untracked();
-            if let Some(idx) = keys.iter().position(|k| *k == wanted) {
-                if selection.get_untracked() != idx {
-                    selection.set(idx);
-                }
+        // Settle selection against THIS build's items. Rows can vanish
+        // between builds (a dismiss ✕, a filter, a server push), and a
+        // selection naming a row that no longer exists is a real defect:
+        // nothing highlights, `access_value` announces a phantom row to
+        // a screen reader, and the first arrow key moves the wrong way.
+        // So the index is always re-derived and always in range.
+        if len > 0 {
+            let by_key = self
+                .selection_key
+                .zip(keys.as_ref())
+                .and_then(|(sig, keys)| {
+                    let wanted = sig.get_untracked();
+                    keys.iter().position(|k| *k == wanted)
+                });
+            // The key is gone (or there is none): hold the SLOT, clamped.
+            // Removing a row leaves the next one selected, and removing
+            // the last leaves the new last — the expected list behavior.
+            let idx = by_key.unwrap_or_else(|| selection.get_untracked().min(len - 1));
+            selection.set_if_changed(idx);
+            if let (Some(sig), Some(keys)) = (self.selection_key, keys.as_ref()) {
+                sig.set_if_changed(keys[idx].clone());
             }
         }
         let selection_key = self.selection_key;
         let keys_for_select = keys.clone();
 
-        let offset = cx.signal(0i32); // first visible CONTENT ROW
+        // First visible CONTENT ROW. A bound offset survives rebuilds
+        // (see `offset_y`) — but the items it points into may have
+        // shrunk since it was written, so clamp it here for the same
+        // reason selection is settled above: no viewport past the end.
+        let offset = self.offset_y.unwrap_or_else(|| cx.signal(0i32));
+        if self.offset_y.is_some() {
+            offset.update(|o| *o = (*o).clamp(0, (total_rows - 1).max(0)));
+        }
         let on_select: crate::widgets::SharedCallback<usize> =
             Rc::new(RefCell::new(self.on_select));
         let on_activate: crate::widgets::SharedCallback<usize> =
             Rc::new(RefCell::new(self.on_activate));
-        let on_accessory_click: crate::widgets::SharedCallback<usize> =
-            Rc::new(RefCell::new(self.on_accessory_click));
         let on_row_double_click: crate::widgets::SharedCallback<usize> =
             Rc::new(RefCell::new(self.on_row_double_click));
-        let accessory_fn = self.accessory_fn.map(Rc::new);
+
+        // `on_remove` is `row_accessory` + `accessory_width` +
+        // `on_accessory_click` with the dismiss glyph filled in; an
+        // explicit `row_accessory` still wins, so a caller can keep a
+        // custom label and still get the removal bookkeeping.
+        let removable = self.on_remove.is_some();
+        // A dismiss is consequence-bearing, so its hot ink is `error` —
+        // the same ruling the Block close affordance follows. A generic
+        // `row_accessory` is a badge or a neutral per-row action, and an
+        // unread count painted red would be a lie, so it takes the
+        // ordinary hover accent. The CONSEQUENCE decides, not the label.
+        let acc_hot_ink = if removable { t.error } else { t.accent };
+        let accessory_fn: Option<AccessoryFn> = self.accessory_fn.or_else(|| {
+            removable.then(|| {
+                Box::new(|_: usize, _: &str| Some(REMOVE_GLYPH.to_string())) as AccessoryFn
+            })
+        });
+        let on_accessory_click: crate::widgets::SharedCallback<usize> =
+            Rc::new(RefCell::new(self.on_accessory_click.or(self.on_remove)));
+
+        // ONE pass: the caller's closure runs exactly once per item and
+        // the label is truncated and measured against the accessory
+        // width, which is fixed for this build. Painting and hit-testing
+        // then borrow — no allocation on the hover or click path.
         let accessory_w = accessory_fn.as_ref().map_or(0, |f| {
-            self.accessory_width
-                .unwrap_or_else(|| accessory_column_width(&items, f))
+            self.accessory_width.unwrap_or_else(|| {
+                items
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, s)| f(i, s))
+                    .map(|l| unicode_width::UnicodeWidthStr::width(l.as_str()) as i32 + 1)
+                    .max()
+                    .unwrap_or(0)
+            })
+        });
+        let accessory_cells: Option<AccessoryCells> = accessory_fn.map(|f| {
+            Rc::new(
+                items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, s)| {
+                        f(i, s).map(|label| {
+                            let text = crate::text::truncate_ellipsis(&label, accessory_w.max(0));
+                            let w = unicode_width::UnicodeWidthStr::width(text.as_str()) as i32;
+                            (text, w)
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            )
         });
         let rich_items = self.rich_items.map(Rc::new);
         let layout = self
@@ -407,17 +589,7 @@ impl List {
                 // (0250 ruling clause 4, disposal-safety law): a
                 // callback that disposes this List's scope must find no
                 // widget code left to run on dead signals.
-                let top = prefix_for_select[target];
-                let bottom = prefix_for_select[target + 1];
-                offset.update(|o| {
-                    if top < *o {
-                        *o = top;
-                    }
-                    if view_h > 0 && bottom > *o + view_h {
-                        *o = bottom - view_h;
-                    }
-                    *o = (*o).clamp(0, (total_rows - view_h.max(1)).max(0));
-                });
+                ensure_visible(offset, &prefix_for_select, target, view_h, total_rows);
                 if changed {
                     // Held borrow across `f`: safe — dispatch-only slot
                     // (the SharedCallback held-borrow contract).
@@ -432,14 +604,20 @@ impl List {
         if let Some(request) = self.scroll_to {
             let prefix_for_scroll = prefix.clone();
             cx.effect_labeled("list-scroll-to", move || {
-                if let Some(idx) = request.get() {
-                    let idx = idx.min(len.saturating_sub(1));
-                    let top = prefix_for_scroll[idx];
-                    offset.update(|o| {
-                        *o = top.clamp(0, (total_rows - 1).max(0));
-                    });
-                    request.set(None); // consumed (one extra no-op run)
+                let Some(idx) = request.get() else {
+                    return;
+                };
+                if len == 0 {
+                    request.set(None);
+                    return;
                 }
+                let vh = view_box.get().1;
+                if vh <= 0 {
+                    return; // hold the request until the probe measures
+                }
+                let idx = idx.min(len - 1);
+                ensure_visible(offset, &prefix_for_scroll, idx, vh, total_rows);
+                request.set(None); // consumed (one extra no-op run)
             });
         }
 
@@ -448,10 +626,26 @@ impl List {
         let accessory_click = on_accessory_click;
         let row_double_click = on_row_double_click;
         let accessory_w_handler = accessory_w;
+        let cells_handler = accessory_cells.clone();
+        let hover_handler = hover;
         let handler = move |ctx: &mut EventCtx, ev: &UiEvent| {
             let rect = ctx.current_rect();
             let h = rect.h.max(1);
+            let hit_at = |pos: Point| {
+                let cols = list_columns(rect.w, total_rows > h, accessory_w_handler);
+                resolve_hit(
+                    Point::new(pos.x - rect.x, pos.y - rect.y),
+                    cols,
+                    offset.get_untracked(),
+                    &prefix_for_handler,
+                    len,
+                    cells_handler.as_ref(),
+                )
+            };
             match ev {
+                UiEvent::MouseLeave => {
+                    hover_handler.set_if_changed(None);
+                }
                 UiEvent::Key(k) => {
                     // Activation keys (0250 ruling clause 2): Enter
                     // always; Space too, because a List has no toggle
@@ -484,48 +678,36 @@ impl List {
                     ctx.stop_propagation();
                 }
                 UiEvent::Mouse(m) => match m.kind {
+                    MouseKind::Move => {
+                        hover_handler.set_if_changed(hit_at(m.pos));
+                    }
                     MouseKind::ScrollUp | MouseKind::ScrollDown => {
                         let delta = if m.kind == MouseKind::ScrollUp { -3 } else { 3 };
-                        offset.update(|o| {
-                            *o = (*o + delta).clamp(0, (total_rows - h).max(0));
-                        });
-                        ctx.stop_propagation();
+                        let max_off = (total_rows - h).max(0);
+                        let to = (offset.get_untracked() + delta).clamp(0, max_off);
+                        // Only a scroller that actually MOVED owns the
+                        // wheel; at either end it bubbles so a parent
+                        // scroller takes over (no dead zone at the edge).
+                        if offset.set_if_changed(to) {
+                            // The pointer did not move but the content
+                            // under it did — re-resolve so the ink never
+                            // lights a row the cursor has left.
+                            hover_handler.set_if_changed(hit_at(m.pos));
+                            ctx.stop_propagation();
+                        }
                     }
                     MouseKind::Down(MouseButton::Left) => {
-                        let local_x = m.pos.x - rect.x;
-                        let show_bar = total_rows > h;
-                        let cols = list_columns(rect.w, show_bar, accessory_w_handler);
-                        match list_hit_zone(local_x, cols) {
-                            ListHitZone::Scrollbar => {
-                                ctx.stop_propagation();
-                                return;
-                            }
-                            ListHitZone::Accessory => {
-                                let row = (m.pos.y - rect.y) + offset.get_untracked();
-                                if row >= 0 && row < total_rows {
-                                    let idx = prefix_for_handler
-                                        .partition_point(|&p| p <= row)
-                                        .saturating_sub(1);
-                                    if idx < len {
-                                        if let Some(f) = accessory_click.borrow_mut().as_mut() {
-                                            f(idx);
-                                        }
-                                    }
+                        match hit_at(m.pos) {
+                            // The strip is inert, but it is ours: a click
+                            // that lands on it must not fall through to
+                            // whatever sits behind the list.
+                            Some(ListHit::Scrollbar) | None => {}
+                            Some(ListHit::Row(idx, ListHitZone::Accessory)) => {
+                                if let Some(f) = accessory_click.borrow_mut().as_mut() {
+                                    f(idx);
                                 }
-                                ctx.stop_propagation();
-                                return;
                             }
-                            ListHitZone::Body => {}
-                        }
-                        // Content row -> item index (binary search on
-                        // the prefix; the row belongs to the item whose
-                        // span contains it).
-                        let row = (m.pos.y - rect.y) + offset.get_untracked();
-                        if row >= 0 && row < total_rows {
-                            let idx = prefix_for_handler
-                                .partition_point(|&p| p <= row)
-                                .saturating_sub(1);
-                            if idx < len {
+                            Some(ListHit::Row(idx, _)) => {
                                 let was_selected = selection.get_untracked() == idx;
                                 select(idx, h);
                                 if was_selected {
@@ -553,16 +735,31 @@ impl List {
             .style(layout)
             .role(crate::ui::Role::List)
             .access_value(move || {
+                // An empty list has nothing selected — announcing a row
+                // number here is the same phantom-row defect the
+                // selection settle above exists to prevent.
+                if len == 0 {
+                    return "0 items".into();
+                }
                 format!("{} items, selected {}", len, selection.get_untracked() + 1)
             })
+            // Solved-size readback for `scroll_to` (0130 measured-extent
+            // seam): the probe records the rect during paint and latches
+            // ONE `after(0)` to publish it, so the viewport height
+            // reaches the reactive graph without paint ever writing a
+            // signal. A steady frame records an unchanged size and
+            // schedules nothing.
+            .draw(super::scroll::size_probe(view_box))
             .focusable();
         if let Some(focused) = self.focused {
             el = el.focus_signal(focused);
         }
         let prefix_for_draw = prefix;
-        let accessory_fn_draw = accessory_fn;
         let accessory_w_draw = accessory_w;
+        let cells_draw = accessory_cells;
         let rich_items_draw = rich_items;
+        let hover_draw = hover;
+        let accent_draw = accent;
         el.on(Phase::Bubble, handler).child(dyn_view(
             LayoutStyle::default()
                 .width(Dimension::Percent(1.0))
@@ -570,9 +767,10 @@ impl List {
             move || {
                 let sel = selection.get();
                 let first_row = offset.get().max(0);
+                let pointer = hover_draw.get();
                 let items = items.clone();
                 let prefix = prefix_for_draw.clone();
-                let accessory_fn_inner = accessory_fn_draw.clone();
+                let cells_inner = cells_draw.clone();
                 let rich_items_inner = rich_items_draw.clone();
                 Element::new()
                     .style(
@@ -590,6 +788,7 @@ impl List {
                         let show_bar = total > rect.h;
                         let cols = list_columns(rect.w, show_bar, accessory_w_draw);
                         let text_w = cols.body_w;
+                        let bar_hot = pointer == Some(ListHit::Scrollbar);
                         // Virtualization: first visible item by
                         // binary search, walk until off-screen.
                         let mut idx = prefix
@@ -602,10 +801,27 @@ impl List {
                             }
                             let item_h = prefix[idx + 1] - prefix[idx];
                             let selected = idx == sel;
+                            // The accessory BELONGS to the row: entering
+                            // it must not make the row go dark. So ink
+                            // says WHICH ROW is hot and BOLD says WHICH
+                            // ZONE — hue alone cannot carry both, since
+                            // `accent` and `error` are the same red in
+                            // several built-in themes.
+                            let hot_zone = match pointer {
+                                Some(ListHit::Row(i, z)) if i == idx => Some(z),
+                                _ => None,
+                            };
                             let style = if selected {
                                 Style::new().fg(sel_fg).bg(sel_bg)
+                            } else if hot_zone.is_some() {
+                                Style::new().fg(accent_draw).bg(ground)
                             } else {
                                 base
+                            };
+                            let body_style = if hot_zone == Some(ListHitZone::Body) {
+                                style.attrs(Attrs::BOLD)
+                            } else {
+                                style
                             };
                             if selected {
                                 // Body + accessory wear the selection pair.
@@ -627,11 +843,20 @@ impl List {
                                     rich_items_inner.as_ref().and_then(|v| v.get(idx))
                                 {
                                     let shaped = rich.wrap(text_w.max(0));
+                                    // Hover ink reaches rich rows too —
+                                    // it is the row's BASE ink, so spans
+                                    // that set their own `fg` still win.
                                     draw_rich_lines(
                                         canvas,
                                         crate::base::Rect::new(rect.x, y, text_w, 1),
                                         shaped.lines.iter().take(1),
-                                        if selected { sel_fg } else { text_fg },
+                                        if selected {
+                                            sel_fg
+                                        } else if hot_zone.is_some() {
+                                            accent_draw
+                                        } else {
+                                            text_fg
+                                        },
                                         crate::render::rich::HAlign::Left,
                                     );
                                 } else {
@@ -640,28 +865,40 @@ impl List {
                                     canvas.print_styled(
                                         crate::base::Point::new(rect.x, y),
                                         &line,
-                                        &style,
+                                        &body_style,
                                     );
                                 }
                             }
                             if cols.accessory_w > 0 {
-                                if let Some(label) = accessory_fn_inner
-                                    .as_ref()
-                                    .and_then(|f| f(idx, &items[idx]))
+                                // Pre-truncated and pre-measured at build
+                                // (see AccessoryCells): painting borrows.
+                                if let Some((acc_text, acc_w)) =
+                                    cells_inner.as_ref().and_then(|c| c[idx].as_ref())
                                 {
-                                    let acc = crate::text::truncate_ellipsis(
-                                        &label,
-                                        cols.accessory_w.max(0),
-                                    );
-                                    let acc_w =
-                                        unicode_width::UnicodeWidthStr::width(acc.as_str()) as i32;
+                                    let acc_hot = hot_zone == Some(ListHitZone::Accessory);
                                     let acc_x =
                                         rect.x + cols.body_w + (cols.accessory_w - acc_w).max(0);
+                                    let acc_style = if selected {
+                                        // Selection outranks hover: the
+                                        // audited selection pair stays,
+                                        // and BOLD marks the zone. The
+                                        // hot inks are NOT contrast-
+                                        // audited against selection_bg.
+                                        if acc_hot {
+                                            style.attrs(Attrs::BOLD)
+                                        } else {
+                                            style
+                                        }
+                                    } else if acc_hot {
+                                        Style::new().fg(acc_hot_ink).bg(ground).attrs(Attrs::BOLD)
+                                    } else {
+                                        style
+                                    };
                                     if y >= rect.y && y < rect.bottom() {
                                         canvas.print_styled(
                                             crate::base::Point::new(acc_x, y),
-                                            &acc,
-                                            &style,
+                                            acc_text,
+                                            &acc_style,
                                         );
                                     }
                                 }
@@ -669,7 +906,15 @@ impl List {
                             idx += 1;
                         }
                         if show_bar {
-                            draw_scrollbar(canvas, rect, first_row, total, track, thumb, ground);
+                            draw_scrollbar(
+                                canvas,
+                                rect,
+                                first_row,
+                                total,
+                                track,
+                                if bar_hot { accent_draw } else { thumb },
+                                ground,
+                            );
                         }
                     })
                     .build()

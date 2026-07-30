@@ -115,6 +115,7 @@ fn dashboard_10k_frames_no_growth_no_panic_restore() {
         caps: Some(Capabilities::default()),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("enter");
     {

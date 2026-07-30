@@ -44,6 +44,7 @@ impl Harness {
             caps: Some(Capabilities::default()),
             enter: None,
             probe: false,
+            ..RunConfig::default()
         };
         let driver = Driver::new(&mut app, &mut term, cfg).expect("driver enters");
         let mut vt = VtScreen::new(size);

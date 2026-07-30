@@ -393,15 +393,31 @@ impl Scroll {
             }
         };
 
-        let scroll_by = move |dx: i32, dy: i32, view: Rect| {
+        // Returns whether this scroller actually consumed the delta —
+        // the caller stops propagation on true, so a wheel at the edge
+        // chains to a parent scroller instead of dying here.
+        let scroll_by = move |dx: i32, dy: i32, view: Rect| -> bool {
             let (content_w, content_h) = extent.get_untracked();
+            let mut moved = false;
             if horizontal && dx != 0 {
-                ox.update(|o| *o = (*o + dx).clamp(0, (content_w - view.w).max(0)));
+                let max_off = (content_w - view.w).max(0);
+                moved |= ox.set_if_changed((ox.get_untracked() + dx).clamp(0, max_off));
             }
             if vertical && dy != 0 {
-                oy.update(|o| *o = (*o + dy).clamp(0, (content_h - view.h).max(0)));
+                let max_off = (content_h - view.h).max(0);
+                // While the tail is pinned the wrapper is bottom-anchored
+                // and `oy` is only synced a turn later, so the stale value
+                // is not where the reader is — the pin IS the position.
+                // Stepping from it is what keeps a wheel-up off the head.
+                let base = if follow.is_some_and(|f| f.get_untracked()) {
+                    max_off
+                } else {
+                    oy.get_untracked()
+                };
+                moved |= oy.set_if_changed((base + dy).clamp(0, max_off));
                 derive_follow(view.h);
             }
+            moved
         };
 
         let handler = move |ctx: &mut EventCtx, ev: &UiEvent| {
@@ -416,12 +432,18 @@ impl Scroll {
                         _ => (0, 0),
                     };
                     if dx != 0 || dy != 0 {
-                        scroll_by(dx, dy, rect);
-                        ctx.stop_propagation();
+                        // A scroller that has not been measured yet still
+                        // OWNS the gesture: reporting "did not move"
+                        // would chain the wheel to an ancestor and scroll
+                        // the wrong pane for the first frames after mount.
+                        let unmeasured = hint.is_none() && extent.get_untracked() == (0, 0);
+                        if scroll_by(dx, dy, rect) || unmeasured {
+                            ctx.stop_propagation();
+                        }
                     }
                 }
                 UiEvent::Key(k) => {
-                    let content_h = extent.get_untracked().1;
+                    let (_content_w, content_h) = extent.get_untracked();
                     let (dx, dy) = match k.key {
                         Key::Up => (0, -1),
                         Key::Down => (0, 1),
@@ -516,7 +538,7 @@ impl Scroll {
 /// next turn — paint itself never writes signals (the Feed width-fixup
 /// pattern). Steady frames record an unchanged size and schedule
 /// nothing, so an idle scroll costs zero timers.
-fn size_probe(sig: Signal<(i32, i32)>) -> impl FnMut(&mut dyn StyledCanvas, Rect) {
+pub(crate) fn size_probe(sig: Signal<(i32, i32)>) -> impl FnMut(&mut dyn StyledCanvas, Rect) {
     let seen: Rc<Cell<(i32, i32)>> = Rc::new(Cell::new((-1, -1)));
     let pending: Rc<Cell<bool>> = Rc::new(Cell::new(false));
     move |_canvas, rect| {

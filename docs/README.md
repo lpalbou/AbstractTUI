@@ -21,7 +21,7 @@ mosaic), software-rasterized 3D (GLB), themes, and animation.
 ## Reference material
 
 - [`../examples/README.md`](../examples/README.md) — the examples
-  catalog, ordered as a learning path: twenty-three runnable programs from
+  catalog, ordered as a learning path: twenty-six runnable programs from
   a 53-line hello to a full ops dashboard and an app shell (a `PageHost`
   tab bar hosting full pages, with `Drawer` panels from both edges),
   plus three extension-crate examples (`workflow`/`network`/`mermaid`),

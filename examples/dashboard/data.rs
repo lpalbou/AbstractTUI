@@ -71,15 +71,6 @@ pub fn clock_text() -> String {
     )
 }
 
-pub fn guard_layout() -> LayoutStyle {
-    LayoutStyle::default().absolute(abstracttui::layout::Inset {
-        left: Some(0),
-        right: Some(0),
-        top: Some(0),
-        bottom: Some(0),
-    })
-}
-
 pub fn session_rows(now: u64) -> Vec<Vec<String>> {
     const HOSTS: [(&str, &str); 7] = [
         ("edge-1", "eu-w"),
@@ -110,6 +101,21 @@ pub fn session_rows(now: u64) -> Vec<Vec<String>> {
             ]
         })
         .collect()
+}
+
+use abstracttui::render::{RichLine, Span, Style};
+use abstracttui::widgets::FeedItem;
+
+/// One colored log row for the events `Feed` (timestamp faint, level
+/// tinted, message body).
+pub fn log_feed_item(t: &TokenSet, idx: u64) -> FeedItem {
+    let (level, color, msg) = log_line(t, idx);
+    let ts = format!("{:02}:{:02}", (idx / 120) % 60, (idx / 2) % 60);
+    FeedItem::rich_lines(vec![RichLine::from_spans(vec![
+        Span::new(format!("{ts} "), Style::new().fg(t.text_faint)),
+        Span::new(format!("{level:<5} "), Style::new().fg(color)),
+        Span::new(msg, Style::new().fg(t.text)),
+    ])])
 }
 
 pub fn log_line(t: &TokenSet, idx: u64) -> (&'static str, Rgba, &'static str) {

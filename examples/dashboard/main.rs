@@ -8,8 +8,9 @@
 //! repainting), Toast + focus-trapped Modal overlays, live theme cycling
 //! through the one theme signal, real focus traversal.
 //!
-//! Keys: Tab focus · ↑↓ list/table · s sort · n toast · b brandmark ·
-//! ? help · Ctrl+T theme · q quit. Gorgeous at 120x35, graceful at
+//! Keys: Tab focus · ↑↓ list/table · wheel scrolls events · s sort · n toast · b brandmark ·
+//! ? help · Ctrl+T cycle themes · click/Enter the header ☾/☼ (top-right) for the theme menu · q quit.
+//! Gorgeous at 120x35, graceful at
 //! 80x24, guarded below 40x10.
 //!
 //! The `b` flourish spins the three-planes mark in a mini `Viewport3D`
@@ -27,7 +28,7 @@ mod common;
 mod data;
 use data::*;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -35,8 +36,9 @@ use abstracttui::app::current_viewport;
 use abstracttui::prelude::*;
 use abstracttui::reactive::after;
 use abstracttui::theme::themes;
-use abstracttui::ui::Canvas;
-use abstracttui::widgets::{ColWidth, Column, LineChart, Sparkline, TimeSeriesState, TitleAlign};
+use abstracttui::widgets::{
+    ColWidth, Column, Feed, FeedState, LineChart, Sparkline, TimeSeriesState, TitleAlign,
+};
 
 /// Data cadence: four ticks per second.
 const TICK: Duration = Duration::from_millis(250);
@@ -91,6 +93,41 @@ fn main() -> abstracttui::base::Result<()> {
         // cycle-5 `focus_signal` plumbing).
         let nav_focus = cx.signal(false);
         let table_focus = cx.signal(false);
+        let log_oy = cx.signal(0i32);
+        let log_follow = cx.signal(true);
+        let log_feed = FeedState::new(cx);
+        let log_feed_sync = log_feed.clone();
+        // A live log tail: APPEND what is new. Rebuilding every entry on
+        // every tick would be O(total) four times a second and would grow
+        // without bound — the feed is a tail, so it keeps a bounded window
+        // and only re-typesets everything when the theme actually changes.
+        const LOG_TAIL: u64 = 200;
+        let log_pushed = Cell::new(0u64);
+        let log_theme = RefCell::new(String::new());
+        cx.effect_labeled("dashboard-log-sync", move || {
+            let total = tick.get() / 2;
+            let t = theme.get();
+            let tokens = t.tokens;
+            let mut rebuild = log_theme.borrow().as_str() != t.id;
+            if rebuild {
+                log_theme.replace(t.id.to_string());
+            }
+            // A shorter history than last time means the tick reset.
+            rebuild |= total < log_pushed.get();
+            // Amortized trim: the window is rebuilt once every LOG_TAIL
+            // ticks, never per tick.
+            rebuild |= log_feed_sync.len() as u64 > LOG_TAIL * 2;
+            let from = if rebuild {
+                log_feed_sync.clear();
+                total.saturating_sub(LOG_TAIL)
+            } else {
+                log_pushed.get()
+            };
+            for i in from..total {
+                log_feed_sync.push(format!("log-{i}"), log_feed_item(&tokens, i));
+            }
+            log_pushed.set(total);
+        });
         // The viewport as a signal (cycle-5 `use_viewport`) — overlays
         // place against the live size, resize included.
         let viewport = use_viewport(cx);
@@ -232,15 +269,18 @@ fn main() -> abstracttui::base::Result<()> {
             // Theme generation: everything below rebuilds with fresh
             // tokens on switch; panel Dyns inside re-render independently.
             .child(dyn_view_scoped(LayoutStyle::default().grow(1.0), {
+                let log_feed = log_feed.clone();
                 let mark_model = mark_model.clone();
                 move |_gcx| {
                     let t = theme.get().tokens;
                     let label = theme.get().label;
                     Element::new()
                         .style(LayoutStyle::column())
-                        .child(header(&t, label, clock))
+                        .child(header(cx, &t, label, clock))
                         .child(body(
                             &t,
+                            cx,
+                            &log_feed,
                             tick,
                             (rx_hist.clone(), tx_hist.clone()),
                             nav,
@@ -248,23 +288,37 @@ fn main() -> abstracttui::base::Result<()> {
                             sort,
                             nav_focus,
                             table_focus,
+                            log_oy,
+                            log_follow,
                             show_mark,
                             mark_model.clone(),
                         ))
                         .child(footer(&t))
+                        // Guard: absolute against this full-size column —
+                        // never a root sibling with overlay_layout on the
+                        // Dyn wrapper (that steals every click).
+                        .child(
+                            Element::new()
+                                .style_signal(move || {
+                                    let vp = viewport.get();
+                                    if vp.w >= common::MIN_SIZE.w && vp.h >= common::MIN_SIZE.h {
+                                        LayoutStyle::default().w(0).h(0).shrink(0.0)
+                                    } else {
+                                        common::overlay_layout()
+                                    }
+                                })
+                                .draw(move |canvas, rect| {
+                                    let vp = viewport.get_untracked();
+                                    if vp.w >= common::MIN_SIZE.w && vp.h >= common::MIN_SIZE.h {
+                                        return;
+                                    }
+                                    let t = theme.get().tokens;
+                                    common::too_small(canvas, rect, common::MIN_SIZE, &t);
+                                })
+                                .build(),
+                        )
                         .build()
                 }
-            }))
-            // Small-terminal guard (absolute overlay, painted last,
-            // no-op above the minimum).
-            .child(dyn_view(guard_layout(), move || {
-                let t = theme.get().tokens;
-                Element::new()
-                    .style(guard_layout())
-                    .draw(move |canvas, rect| {
-                        common::too_small(canvas, rect, common::MIN_SIZE, &t);
-                    })
-                    .build()
             }))
             .build()
     })?;
@@ -291,17 +345,34 @@ fn main() -> abstracttui::base::Result<()> {
             eprintln!("dashboard: action {name} collided — pane nav key missing");
         }
     }
-    app.run()
+    // Hover ink on the nav list and the header's ☾/☼ switcher.
+    app.run_with(RunConfig {
+        hover_ink: true,
+        ..RunConfig::default()
+    })
 }
 
 // ---------------------------------------------------------------------------
 // Sections
 // ---------------------------------------------------------------------------
 
-fn header(t: &TokenSet, theme_label: &'static str, clock: Signal<String>) -> View {
+fn header(cx: Scope, t: &TokenSet, theme_label: &'static str, clock: Signal<String>) -> View {
     let (surface, accent, text_c, muted) = (t.surface, t.accent, t.text, t.text_muted);
     Element::new()
-        .style(LayoutStyle::row().h(1).shrink(0.0).gap(1))
+        .style(
+            LayoutStyle::row()
+                .h(1)
+                .shrink(0.0)
+                .gap(1)
+                // Inset the chrome from the window edges — the theme
+                // control lives top-right with room to breathe.
+                .padding(Edges {
+                    left: 1,
+                    right: 2,
+                    top: 0,
+                    bottom: 0,
+                }),
+        )
         .draw(move |canvas, rect| {
             canvas.fill(rect, ' ', text_c, surface);
             let mut x = rect.x + 1;
@@ -310,10 +381,52 @@ fn header(t: &TokenSet, theme_label: &'static str, clock: Signal<String>) -> Vie
             let _ = x;
         })
         .child(dyn_view(LayoutStyle::default().h(1).grow(1.0), move || {
-            // Right-aligned clock rides its own Dyn: one damaged row
-            // per second, nothing else repaints.
+            // Right-aligned status line; the theme switcher sits after
+            // this in the row (top-right, conventional chrome).
             styled_text_right(format!("{}  ·  {}", theme_label, clock.get()))
         }))
+        .child(
+            Element::new()
+                .style(
+                    LayoutStyle::row()
+                        .h(1)
+                        .shrink(0.0)
+                        .gap(1)
+                        // Wider than the glyph alone: easier to click and
+                        // reads as a control, not stray punctuation.
+                        .width(Dimension::Cells(4))
+                        .justify(Justify::End)
+                        .align_items(Align::Center)
+                        .padding(Edges {
+                            left: 1,
+                            right: 0,
+                            top: 0,
+                            bottom: 0,
+                        }),
+                )
+                .child(dyn_view(
+                    LayoutStyle::default().h(1).shrink(0.0),
+                    move || {
+                        let tokens = current_theme().tokens;
+                        Element::new()
+                            .style(LayoutStyle::default().h(1).shrink(0.0))
+                            .draw(move |canvas, rect| {
+                                if rect.is_empty() {
+                                    return;
+                                }
+                                let _ = canvas.print(
+                                    Point::new(rect.x, rect.y),
+                                    "theme",
+                                    tokens.text_muted,
+                                    Rgba::TRANSPARENT,
+                                );
+                            })
+                            .build()
+                    },
+                ))
+                .child(ThemeSwitcher::new().view(cx))
+                .build(),
+        )
         .build()
 }
 
@@ -335,6 +448,8 @@ fn styled_text_right(s: String) -> View {
 #[allow(clippy::too_many_arguments)]
 fn body(
     t: &TokenSet,
+    cx: Scope,
+    log_feed: &FeedState,
     tick: Signal<u64>,
     traffic: (TimeSeriesState, TimeSeriesState),
     nav: Signal<usize>,
@@ -342,6 +457,8 @@ fn body(
     sort: Signal<(usize, bool)>,
     nav_focus: Signal<bool>,
     table_focus: Signal<bool>,
+    log_oy: Signal<i32>,
+    log_follow: Signal<bool>,
     show_mark: Signal<bool>,
     mark_model: std::sync::Arc<abstracttui::three::Model>,
 ) -> View {
@@ -367,7 +484,7 @@ fn body(
                 .child(
                     Element::new()
                         .style(LayoutStyle::row().grow(2.0).gap(1))
-                        .child(log_panel(t, tick))
+                        .child(log_panel(t, cx, log_feed, log_oy, log_follow))
                         .child(sessions_panel(t, tick, session, sort, table_focus))
                         .build(),
                 )
@@ -511,55 +628,29 @@ fn metric_row(t: &TokenSet, name: &'static str, value: f32) -> View {
         .build()
 }
 
-fn log_panel(t: &TokenSet, tick: Signal<u64>) -> View {
+fn log_panel(
+    t: &TokenSet,
+    cx: Scope,
+    feed: &FeedState,
+    log_oy: Signal<i32>,
+    log_follow: Signal<bool>,
+) -> View {
     let tokens = *t;
     Block::new()
         .title("events")
         .shadow(tokens.shadow_ground)
         .fill(tokens.surface)
-        .layout(LayoutStyle::column().grow(1.0).basis(Dimension::Cells(0)))
-        .child(dyn_view(LayoutStyle::default().grow(1.0), move || {
-            let now = tick.get();
-            Element::new()
-                .style(LayoutStyle::default().grow(1.0))
-                .draw(move |canvas, rect| draw_log_tail(canvas, rect, &tokens, now))
-                .build()
-        }))
-        .element(t)
+        .layout(LayoutStyle::column().grow(1.0))
+        .child(
+            Scroll::new(Feed::new(feed).gap(0).view(cx))
+                .offset_y(log_oy)
+                .follow_tail(log_follow)
+                .layout(LayoutStyle::default().grow(1.0))
+                .element(cx, &tokens)
+                .build(),
+        )
+        .element(&tokens)
         .build()
-}
-
-fn draw_log_tail(canvas: &mut dyn Canvas, rect: Rect, t: &TokenSet, now: u64) {
-    // One line every other tick; the tail always fills the pane.
-    let total = now / 2;
-    let rows = rect.h.max(0) as u64;
-    for row in 0..rows {
-        let idx = match (total + row).checked_sub(rows - 1) {
-            Some(i) => i,
-            None => continue,
-        };
-        let (level, color, msg) = log_line(t, idx);
-        let y = rect.y + row as i32;
-        let ts = format!("{:02}:{:02}", (idx / 120) % 60, (idx / 2) % 60);
-        let mut x = rect.x + 1;
-        x += canvas.print(Point::new(x, y), &ts, t.text_faint, Rgba::TRANSPARENT);
-        x += canvas.print(
-            Point::new(x, y),
-            &format!(" {level:<5} "),
-            color,
-            Rgba::TRANSPARENT,
-        );
-        // Clamp to the pane: draw closures see the whole canvas, so a
-        // long message would collide with the border cell (rect
-        // discipline is the widget's job — cycle-7 span-clipping rule).
-        let avail = (rect.right() - 1 - x).max(0) as usize;
-        if msg.chars().count() <= avail {
-            canvas.print(Point::new(x, y), msg, t.text, Rgba::TRANSPARENT);
-        } else {
-            let fitted: String = msg.chars().take(avail.saturating_sub(1)).collect();
-            canvas.print(Point::new(x, y), &(fitted + "…"), t.text, Rgba::TRANSPARENT);
-        }
-    }
 }
 
 fn sessions_panel(
@@ -676,7 +767,12 @@ fn mark_panel(
 fn footer(t: &TokenSet) -> View {
     let tokens = *t;
     Element::new()
-        .style(LayoutStyle::default().h(1).shrink(0.0))
+        .style(LayoutStyle::default().h(1).shrink(0.0).padding(Edges {
+            left: 1,
+            right: 2,
+            top: 0,
+            bottom: 0,
+        }))
         .draw(move |canvas, rect| {
             common::key_legend(
                 canvas,
@@ -689,7 +785,7 @@ fn footer(t: &TokenSet) -> View {
                     ("n", "toast"),
                     ("b", "mark"),
                     ("?", "help"),
-                    ("ctrl+t", "theme"),
+                    ("ctrl+t", "cycle"),
                     ("q", "quit"),
                 ],
             );

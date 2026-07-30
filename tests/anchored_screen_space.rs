@@ -62,6 +62,7 @@ fn rig() -> Rig {
         })),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     let drawer = handle.borrow().clone().expect("drawer handle");

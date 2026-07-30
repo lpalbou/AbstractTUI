@@ -349,7 +349,26 @@ impl App {
     /// request 1): a panic anywhere — draw closure, handler, layout —
     /// restores cooked mode even when the unwind never reaches the
     /// `Terminal`'s Drop.
-    pub fn run(mut self) -> Result<()> {
+    pub fn run(self) -> Result<()> {
+        self.run_with(RunConfig::default())
+    }
+
+    /// [`App::run`] with an explicit [`RunConfig`] — the same platform
+    /// terminal and panic hook, your session posture. This is how an app
+    /// opts into [`RunConfig::hover_ink`] or refuses the platform
+    /// clipboard without hand-building a `Terminal`:
+    ///
+    /// ```no_run
+    /// # use abstracttui::app::{App, RunConfig};
+    /// # use abstracttui::base::Size;
+    /// # let app = App::new(Size::new(80, 24));
+    /// app.run_with(RunConfig {
+    ///     hover_ink: true,
+    ///     ..RunConfig::default()
+    /// })
+    /// # .unwrap();
+    /// ```
+    pub fn run_with(mut self, cfg: RunConfig) -> Result<()> {
         if !crate::term::have_tty() {
             return Err(crate::base::Error::Unsupported(
                 "App::run needs a tty (headless callers use mount + pump + draw, \
@@ -359,7 +378,7 @@ impl App {
         }
         install_panic_hook();
         let mut term = new_platform_terminal()?;
-        self.run_prepared(&mut term, RunConfig::default())
+        self.run_prepared(&mut term, cfg)
     }
 
     /// `run_on` plus the CONCRETE-terminal startup notices: the input

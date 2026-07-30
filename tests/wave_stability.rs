@@ -38,6 +38,7 @@ fn test_config() -> RunConfig {
             kitty_keyboard: KittyFlags(0),
         }),
         probe: false,
+        ..RunConfig::default()
     }
 }
 

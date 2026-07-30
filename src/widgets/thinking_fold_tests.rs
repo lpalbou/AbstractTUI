@@ -448,6 +448,7 @@ fn parked_and_completed_folds_are_idle() {
         })),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
     let state = holder.borrow().clone().expect("state");

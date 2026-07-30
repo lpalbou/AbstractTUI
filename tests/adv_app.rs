@@ -27,6 +27,7 @@ fn config() -> RunConfig {
         caps: Some(fixed_caps()),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     }
 }
 
@@ -357,6 +358,7 @@ fn probe_replies_upgrade_caps_after_first_paint() {
         caps: Some(Capabilities::default()),
         enter: None,
         probe: true,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("enter");
     // First paint happens BEFORE any probe reply exists (RT1-6a).

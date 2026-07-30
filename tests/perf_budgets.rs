@@ -294,6 +294,7 @@ fn perf_keystroke_to_frame_through_driver() {
         caps: Some(Capabilities::default()),
         enter: None,
         probe: false,
+        ..RunConfig::default()
     };
     let mut driver = Driver::new(&mut app, &mut term, cfg).expect("enter");
     for _ in 0..8 {
