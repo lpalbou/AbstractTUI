@@ -5,7 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.27] - 2026-07-30
+## [0.3.0] - 2026-07-30
+
+`0.2.27` was published with the `RunConfig` change below and yanked: the
+new fields break exhaustive struct literals, which a patch release must
+not do. Use `0.3.0`.
 
 ### Added
 
@@ -84,12 +88,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING** app: `RunConfig` gained the `hover_ink` and
+  `platform_clipboard` fields. Adding fields to a constructible struct
+  breaks exhaustive literals, which is why this is `0.3.0` rather than a
+  patch. Construct it with `..RunConfig::default()` and the addition —
+  and any later posture flag — costs you nothing:
+
+  ```rust
+  let cfg = RunConfig { hover_ink: true, ..RunConfig::default() };
+  ```
+
 - widgets: the `List` accessory column is one click target edge to edge
   on the row that draws it, and rows whose `row_accessory` returns `None`
   leave that column as ordinary body. Accessory clicks still never move
   selection.
-- app: `RunConfig` gained fields. Construct it with
-  `..RunConfig::default()`; exhaustive struct literals will not compile.
 
 ### Performance
 

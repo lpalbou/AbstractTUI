@@ -204,7 +204,12 @@ fn roundtrip_seeded_style_fuzz() {
             if rng.chance(1, 4) {
                 style = style.underline_color(Rgba::rgb(0, 0, 255));
             }
-            s.draw_text(x, y, rng.pick(glyphs), style);
+            // `&&str` (not `&str`) pins `T = &str` in `pick<T>(&[T]) -> &T`.
+            // Any expected type of `&str` drives inference backward, and
+            // rustc 1.87 (the MSRV floor) then picks `T = str` and demands
+            // `&[str]`. The call below deref-coerces to `&str`.
+            let glyph: &&str = rng.pick(glyphs);
+            s.draw_text(x, y, glyph, style);
         }
         let shot = Screenshot::from_surface(&s);
         let back = replay(&shot.to_ansi(), size);

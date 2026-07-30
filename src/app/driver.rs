@@ -46,6 +46,14 @@ use super::App;
 /// How a `run` session is configured. `Default` is the interactive
 /// posture: env-detected capabilities, capability-derived enter options,
 /// active probe on.
+///
+/// Build it from [`RunConfig::default`] and override what you need, so
+/// a later posture flag does not break your call site:
+///
+/// ```
+/// use abstracttui::app::RunConfig;
+/// let cfg = RunConfig { hover_ink: true, ..RunConfig::default() };
+/// ```
 pub struct RunConfig {
     /// Capabilities to assume. `None` = passive env detection at start
     /// (tests inject a fixed set so host env never leaks into assertions).
