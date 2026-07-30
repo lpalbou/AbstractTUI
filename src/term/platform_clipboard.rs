@@ -21,11 +21,11 @@ pub(crate) fn try_copy(text: &str) -> bool {
         if copy_via_stdin("wl-copy", text) {
             return true;
         }
-        return copy_via_stdin_args(&["xclip", "-selection", "clipboard"], text);
+        copy_via_stdin_args(&["xclip", "-selection", "clipboard"], text)
     }
     #[cfg(windows)]
     {
-        return copy_windows(text);
+        copy_windows(text)
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
     {
