@@ -1547,7 +1547,14 @@ the page with the theme's `overlay` token. The titled header's ✕ is a
 MOUSE-ONLY affordance (deliberately not focusable — chrome must never
 steal a modal's initial focus from the content it frames, so
 `focus_init` lands on the page and a hosted `PageHost`'s chords answer
-from frame one); Esc is the keyboard close. Closing releases the
+from frame one); Esc is the keyboard close. Since 0.3.1 the whole
+trailing CORNER of the header row closes on a left press — the glyph,
+the padding margin beside it, and two cells of jitter room before it —
+because the ✕ alone is a one-cell target at the panel's outermost
+column, which is exactly where a terminal whose window width is not an
+exact multiple of the cell width quantizes an edge click into the
+neighbouring column (a cell-perfect test suite cannot observe that
+miss; a field report can, and did). The title area stays inert. Closing releases the
 keyboard the INSTANT it begins: keys pressed during the closing slide
 route to the app (the departing panel is display-only — Esc-then-
 shortcut works at any typing speed), and a reopen that reverses the

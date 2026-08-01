@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-08-01
+
+### Fixed
+
+- app: the drawer header's ✕ close affordance now activates for a left
+  press anywhere in the header row's trailing corner REGION (the glyph,
+  the padding margin beside it, and two cells of jitter room before
+  it), not just the exact glyph cell. The ✕ is a one-cell target at the
+  panel's outermost column — precisely where a real terminal whose
+  window width is not an exact multiple of the cell width quantizes an
+  edge click into the neighbouring column. A cell-perfect synthetic
+  test suite cannot observe that class of miss; the field report
+  (agora-tui, 2026-08-01: "cannot close the preview with the button")
+  is the evidence. Content clicks are unaffected: the region is header
+  chrome only, and the title area stays inert.
+
 ## [0.3.0] - 2026-07-30
 
 `0.2.27` was published with the `RunConfig` change below and yanked: the

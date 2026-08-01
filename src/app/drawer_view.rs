@@ -113,6 +113,39 @@ pub(super) fn panel_view(cfg: &DrawerConfig, handle: DrawerHandle, content: View
             }
         });
     }
+    // The close CORNER (0.3.1, agora-tui field report): the ✕ is a
+    // one-cell target at the outermost column of the screen, which is
+    // exactly where real terminals wobble — a window whose pixel width
+    // is not an exact multiple of the cell width quantizes an edge
+    // click into the neighbouring column, and a synthetic-click test
+    // suite can never see it (the harness is cell-perfect by
+    // construction). So the panel root treats a left PRESS anywhere in
+    // the header row's trailing corner region — the ✕, the padding
+    // margin beside it, and two cells of jitter room before it — as
+    // the close it visibly promises. Header row only: content never
+    // renders there, so no page click is stolen. The ✕'s own Target
+    // handler stays for the exact-cell path (capture wins first).
+    if cfg.title.is_some() {
+        let handle = handle.clone();
+        root = root.on(Phase::Capture, move |ctx, ev| {
+            if let UiEvent::Mouse(m) = ev {
+                if matches!(m.kind, MouseKind::Down(MouseButton::Left)) {
+                    let r = ctx.current_rect();
+                    // Bottom-edge drawers spend their first row on the
+                    // hairline (pad.top = 1); the header sits below it.
+                    let header_y = r.y
+                        + match edge {
+                            DrawerEdge::Bottom => 1,
+                            _ => 0,
+                        };
+                    if m.pos.y == header_y && m.pos.x >= r.right() - 5 {
+                        handle.close_with(DrawerCloseReason::Api);
+                        ctx.stop_propagation();
+                    }
+                }
+            }
+        });
+    }
     if let Some(title) = &cfg.title {
         root = root.child(header_row(title.clone(), modal, ink, muted, ground, handle));
     }

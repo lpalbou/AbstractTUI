@@ -2531,7 +2531,11 @@ the page with the theme's `overlay` token. The titled header's ✕ is a
 MOUSE-ONLY affordance (deliberately not focusable — chrome must never
 steal a modal's initial focus from the content it frames, so
 `focus_init` lands on the page and a hosted `PageHost`'s chords answer
-from frame one); Esc is the keyboard close. Closing releases the
+from frame one); Esc is the keyboard close. Since 0.3.1 the whole
+trailing CORNER of the header row closes on a left press (glyph,
+padding margin, two cells of jitter room) — the ✕ alone is a one-cell
+target at the panel's outermost column, exactly where real terminals
+quantize edge clicks ±1 column. Closing releases the
 keyboard the INSTANT it begins: keys pressed during the closing slide
 route to the app (the departing panel is display-only — Esc-then-
 shortcut works at any typing speed), and a reopen that reverses the
@@ -5353,8 +5357,8 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.3.0 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.3.0 (2026-07-30).
+- Crate: `abstracttui` 0.3.1 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.3.1 (2026-08-01).
 - Extension family (sibling crates in the repo workspace, installed only when needed;
   ADR-0004 — public core API only, same MIT license and dependency discipline):
   - `abstracttui-graph` 0.1.0 — graph auto-layout (`GraphDesc -> Layout`: layered /

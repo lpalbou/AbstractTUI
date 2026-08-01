@@ -593,3 +593,44 @@ fn per_edge_z_slots_are_distinct_and_below_the_modal_band() {
     zs.dedup();
     assert_eq!(zs.len(), n, "no two drawer layers share a z (equal-z trap)");
 }
+
+#[test]
+fn header_corner_region_closes_on_press_with_jitter() {
+    // The ✕ is one cell at the panel's outermost column — the exact
+    // place a real terminal's edge quantization drops a click one
+    // column off (agora-tui field report, 2026-08-01). The header's
+    // trailing corner REGION closes: the glyph cell, the padding
+    // margin beside it, and two cells of jitter room before it. The
+    // title area stays inert — chrome must not eat page clicks.
+    let size = Size::new(100, 40);
+    let overlays = rig(size);
+    let reasons = reason_log();
+    let r = reasons.clone();
+    let (root, handle) = create_root(|cx| {
+        Drawer::new(DrawerEdge::Right)
+            .size(DrawerSize::Cells(30))
+            .motion(MS(0))
+            .title("view")
+            .overlays(&overlays)
+            .on_close(move |why| r.borrow_mut().push(why))
+            .install(cx, |_| text("inspector"))
+    });
+    // Panel rest rect: x 70..100. Header row y=0; the ✕ draws at the
+    // header row's last cell (x=98, right padding puts the margin at 99).
+    for x in [99, 98, 97, 96] {
+        handle.open();
+        settle();
+        assert!(handle.is_open(), "reopened before corner press at {x}");
+        assert!(overlays.dispatch(&click(x, 0)).is_some());
+        settle();
+        assert!(!handle.is_open(), "corner press at x={x} did not close");
+    }
+    assert_eq!(reasons.borrow().len(), 4, "one Api close per press");
+    // Title area: same row, left of the corner region — inert.
+    handle.open();
+    settle();
+    let _ = overlays.dispatch(&click(80, 0));
+    settle();
+    assert!(handle.is_open(), "title-area press must not close");
+    root.dispose();
+}
