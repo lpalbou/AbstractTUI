@@ -122,8 +122,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - name: cargo publish (core)
-        run: cargo publish -p abstracttui
+      - name: cargo publish (core, skip if already on the index)
+        # The same idempotency the family job has always had: a version
+        # already on crates.io re-runs GREEN instead of failing the tag
+        # flow. The maintainer sometimes publishes core locally first
+        # (0.3.1 was) — the tag push must still mint the GitHub Release
+        # record, and `github-release` depends on this job.
+        run: |
+          version=$(cargo pkgid -p abstracttui | sed 's/.*[#@]//')
+          if cargo info "abstracttui@${version}" >/dev/null 2>&1; then
+            echo "abstracttui ${version} already on crates.io — skipping publish"
+          else
+            cargo publish -p abstracttui
+          fi
         env:
           # Classic API token from the repository secrets (set once by
           # the maintainer). See the header comment for the Trusted
