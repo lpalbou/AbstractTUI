@@ -2,9 +2,9 @@
 #
 # Two pieces, one artifact:
 #   - the mdBook guide built from docs/ (book.toml at the repo root) is the
-#     site root: https://lpalbou.github.io/abstracttui/
+#     site root: https://lpalbou.github.io/AbstractTUI/
 #   - rustdoc (`cargo doc --no-deps`) is copied into book/api/, served at
-#     https://lpalbou.github.io/abstracttui/api/abstracttui/
+#     https://lpalbou.github.io/AbstractTUI/api/abstracttui/
 #
 # One-time setup: enable Pages with Source = "GitHub Actions" (see
 # .github/SETUP.md).
