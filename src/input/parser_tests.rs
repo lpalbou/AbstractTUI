@@ -390,6 +390,10 @@ fn x10_mouse_payload_consumed() {
     assert!(matches!(evs[0], Event::Unknown(_)));
 }
 
+/// `ESC ESC` is an Esc keypress followed by a fresh escape sequence —
+/// the crossterm/Codex reading. (An engine-side meta-prefix decode was
+/// tried and reverted: Codex covers the macOS Option+Arrow case at the
+/// KEYMAP level with Alt+b / Alt+f instead, so the kernel stays simple.)
 #[test]
 fn esc_esc_yields_esc_key_then_sequence() {
     let evs = feed_all(b"\x1b\x1b[A");

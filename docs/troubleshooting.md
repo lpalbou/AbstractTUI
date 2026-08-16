@@ -270,6 +270,10 @@ protocol, not a bug.
    highlight clamped to the pane under the anchor; releasing (or
    `c`/Enter/Ctrl+C) copies the selected screen text to the system
    clipboard through OSC 52. `cargo run --example feed` demonstrates it.
+   A live selection freezes every follow-tail `Scroll` for the length of
+   the drag, so a streaming transcript stops sliding under the highlight
+   and the copy is the text you actually pointed at; clearing the region
+   returns the pane to the live tail.
 
 ## The engine's copy doesn't reach my clipboard
 

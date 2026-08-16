@@ -10,7 +10,7 @@ use abstracttui::prelude::*;
 use abstracttui::term::Capabilities;
 use abstracttui::testing::{Attrs, CaptureTerm};
 use abstracttui::ui::{text, Element};
-use abstracttui::widgets::Button;
+use abstracttui::widgets::{Button, Feed, FeedItem, FeedState};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -477,6 +477,109 @@ fn selection_idles_at_zero_cost_when_inactive() {
         assert!(turn.idle, "a parked selection costs nothing");
     }
     assert!(term.take_bytes().is_empty());
+}
+
+// ---------------------------------------------------------------------
+// 1300 — a live selection freezes follow-tail. Screen-space selection
+// over a streaming transcript used to copy whatever the scroll had put
+// on those cells by release time: the highlight said one thing, the
+// clipboard got another.
+// ---------------------------------------------------------------------
+
+/// Turn until the measure → pin → render loop settles (the widgets-side
+/// `settle` in driver terms).
+fn settle_turns(driver: &mut Driver, app: &mut App, term: &mut CaptureTerm) {
+    for _ in 0..5 {
+        driver.turn(app, term).unwrap();
+    }
+}
+
+#[test]
+fn a_live_selection_freezes_the_streaming_tail_and_copies_what_it_shows() {
+    let size = Size::new(20, 4);
+    let holder: Rc<RefCell<Option<FeedState>>> = Rc::new(RefCell::new(None));
+    let h = holder.clone();
+    let mut app = App::new(size);
+    app.mount(move |cx| {
+        let feed = FeedState::new(cx);
+        let follow = cx.signal(true);
+        *h.borrow_mut() = Some(feed.clone());
+        Scroll::new(Feed::new(&feed).gap(0).view(cx))
+            .follow_tail(follow)
+            .view(cx)
+    })
+    .unwrap();
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
+    selection().set_enabled(true);
+    let feed = holder.borrow_mut().take().expect("feed captured");
+
+    // Row text WITHOUT the scrollbar column: the thumb legitimately
+    // moves while frozen (content grew below the viewport and the bar
+    // reports that honestly) — the text is what must hold still.
+    let body = |term: &CaptureTerm, y: usize| {
+        row(term, y)
+            .chars()
+            .take((size.w - 1) as usize)
+            .collect::<String>()
+            .trim_end()
+            .to_string()
+    };
+
+    for i in 0..8 {
+        feed.push(format!("m{i}"), FeedItem::text(format!("line {i}")));
+    }
+    settle_turns(&mut driver, &mut app, &mut term);
+    assert_eq!(body(&term, 3), "line 7", "pinned to the tail");
+    assert_eq!(body(&term, 1), "line 5");
+
+    // Drag across "line 5" (row 1): cells (0,1)..(5,1).
+    term.push_input(b"\x1b[<0;1;2M");
+    term.push_input(b"\x1b[<32;6;2M");
+    driver.turn(&mut app, &mut term).unwrap();
+    let sel_bg = current_theme().tokens.get(TokenId::SelectionBg);
+    assert_eq!(
+        term.screen().cell(2, 1).unwrap().paint.bg,
+        Some(sel_bg),
+        "the drag painted a region"
+    );
+
+    // The stream keeps arriving mid-drag. Before 1300 the tail pin
+    // scrolled these rows up under the highlight.
+    for i in 8..12 {
+        feed.push(format!("m{i}"), FeedItem::text(format!("line {i}")));
+    }
+    settle_turns(&mut driver, &mut app, &mut term);
+    assert_eq!(
+        body(&term, 1),
+        "line 5",
+        "the frozen tail must hold the highlighted row"
+    );
+    assert_eq!(body(&term, 3), "line 7", "no row moved during the freeze");
+    assert_eq!(
+        term.screen().cell(2, 1).unwrap().paint.bg,
+        Some(sel_bg),
+        "the highlight still covers the same text"
+    );
+
+    // Release: the clipboard gets exactly the highlighted row...
+    term.push_input(b"\x1b[<0;6;2m");
+    driver.turn(&mut app, &mut term).unwrap();
+    driver.turn(&mut app, &mut term).unwrap(); // custody emission frame
+    assert_eq!(
+        term.screen().clipboard(),
+        Some(("c", b64("line 5").as_str()))
+    );
+
+    // ...and clearing the region thaws the tail: back to live, at the
+    // tail as it stands now (the frozen appends are not replayed).
+    settle_turns(&mut driver, &mut app, &mut term);
+    assert_eq!(
+        body(&term, 3),
+        "line 11",
+        "thaw re-pins to the live tail: {:?}",
+        (0..4).map(|y| body(&term, y)).collect::<Vec<_>>()
+    );
 }
 
 // ---------------------------------------------------------------------

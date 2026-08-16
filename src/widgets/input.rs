@@ -507,6 +507,10 @@ fn adjust_scroll(caret: &mut Caret, map: &ClusterMap, width: i32) {
 fn delete_selection(text: &mut String, caret: &mut Caret) -> bool {
     let (lo, hi) = selection_range(caret);
     if lo == usize::MAX {
+        // Same rule as the TextArea's (1310): an anchor parked on the
+        // caret is not a selection, and leaving it there turns the next
+        // delete into a phantom one-cluster selection.
+        caret.anchor = None;
         return false;
     }
     let map = ClusterMap::of(text);
@@ -609,40 +613,116 @@ fn edit_key(
         }
         c.cursor = target.min(len);
     };
+    // ---- word-wise chords, every terminal spelling (1310) -------------
+    // The gesture arrives as Alt+←, Ctrl+← or `ESC b` depending on the
+    // emulator; `widgets::edit_keys` owns the table (Codex's) for both
+    // text widgets. The F7 masked rule survives intact BELOW: a
+    // masked field is ONE word, so every word gesture runs to the FIELD
+    // EDGE (start for a backward gesture, end for a forward one) instead
+    // of to a real boundary — no caret position and no partial delete
+    // can report where the secret's words are.
+    if let Some(intent) = crate::widgets::edit_keys::word_intent(key, mods) {
+        use crate::widgets::edit_keys::WordIntent;
+        let back = |cur: usize| {
+            if masked {
+                0
+            } else {
+                word_step(&text_snapshot, &map, cur, -1)
+            }
+        };
+        let fwd = |cur: usize| {
+            if masked {
+                len
+            } else {
+                word_step(&text_snapshot, &map, cur, 1)
+            }
+        };
+        match intent {
+            WordIntent::Left => {
+                let target = back(c.cursor);
+                move_to(&mut c, target);
+                adjust_scroll(&mut c, &map, width);
+                caret.set(c);
+                return true;
+            }
+            WordIntent::Right => {
+                let target = fwd(c.cursor);
+                move_to(&mut c, target);
+                adjust_scroll(&mut c, &map, width);
+                caret.set(c);
+                return true;
+            }
+            // `delete_selection` runs first on both arms, so every path
+            // clears the anchor (an empty one included).
+            WordIntent::DeleteBack => {
+                let cut = back(c.cursor);
+                let mut edited = false;
+                value.update(|text| {
+                    edited = delete_selection(text, &mut c);
+                    if !edited && c.cursor > cut {
+                        let map = ClusterMap::of(text);
+                        text.replace_range(map.byte(cut)..map.byte(c.cursor), "");
+                        c.cursor = cut;
+                        edited = true;
+                    }
+                    let map = ClusterMap::of(text);
+                    adjust_scroll(&mut c, &map, width);
+                });
+                caret.set(c);
+                // At the field edge nothing was removed: a repeat must
+                // not fire `on_change` over and over.
+                if edited {
+                    notify(on_change, value);
+                }
+                return true;
+            }
+            WordIntent::DeleteForward => {
+                let end = fwd(c.cursor);
+                let mut edited = false;
+                value.update(|text| {
+                    edited = delete_selection(text, &mut c);
+                    if !edited && end > c.cursor {
+                        let map = ClusterMap::of(text);
+                        text.replace_range(map.byte(c.cursor)..map.byte(end), "");
+                        edited = true;
+                    }
+                    let map = ClusterMap::of(text);
+                    adjust_scroll(&mut c, &map, width);
+                });
+                caret.set(c);
+                if edited {
+                    notify(on_change, value);
+                }
+                return true;
+            }
+        }
+    }
+
     match key {
         Key::Left => {
-            let target = if alt && masked {
-                0 // masked: the whole value is ONE word (F7)
-            } else if alt {
-                word_step(&text_snapshot, &map, c.cursor, -1)
-            } else {
-                c.cursor.saturating_sub(1)
-            };
+            let target = c.cursor.saturating_sub(1);
             move_to(&mut c, target);
             adjust_scroll(&mut c, &map, width);
             caret.set(c);
             return true;
         }
         Key::Right => {
-            let target = if alt && masked {
-                len // masked: the whole value is ONE word (F7)
-            } else if alt {
-                word_step(&text_snapshot, &map, c.cursor, 1)
-            } else {
-                c.cursor + 1
-            };
+            let target = c.cursor + 1;
             move_to(&mut c, target);
             adjust_scroll(&mut c, &map, width);
             caret.set(c);
             return true;
         }
-        Key::Home => {
+        // Ctrl+A / Ctrl+E ride with Home/End (Codex's
+        // `editor.move_line_start` / `move_line_end`); a single-line
+        // field has one line, so they are the field ends.
+        Key::Home | Key::Char('a') if !alt && (key == Key::Home || ctrl) => {
             move_to(&mut c, 0);
             adjust_scroll(&mut c, &map, width);
             caret.set(c);
             return true;
         }
-        Key::End => {
+        Key::End | Key::Char('e') if !alt && (key == Key::End || ctrl) => {
             move_to(&mut c, len);
             adjust_scroll(&mut c, &map, width);
             caret.set(c);

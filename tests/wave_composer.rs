@@ -418,3 +418,252 @@ fn autofocused_composer_paints_placeholder_beside_caret_on_screen() {
     driver.finish(&mut term).expect("leave");
     assert_eq!(term.screen().unknown_seq_count(), 0, "all bytes modeled");
 }
+
+// ---------------------------------------------------------------------
+// Word-wise editing over the WIRE (first-app/1310). The classifier's
+// unit tests pin the table; these pin that real terminal BYTES reach it
+// through the parser and move a real caret in a real composer. Every
+// row names the terminal that sends it.
+// ---------------------------------------------------------------------
+
+/// Byte offset of `needle` in the fixture (assertions read as intent,
+/// not as magic numbers).
+fn at(needle: &str) -> usize {
+    "alpha beta gamma".find(needle).expect("fixture substring")
+}
+
+#[test]
+fn word_motion_arrives_on_every_terminal_spelling() {
+    let mut app = App::new(Size::new(W, H));
+    let (state, _submitted) = composer_app(&mut app);
+    let mut term = CaptureTerm::new(Size::new(W, H));
+    let mut driver = Driver::new(&mut app, &mut term, config()).expect("driver");
+    settle(&mut driver, &mut app, &mut term);
+
+    // macOS Terminal.app / iTerm2 (Natural Text Editing): Option+Left
+    // is `ESC b`, the readline binding they borrow. This is the
+    // spelling that used to do NOTHING at all.
+    state.set_text("alpha beta gamma");
+    settle(&mut driver, &mut app, &mut term);
+    term.push_input(b"\x1bb");
+    settle(&mut driver, &mut app, &mut term);
+    assert_eq!(state.caret_byte(), at("gamma"), "ESC b: back one word");
+
+    // The Linux/Windows convention: Ctrl+Left is `CSI 1;5D`.
+    term.push_input(b"\x1b[1;5D");
+    settle(&mut driver, &mut app, &mut term);
+    assert_eq!(state.caret_byte(), at("beta"), "CSI 1;5D: back one word");
+
+    // kitty/WezTerm/ghostty/foot/xterm: Alt+Right is `CSI 1;3C`.
+    term.push_input(b"\x1b[1;3C");
+    settle(&mut driver, &mut app, &mut term);
+    let after_beta = at("beta") + "beta".len();
+    assert_eq!(state.caret_byte(), after_beta, "CSI 1;3C: forward one word");
+
+    // macOS Option+Right: `ESC f`.
+    term.push_input(b"\x1bf");
+    settle(&mut driver, &mut app, &mut term);
+    assert_eq!(
+        state.caret_byte(),
+        "alpha beta gamma".len(),
+        "ESC f: forward one word"
+    );
+    assert_eq!(state.text(), "alpha beta gamma", "motion never edits");
+}
+
+#[test]
+fn delete_word_arrives_on_every_terminal_spelling() {
+    let mut app = App::new(Size::new(W, H));
+    let (state, _submitted) = composer_app(&mut app);
+    let mut term = CaptureTerm::new(Size::new(W, H));
+    let mut driver = Driver::new(&mut app, &mut term, config()).expect("driver");
+    settle(&mut driver, &mut app, &mut term);
+
+    // macOS Option+Backspace: `ESC DEL`.
+    state.set_text("alpha beta gamma");
+    settle(&mut driver, &mut app, &mut term);
+    term.push_input(b"\x1b\x7f");
+    settle(&mut driver, &mut app, &mut term);
+    assert_eq!(state.text(), "alpha beta ", "ESC DEL: rub out one word");
+
+    // readline's Ctrl+W (`unix-word-rubout`, byte 0x17).
+    term.push_input(b"\x17");
+    settle(&mut driver, &mut app, &mut term);
+    assert_eq!(state.text(), "alpha ", "Ctrl+W: rub out one word");
+
+    // Alt+D (`ESC d`) deletes FORWARD from the caret.
+    state.set_text("alpha beta gamma");
+    settle(&mut driver, &mut app, &mut term);
+    term.push_input(b"\x1bb"); // to "gamma"
+    term.push_input(b"\x1bb"); // to "beta"
+    settle(&mut driver, &mut app, &mut term);
+    assert_eq!(state.caret_byte(), at("beta"));
+    term.push_input(b"\x1bd");
+    settle(&mut driver, &mut app, &mut term);
+    assert_eq!(state.text(), "alpha  gamma", "ESC d: delete word forward");
+
+    // Ctrl+Delete (`CSI 3;5~`), the Linux/Windows spelling of the same.
+    state.set_text("alpha beta gamma");
+    settle(&mut driver, &mut app, &mut term);
+    term.push_input(b"\x1bb");
+    term.push_input(b"\x1bb");
+    term.push_input(b"\x1b[3;5~");
+    settle(&mut driver, &mut app, &mut term);
+    assert_eq!(
+        state.text(),
+        "alpha  gamma",
+        "CSI 3;5~: delete word forward"
+    );
+    driver.finish(&mut term).expect("leave");
+    assert_eq!(term.screen().unknown_seq_count(), 0, "all bytes modeled");
+}
+
+/// Alt+Left on the modern wires, and the kitty CSI-u dialect of the
+/// readline letters. The repo pins both dialects everywhere else; the
+/// word table is no exception.
+#[test]
+fn word_chords_work_on_the_kitty_wire_too() {
+    let mut app = App::new(Size::new(W, H));
+    let (state, _submitted) = composer_app(&mut app);
+    let mut term = CaptureTerm::new(Size::new(W, H));
+    let mut driver = Driver::new(&mut app, &mut term, config()).expect("driver");
+    settle(&mut driver, &mut app, &mut term);
+
+    state.set_text("alpha beta gamma");
+    settle(&mut driver, &mut app, &mut term);
+    term.push_input(b"\x1b[1;3D"); // legacy Alt+Left
+    settle(&mut driver, &mut app, &mut term);
+    assert_eq!(state.caret_byte(), at("gamma"), "CSI 1;3D");
+
+    term.push_input(b"\x1b[98;3u"); // kitty Alt+b
+    settle(&mut driver, &mut app, &mut term);
+    assert_eq!(state.caret_byte(), at("beta"), "kitty Alt+b");
+
+    term.push_input(b"\x1b[127;3u"); // kitty Alt+Backspace
+    settle(&mut driver, &mut app, &mut term);
+    assert_eq!(state.text(), "beta gamma", "kitty Alt+Backspace rubs out");
+}
+
+/// Shift rides along: the same gesture EXTENDS a selection by word, and
+/// typing replaces what it covered.
+#[test]
+fn shift_word_chords_extend_the_selection() {
+    let mut app = App::new(Size::new(W, H));
+    let (state, _submitted) = composer_app(&mut app);
+    let mut term = CaptureTerm::new(Size::new(W, H));
+    let mut driver = Driver::new(&mut app, &mut term, config()).expect("driver");
+    settle(&mut driver, &mut app, &mut term);
+
+    state.set_text("alpha beta gamma");
+    settle(&mut driver, &mut app, &mut term);
+    term.push_input(b"\x1b[1;4D"); // Shift+Alt+Left: select "gamma"
+    settle(&mut driver, &mut app, &mut term);
+    term.push_input(b"Z");
+    settle(&mut driver, &mut app, &mut term);
+    assert_eq!(state.text(), "alpha beta Z", "word selection was replaced");
+
+    // Ctrl+Shift+Left is the same gesture on the Linux/Windows wire.
+    state.set_text("alpha beta gamma");
+    settle(&mut driver, &mut app, &mut term);
+    term.push_input(b"\x1b[1;6D");
+    term.push_input(b"Q");
+    settle(&mut driver, &mut app, &mut term);
+    assert_eq!(state.text(), "alpha beta Q");
+    driver.finish(&mut term).expect("leave");
+    assert_eq!(term.screen().unknown_seq_count(), 0, "all bytes modeled");
+}
+
+/// CODEX PARITY (first-app/1310). One row per binding in Codex's
+/// default `EditorKeymap` (`codex-rs/tui/src/keymap.rs`), driven as
+/// real wire bytes: if a row here stops matching Codex, muscle memory
+/// breaks for anyone moving between the two.
+#[test]
+fn navigation_chords_match_codex_defaults() {
+    let mut app = App::new(Size::new(W, H));
+    let (state, _submitted) = composer_app(&mut app);
+    let mut term = CaptureTerm::new(Size::new(W, H));
+    let mut driver = Driver::new(&mut app, &mut term, config()).expect("driver");
+    settle(&mut driver, &mut app, &mut term);
+
+    // editor.move_word_left = alt('b'), Alt+Left, Ctrl+Left
+    for (label, bytes) in [
+        ("alt+b", &b"\x1bb"[..]),
+        ("alt+left", &b"\x1b[1;3D"[..]),
+        ("ctrl+left", &b"\x1b[1;5D"[..]),
+    ] {
+        state.set_text("alpha beta gamma");
+        settle(&mut driver, &mut app, &mut term);
+        term.push_input(bytes);
+        settle(&mut driver, &mut app, &mut term);
+        assert_eq!(state.caret_byte(), at("gamma"), "move_word_left {label}");
+    }
+
+    // editor.move_word_right = alt('f'), Alt+Right, Ctrl+Right
+    for (label, bytes) in [
+        ("alt+f", &b"\x1bf"[..]),
+        ("alt+right", &b"\x1b[1;3C"[..]),
+        ("ctrl+right", &b"\x1b[1;5C"[..]),
+    ] {
+        state.set_text("alpha beta gamma");
+        settle(&mut driver, &mut app, &mut term);
+        term.push_input(b"\x1bb"); // to "gamma"
+        term.push_input(bytes);
+        settle(&mut driver, &mut app, &mut term);
+        assert_eq!(
+            state.caret_byte(),
+            "alpha beta gamma".len(),
+            "move_word_right {label}"
+        );
+    }
+
+    // editor.move_line_start = Home, Ctrl+A / move_line_end = End, Ctrl+E
+    for (label, bytes) in [("home", &b"\x1b[H"[..]), ("ctrl+a", &b"\x01"[..])] {
+        state.set_text("alpha beta gamma");
+        settle(&mut driver, &mut app, &mut term);
+        term.push_input(bytes);
+        settle(&mut driver, &mut app, &mut term);
+        assert_eq!(state.caret_byte(), 0, "move_line_start {label}");
+    }
+    for (label, bytes) in [("end", &b"\x1b[F"[..]), ("ctrl+e", &b"\x05"[..])] {
+        state.set_text("alpha beta gamma");
+        settle(&mut driver, &mut app, &mut term);
+        term.push_input(b"\x1bb");
+        term.push_input(bytes);
+        settle(&mut driver, &mut app, &mut term);
+        assert_eq!(
+            state.caret_byte(),
+            "alpha beta gamma".len(),
+            "move_line_end {label}"
+        );
+    }
+
+    // editor.delete_backward_word = Alt+Backspace, Ctrl+Backspace, Ctrl+W
+    for (label, bytes) in [
+        ("alt+backspace", &b"\x1b\x7f"[..]),
+        ("ctrl+backspace", &b"\x1b[127;5u"[..]),
+        ("ctrl+w", &b"\x17"[..]),
+    ] {
+        state.set_text("alpha beta gamma");
+        settle(&mut driver, &mut app, &mut term);
+        term.push_input(bytes);
+        settle(&mut driver, &mut app, &mut term);
+        assert_eq!(state.text(), "alpha beta ", "delete_backward_word {label}");
+    }
+
+    // editor.delete_forward_word = Alt+Delete, Ctrl+Delete, Alt+D
+    for (label, bytes) in [
+        ("alt+delete", &b"\x1b[3;3~"[..]),
+        ("ctrl+delete", &b"\x1b[3;5~"[..]),
+        ("alt+d", &b"\x1bd"[..]),
+    ] {
+        state.set_text("alpha beta gamma");
+        settle(&mut driver, &mut app, &mut term);
+        term.push_input(b"\x1bb");
+        term.push_input(b"\x1bb"); // caret at "beta"
+        term.push_input(bytes);
+        settle(&mut driver, &mut app, &mut term);
+        assert_eq!(state.text(), "alpha  gamma", "delete_forward_word {label}");
+    }
+    driver.finish(&mut term).expect("leave");
+    assert_eq!(term.screen().unknown_seq_count(), 0, "all bytes modeled");
+}

@@ -414,3 +414,97 @@ fn masked_editing_stays_cluster_atomic_and_value_stays_real() {
     });
     assert!(plain_tree.accessibility_tree_text().contains("visible"));
 }
+
+/// F7 masked rule, DELETE half (1310, adversarial review): a masked
+/// field is ONE word for the delete-word gestures too, so the rubout
+/// runs to the field edge. A partial delete would report where the
+/// secret's word boundaries are just as loudly as a caret position.
+#[test]
+fn masked_word_delete_runs_to_the_field_edge() {
+    let size = Size::new(24, 1);
+    let (_root, mut tree, value) = masked_input(size);
+    tree.dispatch(&UiEvent::Paste("one two three".into()));
+    // Option+Backspace at the end: everything before the caret goes,
+    // NOT just "three".
+    key_mod(&mut tree, Key::Backspace, Mods::ALT);
+    assert_eq!(value.get_untracked(), "", "masked rubout takes the field");
+
+    // Forward half, from the start.
+    tree.dispatch(&UiEvent::Paste("alpha beta".into()));
+    key_mod(&mut tree, Key::Left, Mods::ALT); // masked: to 0
+    key_mod(&mut tree, Key::Delete, Mods::CTRL);
+    assert_eq!(value.get_untracked(), "", "masked forward delete too");
+
+    // Unmasked control: the same chords stop at real word boundaries.
+    let (_r2, mut plain, plain_value) = focused_input(size);
+    plain.dispatch(&UiEvent::Paste("one two three".into()));
+    key_mod(&mut plain, Key::Backspace, Mods::ALT);
+    assert_eq!(plain_value.get_untracked(), "one two ");
+}
+
+/// Every terminal spelling reaches the SAME editing behavior — the
+/// classifier's table is pinned in `edit_keys_tests.rs`; this pins that
+/// the widget honors each one identically.
+#[test]
+fn word_chords_agree_across_terminal_spellings() {
+    let size = Size::new(30, 1);
+    for (label, key, mods) in [
+        ("Alt+Left", Key::Left, Mods::ALT),
+        ("Ctrl+Left", Key::Left, Mods::CTRL),
+        ("ESC b", Key::Char('b'), Mods::ALT),
+    ] {
+        let (_root, mut tree, value) = focused_input(size);
+        tree.dispatch(&UiEvent::Paste("one two three".into()));
+        key_mod(&mut tree, key, mods);
+        type_str(&mut tree, "X");
+        assert_eq!(value.get_untracked(), "one two Xthree", "{label}");
+    }
+    for (label, key, mods) in [
+        ("Alt+Backspace", Key::Backspace, Mods::ALT),
+        ("Ctrl+W", Key::Char('w'), Mods::CTRL),
+    ] {
+        let (_root, mut tree, value) = focused_input(size);
+        tree.dispatch(&UiEvent::Paste("one two three".into()));
+        key_mod(&mut tree, key, mods);
+        assert_eq!(value.get_untracked(), "one two ", "{label}");
+    }
+}
+
+/// Grapheme clusters survive a word delete whole: the repo's
+/// cluster-atomic rule (RT3-2) is not suspended because the range came
+/// from a word step instead of a single character.
+#[test]
+fn word_delete_stays_cluster_atomic() {
+    let size = Size::new(30, 1);
+    let (_root, mut tree, value) = focused_input(size);
+    // A ZWJ family and a combining-mark word, then a plain one.
+    tree.dispatch(&UiEvent::Paste("👨‍👩‍👧 café tail".into()));
+    key_mod(&mut tree, Key::Backspace, Mods::ALT); // rubs out "tail"
+    assert_eq!(value.get_untracked(), "👨‍👩‍👧 café ");
+    key_mod(&mut tree, Key::Backspace, Mods::ALT); // rubs out "café"
+    assert_eq!(value.get_untracked(), "👨‍👩‍👧 ");
+    key_mod(&mut tree, Key::Backspace, Mods::ALT); // the family, whole
+    assert_eq!(
+        value.get_untracked(),
+        "",
+        "a ZWJ family is one cluster, never split"
+    );
+}
+
+/// An anchor parked ON the caret (Shift+Left then Shift+Right) is not a
+/// selection: the delete that follows must not resurrect it as a
+/// phantom range (1310, adversarial review).
+#[test]
+fn an_empty_anchor_never_becomes_a_phantom_selection() {
+    let size = Size::new(24, 1);
+    let (_root, mut tree, value) = focused_input(size);
+    tree.dispatch(&UiEvent::Paste("abcdef".into()));
+    key_mod(&mut tree, Key::Left, Mods::SHIFT); // anchor arms at 6
+    key_mod(&mut tree, Key::Right, Mods::SHIFT); // caret back onto it
+    key(&mut tree, Key::Backspace); // deletes 'f' only
+    assert_eq!(value.get_untracked(), "abcde");
+    // If the stale anchor survived, this keystroke would replace a
+    // phantom selection instead of inserting.
+    type_str(&mut tree, "X");
+    assert_eq!(value.get_untracked(), "abcdeX", "no phantom selection");
+}

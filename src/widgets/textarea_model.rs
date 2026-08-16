@@ -252,6 +252,14 @@ pub(crate) fn selection_range(c: &Caret) -> (usize, usize) {
 pub(crate) fn delete_selection(text: &mut String, c: &mut Caret) -> bool {
     let (lo, hi) = selection_range(c);
     if lo == usize::MAX {
+        // An anchor sitting ON the caret is not a selection, and it must
+        // not survive the delete that follows: Shift+Left then
+        // Shift+Right parks the anchor exactly there (`move_to` only
+        // arms an anchor that is None), and a plain Backspace after it
+        // used to move the caret out from under the anchor — resurrecting
+        // it as a PHANTOM one-character selection that the next
+        // keystroke would silently eat (1310, adversarial review).
+        c.anchor = None;
         return false;
     }
     text.replace_range(lo..hi, "");
@@ -321,24 +329,73 @@ pub(crate) fn apply_key(
         c.sticky = sticky;
     };
 
+    // ---- word-wise chords, every terminal spelling (1310) -------------
+    // Ahead of the table: the same gesture arrives as Alt+←, Ctrl+←, or
+    // `ESC b` depending on the emulator, and one place decides what all
+    // of them mean (`widgets::edit_keys`). Plain ←/→ fall through.
+    if let Some(intent) = crate::widgets::edit_keys::word_intent(key, mods) {
+        use crate::widgets::edit_keys::WordIntent;
+        c.goal = None;
+        return match intent {
+            WordIntent::Left => {
+                move_to(c, word_step_bytes(text, c.byte, -1), false);
+                EditOutcome::Handled { edited: false }
+            }
+            WordIntent::Right => {
+                move_to(c, word_step_bytes(text, c.byte, 1), false);
+                EditOutcome::Handled { edited: false }
+            }
+            // A selection outranks the word range: the visible thing
+            // the user asked to delete is what goes (both widgets'
+            // Backspace/Delete rule, kept identical here).
+            // `delete_selection` always runs first, so it clears any
+            // anchor — including an empty one — on every path.
+            WordIntent::DeleteBack => {
+                let mut edited = delete_selection(text, c);
+                if !edited && c.byte > 0 {
+                    let cut = word_step_bytes(text, c.byte, -1);
+                    edited = cut < c.byte;
+                    text.replace_range(cut..c.byte, "");
+                    c.byte = cut;
+                }
+                c.sticky = false;
+                // Held at the buffer edge, the key deletes NOTHING —
+                // reporting a change there would fire `on_change` and
+                // push history for every repeat.
+                EditOutcome::Handled { edited }
+            }
+            WordIntent::DeleteForward => {
+                let mut edited = delete_selection(text, c);
+                if !edited && c.byte < text.len() {
+                    let end = word_step_bytes(text, c.byte, 1);
+                    edited = end > c.byte;
+                    text.replace_range(c.byte..end, "");
+                }
+                c.sticky = false;
+                EditOutcome::Handled { edited }
+            }
+        };
+    }
+
     match key {
         // ---- horizontal motion (clears the vertical goal) -------------
         Key::Left => {
-            let target = if alt {
-                word_step_bytes(text, c.byte, -1)
-            } else {
-                crate::text::prev_boundary(text, c.byte)
-            };
-            move_to(c, target, false);
+            move_to(c, crate::text::prev_boundary(text, c.byte), false);
             c.goal = None;
             EditOutcome::Handled { edited: false }
         }
         Key::Right => {
-            let target = if alt {
-                word_step_bytes(text, c.byte, 1)
-            } else {
-                crate::text::next_boundary(text, c.byte)
-            };
+            move_to(c, crate::text::next_boundary(text, c.byte), false);
+            c.goal = None;
+            EditOutcome::Handled { edited: false }
+        }
+        // Ctrl+A / Ctrl+E are line start/end, NOT document ends: that is
+        // Codex's `editor.move_line_start` / `move_line_end` pairing of
+        // Home/End with the readline chords, and it is what iTerm2's
+        // "Natural Text Editing" preset sends for Cmd+←/Cmd+→.
+        Key::Char('a') if ctrl && !alt => {
+            let rows = RowMap::build(text, width);
+            let target = rows.rows[rows.row_of(c.byte, c.sticky)].start;
             move_to(c, target, false);
             c.goal = None;
             EditOutcome::Handled { edited: false }
@@ -351,6 +408,14 @@ pub(crate) fn apply_key(
                 rows.rows[rows.row_of(c.byte, c.sticky)].start
             };
             move_to(c, target, false);
+            c.goal = None;
+            EditOutcome::Handled { edited: false }
+        }
+        Key::Char('e') if ctrl && !alt => {
+            let rows = RowMap::build(text, width);
+            let row = rows.rows[rows.row_of(c.byte, c.sticky)];
+            let sticky = row_end_has_room(&rows, text, row, width);
+            move_to(c, row.text_end, sticky);
             c.goal = None;
             EditOutcome::Handled { edited: false }
         }

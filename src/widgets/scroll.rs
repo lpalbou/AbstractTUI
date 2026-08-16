@@ -33,6 +33,16 @@
 //! bottom edge re-arms it. The app may force it true ("jump to latest")
 //! and render it ("following / scrolled"). Vertical axis only.
 //!
+//! ## Follow-tail freeze (first-app/1300)
+//!
+//! [`freeze_follow_tail`] holds a pinned scroller still without
+//! disengaging it: the rows on screen stay on screen while appends grow
+//! below the viewport, and unfreezing re-pins to the tail as it stands
+//! then. The engine drives it from the screen-selection layer
+//! (`app::selection`) — a live drag freezes every follow-tail scroller,
+//! because a transcript that scrolls under a selection copies rows the
+//! user never highlighted. Apps may drive it for their own freezes.
+//!
 //! ## Offset repair on content shrink (first-app/0281)
 //!
 //! A bound offset that a CONTENT shrink (or viewport growth) left
@@ -60,13 +70,64 @@ use std::rc::Rc;
 
 use crate::base::Rect;
 use crate::layout::{Dimension, Inset, Position, Style as LayoutStyle};
-use crate::reactive::{Scope, Signal};
+use crate::reactive::{create_root, Scope, Signal};
 use crate::theme::TokenSet;
 use crate::ui::{
     dyn_view, Element, EventCtx, Key, MouseButton, MouseKind, Phase, StyledCanvas, UiEvent, View,
 };
 
 use super::list::draw_scrollbar;
+
+// ---------------------------------------------------------------------------
+// Follow-tail freeze (first-app/1300)
+// ---------------------------------------------------------------------------
+
+thread_local! {
+    /// One process-lifetime signal per thread, under a deliberately
+    /// leaked root (the `app::theme` pattern): the freeze outlives every
+    /// component scope that reads it, and disposing the root would
+    /// invalidate the handle each `Scroll` captured.
+    static FOLLOW_FROZEN: Cell<Option<Signal<bool>>> = const { Cell::new(None) };
+}
+
+fn follow_frozen_signal() -> Signal<bool> {
+    FOLLOW_FROZEN.with(|slot| {
+        if let Some(sig) = slot.get() {
+            return sig;
+        }
+        let (root, sig) = create_root(|cx| cx.signal(false));
+        std::mem::forget(root);
+        slot.set(Some(sig));
+        sig
+    })
+}
+
+/// Hold every follow-tail [`Scroll`] on this thread STILL: while frozen,
+/// a pinned scroller keeps showing the rows it is showing now instead of
+/// tracking the content's bottom edge across appends. Unfreezing re-pins
+/// to the live tail in one settle turn.
+///
+/// The engine sets this itself while a screen selection is live
+/// (`app::selection`): text that slides upward mid-drag is text you
+/// cannot copy, so a streaming transcript stops moving the moment a drag
+/// paints a region and resumes the instant it clears. Apps may drive it
+/// for their own freezes (a copy-mode overlay, a paused inspector) —
+/// last writer wins, and the engine writes only on selection edges.
+///
+/// It changes NOTHING else: `follow` stays armed (chrome still reads
+/// "following"), wheel and keys still scroll, and the offset repair
+/// still rescues a stranded view. A frozen scroller with no selection
+/// and no app writer is the default false — one signal read per pinned
+/// scroller per settle, nothing more.
+pub fn freeze_follow_tail(on: bool) {
+    follow_frozen_signal().set_if_changed(on);
+}
+
+/// Whether follow-tail is currently frozen ([`freeze_follow_tail`]).
+/// Reads inside a tracked computation re-run it on the next flip.
+pub fn follow_tail_frozen() -> bool {
+    follow_frozen_signal().get()
+}
 
 /// A clipped viewport over oversized mounted content: wheel, arrows,
 /// PgUp/PgDn, drag-able scrollbars, and the transcript idiom
@@ -268,7 +329,16 @@ impl Scroll {
                     },
                 ),
             };
-            let tail_pinned = vertical && follow.map(|f| f.get()).unwrap_or(false) && oy.get() > 0;
+            // A freeze (1300: a live screen selection, or an app's own
+            // call) drops the bottom anchor and hands the wrapper back
+            // to `top: -oy` — the offset the pin last wrote. Appends
+            // then grow BELOW the viewport instead of pushing the
+            // visible rows up, which is the whole point: the cells
+            // under a drag stay the cells the copy will read.
+            let tail_pinned = vertical
+                && follow.map(|f| f.get()).unwrap_or(false)
+                && oy.get() > 0
+                && !follow_frozen_signal().get();
             let inset = if tail_pinned {
                 Inset {
                     left: Some(-ox.get()),
@@ -337,6 +407,14 @@ impl Scroll {
             cx.effect(move || {
                 if !f.get() {
                     return; // extent/view re-track when re-armed
+                }
+                // Frozen (1300): the offset holds where it is, so the
+                // view holds too. The freeze signal is tracked BEFORE
+                // the early return — thawing re-runs this effect, which
+                // re-tracks extent/view and pins to the tail as it
+                // stands then (one settle turn, no jump backwards).
+                if follow_frozen_signal().get() {
+                    return;
                 }
                 let content_h = extent.get().1;
                 let view_h = view_box.get().1;
@@ -409,7 +487,14 @@ impl Scroll {
                 // and `oy` is only synced a turn later, so the stale value
                 // is not where the reader is — the pin IS the position.
                 // Stepping from it is what keeps a wheel-up off the head.
-                let base = if follow.is_some_and(|f| f.get_untracked()) {
+                // FROZEN (1300), the wrapper is top-anchored again and the
+                // pin writes nothing: `oy` IS the position, and stepping
+                // from the live bottom would jump the reader to the tail
+                // they are mid-drag over. Read untracked — a gesture is
+                // not a computation.
+                let base = if follow.is_some_and(|f| f.get_untracked())
+                    && !follow_frozen_signal().get_untracked()
+                {
                     max_off
                 } else {
                     oy.get_untracked()

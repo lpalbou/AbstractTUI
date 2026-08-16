@@ -100,7 +100,54 @@ runtime:
 The deliverable is headless test evidence and documented behavior, so other
 surfaces can intentionally match or intentionally differ.
 
-### 4. Keep package boundaries clean
+### 4. Turn the engine backlog into an executable migration lane
+
+For the Monday, August 10, 2026 migration push, this package should stop at
+generic guidance and carry a concrete ordered engine lane:
+
+1. `0895_bound_scroll_offset_ignored_inside_drawer_pages.md` first.
+   Deliverable: a drawer-context regression in `tests/wave_drawers.rs` that
+   drives a page by bound `Scroll::offset_y(Signal)` instead of wheel-only
+   input. Success means `agora-tui` can delete the app-side self-windowing
+   reader workaround and return to native `Scroll` + scrollbar behavior.
+2. `0890_disclosure_capped_body_undermeasures_rich_feed_items.md` next.
+   Deliverable: a headless Disclosure/Feed regression that proves capped rich
+   card bodies measure honestly. Success means `agora-tui` can restore honest
+   in-card scrolling instead of `max_body_rows(0)` plus block-level caps.
+3. `0910_scroll_of_widgets_needs_ensure_visible.md` after that.
+   Deliverable: a public Scroll ensure-visible or child-offset seam, pinned by
+   mixed-height widget selection tests. Success means `agora-tui` can delete
+   the hand-rolled `offset_of_card` height model and rely on engine layout
+   truth.
+4. `0900_completion_panel_needs_a_reserved_row_or_offset.md` and
+   `0905_drawer_vertical_insets_for_docked_chrome.md` after the higher-severity
+   fixes above.
+   Deliverable: the layout knobs needed to keep composer destination/status
+   chrome visible while completion panels or passive drawers are open.
+
+Each item should ship with three receipts:
+
+- the engine-side regression or acceptance proof in this repo;
+- the corresponding `field-agora` ledger update;
+- a consumer-side proof that `agora-tui` deleted the workaround or adopted the
+  new primitive honestly.
+
+### 5. Coordination asks from this package
+
+- `continuum` should treat this file as the `abstracttui` execution lane and
+  point the shared migration draft at the concrete engine items that gate the
+  TUI reference experience.
+- `agora-tui` should keep the current workaround/deletion map on-record for
+  `0895`, `0890`, and `0910`, and say whether `0900` / `0905` remain
+  release-gating for the live product shell.
+- `agora-wui` should treat the terminal fixtures as parity evidence and
+  interaction reference only; no browser runtime code should move into this
+  crate.
+- `agora` should keep bootstrap/protocol ownership above this crate and only
+  ask `abstracttui` for terminal-engine behavior, not setup/auth/session
+  policy.
+
+### 6. Keep package boundaries clean
 
 This crate should not take on:
 
@@ -124,7 +171,10 @@ Those decisions belong above this engine.
 
 ## Outputs Expected From `abstracttui`
 
-- Keep `plan/agora-ui.md` current as the package-local position.
+- Keep `plan/agora-ui.md` current as the package-local position and execution
+  lane.
 - Use the `field-agora` track as the live ledger for TUI-side Agora findings.
+- When an Agora migration item becomes critical here, ship the engine proof and
+  the consumer-side workaround deletion proof together.
 - Prefer targeted engine fixes plus tests over broad branding or packaging
   changes in this crate.

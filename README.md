@@ -38,7 +38,8 @@ through ordinary reactivity.*
 
 ## Highlights
 
-- **Widgets + layout** — buttons, text inputs, a multiline composer
+- **Widgets + layout** — buttons, text inputs (with Codex-compatible
+  word/line navigation and word-delete chords), a multiline composer
   (`TextArea` with history and completion dropdowns), selects (`Select` /
   `Combobox` / `MultiSelect` over anchored popups that layer above modals),
   lists and sortable tables with distinct selection and activation events
@@ -61,7 +62,9 @@ through ordinary reactivity.*
   lists, strikethrough, and lazy in-flow images. `MarkdownView` adds the
   reading surface: heading outline with anchor jumps, and find-in-document
   with highlighted matches. `Scroll::follow_tail` pins to the bottom until
-  the user scrolls and re-pins at the edge.
+  the user scrolls and re-pins at the edge; a screen-text drag freezes a
+  pinned tail until the copy or cancellation, so the rows under the
+  highlight cannot slide away mid-selection.
 - **Live data** — feed the UI from background threads through
   `channel_source` / `latest_source` / `bounded_source` (drop or coalesce
   policies with honest drop counters), a cancellable `interval` timer, and
@@ -71,8 +74,9 @@ through ordinary reactivity.*
   jittered exponential backoff. An idle app still costs zero — offline
   included.
 - **Selection + clipboard** — drag to select rendered text (wide-glyph safe,
-  pane-clamped), copy via OSC 52; or suspend mouse capture for native
-  terminal selection.
+  pane-clamped), copy via OSC 52, and keep a live follow-tail transcript
+  still while selecting; or suspend mouse capture for native terminal
+  selection.
 - **26 built-in themes** — catppuccin, rose-pine, tokyo-night, nord, one-dark,
   dracula, monokai, gruvbox, solarized, everforest and the Abstract originals —
   over 36 semantic design tokens, contrast-audited against WCAG floors, and
@@ -160,8 +164,8 @@ same dependency discipline, public core API only —
 [ADR-0004](docs/adr/0004-extension-packaging.md)):
 
 ```sh
-cargo add abstracttui-graph      # 0.1 — graph auto-layout + GraphView
-cargo add abstracttui-mermaid    # 0.1 — mermaid subset renderer
+cargo add abstracttui-graph      # 0.2 — graph auto-layout + GraphView
+cargo add abstracttui-mermaid    # 0.2 — mermaid subset renderer
 ```
 
 ## Run the examples

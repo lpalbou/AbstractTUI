@@ -327,6 +327,54 @@ fn follow_tail_pins_growth_disengages_on_wheel_and_rearms_at_bottom() {
 }
 
 #[test]
+fn frozen_follow_tail_holds_its_rows_and_repins_on_thaw() {
+    // 1300: a live screen selection freezes the tail so the cells under
+    // the drag are the cells the copy reads. The freeze is the widgets-
+    // layer half — driven here directly, wired to `app::selection` in
+    // `tests/adv_selection.rs`.
+    let size = Size::new(16, 4);
+    let (root, mut tree, rig) = mount_follow_feed(size);
+    for i in 0..10 {
+        rig.feed
+            .push(format!("m{i}"), FeedItem::text(format!("line {i}")));
+    }
+    let canvas = settle(&mut tree, size);
+    assert!(canvas.row_text(3).contains("line 9"), "pinned to the tail");
+    // Text columns only: the scrollbar thumb SHOULD move while frozen —
+    // content grew below the viewport and the bar reports that honestly.
+    let body = |s: String| s.chars().take((size.w - 1) as usize).collect::<String>();
+    let held: Vec<String> = (0..4).map(|y| body(canvas.row_text(y))).collect();
+
+    // Frozen: appends land below the viewport, the visible rows do not
+    // move, and `follow` stays ARMED (a freeze is not a disengage — the
+    // app's "following" chrome must not flicker for the drag).
+    super::freeze_follow_tail(true);
+    rig.feed.push("m10", FeedItem::text("line 10"));
+    rig.feed.push("m11", FeedItem::text("line 11"));
+    let canvas = settle(&mut tree, size);
+    assert_eq!(
+        (0..4).map(|y| body(canvas.row_text(y))).collect::<Vec<_>>(),
+        held,
+        "a frozen tail must not move under the selection"
+    );
+    assert!(
+        rig.follow.get_untracked(),
+        "freezing must not disengage follow"
+    );
+
+    // Thawed: one settle turn re-pins to the tail AS IT STANDS NOW —
+    // the frozen appends are not replayed, the view jumps to live.
+    super::freeze_follow_tail(false);
+    let canvas = settle(&mut tree, size);
+    assert!(
+        canvas.row_text(3).contains("line 11"),
+        "thaw re-pins to the live tail: {:?}",
+        (0..4).map(|y| canvas.row_text(y)).collect::<Vec<_>>()
+    );
+    root.dispose();
+}
+
+#[test]
 fn app_can_force_follow_to_jump_to_latest() {
     let size = Size::new(16, 4);
     let (root, mut tree, rig) = mount_follow_feed(size);

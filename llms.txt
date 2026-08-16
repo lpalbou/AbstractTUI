@@ -17,7 +17,8 @@
 > channel the terminal proves (kitty graphics, iTerm2, sixel, or unicode mosaic),
 > software-rasterized 3D from GLB files (textures, animation, skinning — no GPU),
 > cell-shader animation with tweens, easings, and timelines, streaming transcripts
-> (`Feed` + follow-tail scroll + a multiline composer with completion) speaking the full
+> (`Feed` + follow-tail scroll that pauses during a screen-text selection + a multiline composer
+> with completion) speaking the full
 > markdown doc vocabulary (GFM tables that render live while streaming, task lists, lazy
 > in-flow images) with a document reader surface (heading outline and anchor jumps,
 > find-in-document highlights), a live-data lane for background producers (bounded
@@ -29,8 +30,9 @@
 > `r: <value>` footer label grammar, and a streaming last-wins ThinkingFold for
 > reasoning text arriving from result metadata), file-attachment surfaces (a paste intercept
 > with a cross-terminal file-drop classifier plus a directory FilePicker widget, so
-> a dropped file becomes an attachment instead of pasted text), text selection with
-> OSC 52 clipboard copy, an
+> a dropped file becomes an attachment instead of pasted text), Codex-compatible word/line
+> editing and word-delete chords in both text widgets, text selection with OSC 52 clipboard
+> copy, an
 > optional boot splash, and a headless testing harness that drives the production
 > pipeline without a pty — including screenshot capture with deterministic plain-text,
 > replayable-ANSI and GitHub-renderable-SVG exporters. A public sub-cell vector canvas
@@ -61,7 +63,9 @@
   small-terminals & content-pressure guarantees and recipes),
   the widget catalog (`List` and `Table` selection-vs-activation, `List` removable
   rows (`on_remove`), row accessories, hover ink, bindable `selection`/`offset_y`
-  and `on_row_double_click`, masked `TextInput`,
+  and `on_row_double_click`, masked `TextInput`, Codex-compatible word/line navigation
+  and word-delete chords in both text widgets, and `scroll::freeze_follow_tail` for
+  copy-safe streaming selection,
   diff-aware `CodeView`,
   `Feed` streaming/rich lines/sync/selection-by-key, chart history rings with time axes,
   `Meter`/`AudioScope` levels, the `PageHost` page-level tab host, the `Block`
@@ -130,9 +134,9 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, **0.3.1** (2026-08-01) the current one —
-  released alongside the first extension-family crates (`abstracttui-graph` 0.1.0,
-  `abstracttui-mermaid` 0.1.0, each with its own changelog under `extensions/`).
+  (2026-07-21) is the first public release, **0.3.2** (2026-08-17) the current one.
+  The extension family is at `abstracttui-graph` 0.2.0 and
+  `abstracttui-mermaid` 0.2.0, each with its own changelog under `extensions/`.
 - [Contributing](CONTRIBUTING.md): Building, the test suite (~2,120 core tests; ~2,245
   with the extension family via `--workspace`, the CI gate) and the explicitly-run suites
   (live pty, two release-mode perf-budget suites with byte-emission ratchets, plus the

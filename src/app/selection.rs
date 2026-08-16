@@ -45,6 +45,18 @@
 //!   0150's clipboard leg) — queue any text for OSC 52 emission through
 //!   the same custody path, from any component handler.
 //!
+//! ## A live selection freezes follow-tail (first-app/1300)
+//!
+//! The region is SCREEN space, so content that keeps scrolling under it
+//! turns the copy into a lie: the highlight covers the rows the user
+//! aimed at, and the release copies whatever those cells hold by then.
+//! While a region is visible the layer therefore calls
+//! [`widgets::scroll::freeze_follow_tail`](crate::widgets::scroll::freeze_follow_tail)
+//! — every pinned `Scroll` holds its rows still, appends grow below the
+//! viewport, and clearing the region (release-copy, Esc, a dismissing
+//! click) re-pins to the live tail. Streaming apps need no wiring: what
+//! you highlight is what you get, mid-run or idle.
+//!
 //! ## Honesty: this is SCREEN-text extraction
 //!
 //! The copied text is what the composed frame shows — glyphs from the
@@ -129,6 +141,18 @@ pub fn copy_to_clipboard(text: impl Into<String>) {
 // ---------------------------------------------------------------------------
 // Selection (tier 3)
 // ---------------------------------------------------------------------------
+
+/// Publish the region's liveness DOWN to the widgets layer (1300): a
+/// visible region freezes every follow-tail `Scroll`, so a streaming
+/// transcript holds still for the length of the drag. Screen-space
+/// selection over auto-scrolling content is otherwise a copy of
+/// whatever landed on those cells at release — the highlight says one
+/// thing and the clipboard gets another. Called from EVERY state
+/// transition that can change `region.is_some()`; the setter is
+/// idempotent (`set_if_changed`), so the steady state costs nothing.
+fn publish_freeze(st: &SelectionState) {
+    crate::widgets::scroll::freeze_follow_tail(st.region.is_some());
+}
 
 /// One selection region: anchor + head (screen cells, both inclusive),
 /// row-flowed within `clamp` (the pane rect resolved at drag start).
@@ -276,6 +300,7 @@ impl Selection {
             st.dirty = true;
             request_frame();
         }
+        publish_freeze(st);
     }
 
     // ---- driver plumbing (crate-internal) --------------------------------
@@ -301,6 +326,7 @@ impl Selection {
                         if dismissed {
                             st.dirty = true;
                             request_frame();
+                            publish_freeze(&st); // dismissal thaws the tail
                         }
                         let clamp = clamp_at(m.pos);
                         st.drag = Some(DragArm {
@@ -351,6 +377,9 @@ impl Selection {
                             st.region = Some(next);
                             st.dirty = true;
                             request_frame();
+                            // The first drag off the anchor cell is the
+                            // edge that freezes the tail (1300).
+                            publish_freeze(&st);
                         }
                         if claiming && arm.press_routed {
                             // First drag off the anchor cell: the layer
@@ -496,6 +525,7 @@ impl Selection {
         st.region = None;
         st.painted.clear();
         st.dirty = false;
+        publish_freeze(&st);
     }
 
     /// Resize invalidates screen-space geometry wholesale: clear the
@@ -506,6 +536,7 @@ impl Selection {
         st.region = None;
         st.painted.clear();
         st.dirty = false;
+        publish_freeze(&st);
     }
 }
 

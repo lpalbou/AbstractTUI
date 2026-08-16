@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-08-17
+
+### Added
+
+- widgets: **Codex-compatible navigation chords in `TextInput` and
+  `TextArea`** (first-app/1310) — Codex's default editor keymap adopted
+  verbatim: `move_word_left`/`move_word_right` (Alt+b/Alt+f, Alt+←/→,
+  Ctrl+←/→), `move_line_start`/`move_line_end` (Home/Ctrl+A,
+  End/Ctrl+E), `delete_backward_word` (Alt+Backspace, Ctrl+Backspace,
+  Ctrl+W) and `delete_forward_word` (Alt+Delete, Ctrl+Delete, Alt+D).
+  Shift extends the selection by word on every form. The letters claim
+  exactly one modifier, so AltGr (Ctrl+Alt) never reads as a word chord.
+  Codex's character-motion, kill and yank chords (`Ctrl+B`/`F`/`D`/`U`/
+  `K`/`Y`) are deliberately NOT claimed — they collide with app
+  bindings too often. Note that a focused editor now consumes the
+  chords above, which previously fell through to global actions.
+
+- widgets: `scroll::freeze_follow_tail` / `scroll::follow_tail_frozen` —
+  hold every follow-tail `Scroll` on the thread still without
+  disengaging it. Frozen, a pinned scroller keeps the rows it is showing
+  and appends grow below the viewport; thawing re-pins to the tail as it
+  stands then (`follow` never flips, so "following" chrome does not
+  flicker).
+
+### Fixed
+
+- widgets: an anchor parked ON the caret (Shift+Left then Shift+Right)
+  survived the next delete, which moved the caret out from under it and
+  turned it into a phantom one-character selection that the following
+  keystroke silently replaced. `delete_selection` drops an empty anchor
+  in both text widgets now.
+- widgets: a word delete at the buffer edge reported an edit that never
+  happened — holding `Alt+Backspace` at position 0 fired `on_change`
+  (and pushed history) per key repeat.
+- app: a live screen selection now FREEZES follow-tail scrollers
+  (first-app/1300 — `app::selection` drives the freeze above). Selection is
+  screen-space, so a streaming transcript that kept scrolling under a
+  drag copied whatever landed on those cells by release: the highlight
+  said one thing and the clipboard got another. Now the transcript holds
+  still for the length of the drag and returns to the live tail when the
+  region clears. Field report: abstractcode-tui, 2026-08-16 ("I cannot
+  copy text while it works"). No app wiring — streaming apps inherit it.
+
 ## [0.3.1] - 2026-08-01
 
 ### Fixed

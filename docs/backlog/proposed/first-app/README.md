@@ -71,6 +71,17 @@ Completed 2026-07-24 (disclosure wave, jointly with field-agora 0850):
 | --- | --- | --- |
 | 0260 | Disclosure widget — standalone fold/unfold card shipped (`▸`/`▾` title row + detail slot, click/Enter/Space toggle, `max_body_rows` cap + auto-hiding scrollbar, uncontrolled + `folded(Signal<bool>)` modes, folded = body unmounted) with the Feed enablers (`on_item_press`, `item_at_row`) and the documented message-card recipe. The feed-NATIVE card kind stays future work behind 0280's draw-only block boundary. | feature |
 
+Completed 2026-08-16 (clipboard-truth wave — band continuation):
+
+| ID | Title | Class |
+| --- | --- | --- |
+| 1310 | Codex-compatible navigation chords in both text widgets — Codex's `EditorKeymap` defaults adopted verbatim (word motion in all three spellings, line start/end incl. Ctrl+A/Ctrl+E, the delete-word family), pinned by a parity test. A parser-level meta-prefix decode was built and REVERTED as out of scope: Codex covers that terminal at the keymap level. Adversarial review also caught a phantom-selection bug and a no-op `on_change`. | feature |
+| 1300 | A live selection freezes follow-tail — screen-space selection over a pinned `Scroll` copied whatever the stream had put on those cells by release (`widgets::scroll::freeze_follow_tail` + the `app::selection` publisher). Filed with the second half of the same report, which was a version fact: 0.2.20 had no host-clipboard fallback, so every copy died with OSC 52 unadvertised (fixed by 0.2.25/0.3.0 — abstractcode-tui bumped). | bug |
+
+**Band continuation**: 0220–0299 is full, so this track continues at
+**1300–1340** (the next-free-fifty rule, stated in
+`../field-core/README.md`; 1250–1290 is app-kits' continuation).
+
 Table reconciliation (2026-07-23, by the consumer while filing 0281-0283):
 the open table above had gone stale against the directory — 0250 (fixed
 0.2.0), 0290 (0.2.2), 0297 (0.2.3) and 0298 all live in

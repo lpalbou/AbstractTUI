@@ -920,6 +920,14 @@ fn log_pane(cx: Scope, content: View) -> View {
 }
 ```
 
+`freeze_follow_tail(bool)` holds a pinned scroller still WITHOUT
+disengaging it: the visible rows stay put, appends grow below the
+viewport, and thawing re-pins to the tail as it stands then. The engine
+drives it from the selection layer so a drag over a streaming transcript
+copies the text it highlights (see
+[app::selection](#appselection--screen-text-selection-and-clipboard-copy));
+apps can drive it for their own freezes.
+
 ### Modal content that can overflow
 
 Put the overflow inside a `Scroll` and keep the fixed rows fixed — the
@@ -990,6 +998,38 @@ focused-and-empty, one cell past the caret in the same `text_faint`
 ink, so the caret block stays visible beside it — the convention
 modern editors ship. The option is off by default; `TextInput` has the
 same option.
+
+### Navigation chords (Codex-compatible)
+
+Both text widgets take **Codex's default editor keymap**
+(`codex-rs/tui/src/keymap.rs`), so muscle memory carries across:
+
+| Codex binding | Keys | Effect |
+|---|---|---|
+| `move_word_left` / `move_word_right` | Alt+b / Alt+f, Alt+←/→, Ctrl+←/→ | caret by word |
+| `move_line_start` / `move_line_end` | Home / End, Ctrl+A / Ctrl+E | caret to line start/end |
+| `delete_backward_word` | Alt+Backspace, Ctrl+Backspace, Ctrl+W | delete word before caret |
+| `delete_forward_word` | Alt+Delete, Ctrl+Delete, Alt+D | delete word after caret |
+
+Three spellings per gesture is what Codex binds, and for good reason:
+macOS has no Option-arrow escape of its own, so iTerm2's "Natural Text
+Editing" preset sends readline's `ESC b`/`ESC f`, while `CSI 1;3D` is
+the kitty/WezTerm form and `CSI 1;5D` the Linux/Windows one. Shift
+rides along on any of them to extend the selection by word. Ctrl+Home /
+Ctrl+End remain document start/end (beyond Codex's table).
+
+Two consequences worth knowing:
+
+- A focused editor CONSUMES these chords — including `Alt+b`/`Alt+f`/
+  `Alt+d`, `Ctrl+W` and `Ctrl+A`/`Ctrl+E` — which otherwise reach your
+  keymap. That is the cost of matching Codex; check for collisions with
+  your own bindings. `Ctrl+B`, `Ctrl+F`, `Ctrl+D`, `Ctrl+U`, `Ctrl+K`
+  and `Ctrl+Y` are NOT claimed: Codex binds them for character motion,
+  kill and yank, but they collide with app chords far more often, so
+  they stay yours.
+- A masked `TextInput` (`.masked(true)`) treats the whole value as ONE
+  word for every one of these, motion and delete alike: word boundaries
+  in a secret would otherwise be readable from caret positions.
 
 ### Completion dropdown (anchored panel)
 
@@ -1867,6 +1907,17 @@ Selection semantics, stated plainly:
   box of the nearest clipping or padded ancestor (a `Scroll` viewport, a
   bordered `Block`), else the whole tree — so sibling panes and border
   glyphs never leak into a copy.
+- **A live region freezes follow-tail.** Because the region is screen
+  space, content that keeps scrolling under it turns the copy into a
+  lie — the highlight covers the rows you aimed at, the release copies
+  whatever those cells hold by then. While a region is visible the
+  engine calls `widgets::scroll::freeze_follow_tail(true)`: every pinned
+  `Scroll` holds its rows, appends grow below the viewport, and clearing
+  the region (release-copy, Esc, a dismissing click) re-pins to the tail
+  as it stands then. `follow` itself never flips, so "following /
+  scrolled" chrome does not flicker for a drag. Streaming apps inherit
+  this — nothing to wire — and may drive the same verb for their own
+  freezes.
 - **Zero idle cost.** With no active selection the render hook is two
   empty checks; a parked selection renders no frames until something
   changes.
