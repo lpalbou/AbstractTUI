@@ -10,7 +10,7 @@ mosaic), software-rasterized 3D (GLB), themes, and animation.
 | --- | --- |
 | [getting-started.md](getting-started.md) | Install, the first app, core concepts — the 60-second path to a running program. |
 | [architecture.md](architecture.md) | How the engine fits together: signals, layout, the damage-tracked compositor, the terminal layer. |
-| [api.md](api.md) | The public API surface, module by module — including Codex-compatible text editing chords and selection-safe follow-tail scrolling. |
+| [api.md](api.md) | The public API surface, module by module — including Codex-compatible text editing chords, selection-safe follow-tail scrolling, and the `DrawerDock` drawer rail. |
 | [theming.md](theming.md) | The 36-token semantic model, the 26 built-in themes, runtime switching, theme modes and the drop-in `ThemeSwitcher`, contrast guarantees, custom theme registration, and styling rules for widget authors. |
 | [graphics-and-3d.md](graphics-and-3d.md) | Images end-to-end (decode → bitmap → widget/protocols, the capability ladder, mosaic modes), the 3D pipeline (GLB loading, scenes, the Viewport3D widget, animation), the boot splash, honest limits, and measured performance. |
 | [graphs-and-diagrams.md](graphs-and-diagrams.md) | The extension family (`abstracttui-graph`, `abstracttui-mermaid`): layout pass selection (layered vs force vs grid), the `GraphDesc -> Layout` contract, `GraphView` usage, the mermaid subset table and its atomic fallback, install lines and worked examples. |

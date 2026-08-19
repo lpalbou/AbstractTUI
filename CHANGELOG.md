@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2026-08-19
+
+### Fixed
+
+- render: `Screenshot::to_svg` produced files that DISTORT in
+  Chromium-based viewers: merged text runs contributed no characters
+  for never-painted cells while `textLength` still spanned them (every
+  glyph in the run stretched), and run padding used real spaces under
+  `xml:space="preserve"`, which Chromium ignores — leading/trailing
+  spaces collapsed and stretched the survivors. Blank cells now emit
+  U+00A0, so a run's character count always equals the cells it spans
+  and nothing is collapsible. Affects every SVG export.
+
+### Added
+
+- widgets: **`DrawerDock`** (app-kits 1255) — a right-edge rail of
+  always-visible vertical tabs, each fronting a docked side panel: at
+  most one open, and the panel column vanishes entirely while none is.
+  The panel DOCKS in layout (content reflows around it) — the
+  transient, sliding, scrimmed cousin remains `app::drawer`. Open state
+  is a bindable `Signal<Option<String>>` (`None` = collapsed): the dock
+  renders and mutates it, apps drive it from keys or restore it across
+  sessions. Closed drawers are disposed (the PageHost generation-scope
+  recipe; durable state lives in app signals outside the builders).
+  Tabs carry reactive badge dots (`drawer_badge`); titles truncate
+  clear of the ✕ close corner and rail labels render one grapheme
+  cluster per row. Collapse via the active tab, the panel's ✕ corner
+  region, or Esc while focus is inside the panel. Drawer builders must
+  not write `open` synchronously (redirect from `on_change` or an
+  effect; debug builds assert). `cargo run --example drawer_dock`
+  demonstrates it;
+  `tests/shot_drawer_dock.rs` drives every state through wire-level
+  clicks and doubles as the screenshot harness
+  (`DRAWER_DOCK_SHOTS=<dir>` writes SVG captures).
+
 ## [0.3.3] - 2026-08-19
 
 `0.3.2` was tagged but never reached crates.io: the release pipeline's

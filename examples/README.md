@@ -28,6 +28,7 @@ the previous one:
 | 4 · interaction | `activate.rs` | selection vs activation on `List` and `Table`; double-click, honestly |
 | 4 · interaction | `presence_board.rs` | rich list rows + trailing × accessory + timed double-click body (chat sidebar pattern) |
 | 4 · interaction | `interaction_affordances.rs` | hover ink, removable rows, live filtering, nested scroll wheel bubbling |
+| 4 · interaction | `drawer_dock.rs` | the right-edge drawer rail (`DrawerDock`): docked panels, full collapse, badge dots |
 | 4 · interaction | `decide.rs` | the modal decision gate (`ChoicePrompt`): confirmations, multi-pick, chains |
 | 5 · content + live data | `feed.rs` | background threads → bounded ingestion → `Feed` with follow-tail |
 | 5 · content + live data | `transcript.rs` | streaming markdown chat: tables render live, composer with completion |
@@ -218,6 +219,21 @@ sequence (`ChoiceSequence`). Must-choose mode refuses Esc visibly.
 - Needs: any tty.
 - Looks like: a focus-trapped question card over a dimmed app, options
   answering single keys.
+
+## drawer_dock
+
+The right-edge drawer rail (`DrawerDock`): a transcript-shaped surface
+with Assistant / Files / Desk docked behind always-visible vertical
+tabs. Click a tab to dock its panel open (content reflows around it);
+click the active tab or the panel's ✕ to collapse to the bare rail.
+The Desk tab carries a reactive badge dot that its own drawer consumes
+on open — the durable-state recipe (signals outside the builders).
+
+- Keys: `1`/`2`/`3` open drawers · `0` collapse · `q` quit — the keys
+  write the same `open` signal the tabs do.
+- Needs: any tty; mouse for the tabs and ✕.
+- Looks like: the web team-page drawer rail, in cells.
+- Run: `cargo run --example drawer_dock`
 
 ## feed
 

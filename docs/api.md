@@ -258,6 +258,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
 - **PageHost** — the page-level tab host: N FULL pages behind one themed tab bar, exactly one mounted (see [its own section](#widgetspagehost--the-page-level-tab-host) below).
+- **DrawerDock** — the right-edge drawer rail: always-visible vertical tabs, each fronting a docked side panel — at most one open, fully collapsed to the bare rail otherwise, with reactive badge dots (see [its own section](#widgetsdrawerdock--the-right-edge-drawer-rail) below).
 - **Disclosure** — the fold/unfold card: a one-row title header (glyph + truncating title + muted detail slot) that expands a body in place. Click or Enter/Space toggles; `max_body_rows` caps the body behind a scrollbar; state is widget-internal (`initially_folded`) or app-owned (`folded(Signal<bool>)`).
 - **FilePicker** — directory browser for modals and attach flows: breadcrumb header, type-to-filter input, entry rows with kind glyphs and an optional size column, opt-in multi-select, `on_pick(Vec<String>)`; entries come from the pluggable `FileSource` seam (see [the file-attachments section](#file-attachments--paste-intercept-drop-classifier-filepicker) below).
 - **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override) and can be read back through `extent_signal`; `follow_tail` binds the pinned-to-bottom idiom; `scrollbar_auto_hide` hides the bar while content fits.
@@ -1164,6 +1165,65 @@ fn command_picker(cx: Scope) -> (View, SelectHandle) {
     (view, picker) // `/theme` handler calls picker.open()
 }
 ```
+
+## widgets::DrawerDock — the right-edge drawer rail
+
+The team-page pattern in cells: a persistent rail of vertical tabs on
+the right edge, each fronting a docked side panel. At most one drawer
+is open; while none is, the panel column vanishes entirely and the
+content takes every cell up to the rail. The panel DOCKS in layout —
+content reflows around it. (The transient, sliding, scrimmed cousin is
+[`app::drawer`](#appdrawer); reach for the dock when the drawers are
+permanent chrome, for the drawer when they are an occasional overlay.)
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::widgets::DrawerDock;
+
+fn shell(cx: Scope, content: View) -> View {
+    let open = cx.signal(None::<String>); // None = collapsed
+    let desk_waiting = cx.signal(true);   // durable: lives OUTSIDE the builders
+    DrawerDock::new(content)
+        .drawer("assistant", "Assistant", |cx| assistant_panel(cx))
+        .drawer("files", "Files", |cx| files_panel(cx))
+        .drawer("desk", "Desk", move |cx| desk_panel(cx))
+        .drawer_badge(move || desk_waiting.get()) // dot under the Desk tab
+        .open(open)          // bindable both ways; keys just write it
+        .panel_width(40)
+        .view(cx)
+}
+```
+
+The contract, stated plainly:
+
+- **Click a tab** to open its drawer (replacing any other). Click the
+  ACTIVE tab or the panel header's ✕ corner region to collapse. Esc
+  also collapses, but only while focus sits INSIDE the panel — a
+  text-only drawer that never takes focus closes by mouse alone, like
+  the web reference.
+- **Builders must not write `open` synchronously** — a redirect belongs
+  in `on_change` or an effect. The builder runs inside the panel's own
+  tracked computation, where a same-turn write silently desyncs state
+  from screen; debug builds assert. Keep tab titles short: the rail
+  renders tabs top-down at fixed height, and a tab past the viewport
+  bottom is clipped and unreachable by mouse.
+- **`open` is the API.** A `Signal<Option<String>>` of the drawer id.
+  The dock renders and mutates it; the app may write it any time —
+  external writes switch panels without firing `on_change`, dock-driven
+  transitions fire it after the state write (a handler may dispose the
+  dock's scope). There are no container-reserved chords: bind your own
+  keys by writing the signal.
+- **Closed = disposed** (the PageHost recipe): only the open drawer's
+  body is mounted, inside a generation scope that dies on close/switch.
+  Durable drawer state lives in app signals created outside the
+  builders, which re-read them on remount.
+- **Badges** (`drawer_badge`, attaches to the last-added drawer): while
+  the closure answers true, an accent dot renders under that tab's
+  label — "something waits behind this drawer", readable without
+  opening it. Resolved reactively inside the rail's region.
+
+`cargo run --example drawer_dock` is the demo; `1`-`5`/`0` drive the
+same signal the tabs write.
 
 ## widgets::PageHost — the page-level tab host
 

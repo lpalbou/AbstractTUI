@@ -24,6 +24,7 @@ pub mod chart;
 pub mod checkbox;
 pub mod code;
 pub mod disclosure;
+pub mod drawer_dock;
 pub(crate) mod edit_keys;
 pub mod feed;
 pub mod file_picker;
@@ -91,6 +92,7 @@ pub use markdown::{MdSearchMatch, OutlineEntry};
 // Appended (wave 7, first-app 0260 + field-agora 0850): the
 // fold/unfold card.
 pub use disclosure::Disclosure;
+pub use drawer_dock::DrawerDock;
 // Appended (wave 8, app-kits 0545): the page-level tab host.
 pub use page_host::PageHost;
 // Appended (first-app 0273, the attachments wave): the paste
@@ -179,7 +181,7 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 44] = [
+    const SOURCES: [(&str, &str); 45] = [
         ("mod.rs", include_str!("mod.rs")),
         ("audio_scope.rs", include_str!("audio_scope.rs")),
         ("meter.rs", include_str!("meter.rs")),
@@ -194,6 +196,7 @@ mod lint_tests {
         ("checkbox.rs", include_str!("checkbox.rs")),
         ("code.rs", include_str!("code.rs")),
         ("disclosure.rs", include_str!("disclosure.rs")),
+        ("drawer_dock.rs", include_str!("drawer_dock.rs")),
         ("feed.rs", include_str!("feed.rs")),
         ("feed_draw.rs", include_str!("feed_draw.rs")),
         ("feed_item.rs", include_str!("feed_item.rs")),

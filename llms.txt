@@ -68,7 +68,8 @@
   copy-safe streaming selection,
   diff-aware `CodeView`,
   `Feed` streaming/rich lines/sync/selection-by-key, chart history rings with time axes,
-  `Meter`/`AudioScope` levels, the `PageHost` page-level tab host, the `Block`
+  `Meter`/`AudioScope` levels, the `PageHost` page-level tab host, the `DrawerDock`
+  right-edge drawer rail (docked panels, full collapse, badge dots), the `Block`
   close affordance `on_close`), the widget
   disposal-safety law, the file-attachment surfaces (`Element::on_paste` capture hook,
   `TextInput`/`TextArea`

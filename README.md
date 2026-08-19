@@ -47,11 +47,13 @@ through ordinary reactivity.*
   trailing accessory columns and rich row labels — see `presence_board`),
   tabs, checkboxes, radio groups, scroll regions, panels (closable via an
   opt-in title-row ✕), a directory `FilePicker`, badges, progress
-  bars, spinners, modals, toasts, tooltips — plus the app-shell pair:
+  bars, spinners, modals, toasts, tooltips — plus the app-shell trio:
   `PageHost` (full pages behind one themed tab bar — container-reserved
-  chords, reactive tab badges, overflow windowing) and `Drawer`
+  chords, reactive tab badges, overflow windowing), `Drawer`
   (edge-anchored overlay panels, modal or glanceable, sliding from any
-  edge) — arranged by a flexbox-style solver
+  edge) and `DrawerDock` (a right-edge rail of always-visible vertical
+  tabs fronting docked side panels — one open at a time, fully
+  collapsed otherwise, reactive badge dots) — arranged by a flexbox-style solver
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
 - **Transcripts and documents** — `Feed` renders append-only conversations

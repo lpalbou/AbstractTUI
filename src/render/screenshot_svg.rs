@@ -145,7 +145,7 @@ impl Screenshot {
                 let key = style_key(cell, default_fg, default_bg);
                 let start = x;
                 run.clear();
-                run.push_str(cell.text());
+                let mut has_ink = push_run_glyph(&mut run, cell.text());
                 x += 1;
                 while x < self.width() {
                     let Some(next) = self.cell(x, y) else { break };
@@ -155,15 +155,17 @@ impl Screenshot {
                     {
                         break;
                     }
-                    run.push_str(next.text());
+                    has_ink |= push_run_glyph(&mut run, next.text());
                     x += 1;
                 }
-                if run.bytes().any(|b| b != b' ') {
+                if has_ink {
                     emit_text_run(out, start, y, x - start, cell, &run, default_fg, default_bg);
                 }
             }
         }
     }
+
+    // (svg_text_runs helper lives below as a free fn)
 
     /// Underline (incl. undercurl, downleveled straight) and strike
     /// rects, merged per same-color run.
@@ -268,6 +270,35 @@ fn style_key(c: &ShotCell, default_fg: Rgba, default_bg: Rgba) -> (Rgba, bool, b
         c.attrs().contains(Attrs::DIM),
         c.attrs().contains(Attrs::ITALIC),
     )
+}
+
+/// Append one narrow cell's glyph to a merged run, keeping the run's
+/// CHARACTER COUNT equal to the cells it spans — the invariant
+/// `textLength` depends on. Blank cells become U+00A0 (same advance as
+/// a space in every monospace font) for two reasons, both viewer
+/// truths rather than spec truths:
+///
+/// - a NEVER-painted cell reports empty text; pushing nothing while
+///   the run still spans its column made the run shorter than its
+///   `textLength`, and `spacingAndGlyphs` then STRETCHED every glyph
+///   in the run (the distortion is in the FILE, not the viewer);
+/// - Chromium ignores the deprecated `xml:space="preserve"`, so real
+///   leading/trailing spaces collapse and the survivors stretch the
+///   same way. NBSP is not collapsible whitespace.
+///
+/// Returns whether the cell carries visible ink (a run of nothing but
+/// blanks is skipped — the background rects already paint it).
+fn push_run_glyph(run: &mut String, text: &str) -> bool {
+    match text {
+        "" | " " => {
+            run.push('\u{a0}');
+            false
+        }
+        t => {
+            run.push_str(t);
+            true
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
