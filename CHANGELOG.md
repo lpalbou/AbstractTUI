@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- ci/tests: the RT5 controlling-terminal probes fork the test binary to
+  give their pty child a real ctty, and fork from the THREADED default
+  suite deadlocks in the parent's atfork handlers on GitHub's macos
+  runners — the macOS test job hung to its 30-minute timeout. The two
+  probes are now ignore-gated into the serial live tier, where the CI
+  live-pty jobs (ubuntu, and a new macos leg for the Darwin verdict
+  halves) run them with `--test-threads=1`. Local invocation:
+  `cargo test --lib -- --ignored --test-threads=1 term::rt5_live_tests`.
+
 ## [0.3.4] - 2026-08-19
 
 ### Fixed

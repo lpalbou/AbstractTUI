@@ -267,7 +267,14 @@ fn rt5_child_engine_read() {
 }
 
 // ---------------------------------------------------------------------------
-// PARENT tests (run in the normal suite; skip gracefully without a pty).
+// PARENT tests — LIVE TIER ONLY (`--ignored --test-threads=1`, the
+// live-pty CI job). They fork THIS multithreaded test binary to spawn
+// the pty child; fork from a threaded process can deadlock in the
+// parent's atfork handlers, and on GitHub's macos-latest image
+// (2026-08) it does so reliably — the default suite hung at its
+// 30-minute job timeout twice with this test silently stuck. Serial
+// execution removes the race (every other harness thread is parked at
+// fork time), which is exactly why the live tier exists.
 // ---------------------------------------------------------------------------
 
 /// THE DECISIVE TEST: with a perfect controlling terminal, the /dev/tty
@@ -276,6 +283,8 @@ fn rt5_child_engine_read() {
 /// (eliminated: the ctty is established by construction here) from the
 /// real platform behavior the engine must handle.
 #[test]
+#[ignore = "live pty probe (forks the threaded harness) — run serially: \
+            cargo test --lib -- --ignored --test-threads=1 term::rt5_live_tests"]
 fn devtty_alias_vs_real_device_poll() {
     let (master, child) = match spawn_child_test("term::rt5_live_tests::rt5_child_alias_vs_real") {
         Ok(v) => v,
@@ -330,6 +339,8 @@ fn devtty_alias_vs_real_device_poll() {
 /// keystroke under a proper ctty (the exact path every real terminal
 /// runs). This is the kernel-side twin of REDTEAM's RT5-1 acceptance.
 #[test]
+#[ignore = "live pty probe (forks the threaded harness) — run serially: \
+            cargo test --lib -- --ignored --test-threads=1 term::rt5_live_tests"]
 fn engine_keystrokes_flow_on_ctty_path() {
     let (master, child) = match spawn_child_test("term::rt5_live_tests::rt5_child_engine_read") {
         Ok(v) => v,

@@ -109,6 +109,33 @@ jobs:
         run: cargo build --examples
       - name: Live pty suite (serial)
         run: cargo test --test live_smoke -- --ignored --test-threads=1
+      - name: RT5 ctty probes (serial)
+        run: >-
+          cargo test --lib -- --ignored --test-threads=1 --exact
+          term::rt5_live_tests::devtty_alias_vs_real_device_poll
+          term::rt5_live_tests::engine_keystrokes_flow_on_ctty_path
+
+  # The RT5 probes' Darwin verdict halves (the /dev/tty POLLNVAL root
+  # cause) only assert on macOS, so they need a macOS runner. They fork
+  # the test binary to give the child a real controlling terminal —
+  # which is exactly why they are ignore-gated out of the THREADED
+  # default suite: fork from a multithreaded process deadlocks in the
+  # parent's atfork handlers on the 2026-08 macos-latest image (the
+  # default job hung to its 30-minute timeout, twice). Serial execution
+  # parks every other harness thread across the fork.
+  live-pty-macos:
+    name: live pty (macos)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: RT5 ctty probes (serial)
+        run: >-
+          cargo test --lib -- --ignored --test-threads=1 --exact
+          term::rt5_live_tests::devtty_alias_vs_real_device_poll
+          term::rt5_live_tests::engine_keystrokes_flow_on_ctty_path
 
   # MSRV gate (backlog 0180): the declared `rust-version` in Cargo.toml
   # must actually compile the whole tree. Pinned toolchain, `--locked`
