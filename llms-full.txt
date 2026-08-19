@@ -2873,12 +2873,18 @@ at once. The key table while a region is visible (i.e. mid-drag):
 | anything else  | routes to the app normally               |
 
 Ctrl+C only quits when no region is visible. Wheel scrolling, hover, and
-every other key route normally the whole time. Copies travel as OSC 52
-through the presenter's byte custody;
-terminals that did not advertise the capability still get the bytes
-(harmless) plus a one-time labeled startup notice, and under tmux the
-sequence is deliberately not passthrough-wrapped (tmux consumes OSC 52
-natively — `set -g set-clipboard on`).
+every other key route normally the whole time.
+
+Copies take the first route that works: OSC 52 through the presenter's
+byte custody when the terminal advertises it, otherwise the host
+clipboard (`pbcopy` / `wl-copy` / `xclip` / `clip.exe`, controlled by
+[`RunConfig::platform_clipboard`](crate::app::RunConfig)). Every copy
+that has a working route posts a startup notice naming its size —
+`copied 240 characters (3 lines) to the clipboard` — so a user can tell
+a copy landed, and landed whole, without leaving the app. A copy with no
+route left posts a labeled warning instead. Under tmux the sequence is
+deliberately not passthrough-wrapped (tmux consumes OSC 52 natively —
+`set -g set-clipboard on`).
 
 Selection semantics, stated plainly:
 
@@ -5355,18 +5361,25 @@ protocol, not a bug.
 
 ## The engine's copy doesn't reach my clipboard
 
+**First, check the notices**: every copy that has a working route posts
+one naming its size (`copied 240 characters (3 lines) to the
+clipboard`). If you see that receipt, the copy left the engine intact
+and the remaining suspects are the multiplexer and the terminal. If you
+see the labeled clipboard warning instead, no route was available.
+
 **Cause**: OSC 52 is a write-only, fire-and-forget escape — the terminal
 either applies it or silently ignores it, and there is no reply to check.
-Common blockers: the terminal does not support OSC 52 (the engine emits
-anyway — harmless — and pushes a one-time labeled startup notice when the
-capability was not advertised); tmux is in the middle (it consumes OSC 52
+The engine falls back to the host clipboard
+(`RunConfig::platform_clipboard`, on by default) where OSC 52 is not
+advertised. Common blockers: the terminal does not support OSC 52 and no
+host helper is installed; tmux is in the middle (it consumes OSC 52
 itself — `set -g set-clipboard on` in `~/.tmux.conf` lets it forward the
 copy; the engine follows its verb policy and does not passthrough-wrap
 OSC 52, because tmux handles the sequence natively); or a security
 setting (some terminals gate clipboard writes behind a prompt or a
 setting, e.g. `clipboard_control` in kitty).
 
-**Fix**: check the startup notices first, then your multiplexer's
+**Fix**: check the notices first, then your multiplexer's
 `set-clipboard`, then the terminal's clipboard permission setting. Size
 is rarely the issue: screen selections are a few kilobytes and every
 known OSC 52 cap (tmux's historical ~74KB, kitty's default 8MB) sits far
@@ -5414,8 +5427,8 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.3.2 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.3.2 (2026-08-17).
+- Crate: `abstracttui` 0.3.3 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.3.3 (2026-08-19).
 - Extension family (sibling crates in the repo workspace, installed only when needed;
   ADR-0004 — public core API only, same MIT license and dependency discipline):
   - `abstracttui-graph` 0.2.0 — graph auto-layout (`GraphDesc -> Layout`: layered /

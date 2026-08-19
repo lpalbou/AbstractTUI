@@ -874,3 +874,52 @@ fn pane_clamp_keeps_sibling_panes_out_of_the_copy() {
     let expected = b64("left aaa\nleft bbb");
     assert_eq!(term.screen().clipboard(), Some(("c", expected.as_str())));
 }
+
+/// A copy CONFIRMS itself (first-app/1320). The clipboard lives outside
+/// the app, so the user cannot see whether anything landed or whether it
+/// landed whole — the character count is the receipt. Field report
+/// (abstractcode-tui, 2026-08-19): the engine used to announce "OSC 52
+/// unavailable" on a copy that had SUCCEEDED through the host clipboard,
+/// which reads as a failure and says nothing about the copy.
+#[test]
+fn a_successful_copy_reports_its_size() {
+    let size = Size::new(30, 6);
+    let mut app = three_rows(size);
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
+    selection().set_enabled(true);
+    driver.turn(&mut app, &mut term).unwrap();
+
+    // Drag "alpha" (5 chars, one row) and copy it.
+    term.push_input(b"\x1b[<0;1;1M");
+    term.push_input(b"\x1b[<32;5;1M");
+    term.push_input(b"c");
+    driver.turn(&mut app, &mut term).unwrap();
+    assert_eq!(
+        term.screen().clipboard(),
+        Some(("c", b64("alpha").as_str()))
+    );
+    let notices = app.startup_notices();
+    assert_eq!(
+        notices.last().map(String::as_str),
+        Some("copied 5 characters to the clipboard"),
+        "the receipt names the size: {notices:?}"
+    );
+    assert!(
+        !notices.iter().any(|n| n.contains("unavailable")),
+        "a copy that WORKED must not announce a degradation: {notices:?}"
+    );
+
+    // A multi-row copy also reports its rows — a squashed multi-line
+    // paste is the failure this count makes visible.
+    term.push_input(b"\x1b[<0;1;2M");
+    term.push_input(b"\x1b[<32;5;3M");
+    term.push_input(b"c");
+    driver.turn(&mut app, &mut term).unwrap();
+    let notices = app.startup_notices();
+    assert_eq!(
+        notices.last().map(String::as_str),
+        Some("copied 17 characters (2 lines) to the clipboard"),
+        "{notices:?}"
+    );
+}

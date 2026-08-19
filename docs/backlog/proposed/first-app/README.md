@@ -71,6 +71,12 @@ Completed 2026-07-24 (disclosure wave, jointly with field-agora 0850):
 | --- | --- | --- |
 | 0260 | Disclosure widget — standalone fold/unfold card shipped (`▸`/`▾` title row + detail slot, click/Enter/Space toggle, `max_body_rows` cap + auto-hiding scrollbar, uncontrolled + `folded(Signal<bool>)` modes, folded = body unmounted) with the Feed enablers (`on_item_press`, `item_at_row`) and the documented message-card recipe. The feed-NATIVE card kind stays future work behind 0280's draw-only block boundary. | feature |
 
+Completed 2026-08-19 (usable-instruments wave):
+
+| ID | Title | Class |
+| --- | --- | --- |
+| 1320 | A scrollbar you can see + a copy that confirms itself — thumb floor of 3 cells in the shared `draw_scrollbar` (every engine scrollbar), and clipboard copies post `copied N characters (M lines) to the clipboard` with the warning reserved for no-working-route. Filed with the CI fix for the phantom v0.3.2 release (the publish skip-guard read the local workspace). | bug |
+
 Completed 2026-08-16 (clipboard-truth wave — band continuation):
 
 | ID | Title | Class |

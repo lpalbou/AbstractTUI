@@ -167,10 +167,13 @@ fn variable_heights_window_by_content_rows_and_click_maps_rows_to_items() {
     let canvas = render(&mut tree, Size::new(14, 4));
     // it0 occupies rows 0-1 (h=2), it1 row 2, it2 rows 3+.
     assert!(canvas.row_text(0).contains("it 0"));
-    assert_eq!(
-        canvas.row_text(1).trim(),
-        "│",
-        "spacer row of the 2-tall item (+bar)"
+    // The spacer row carries no text — only the scrollbar column (track
+    // or thumb: the 1320 thumb floor makes this row thumb at this
+    // geometry, and which glyph lands here is the bar's business).
+    assert!(
+        matches!(canvas.row_text(1).trim(), "│" | "┃"),
+        "spacer row of the 2-tall item holds only the bar: {:?}",
+        canvas.row_text(1)
     );
     assert!(canvas.row_text(2).contains("it 1"));
     // Clicking the SECOND row of it0 still selects item 0.

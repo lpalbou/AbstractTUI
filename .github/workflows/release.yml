@@ -22,6 +22,10 @@
 #     already on the index, so a core-only release (family versions
 #     unchanged) re-runs green instead of failing on "already
 #     published". Bump a family crate's version to release it.
+#   - BOTH publish jobs end by ASSERTING their versions are served by
+#     the sparse index — job success MEANS published. This is the guard
+#     against phantom releases (v0.3.2 went green without publishing:
+#     its skip probe read the local workspace, not the registry).
 #   - `github-release` depends only on core publish: a family failure
 #     is visible (red job) but never blocks the core release record.
 #
@@ -122,24 +126,71 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - name: cargo publish (core, skip if already on the index)
-        # The same idempotency the family job has always had: a version
-        # already on crates.io re-runs GREEN instead of failing the tag
-        # flow. The maintainer sometimes publishes core locally first
-        # (0.3.1 was) — the tag push must still mint the GitHub Release
-        # record, and `github-release` depends on this job.
+      - name: cargo publish (core, tolerate an already-published version)
+        # Idempotent so a version already on crates.io re-runs GREEN
+        # instead of failing the tag flow: the maintainer sometimes
+        # publishes core locally first (0.3.1 was), and the tag push must
+        # still mint the GitHub Release record that `github-release`
+        # depends on.
+        #
+        # ALWAYS ATTEMPT THE PUBLISH. The previous shape asked
+        # `cargo info "abstracttui@${version}"` first and skipped when it
+        # exited zero — and inside a checkout of this repo it ALWAYS
+        # exits zero, because `cargo info` resolves the LOCAL WORKSPACE
+        # member and the version being released is, by definition, the
+        # workspace version. The guard therefore skipped every genuine
+        # release (v0.3.2 went green and published nothing; v0.3.1 only
+        # landed because it was published locally first). Two rules fall
+        # out, both load-bearing:
+        #   1. a decide-then-skip guard must never be the only thing
+        #      between a tag and the registry — attempt, then excuse a
+        #      failure against the index cargo itself reads;
+        #   2. the job may only SUCCEED once the version is verifiably
+        #      on that index (the assertion step below) — so any future
+        #      guard bug fails loudly instead of minting a phantom
+        #      release.
         run: |
+          set -euo pipefail
           version=$(cargo pkgid -p abstracttui | sed 's/.*[#@]//')
-          if cargo info "abstracttui@${version}" >/dev/null 2>&1; then
-            echo "abstracttui ${version} already on crates.io — skipping publish"
+          echo "publishing abstracttui ${version}"
+          if cargo publish -p abstracttui; then
+            echo "published abstracttui ${version}"
           else
-            cargo publish -p abstracttui
+            status=$?
+            if curl -sS --fail https://index.crates.io/ab/st/abstracttui \
+              | grep -q "\"vers\":\"${version}\""; then
+              echo "abstracttui ${version} is already on the index — treating as published"
+            else
+              echo "publish failed (exit ${status}) and ${version} is NOT on the index"
+              exit "${status}"
+            fi
           fi
         env:
           # Classic API token from the repository secrets (set once by
           # the maintainer). See the header comment for the Trusted
           # Publishing migration path.
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: assert the version is on the index (job success means published)
+        # The postcondition that makes a phantom release impossible: no
+        # code path above — publish, excuse, or any future guard — can
+        # let this job go green unless the exact version is served by the
+        # sparse index cargo resolves from. `cargo publish` blocks until
+        # index visibility, so the first probe normally passes; the retry
+        # covers propagation tail-latency only.
+        run: |
+          set -euo pipefail
+          version=$(cargo pkgid -p abstracttui | sed 's/.*[#@]//')
+          for i in $(seq 1 12); do
+            if curl -sS --fail https://index.crates.io/ab/st/abstracttui \
+              | grep -q "\"vers\":\"${version}\""; then
+              echo "verified: abstracttui ${version} is on the index"
+              exit 0
+            fi
+            echo "not on the index yet (attempt ${i}/12) — waiting 10s"
+            sleep 10
+          done
+          echo "abstracttui ${version} never appeared on the index — the release did NOT happen"
+          exit 1
 
   publish-family:
     name: publish extension family
@@ -177,6 +228,32 @@ jobs:
           publish_if_absent abstracttui-mermaid
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: assert family versions are on the index
+        # Same postcondition as core: whether a crate was published just
+        # now or skipped as already-present, the workspace version must
+        # be served by the index for this job to succeed.
+        run: |
+          set -euo pipefail
+          for crate in abstracttui-graph abstracttui-mermaid; do
+            version="$(cargo metadata --no-deps --format-version 1 \
+              | jq -r ".packages[] | select(.name == \"$crate\") | .version")"
+            prefix="$(printf '%s' "$crate" | cut -c1-2)/$(printf '%s' "$crate" | cut -c3-4)"
+            ok=0
+            for i in $(seq 1 12); do
+              if curl -sS --fail "https://index.crates.io/${prefix}/${crate}" \
+                | grep -q "\"vers\":\"${version}\""; then
+                echo "verified: ${crate} ${version} is on the index"
+                ok=1
+                break
+              fi
+              echo "${crate} ${version} not on the index yet (attempt ${i}/12) — waiting 10s"
+              sleep 10
+            done
+            if [ "$ok" != "1" ]; then
+              echo "${crate} ${version} never appeared on the index"
+              exit 1
+            fi
+          done
 
   github-release:
     name: create GitHub Release

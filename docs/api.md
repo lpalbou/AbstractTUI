@@ -1886,12 +1886,18 @@ at once. The key table while a region is visible (i.e. mid-drag):
 | anything else  | routes to the app normally               |
 
 Ctrl+C only quits when no region is visible. Wheel scrolling, hover, and
-every other key route normally the whole time. Copies travel as OSC 52
-through the presenter's byte custody;
-terminals that did not advertise the capability still get the bytes
-(harmless) plus a one-time labeled startup notice, and under tmux the
-sequence is deliberately not passthrough-wrapped (tmux consumes OSC 52
-natively — `set -g set-clipboard on`).
+every other key route normally the whole time.
+
+Copies take the first route that works: OSC 52 through the presenter's
+byte custody when the terminal advertises it, otherwise the host
+clipboard (`pbcopy` / `wl-copy` / `xclip` / `clip.exe`, controlled by
+[`RunConfig::platform_clipboard`](crate::app::RunConfig)). Every copy
+that has a working route posts a startup notice naming its size —
+`copied 240 characters (3 lines) to the clipboard` — so a user can tell
+a copy landed, and landed whole, without leaving the app. A copy with no
+route left posts a labeled warning instead. Under tmux the sequence is
+deliberately not passthrough-wrapped (tmux consumes OSC 52 natively —
+`set -g set-clipboard on`).
 
 Selection semantics, stated plainly:
 

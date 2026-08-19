@@ -277,18 +277,25 @@ protocol, not a bug.
 
 ## The engine's copy doesn't reach my clipboard
 
+**First, check the notices**: every copy that has a working route posts
+one naming its size (`copied 240 characters (3 lines) to the
+clipboard`). If you see that receipt, the copy left the engine intact
+and the remaining suspects are the multiplexer and the terminal. If you
+see the labeled clipboard warning instead, no route was available.
+
 **Cause**: OSC 52 is a write-only, fire-and-forget escape — the terminal
 either applies it or silently ignores it, and there is no reply to check.
-Common blockers: the terminal does not support OSC 52 (the engine emits
-anyway — harmless — and pushes a one-time labeled startup notice when the
-capability was not advertised); tmux is in the middle (it consumes OSC 52
+The engine falls back to the host clipboard
+(`RunConfig::platform_clipboard`, on by default) where OSC 52 is not
+advertised. Common blockers: the terminal does not support OSC 52 and no
+host helper is installed; tmux is in the middle (it consumes OSC 52
 itself — `set -g set-clipboard on` in `~/.tmux.conf` lets it forward the
 copy; the engine follows its verb policy and does not passthrough-wrap
 OSC 52, because tmux handles the sequence natively); or a security
 setting (some terminals gate clipboard writes behind a prompt or a
 setting, e.g. `clipboard_control` in kitty).
 
-**Fix**: check the startup notices first, then your multiplexer's
+**Fix**: check the notices first, then your multiplexer's
 `set-clipboard`, then the terminal's clipboard permission setting. Size
 is rarely the issue: screen selections are a few kilobytes and every
 known OSC 52 cap (tmux's historical ~74KB, kitty's default 8MB) sits far

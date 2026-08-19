@@ -941,7 +941,18 @@ pub(crate) fn draw_scrollbar(
     for y in rect.y..rect.bottom() {
         canvas.print_styled(crate::base::Point::new(x, y), "│", &track_style);
     }
-    let thumb_h = ((h * h) / total.max(1)).clamp(1, h);
+    // Thumb LENGTH is proportional, with a floor: the exact proportion
+    // of a long transcript rounds to zero (a 3000-row buffer in a 30-row
+    // pane asks for 900/3000 = 0 cells), and the old `clamp(1, h)` then
+    // drew a single `┃` — a dot the eye cannot find, cannot read a
+    // position from, and cannot follow while scrolling. Floor it at
+    // MIN_THUMB cells, but never let the floor fill the track: a thumb
+    // with no room to travel reports no position at all, so it yields to
+    // `h - 1` on very short bars (and to `h` itself when the content
+    // fits, where a full-length thumb IS the honest answer).
+    const MIN_THUMB: i32 = 3;
+    let floor = MIN_THUMB.min(h - 1).max(1);
+    let thumb_h = ((h * h) / total.max(1)).clamp(floor, h);
     let denom = (total - h).max(1);
     let thumb_y = rect.y + ((first.min(denom) * (h - thumb_h)) / denom).max(0);
     let thumb_style = Style::new().fg(thumb).bg(ground);

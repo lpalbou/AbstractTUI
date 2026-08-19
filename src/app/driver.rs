@@ -115,6 +115,26 @@ pub struct Turn {
     pub idle: bool,
 }
 
+/// The copy receipt (first-app/1320): what the user needs to trust a
+/// copy they cannot see. Characters, because that is what "did all of
+/// it land?" asks; plus the row count when the selection spans rows,
+/// because a multi-row copy's most common failure is landing as one
+/// squashed line.
+fn copy_receipt(text: &str) -> String {
+    let chars = text.chars().count();
+    let rows = text.lines().count().max(1);
+    let unit = if chars == 1 {
+        "character"
+    } else {
+        "characters"
+    };
+    if rows > 1 {
+        format!("copied {chars} {unit} ({rows} lines) to the clipboard")
+    } else {
+        format!("copied {chars} {unit} to the clipboard")
+    }
+}
+
 /// `base::FrameRequester` that interrupts the terminal's blocking read,
 /// so a frame requested from a posted job (timer thread) wakes the loop.
 struct WakeOnFrame(Option<TerminalWaker>);
@@ -936,13 +956,19 @@ impl Driver {
         term.flush()
     }
 
-    /// Queue one OSC 52 clipboard write for presenter-custody emission.
+    /// Queue one clipboard write, and CONFIRM it.
+    ///
     /// Empty/whitespace text is refused (an empty OSC 52 payload CLEARS
-    /// the clipboard — a surprise, never a copy). Capability honesty:
-    /// OSC 52 is write-only fire-and-forget, so an unadvertising
-    /// terminal gets the bytes anyway (harmless — unsupporting terminals
-    /// ignore the frame, and the env pass is conservative) plus a
-    /// one-time labeled notice that the copy may have been ignored.
+    /// the clipboard — a surprise, never a copy).
+    ///
+    /// Every copy that has a working route reports its SIZE: a copy is
+    /// invisible by nature — the clipboard lives outside the app, and
+    /// the user cannot see whether anything landed or whether it landed
+    /// whole — so the character count is the receipt. The only warning
+    /// left is the one a user can act on: no route worked at all.
+    /// (Before, the reverse was true: a copy that SUCCEEDED through the
+    /// host clipboard announced "OSC 52 unavailable", which reads as a
+    /// failure and told the user nothing about their copy.)
     fn queue_clipboard_text(&mut self, app: &mut App, text: &str) {
         if text.trim().is_empty() {
             return;
@@ -950,26 +976,23 @@ impl Driver {
         if self.caps.osc52_copy {
             self.pending_clipboard
                 .push(crate::term::verbs::clipboard_copy_bytes(text));
+            app.push_startup_notice(copy_receipt(text));
             reactive::request_frame();
             return;
         }
         if self.platform_clipboard && crate::term::platform_clipboard::try_copy(text) {
-            if !self.osc52_noticed {
-                self.osc52_noticed = true;
-                app.push_startup_notice(
-                    "clipboard: OSC 52 unavailable — copied via platform clipboard",
-                );
-            }
             // The host clipboard already holds the FULL selection. Adding
             // an OSC 52 write here would be a second, competing writer:
             // terminals and tmux cap the payload, so a long selection the
             // host stored whole could be overwritten by a truncated one.
+            // This route is the PROVEN one — the helper exited zero.
+            app.push_startup_notice(copy_receipt(text));
             return;
         }
         if !self.osc52_noticed {
             self.osc52_noticed = true;
             let msg = if self.platform_clipboard {
-                "clipboard: OSC 52 unavailable and platform copy failed — selection may not reach the clipboard"
+                "clipboard: no working route — OSC 52 is unavailable and the platform copy failed; the selection may not have reached the clipboard"
             } else {
                 "clipboard: OSC 52 not advertised by this terminal — copies may be ignored"
             };

@@ -608,3 +608,57 @@ fn follow_tail_repins_across_resize() {
     assert!(rig.follow.get_untracked(), "resize must not disengage");
     root.dispose();
 }
+
+/// The thumb has a usable FLOOR (first-app/1320). The exact proportion
+/// of a long transcript rounds to zero — the old `clamp(1, h)` then drew
+/// a single `┃`, a dot the eye cannot find or follow. Field report
+/// (abstractcode-tui, 2026-08-19): "the scrollbar is too small".
+#[test]
+fn scrollbar_thumb_never_shrinks_to_a_dot() {
+    let size = Size::new(16, 20);
+    let (root, mut tree, rig) = mount_follow_feed(size);
+    // 2000 rows in a 20-row pane: the proportional thumb is 20*20/2000
+    // = 0 cells.
+    for i in 0..2000 {
+        rig.feed
+            .push(format!("m{i}"), FeedItem::text(format!("line {i}")));
+    }
+    let canvas = settle(&mut tree, size);
+    let bar_x = (size.w - 1) as usize;
+    let thumb_rows = (0..size.h)
+        .filter(|&y| canvas.row_text(y).chars().nth(bar_x) == Some('┃'))
+        .count();
+    assert!(
+        thumb_rows >= 3,
+        "a 2000-row buffer must still draw a findable thumb, got {thumb_rows} rows"
+    );
+    assert!(
+        thumb_rows < size.h as usize,
+        "...and it must keep room to travel, got {thumb_rows} of {}",
+        size.h
+    );
+    root.dispose();
+}
+
+/// The floor never eats the track: content that FITS still fills the
+/// bar (that is the honest "nothing to scroll" answer), and a tiny
+/// viewport yields rather than covering its own travel room.
+#[test]
+fn scrollbar_thumb_floor_yields_to_short_tracks() {
+    let size = Size::new(16, 3);
+    let (root, mut tree, rig) = mount_follow_feed(size);
+    for i in 0..200 {
+        rig.feed
+            .push(format!("m{i}"), FeedItem::text(format!("line {i}")));
+    }
+    let canvas = settle(&mut tree, size);
+    let bar_x = (size.w - 1) as usize;
+    let thumb_rows = (0..size.h)
+        .filter(|&y| canvas.row_text(y).chars().nth(bar_x) == Some('┃'))
+        .count();
+    assert!(
+        (1..size.h as usize).contains(&thumb_rows),
+        "a 3-row track keeps at least one row of travel, got {thumb_rows}"
+    );
+    root.dispose();
+}

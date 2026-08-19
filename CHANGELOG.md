@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-08-19
+
+`0.3.2` was tagged but never reached crates.io: the release pipeline's
+publish guard reported the version as already present and skipped it.
+`0.3.3` supersedes it and contains everything 0.3.2 listed. A dependency
+on `0.3.2` cannot resolve from the registry — require `0.3.3`.
+
+### Fixed
+
+- widgets: the scrollbar thumb keeps a usable minimum length. The
+  proportional height of a long buffer rounds to zero (2000 rows in a
+  20-row pane), which drew a single-cell thumb that is hard to see and
+  impossible to follow while scrolling. The thumb now has a floor of
+  three cells, yielding on very short bars so it always keeps room to
+  travel, and still filling the track when the content fits. Affects
+  every scrollbar in the engine: `Scroll`, `List`, `Table`,
+  `FilePicker`.
+- app: a successful clipboard copy now reports its size — `copied 240
+  characters (3 lines) to the clipboard` — instead of announcing which
+  route it took. A copy leaves the app, so its size is the only evidence
+  the user has that it landed and landed whole. A warning is reserved
+  for the case that needs action: no working clipboard route at all.
+- ci: the core publish step always attempts `cargo publish` and checks
+  the sparse index only to excuse a failure, so a release can no longer
+  report success without publishing.
+
 ## [0.3.2] - 2026-08-17
 
 ### Added

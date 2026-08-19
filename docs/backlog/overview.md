@@ -1,7 +1,7 @@
 # AbstractTUI backlog — overview
 
 Planning memory for AbstractTUI (the Rust terminal-UI engine, published as
-`abstracttui` — 0.3.2 as of 2026-08-17). The engine itself is complete and
+`abstracttui` — 0.3.3 as of 2026-08-19). The engine itself is complete and
 shipped — content widgets (Feed/TextArea/MarkdownView + the doc vocabulary),
 app-shell chrome (PageHost, Drawer, ChoicePrompt, ThemeSwitcher), the
 live-data lane with connection lifecycle, key-state/PTT, attachments, the
@@ -86,7 +86,7 @@ field-gateway continues at 1000–1050, field-core owns 1100–1190,
 | live-data | `planned/live-data/`, `proposed/live-data/` | Mixed | Network-driven reactivity: async-source→signal binding, bounded ingestion, reconnect, the transport decision, and the read-only watcher milestone. |
 | app-widgets | `planned/app-widgets/`, `proposed/app-widgets/` | Mixed | The content-widget layer real apps need (feed/transcript, streaming markdown, multiline composer, follow-tail scroll, lexers) + the API-stability and platform-accuracy passes — now also home to the wave-12 measure/crush findings (0135/0175/0185). |
 | ports | `planned/ports/`, `proposed/ports/` | Mixed | The application epics that consume both tracks: a coding-agent console, an a2a chat TUI, and the gateway configuration wizard (0215, planned — validator app #2). |
-| first-app | `proposed/first-app/`, `completed/first-app/` | Mixed | Bug/footgun reports from the first shipped application (`abstractcode-tui`, 2026-07-21): reproduced engine defects with field workarounds to delete. 28 completed, 4 open. Band 0220–0299 full; continues at 1300–1340. |
+| first-app | `proposed/first-app/`, `completed/first-app/` | Mixed | Bug/footgun reports from the first shipped application (`abstractcode-tui`, 2026-07-21): reproduced engine defects with field workarounds to delete. 29 completed, 4 open. Band 0220–0299 full; continues at 1300–1340. |
 | control-plane | `proposed/control-plane/`, `completed/control-plane/` | Mixed | Making running apps observable and drivable from outside their own keyboard: lifecycle events, an automation bus + opt-in JSONL control server (MCP-bridgeable), declared-keys persistence with crash-resume, headless serve with attach/detach — plus the shipped observe primitives (0370 screenshots; 0380 files the damage-visualizer knob). |
 | extensions | `proposed/extensions/`, `completed/extensions/` | Mixed | Modularity architecture (ADR-0004, executed: the `abstracttui-*` sibling family is live) and the diagram-class capability lane: canvas layer (0420) + graph view (0440) + mermaid subset (0450) SHIPPED; editor (0430), reader enablement (0460), link seam (0480) and the wave-12 polish items (0445/0455) remain. |
 | app-kits | `proposed/app-kits/`, `completed/app-kits/` | Mixed | The application-kit layer over the content widgets: anchored-popup substrate + choice controls (0500/0515 shipped), PageHost (0545), Drawer (0585), double-click (0535), theme switcher (0595), panel ✕ (0605) — form kit, wizard, tables, chips, nav, tree, split panes remain, with the field-gateway track as their live evidence. |
@@ -124,6 +124,7 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0110 | `md::StreamSession` (open-block-only re-parse, equivalence-pinned) | completed/app-widgets/ |
 | 0270 | Text selection + clipboard copy (all three tiers: bypass docs, mouse-capture suspend verb, screen-text selection + OSC 52) — completed 2026-07-22 | completed/first-app/ |
 | 0290 | UX footgun fixed: every selection copy ENDS the gesture (release-copy and mid-drag Enter/`c`/Ctrl+C clear the region with the copy) — post-copy keys reach the app immediately — completed 2026-07-22 | completed/first-app/ |
+| 1320 | A scrollbar you can see (thumb floor, every engine scrollbar) and a copy that confirms itself (`copied N characters to the clipboard`, warning reserved for no working route) — completed 2026-08-19 | completed/first-app/ |
 | 1310 | Codex-compatible navigation chords in `TextInput`/`TextArea` — Codex's `EditorKeymap` defaults adopted verbatim (word motion in all three spellings, line start/end, delete-word), pinned by a wire-level parity test — completed 2026-08-16 | completed/first-app/ |
 | 1300 | Copy truth fixed: a live selection FREEZES follow-tail (`widgets::scroll::freeze_follow_tail`, published by `app::selection`) — a streaming transcript no longer slides under the highlight, so the clipboard gets the rows the user pointed at — completed 2026-08-16 | completed/first-app/ |
 | 0298 | P0 fixed: stale frame band after resize — `apply_resize` pairs prev-poison with `Presenter::invalidate()` so the post-resize frame re-anchors with absolute CUP; every resize×modal-close interleaving pinned vs a fresh-paint oracle — completed 2026-07-22 | completed/first-app/ |
