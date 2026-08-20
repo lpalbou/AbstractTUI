@@ -65,7 +65,10 @@ pub struct RenderedImage {
 /// Mosaic rung options (cycle-4 quality pass).
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct MosaicOpts {
-    /// Glyph family.
+    /// Glyph family. The default is the legacy-safe
+    /// [`MosaicMode::HalfBlock`]; a renderer wired to a known terminal
+    /// should set [`MosaicMode::auto`]'s answer for it (denser cells,
+    /// sharper picture) — the `Image` widget does exactly that.
     pub mode: MosaicMode,
     /// Pre-quantize + Floyd–Steinberg the source to this many colors
     /// before cell fitting. `None` = truecolor (the default — mosaic

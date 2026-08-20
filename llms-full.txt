@@ -499,7 +499,10 @@ Image::from_bitmap(bitmap.clone())
 decodes PNG or JPEG — baseline and progressive alike; unknown formats are
 rejected by name, never with a panic. The widget renders unicode mosaic — colored sub-cell glyphs that work
 in any terminal — and picks the best mosaic mode for the terminal's detected
-glyph and color support. For pixel-perfect output over the kitty, iTerm2, or sixel
+glyph and color support (`.mode(MosaicMode::Sextant)` pins the densest family
+when you know the font carries it — see
+[graphics-and-3d.md](graphics-and-3d.md#getting-more-resolution-out-of-a-picture)).
+For pixel-perfect output over the kitty, iTerm2, or sixel
 protocols, `gfx::ImageSession` manages placement at the app level; the
 `images` example (`cargo run --example images`) shows both paths side by side,
 naming the channel it chose.
@@ -3290,7 +3293,11 @@ assert_eq!(cells.len(), 8 * 4);
   the mode and the reason it was chosen (half-block, quadrant, sextant, or
   braille; optional Floyd–Steinberg dithering).
 - `widgets::Image` is the widget form — always mosaic, because a draw
-  closure owns cells, not escape bytes.
+  closure owns cells, not escape bytes. Its glyph family follows the
+  terminal (`MosaicMode::auto`) unless `.mode(...)` pins one;
+  `MosaicMode::Sextant` is the denser opt-in where the font carries the
+  Unicode 13 block sextants. See
+  [graphics-and-3d.md](graphics-and-3d.md#getting-more-resolution-out-of-a-picture).
 - `gfx::ImageSession` manages the pixel protocols (kitty, iTerm2, sixel):
   slots keyed by the caller, content versions, minimal traffic per channel —
   kitty transmits once and re-places on move; iTerm2 and sixel honestly
@@ -4017,6 +4024,46 @@ fit (weighted least squares):
 `MosaicMode::auto(&caps)` picks for you and returns the reason as a label:
 non-UTF-8 locales get HalfBlock (U+2580 survives most legacy codepages),
 monochrome terminals get Braille, color terminals get Quadrant.
+
+### Getting more resolution out of a picture
+
+A mosaic cell carries one glyph and two colors, so a picture's resolution
+is the glyph family's subpixel density — and the family is the first knob
+to reach for.
+
+`widgets::Image`, markdown image blocks, and `gfx::render_to_cells` all
+follow `MosaicMode::auto`, so a UTF-8 color terminal already draws at
+quadrant density (2×2 per cell). Pinning **Sextant** buys another step
+where you know the font carries the Unicode 13 block sextants:
+
+```rust
+use abstracttui::gfx::MosaicMode;
+use abstracttui::widgets::{Image, ImageFit};
+
+Image::from_bitmap(photo)
+    .fit(ImageFit::Contain)
+    .mode(MosaicMode::Sextant) // 2x3 subpixels — check your font first
+    .view(cx)
+```
+
+Measured on a 1200×1599 photograph drawn into a 24×32 cell pane, scoring
+each family against one common reference:
+
+| family | subpixels per cell | PSNR |
+| --- | --- | --- |
+| HalfBlock | 1×2 | 20.5 dB |
+| Quadrant | 2×2 | 23.5 dB |
+| Sextant | 2×3 | 24.3 dB |
+
+Two more levers, in order of effect:
+
+- **Give the image more cells.** Resolution is cells × subpixels, so a
+  pane twice as wide is worth more than any family change: the same photo
+  at 40×50 cells gains ~1.4 dB per family over 24×32.
+- **Reach the pixel protocols.** kitty, iTerm2, and sixel send real
+  pixels, which no mosaic family can match. That path is `gfx::ImageSession`
+  at the app level (a widget draw closure owns cells, not escape bytes) —
+  see the three entry points above.
 
 Optional **Floyd–Steinberg dithering** (serpentine error diffusion) can
 pre-quantize the source to a palette before cell fitting — worth it when

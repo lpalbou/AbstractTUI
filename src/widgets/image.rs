@@ -8,9 +8,20 @@
 //! let theme = default_theme();
 //! let img = Image::from_path("logo.png")
 //!     .fit(ImageFit::Contain)
-//!     .mode(MosaicMode::HalfBlock)
+//!     // Optional: the mosaic family follows the terminal unless pinned.
+//!     .mode(MosaicMode::Sextant)
 //!     .element(&theme.tokens);
 //! ```
+//!
+//! ## Resolution
+//!
+//! A mosaic cell carries one glyph and two colors, so the picture's
+//! resolution IS the glyph family's subpixel density. The widget
+//! follows [`MosaicMode::auto`](crate::gfx::MosaicMode::auto) — 2x2
+//! quadrants on a UTF-8 color terminal — and [`Image::mode`] pins a
+//! denser family (2x3 sextants) when the font is known to carry the
+//! Unicode 13 glyphs. Above that ladder sits the pixel-protocol path
+//! (`gfx::ImageSession`), which sends the real pixels.
 //!
 //! (`element` takes only `&TokenSet` — unlike stateful widgets there
 //! is no `Scope` parameter, because an image holds no reactive state;
@@ -98,7 +109,8 @@ impl ImageAlign {
 pub struct Image {
     source: Result<Arc<Bitmap>, String>,
     fit: ImageFit,
-    mode: MosaicMode,
+    /// `None` = follow the terminal (see [`Image::mode`]).
+    mode: Option<MosaicMode>,
     align_h: ImageAlign,
     align_v: ImageAlign,
     layout: LayoutStyle,
@@ -145,7 +157,7 @@ impl Image {
         Image {
             source,
             fit: ImageFit::Contain,
-            mode: MosaicMode::HalfBlock,
+            mode: None,
             align_h: ImageAlign::Center,
             align_v: ImageAlign::Center,
             layout: LayoutStyle::default(),
@@ -157,11 +169,33 @@ impl Image {
         self
     }
 
-    /// Mosaic glyph family override (default half blocks — exact colors,
-    /// universal fonts).
+    /// Pin the mosaic glyph family instead of following the terminal.
+    ///
+    /// By default the widget takes [`MosaicMode::auto`] of the live
+    /// [`Capabilities`](crate::term::Capabilities): quadrants (2x2
+    /// subpixels per cell) wherever the terminal proved UTF-8 and
+    /// color, braille on monochrome-class terminals, half blocks when
+    /// the locale is not UTF-8. Pin a mode when you know better than
+    /// the probe:
+    ///
+    /// - [`MosaicMode::Sextant`] — 2x3 subpixels, the densest mosaic
+    ///   and visibly the sharpest on photographs. Opt-in because its
+    ///   glyphs are Unicode 13 (U+1FB00 block sextants) and a font
+    ///   without them renders tofu; no font probe exists.
+    /// - [`MosaicMode::HalfBlock`] — 1x2 subpixels with EXACT colors
+    ///   (no two-color fit), and the only family that survives legacy
+    ///   codepages.
     pub fn mode(mut self, mode: MosaicMode) -> Image {
-        self.mode = mode;
+        self.mode = Some(mode);
         self
+    }
+
+    /// The glyph family this image draws with: the pinned one, or the
+    /// terminal's own answer. Resolved per draw, so a capability
+    /// upgrade (the probe replies after first paint) sharpens the next
+    /// repaint without a rebuild.
+    fn resolved_mode(pinned: Option<MosaicMode>) -> MosaicMode {
+        pinned.unwrap_or_else(|| MosaicMode::auto(&crate::app::current_caps()).0)
     }
 
     pub fn align(mut self, horizontal: ImageAlign, vertical: ImageAlign) -> Image {
@@ -212,7 +246,7 @@ impl Image {
     pub fn element(self, t: &TokenSet) -> Element {
         let faint = t.text_faint;
         let fit = self.fit;
-        let mode = self.mode;
+        let pinned = self.mode;
         let (ah, av) = (self.align_h, self.align_v);
         // Intrinsic size (RT8-6 collapse fix): a draw-only element
         // answers ZERO to `Auto` sizing, so images in unsized rows or
@@ -220,7 +254,7 @@ impl Image {
         // measures as its natural cell footprint — flex grow/shrink and
         // the fit modes reconcile it with the rect actually granted,
         // exactly as they would for an overlong text leaf.
-        let natural = Self::natural_cells(&self.source, mode);
+        let natural = Self::natural_cells(&self.source, Self::resolved_mode(pinned));
         let source = self.source;
         // FnMut state: the mosaic renderer's buffers persist across
         // draws (steady-state repaints allocate nothing new).
@@ -249,6 +283,7 @@ impl Image {
                         return;
                     }
                 };
+                let mode = Image::resolved_mode(pinned);
                 draw_fitted(canvas, rect, bitmap, fit, mode, ah, av, &mut renderer);
             })
     }
@@ -601,6 +636,38 @@ mod tests {
     }
 
     /// The widget's intrinsic answer is its native cell footprint
+    /// The mosaic family follows the TERMINAL unless the caller pins
+    /// one — the promise the widget docs make, and the difference
+    /// between a quadrant-dense picture and a half-block one on every
+    /// terminal that proved UTF-8 and color.
+    #[test]
+    fn unpinned_mode_follows_the_terminal() {
+        let caps = crate::app::current_caps();
+        assert_eq!(
+            Image::resolved_mode(None),
+            MosaicMode::auto(&caps).0,
+            "an unpinned image must draw with the terminal's own mode"
+        );
+        for pinned in [
+            MosaicMode::HalfBlock,
+            MosaicMode::Quadrant,
+            MosaicMode::Sextant,
+            MosaicMode::Braille,
+        ] {
+            assert_eq!(
+                Image::resolved_mode(Some(pinned)),
+                pinned,
+                "a pinned mode outranks the probe"
+            );
+        }
+        // The conservative default caps (nothing proved) keep the
+        // legacy-safe family, so headless callers see no change.
+        assert_eq!(
+            MosaicMode::auto(&crate::term::Capabilities::default()).0,
+            MosaicMode::HalfBlock
+        );
+    }
+
     /// through the mode's subpixel density (aspect-correct in cell
     /// space), never zero; broken sources answer the labeled state's
     /// footprint so the label survives `Auto` contexts.

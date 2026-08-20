@@ -198,8 +198,11 @@ pub(crate) fn draw_image_row(
 /// Probe cache row: path, file signature, probed dims (None = not an
 /// image / unprobeable at that signature).
 type ProbeEntry = (String, u64, Option<(u32, u32)>);
-/// Mosaic cache key: (path, file signature, cols, rows).
-type MosaicKey = (String, u64, i32, i32);
+/// Mosaic cache key: (path, file signature, cols, rows, glyph family).
+/// The MODE belongs in the key — the terminal's capabilities can
+/// upgrade mid-session (the probe replies after first paint), and a
+/// grid rendered under the old family must not be served after.
+type MosaicKey = (String, u64, i32, i32, MosaicMode);
 
 thread_local! {
     /// path → (file signature, probed dims). Bounded LRU.
@@ -312,7 +315,10 @@ fn probe_file_uncached(path: &str) -> Option<(u32, u32)> {
 /// Full decode + mosaic render, LRU-cached by (path, signature, size).
 fn load_mosaic(path: &str, cols: i32, rows: i32) -> Result<Rc<MosaicGrid>, String> {
     let sig = file_signature(path)?;
-    let key = (path.to_string(), sig, cols, rows);
+    // Follow the terminal, like the `Image` widget: quadrants wherever
+    // UTF-8 and color are proved, half blocks on a legacy codepage.
+    let mode = MosaicMode::auto(&crate::app::current_caps()).0;
+    let key = (path.to_string(), sig, cols, rows, mode);
     let hit = MOSAIC_CACHE.with(|c| {
         let mut cache = c.borrow_mut();
         if let Some(pos) = cache.iter().position(|(k, _)| *k == key) {
@@ -334,7 +340,7 @@ fn load_mosaic(path: &str, cols: i32, rows: i32) -> Result<Rc<MosaicGrid>, Strin
         &bitmap,
         cols.max(1) as u32,
         rows.max(1) as u32,
-        MosaicMode::HalfBlock,
+        mode,
     ));
     MOSAIC_CACHE.with(|c| {
         let mut cache = c.borrow_mut();

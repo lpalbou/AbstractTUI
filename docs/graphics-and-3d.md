@@ -90,6 +90,46 @@ fit (weighted least squares):
 non-UTF-8 locales get HalfBlock (U+2580 survives most legacy codepages),
 monochrome terminals get Braille, color terminals get Quadrant.
 
+### Getting more resolution out of a picture
+
+A mosaic cell carries one glyph and two colors, so a picture's resolution
+is the glyph family's subpixel density — and the family is the first knob
+to reach for.
+
+`widgets::Image`, markdown image blocks, and `gfx::render_to_cells` all
+follow `MosaicMode::auto`, so a UTF-8 color terminal already draws at
+quadrant density (2×2 per cell). Pinning **Sextant** buys another step
+where you know the font carries the Unicode 13 block sextants:
+
+```rust
+use abstracttui::gfx::MosaicMode;
+use abstracttui::widgets::{Image, ImageFit};
+
+Image::from_bitmap(photo)
+    .fit(ImageFit::Contain)
+    .mode(MosaicMode::Sextant) // 2x3 subpixels — check your font first
+    .view(cx)
+```
+
+Measured on a 1200×1599 photograph drawn into a 24×32 cell pane, scoring
+each family against one common reference:
+
+| family | subpixels per cell | PSNR |
+| --- | --- | --- |
+| HalfBlock | 1×2 | 20.5 dB |
+| Quadrant | 2×2 | 23.5 dB |
+| Sextant | 2×3 | 24.3 dB |
+
+Two more levers, in order of effect:
+
+- **Give the image more cells.** Resolution is cells × subpixels, so a
+  pane twice as wide is worth more than any family change: the same photo
+  at 40×50 cells gains ~1.4 dB per family over 24×32.
+- **Reach the pixel protocols.** kitty, iTerm2, and sixel send real
+  pixels, which no mosaic family can match. That path is `gfx::ImageSession`
+  at the app level (a widget draw closure owns cells, not escape bytes) —
+  see the three entry points above.
+
 Optional **Floyd–Steinberg dithering** (serpentine error diffusion) can
 pre-quantize the source to a palette before cell fitting — worth it when
 the *output* terminal is 256- or 16-color, where straight quantization

@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-08-20
+
+### Fixed
+
+- widgets: images draw at the terminal's own mosaic density.
+  `widgets::Image` and markdown image blocks pinned half blocks (1x2
+  subpixels per cell) regardless of what the terminal proved — the
+  documented behavior was already capability-driven selection. Both now
+  follow `MosaicMode::auto`: quadrants (2x2 per cell) wherever UTF-8 and
+  color are proved, braille on monochrome-class terminals, half blocks
+  on a legacy codepage. Measured on a photograph in a 24x32 cell pane,
+  20.5 dB → 23.5 dB PSNR. The family resolves per draw, so a capability
+  upgrade sharpens the next repaint. `Image::mode(...)` still pins a
+  family — `MosaicMode::Sextant` (2x3) is the denser opt-in where the
+  font carries the Unicode 13 block sextants — and the conservative
+  default capabilities still answer half blocks, so headless output is
+  unchanged.
+
 ## [0.3.5] - 2026-08-20
 
 ### Added
@@ -2062,7 +2080,8 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
-[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.3.5...HEAD
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.3.6...HEAD
+[0.3.6]: https://github.com/lpalbou/abstracttui/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/lpalbou/abstracttui/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/lpalbou/abstracttui/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/lpalbou/abstracttui/compare/v0.3.2...v0.3.3

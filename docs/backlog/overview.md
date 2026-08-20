@@ -1,7 +1,7 @@
 # AbstractTUI backlog — overview
 
 Planning memory for AbstractTUI (the Rust terminal-UI engine, published as
-`abstracttui` — 0.3.5 as of 2026-08-20). The engine itself is complete and
+`abstracttui` — 0.3.6 as of 2026-08-20). The engine itself is complete and
 shipped — content widgets (Feed/TextArea/MarkdownView + the doc vocabulary),
 app-shell chrome (PageHost, Drawer, ChoicePrompt, ThemeSwitcher), the
 live-data lane with connection lifecycle, key-state/PTT, attachments, the
@@ -124,6 +124,7 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0110 | `md::StreamSession` (open-block-only re-parse, equivalence-pinned) | completed/app-widgets/ |
 | 0270 | Text selection + clipboard copy (all three tiers: bypass docs, mouse-capture suspend verb, screen-text selection + OSC 52) — completed 2026-07-22 | completed/first-app/ |
 | 0290 | UX footgun fixed: every selection copy ENDS the gesture (release-copy and mid-drag Enter/`c`/Ctrl+C clear the region with the copy) — post-copy keys reach the app immediately — completed 2026-07-22 | completed/first-app/ |
+| 0151 | Images draw at the terminal's own mosaic density — `widgets::Image` and markdown image blocks follow `MosaicMode::auto` (quadrants on a UTF-8 color terminal) instead of pinning half blocks; measured +3 dB PSNR on a photo pane — completed 2026-08-20 | completed/app-widgets/ |
 | 0149 | Progressive JPEG decode (`gfx::jpeg` reads SOF2 beside SOF0/SOF1, plus single-component scans, so multi-scan sequential files decode too); image previews of editor-default JPEGs show the picture instead of a labeled refusal — completed 2026-08-20 | completed/app-widgets/ |
 | 1255 | DrawerDock — right-edge rail of always-visible vertical tabs + docked side panel (one open, full collapse, reactive badges); the persistent sibling of app::drawer, layout-docked so content reflows — completed 2026-08-19 | completed/app-kits/ |
 | 1320 | A scrollbar you can see (thumb floor, every engine scrollbar) and a copy that confirms itself (`copied N characters to the clipboard`, warning reserved for no working route) — completed 2026-08-19 | completed/first-app/ |

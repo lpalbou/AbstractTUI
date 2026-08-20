@@ -201,7 +201,10 @@ Image::from_bitmap(bitmap.clone())
 decodes PNG or JPEG — baseline and progressive alike; unknown formats are
 rejected by name, never with a panic. The widget renders unicode mosaic — colored sub-cell glyphs that work
 in any terminal — and picks the best mosaic mode for the terminal's detected
-glyph and color support. For pixel-perfect output over the kitty, iTerm2, or sixel
+glyph and color support (`.mode(MosaicMode::Sextant)` pins the densest family
+when you know the font carries it — see
+[graphics-and-3d.md](graphics-and-3d.md#getting-more-resolution-out-of-a-picture)).
+For pixel-perfect output over the kitty, iTerm2, or sixel
 protocols, `gfx::ImageSession` manages placement at the app level; the
 `images` example (`cargo run --example images`) shows both paths side by side,
 naming the channel it chose.

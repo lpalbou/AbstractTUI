@@ -2302,7 +2302,11 @@ assert_eq!(cells.len(), 8 * 4);
   the mode and the reason it was chosen (half-block, quadrant, sextant, or
   braille; optional Floyd–Steinberg dithering).
 - `widgets::Image` is the widget form — always mosaic, because a draw
-  closure owns cells, not escape bytes.
+  closure owns cells, not escape bytes. Its glyph family follows the
+  terminal (`MosaicMode::auto`) unless `.mode(...)` pins one;
+  `MosaicMode::Sextant` is the denser opt-in where the font carries the
+  Unicode 13 block sextants. See
+  [graphics-and-3d.md](graphics-and-3d.md#getting-more-resolution-out-of-a-picture).
 - `gfx::ImageSession` manages the pixel protocols (kitty, iTerm2, sixel):
   slots keyed by the caller, content versions, minimal traffic per channel —
   kitty transmits once and re-places on move; iTerm2 and sixel honestly
