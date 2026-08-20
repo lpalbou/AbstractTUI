@@ -414,6 +414,16 @@ impl TextArea {
         // Grow-to-content: height tracks the wrapped row count inside
         // [min_rows, max_rows]; shrink 0 so an overflowing sibling can
         // never crush the composer (0240 #2).
+        //
+        // Scope, because callers have read more into this than it says
+        // (1330): shrink 0 protects THIS element's box among its own
+        // siblings. It cannot reserve room in an ancestor. A container
+        // above that is itself shrinkable can still be solved shorter
+        // than the composer, and the composer's surplus rows are then
+        // painted outside it — the caret's row among them. Give every
+        // chrome row in the column that same shrink(0.0), and give the
+        // growing pane beside them `basis(Cells(0))`; a column that
+        // still overflows names itself in the notices lane.
         let layout = self.layout.clone();
         let growth = {
             move || {

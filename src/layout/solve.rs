@@ -294,6 +294,23 @@ fn layout_children_of(tree: &mut LayoutTree, id: LayoutId) {
                 tree.note_zero_collapse(child, declared_fixed[i], axis, content, i);
             }
         }
+        // 1330: the other end of the same class. Zero-collapse catches a
+        // child crushed OUT of existence; this catches one solved PAST
+        // the parent's box, whose surplus rows a later sibling then
+        // overpaints. Columns only, non-clipping parents only, and only
+        // when the surplus is attributable to a child that could not
+        // give — see `note_main_overflow`.
+        let wanted: i32 = sizes.iter().sum();
+        if matches!(style.direction, Direction::Column)
+            && !style.clips_children()
+            && wanted > available_main
+        {
+            if let Some(i) = (0..flow.len())
+                .find(|&i| sizes[i] > 0 && (items[i].shrink <= 0.0 || sizes[i] <= items[i].min))
+            {
+                tree.note_main_overflow(content, wanted, available_main, i);
+            }
+        }
     }
 
     // Leftover space feeds `justify` (only exists when nothing grew).

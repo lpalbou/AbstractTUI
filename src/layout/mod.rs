@@ -488,6 +488,68 @@ mod tests {
         assert_eq!(after_resize.len(), 1, "resize reports the new geometry");
     }
 
+    /// 1330: the other end of the zero-collapse class. A child that
+    /// REFUSES to shrink inside a column shorter than it is solved past
+    /// the parent's box and paints there — where the next sibling
+    /// overpaints it. The engine keeps the rect truthful and says so.
+    #[cfg(debug_assertions)]
+    #[test]
+    fn main_overflow_emits_a_debug_notice_once() {
+        // The composer shape: a 3-row box around a 4-row widget that
+        // declared shrink(0.0). The widget keeps its 4 rows; row 4 lands
+        // outside the parent.
+        let (mut tree, root, ids) =
+            tree_with(&[Style::default().h(4).shrink(0.0)], Style::column().h(3));
+        solve(&mut tree, root, Rect::new(0, 0, 20, 3));
+        assert_eq!(tree.rect(ids[0]).h, 4, "shrink 0 holds its rows");
+        assert!(
+            tree.rect(ids[0]).bottom() > tree.rect(root).bottom(),
+            "and therefore overflows the parent: {:?} vs {:?}",
+            tree.rect(ids[0]),
+            tree.rect(root)
+        );
+        let notices = tree.take_collapse_notices();
+        assert_eq!(notices.len(), 1, "the overflow names itself: {notices:?}");
+        assert!(
+            notices[0].contains("4 rows") && notices[0].contains("3-row"),
+            "notice names wanted and available: {}",
+            notices[0]
+        );
+        // Once per situation, exactly like the zero-collapse notice.
+        solve(&mut tree, root, Rect::new(0, 0, 20, 3));
+        assert!(tree.take_collapse_notices().is_empty(), "reported once");
+
+        // A parent that CLIPS has said what it wants done with the
+        // surplus: no notice.
+        let (mut t2, r2, _) = tree_with(
+            &[Style::default().h(4).shrink(0.0)],
+            Style::column().h(3).clip(),
+        );
+        solve(&mut t2, r2, Rect::new(0, 0, 20, 3));
+        assert!(
+            t2.take_collapse_notices().is_empty(),
+            "a clipping parent is silent"
+        );
+
+        // Rows stay silent: a label wider than its cell is the most
+        // ordinary condition in a terminal UI.
+        let (mut t3, r3, _) = tree_with(&[Style::default().w(40).shrink(0.0)], Style::row().w(20));
+        solve(&mut t3, r3, Rect::new(0, 0, 20, 1));
+        assert!(
+            t3.take_collapse_notices().is_empty(),
+            "row overflow is not reported"
+        );
+
+        // A child that CAN give is not an overflow: it just shrinks.
+        let (mut t4, r4, i4) = tree_with(&[Style::default().h(4)], Style::column().h(3));
+        solve(&mut t4, r4, Rect::new(0, 0, 20, 3));
+        assert_eq!(t4.rect(i4[0]).h, 3, "ordinary shrink");
+        assert!(
+            t4.take_collapse_notices().is_empty(),
+            "shrinking is what shrink means"
+        );
+    }
+
     #[test]
     fn measure_query_answers_without_assigning_rects() {
         // The 0130 size query: a column of measured leaves answers its

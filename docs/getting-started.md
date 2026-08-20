@@ -141,6 +141,26 @@ space a `grow`, and fixed panes an explicit size. A pane with neither takes
 only its content size. `LayoutStyle::fill()` (fill the parent on both axes) and
 `LayoutStyle::line(n)` (full width, `n` rows) cover the two most common shapes.
 
+`grow` shares what is *left over* after every child's starting size, and that
+starting size defaults to the child's content. So a pane whose content can
+exceed the viewport — a transcript, a log, a long list — asks for all of it
+before anything is shared. Two consequences follow, and both surprise people:
+fixed siblings are the ones that pay for the surplus, and `grow` ratios apply
+to nothing when there is no leftover, so a 3:1 intent between two content-heavy
+panes renders 1:1. Pair `grow` with `basis(Cells(0))` on any such pane so it
+starts at zero, takes only leftover, and lets the ratio own the axis:
+
+```rust
+// The growing pane demands no room of its own; the chrome row keeps its 3.
+let transcript = LayoutStyle::column().grow(1.0).basis(Dimension::Cells(0));
+let composer = LayoutStyle::column().height(Dimension::Cells(3)).shrink(0.0);
+```
+
+`Scroll` already carries that default, but `basis` describes one element only:
+a wrapper around a `Scroll` re-derives its own starting size from its content
+unless you give the wrapper `basis(Cells(0))` too. Put it on the element that
+sits directly in the pressured column.
+
 For two-dimensional layouts there is a track-based `Grid` — columns and rows
 declared as `Track::Cells(n)`, `Track::Percent(f)`, `Track::Fr(f)`, or
 `Track::Auto`, with row-major auto-placement and spans:

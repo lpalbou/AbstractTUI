@@ -51,3 +51,25 @@ deletes: the diagnosis session. Suggested one-paragraph addition to
 whose content can exceed the viewport should pair `grow` with
 `basis(Cells(0))` so the ratio owns the axis — Scroll's default does
 exactly this."
+
+## Completion report
+- Final path: docs/backlog/completed/field-agora/0840_layout_docs_grow_vs_intrinsic_basis_for_content_heavy_panes.md
+- Date: 2026-08-20
+- Root cause: exactly as filed — a docs gap, not a code defect. `grow`
+  distributes leftover, the default basis is content, and nothing in the
+  reader's path said so.
+- Fix landed: the suggested paragraph, in docs/getting-started.md
+  "Layout basics", covering both symptoms this trap produces — grow
+  ratios applying to nothing (this item's 3:1-renders-1:1) and fixed
+  siblings paying for a content-heavy pane's surplus (first-app 1330,
+  filed a month later against the same trap by a different app team).
+  It also names the part neither report knew: `basis` describes one
+  element, so a wrapper around a `Scroll` re-derives a content-sized
+  basis unless the wrapper carries `basis(Cells(0))` too. Put it on the
+  element that sits directly in the pressured column.
+- Also landed in the same pass: docs/api.md scopes `shrink(0.0)` to one
+  element and names `clip()`/`scroll()` in the layout vocabulary;
+  docs/troubleshooting.md gains a symptom-first entry.
+- Not landed: making the engine infer this. Two attempts are measured in
+  first-app 1330's completion report; both need a min-content sizing
+  mode the solver does not have, filed as first-app 1331.

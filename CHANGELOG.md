@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-08-20
+
+### Added
+
+- layout: a debug notice for main-axis overflow — the other end of the
+  zero-collapse class. When a column's flow children need more rows than
+  its content box has and at least one of them cannot shrink, the solver
+  names it in the same notices lane (`use_startup_notices`) that reports
+  a child crushed to zero. Layout keeps solved rects truthful, so the
+  surplus rows are painted outside the container, where a later sibling's
+  paint can land on top of them; the notice reports how many rows were
+  needed, how many were available, and the remedies. Debug builds only,
+  once per situation, and deliberately scoped to columns whose parent
+  does not already clip — a label wider than its cell is ordinary in a
+  terminal UI and is not reported.
+
+### Changed
+
+- docs: `docs/getting-started.md` now states how `grow` interacts with
+  content-derived starting sizes. `grow` shares the leftover, and a pane
+  whose content can exceed the viewport asks for all of it first — so
+  fixed siblings pay for the surplus, and grow ratios between two such
+  panes apply to nothing. Pair `grow` with `basis(Cells(0))` on those
+  panes. `basis` describes one element: a wrapper around a `Scroll`
+  re-derives a content-sized starting size unless the wrapper carries
+  `basis(Cells(0))` too.
+- docs: `docs/api.md` scopes `shrink(0.0)` explicitly — it protects one
+  element's box among its own siblings and cannot reserve room in an
+  ancestor — and names `LayoutStyle::clip()` and `LayoutStyle::scroll()`
+  in the layout vocabulary alongside the `Overflow` enum.
+- docs: `docs/troubleshooting.md` gains a symptom-first entry for an
+  input panel that is a row short and stops following the caret; both
+  halves are one failure.
+
 ## [0.3.6] - 2026-08-20
 
 ### Fixed

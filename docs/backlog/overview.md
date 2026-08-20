@@ -1,7 +1,7 @@
 # AbstractTUI backlog — overview
 
 Planning memory for AbstractTUI (the Rust terminal-UI engine, published as
-`abstracttui` — 0.3.6 as of 2026-08-20). The engine itself is complete and
+`abstracttui` — 0.3.7 as of 2026-08-20). The engine itself is complete and
 shipped — content widgets (Feed/TextArea/MarkdownView + the doc vocabulary),
 app-shell chrome (PageHost, Drawer, ChoicePrompt, ThemeSwitcher), the
 live-data lane with connection lifecycle, key-state/PTT, attachments, the
@@ -33,14 +33,18 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | State | Count |
 | --- | --- |
 | Planned | 5 |
-| Proposed | 82 |
-| Completed | 61 |
+| Proposed | 86 |
+| Completed | 69 |
 | Deprecated | 0 |
 | Recurrent | 0 |
 
 (2026-07-26: +1 completed — app-kits/1250 reasoning controls, filed
 directly in completed/ per the same-wave precedent; the app-kits band
 continues at 1250, see the bands note below.)
+
+(Count reconciliation 2026-08-20, during the layout-honesty wave: the
+table had drifted from the directory across several waves and now
+matches a file count again. The directory is the truth.)
 
 Counting rule: `NNNN_*.md` files on disk under each lifecycle directory
 (topic subfolders included). The completed ledger below additionally
@@ -86,7 +90,7 @@ field-gateway continues at 1000–1050, field-core owns 1100–1190,
 | live-data | `planned/live-data/`, `proposed/live-data/` | Mixed | Network-driven reactivity: async-source→signal binding, bounded ingestion, reconnect, the transport decision, and the read-only watcher milestone. |
 | app-widgets | `planned/app-widgets/`, `proposed/app-widgets/` | Mixed | The content-widget layer real apps need (feed/transcript, streaming markdown, multiline composer, follow-tail scroll, lexers) + the API-stability and platform-accuracy passes — now also home to the wave-12 measure/crush findings (0135/0175/0185). |
 | ports | `planned/ports/`, `proposed/ports/` | Mixed | The application epics that consume both tracks: a coding-agent console, an a2a chat TUI, and the gateway configuration wizard (0215, planned — validator app #2). |
-| first-app | `proposed/first-app/`, `completed/first-app/` | Mixed | Bug/footgun reports from the first shipped application (`abstractcode-tui`, 2026-07-21): reproduced engine defects with field workarounds to delete. 29 completed, 4 open. Band 0220–0299 full; continues at 1300–1340. |
+| first-app | `proposed/first-app/`, `completed/first-app/` | Mixed | Bug/footgun reports from the first shipped application (`abstractcode-tui`, 2026-07-21): reproduced engine defects with field workarounds to delete. 30 completed, 4 open. Band 0220–0299 full; continues at 1300–1340. |
 | control-plane | `proposed/control-plane/`, `completed/control-plane/` | Mixed | Making running apps observable and drivable from outside their own keyboard: lifecycle events, an automation bus + opt-in JSONL control server (MCP-bridgeable), declared-keys persistence with crash-resume, headless serve with attach/detach — plus the shipped observe primitives (0370 screenshots; 0380 files the damage-visualizer knob). |
 | extensions | `proposed/extensions/`, `completed/extensions/` | Mixed | Modularity architecture (ADR-0004, executed: the `abstracttui-*` sibling family is live) and the diagram-class capability lane: canvas layer (0420) + graph view (0440) + mermaid subset (0450) SHIPPED; editor (0430), reader enablement (0460), link seam (0480) and the wave-12 polish items (0445/0455) remain. |
 | app-kits | `proposed/app-kits/`, `completed/app-kits/` | Mixed | The application-kit layer over the content widgets: anchored-popup substrate + choice controls (0500/0515 shipped), PageHost (0545), Drawer (0585), double-click (0535), theme switcher (0595), panel ✕ (0605) — form kit, wizard, tables, chips, nav, tree, split panes remain, with the field-gateway track as their live evidence. |
@@ -203,6 +207,7 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0274 | `app::notify()` — presenter-custody emitter for the detected OSC 9/99 notification channels (RENUMBERED from 0290 this pass) | first-app | Execute WITH planned 0150 (the notify leg, same emission path); first consumer named (abstractcode-tui run-conclusion ping). |
 | 0280 | Feed custom blocks cannot host widgets; protocol images degrade to mosaic in Feed | first-app | Design with Feed's item model + the 0144 protocol-images-in-flow question. |
 | 0289 | Typed uppercase inserts lowercase on kitty-spelling wires (`convert_event` drops the kitty `text` field) | first-app | Next input wave (bug — should not wait long). |
+| 1331 | The solver has no min-content sizing mode — the prerequisite under CSS's automatic minimum size AND basis-aware intrinsic sizing (both attempted and measured during 1330) | first-app | A layout-semantics cycle; it is a solver capability, not a bug fix. |
 | 0300 | App lifecycle events (boot/ready/resize/caps/focus/suspend/resume/quit + custom) — the band foundation | control-plane | Scheduling any of 0310/0340/0350, or the first app needing suspend/flush hooks. |
 | 0310 | Automation bus: inject input, query semantic tree + screen text, invoke named actions, subscribe to events | control-plane | 0300 + a driving consumer (port harness, embedder, or 0320). |
 | 0320 | JSONL control protocol + opt-in serve seam (default-OFF `control-server` feature; socket perms = auth) | control-plane | 0310 + the JSON-promotion precondition (with extensions 0410); closes only with the protocol ADR. |
@@ -254,7 +259,6 @@ the build / P2 cost real time, workaround holds / P3 paper cut.
 | field-agora | 0810 | List rows are plain strings — no badge slot | capability gap | P3 |
 | field-agora | 0820 | Connection has no app-initiated re-dial verb | API gap | P3 |
 | field-agora | 0830 | Reconnect countdown needs app-side deadline bookkeeping | API gap | P3 |
-| field-agora | 0840 | Layout docs: grow vs intrinsic basis for content-heavy panes | docs | P3 |
 | field-agora | 0860 | RichTextView/MarkdownView no intrinsic measure — invisible in Scroll (MarkdownView half FIXED by the ADR-0005 wave; RichTextView + the general class remain — see 0135) | footgun | P3 |
 | field-agora | 0870 | FeedItem headline single-row/nowrap mode | capability gap | P3 |
 | field-agora | 0880 | FeedItem body max-measure for wide terminals | capability gap | P3 |

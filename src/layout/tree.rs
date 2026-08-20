@@ -205,6 +205,48 @@ impl LayoutTree {
         }
     }
 
+    /// Record one main-axis OVERFLOW fact (1330): the flow children of
+    /// a column need more rows than the container's content box has,
+    /// and at least one of them refuses to shrink. The solver keeps
+    /// rects truthful, so the surplus is painted OUTSIDE the parent —
+    /// where, under the default `Overflow::Visible`, whether it
+    /// survives depends on whether a later sibling happens to claim
+    /// those cells. That makes the loss look like a rendering glitch
+    /// somewhere else entirely; this names it at the source.
+    ///
+    /// Columns only, and only when the parent does not already clip:
+    /// a row whose label is wider than its cell is the most ordinary
+    /// condition in a terminal UI, and a clipping parent has said what
+    /// it wants done with the surplus.
+    pub(crate) fn note_main_overflow(
+        &mut self,
+        parent_content: Rect,
+        wanted: i32,
+        available: i32,
+        child_index: usize,
+    ) {
+        // The amount stays OUT of the key: a grow-to-content widget
+        // crosses the boundary one row at a time, and keying on the
+        // surplus would report each intermediate size. `-1` in the
+        // declared slot marks the overflow kind, which a zero-collapse
+        // (always a positive declared size) can never collide with.
+        let sig = (parent_content, false, -1, child_index);
+        if self.collapse_seen.len() >= COLLAPSE_SEEN_CAP || !self.collapse_seen.insert(sig) {
+            return;
+        }
+        let note = format!(
+            "layout: child #{child_index} and its siblings need {wanted} rows in a \
+             {available}-row content box (parent content {parent_content:?}) — a child \
+             that cannot shrink is solved OUTSIDE its parent and paints there, so a \
+             later sibling can overpaint it. Give the parent the rows (shrink(0.0), an \
+             explicit min, or a basis(Cells(0)) on whatever pane is exerting the \
+             pressure), or clip the surplus with LayoutStyle::clip() / a Scroll"
+        );
+        if self.collapse_notices.len() < COLLAPSE_NOTICE_CAP {
+            self.collapse_notices.push(note);
+        }
+    }
+
     /// Drain the zero-collapse diagnostics recorded since last drain
     /// (debug builds only populate them; release builds always return
     /// empty). Each collapsed node reports once per tree lifetime.

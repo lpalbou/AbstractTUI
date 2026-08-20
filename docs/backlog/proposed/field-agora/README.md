@@ -38,7 +38,6 @@ gap the same session.
 | 0810 | List rows are plain strings — no badge slot | capability gap | P3 |
 | 0820 | Connection has no app-initiated re-dial verb | API gap | P3 |
 | 0830 | reconnect countdown needs app-side deadline bookkeeping | API gap | P3 |
-| 0840 | layout docs: grow vs intrinsic basis for content-heavy panes | UX defect (docs) | P3 |
 | 0860 | RichTextView/MarkdownView have no intrinsic measure — invisible in Scroll | footgun | P3 |
 | 0870 | FeedItem headline single-row/nowrap mode (folded cards wrap into body-lookalikes) | capability gap | P3 |
 | 0880 | FeedItem body max-measure for wide terminals | capability gap | P3 |
@@ -55,6 +54,13 @@ collision on record: 0900/0905/0910 duplicate ids in
 `../field-gateway/` (their own band) — track+number is the working
 key; renumbering is the owners' call, the wave11/0990 precedent.
 field-gateway continues at 1000–1050; field-core owns 1100–1190.)
+
+Completed 2026-08-20 (layout-honesty wave, moved to
+`../../completed/field-agora/`):
+
+| ID | Title | Class | Severity |
+| --- | --- | --- | --- |
+| 0840 | layout docs: grow vs intrinsic basis for content-heavy panes — the suggested paragraph landed in `docs/getting-started.md`, extended with the wrapper caveat (`basis` describes one element; a wrapper around a `Scroll` re-derives a content-sized basis). Closed together with first-app 1330, the second field report of the same trap. | UX defect (docs) | P3 |
 
 Completed 2026-07-24 (disclosure wave, moved to
 `../../completed/field-agora/`):

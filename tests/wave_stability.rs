@@ -379,6 +379,81 @@ fn capabilities_construct_via_with_and_grow_without_breakage() {
 // `zero_collapse_dedup_survives_dyn_regeneration`).
 // ---------------------------------------------------------------------
 
+/// 1330: the composer shape. A `TextArea`-like child that declared
+/// `shrink(0.0)` inside a box one row shorter than it keeps its rows
+/// and is solved OUTSIDE the box, where the next sibling overpaints
+/// them — silently, before this notice existed. The row the user loses
+/// is the one the caret is on, so the failure reads as "the panel is
+/// too short AND it doesn't follow my text". The engine names it.
+#[cfg(debug_assertions)]
+#[test]
+fn main_axis_overflow_reaches_the_notices_lane() {
+    use abstracttui::app::use_startup_notices;
+
+    create_root(|_| {
+        let size = Size::new(40, 10);
+        let mut app = App::new(size);
+        type NoticeSignal = abstracttui::reactive::Signal<Vec<String>>;
+        let lane: Rc<RefCell<Option<NoticeSignal>>> = Rc::new(RefCell::new(None));
+        let lane_in = lane.clone();
+        app.mount(move |cx| {
+            *lane_in.borrow_mut() = Some(use_startup_notices(cx));
+            // The composer row, one row SHORTER than the widget inside
+            // it — exactly what the solver hands an app whose chrome
+            // column is under overflow pressure.
+            let composer = Element::new()
+                .style(LayoutStyle::column().h(3))
+                .child(
+                    Element::new()
+                        .style(LayoutStyle::default().h(4).shrink(0.0))
+                        .child(text("composer"))
+                        .build(),
+                )
+                .build();
+            Element::new()
+                .style(LayoutStyle::column())
+                .child(composer)
+                .child(
+                    Element::new()
+                        .style(LayoutStyle::default().h(1))
+                        .child(text("status row"))
+                        .build(),
+                )
+                .build()
+        })
+        .expect("mount");
+
+        let mut term = CaptureTerm::new(size);
+        let mut driver = Driver::new(&mut app, &mut term, test_config()).expect("driver");
+        driver.turn(&mut app, &mut term).expect("turn 1");
+        driver.turn(&mut app, &mut term).expect("turn 2");
+        flush_effects();
+
+        let signal = lane.borrow().expect("notices signal captured");
+        let notes = signal.get();
+        let overflow: Vec<&String> = notes
+            .iter()
+            .filter(|n| n.contains("solved OUTSIDE its parent"))
+            .collect();
+        assert_eq!(
+            overflow.len(),
+            1,
+            "exactly one overflow notice in the lane: {notes:?}"
+        );
+        // Same situation across turns is one fact, not one per frame.
+        driver.turn(&mut app, &mut term).expect("turn 3");
+        driver.turn(&mut app, &mut term).expect("turn 4");
+        flush_effects();
+        let notes2 = signal.get();
+        let overflow2: Vec<&String> = notes2
+            .iter()
+            .filter(|n| n.contains("solved OUTSIDE its parent"))
+            .collect();
+        assert_eq!(overflow2.len(), 1, "no re-report across turns: {notes2:?}");
+        app.shutdown();
+    });
+}
+
 /// A column that crushes a declared 1-row child produces exactly one
 /// startup notice, delivered through the notices signal at the next
 /// phase U — the surface an app can actually render.

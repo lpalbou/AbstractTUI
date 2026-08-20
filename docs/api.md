@@ -200,7 +200,11 @@ Rounding is largest-remainder, so children tile their container exactly.
 `Track::Percent(f)`, `Track::Auto` (content-sized), or `Track::Fr(w)`
 (weighted leftover); children auto-place row-major and can span via
 `col_span`/`row_span`. `Overflow` (`Visible`/`Clip`/`Scroll`) is the
-clipping and wheel-routing vocabulary.
+clipping and wheel-routing vocabulary: layout itself never clips — solved
+rects stay truthful — so a child bigger than its parent paints past it
+under the default `Visible`. `LayoutStyle::clip()` truncates children at
+the content box, and `LayoutStyle::scroll()` clips and marks the node as
+the scroll container wheel routing and ensure-visible look for.
 
 ```rust
 use abstracttui::prelude::*;
@@ -231,6 +235,18 @@ a `Scroll`, whose default `basis(0)` exerts no pressure), and render
 `use_startup_notices` somewhere visible — the engine names every
 zero-collapse into that lane, and a notice nobody renders is a
 debugging session someone else pays for.
+
+`shrink(0.0)` describes ONE element among its own siblings. It does not
+reserve room in an ancestor, and no flexbox implementation makes that
+promise: a shrinkable container above your incompressible row can still
+be solved shorter than the row, and the surplus is then painted outside
+the container, where a later sibling's paint lands on top of it. Apply
+`shrink(0.0)` to every chrome row in the pressured column — the outer
+row as well as the widget inside it — and give the growing pane beside
+them `basis(Cells(0))` so it exerts no pressure in the first place.
+Debug builds name a column whose children need more rows than it has,
+in the same notices lane as the zero-collapse notice; `clip()` on the
+container turns the surplus into honest truncation instead.
 
 ## widgets — the built-in library
 

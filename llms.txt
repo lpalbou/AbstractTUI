@@ -129,7 +129,8 @@
   dead keyboard, images falling back to mosaic, images that reject by name,
   washed-out colors, flicker/tearing,
   Ctrl+Enter behaving like Enter, the splash not playing, slow frames, wide-character
-  misalignment, rows vanishing on small terminals, double-click not activating, file
+  misalignment, rows vanishing on small terminals, an input panel that is a row short
+  and stops following the caret, double-click not activating, file
   drops pasting a path instead of attaching, text selection under mouse capture,
   copies not reaching the clipboard, hover highlights that never light up
   (`RunConfig::hover_ink`), and tests that hang.
@@ -137,7 +138,7 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, **0.3.3** (2026-08-19) the current one.
+  (2026-07-21) is the first public release, **0.3.7** (2026-08-20) the current one.
   The extension family is at `abstracttui-graph` 0.2.0 and
   `abstracttui-mermaid` 0.2.0, each with its own changelog under `extensions/`.
 - [Contributing](CONTRIBUTING.md): Building, the test suite (~2,120 core tests; ~2,245

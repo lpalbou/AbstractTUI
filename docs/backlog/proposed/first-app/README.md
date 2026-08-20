@@ -13,6 +13,7 @@ item records the workaround so the engine fix can delete it.
 | 0274 | `app::notify()` — presenter-custody emitter for the detected OSC 9/99 notification channels (the notify leg of planned 0150, first consumer named; RENUMBERED from 0290 2026-07-25 — collided with completed 0290) | API gap |
 | 0280 | Feed custom blocks cannot host widgets — protocol images degrade to mosaic | capability gap |
 | 0289 | Typed uppercase inserts lowercase on kitty-spelling wires — `convert_event` drops the kitty `text` field; TextInput inserts the base char (found during the 0286/0288 verification) | bug |
+| 1331 | The solver has no min-content sizing mode — the shared prerequisite under every "the engine should have figured that out" layout fix; filed out of 1330 after both of its automatic directions failed against this wall (measured: 25 test failures / a regressed acceptance scene) | capability gap |
 
 Completed (moved to `../../completed/first-app/`, 2026-07-21 wave cycle 1):
 
@@ -70,6 +71,12 @@ Completed 2026-07-24 (disclosure wave, jointly with field-agora 0850):
 | ID | Title | Class |
 | --- | --- | --- |
 | 0260 | Disclosure widget — standalone fold/unfold card shipped (`▸`/`▾` title row + detail slot, click/Enter/Space toggle, `max_body_rows` cap + auto-hiding scrollbar, uncontrolled + `folded(Signal<bool>)` modes, folded = body unmounted) with the Feed enablers (`on_item_press`, `item_at_row`) and the documented message-card recipe. The feed-NATIVE card kind stays future work behind 0280's draw-only block boundary. | feature |
+
+Completed 2026-08-20 (layout-honesty wave):
+
+| ID | Title | Class |
+| --- | --- | --- |
+| 1330 | An overflowing child is silently overpainted by its next sibling. Landed: a debug notice for a COLUMN whose children need more rows than its content box has and at least one cannot shrink (the zero-collapse notice's other end), plus the docs that scope `shrink(0.0)` to one element and surface `clip()`/`scroll()`. Declined on measurement: the CSS auto-minimum (25 failures, and it does not fix the bug) and default clipping (already shipped as `Overflow`, and it does not fix the bug either). Prerequisite for the automatic fixes filed as 1331. | bug |
 
 Completed 2026-08-19 (usable-instruments wave):
 

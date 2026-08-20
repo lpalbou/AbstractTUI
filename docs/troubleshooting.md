@@ -192,6 +192,31 @@ visible: the engine names every collapsed node into that lane, and a
 notice nobody renders is a debugging session someone else pays for. The
 full contract: [api.md § "Small terminals & content pressure"](api.md#small-terminals--content-pressure).
 
+## My input panel is a row short and stops following what I type
+
+**Cause**: one failure, not two. A container above the input was solved
+shorter than the input itself, so the widget kept its full row count and
+the last of those rows landed outside its parent. Layout never clips, so
+that row is painted — and then the next sibling (a status bar, a hint
+line) paints over the same cells. The widget scrolls its text correctly
+for the rows it believes it has, which is why the row you lose is always
+the one the caret is on.
+
+**Fix**: `shrink(0.0)` on the widget protects the widget's own box among
+its siblings; it cannot reserve room in an ancestor. Put `shrink(0.0)` on
+the outer chrome row too, and give the growing pane beside it
+`grow(1.0).basis(Cells(0))` so it starts at zero and takes only leftover
+instead of demanding its whole content height. `Scroll` carries that
+default already, but a wrapper around a `Scroll` re-derives its own
+starting size from content — put `basis(Cells(0))` on the element that
+sits directly in the pressured column.
+
+In debug builds a column whose children need more rows than it has names
+itself in the notices lane, so render `use_startup_notices` somewhere
+visible. If you would rather see honest truncation than a row that a
+neighbour may or may not overpaint, `LayoutStyle::clip()` on the
+container cuts the surplus at the content box.
+
 ## Double-click doesn't activate (in the app, or in a test)
 
 **Cause**: several honest ones, in likelihood order. In a `Table`, a SLOW
