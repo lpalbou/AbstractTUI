@@ -13,8 +13,9 @@
 > 26 built-in themes over 36
 > contrast-audited semantic design tokens with a drop-in theme-switcher control
 > (grouped dark/light menu with live preview, or a one-click mode toggle that
-> remembers the theme per mode), PNG/baseline-JPEG images drawn through the best
-> channel the terminal proves (kitty graphics, iTerm2, sixel, or unicode mosaic),
+> remembers the theme per mode), PNG/JPEG images (baseline and progressive)
+> drawn through the best channel the terminal proves
+> (kitty graphics, iTerm2, sixel, or unicode mosaic),
 > software-rasterized 3D from GLB files (textures, animation, skinning — no GPU),
 > cell-shader animation with tweens, easings, and timelines, streaming transcripts
 > (`Feed` + follow-tail scroll that pauses during a screen-text selection + a multiline composer
@@ -118,14 +119,15 @@
 - [FAQ](docs/faq.md): Real questions — design rationale, an honest architectural
   comparison with ratatui/Textual/Bubble Tea/notcurses/Ink (update models, media,
   testing, maturity limits), SSH, which terminals support
-  images, wide-character widths, headless testing, screenshots, letting users switch
-  themes (`ThemeSwitcher`), `click_count()` and scrollable rich lists, attaching files
-  dropped onto the terminal, embedding in an
-  existing event loop,
+  images, which image formats decode, wide-character widths, headless testing,
+  screenshots, letting users switch themes (`ThemeSwitcher`), `click_count()`
+  and scrollable rich lists, attaching files dropped onto the terminal,
+  embedding in an existing event loop,
   the near-zero dependency policy, theme readability, `NO_COLOR`/dumb terminals, Windows
   status, crate size, shareable components, damage debugging, and the clipboard policy.
 - [Troubleshooting](docs/troubleshooting.md): Symptom → cause → fix — nothing renders,
-  dead keyboard, images falling back to mosaic, washed-out colors, flicker/tearing,
+  dead keyboard, images falling back to mosaic, images that reject by name,
+  washed-out colors, flicker/tearing,
   Ctrl+Enter behaving like Enter, the splash not playing, slow frames, wide-character
   misalignment, rows vanishing on small terminals, double-click not activating, file
   drops pasting a path instead of attaching, text selection under mouse capture,

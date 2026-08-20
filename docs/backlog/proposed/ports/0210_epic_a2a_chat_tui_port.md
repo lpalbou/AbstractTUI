@@ -111,8 +111,7 @@ and the engine is one widget cycle away from carrying it.
   addressed to me, with age), DM initiation, notify/bell/title via 0150.
 - **Phase 4 — attachments + polish.** Content-addressed attachment
   fetch + inline image preview through the engine's protocol ladder
-  (kitty → iTerm2 → sixel → mosaic; progressive JPEG refuses with a
-  labeled error — acceptable per the review), themes pass, keymap help.
+  (kitty → iTerm2 → sixel → mosaic), themes pass, keymap help.
 
 ## Scope / Non-goals
 Scope: the client crate, its hub protocol layer, fixtures, upstream bug

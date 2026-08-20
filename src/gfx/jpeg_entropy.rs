@@ -1,6 +1,12 @@
-//! JPEG entropy layer: the stuffed-byte bit reader and canonical
-//! Huffman tables (ITU T.81 §F.2). Baseline Huffman only — the
-//! arithmetic-coding path is rejected upstream by name.
+//! JPEG entropy layer: the stuffed-byte bit reader, canonical Huffman
+//! tables (ITU T.81 §F.2), and the five block decoders — one
+//! sequential, four progressive (T.81 §G.2: DC first/refine, AC
+//! first/refine). Huffman only — the arithmetic-coding path is
+//! rejected upstream by name.
+//!
+//! Coefficients live in `i16` (the spec's coefficient range, and half
+//! the memory of `i32` across a whole progressive image); every store
+//! clamps, so a malformed stream saturates instead of wrapping.
 
 use crate::base::{Error, Result};
 
@@ -180,15 +186,25 @@ pub fn extend(v: u32, size: u32) -> i32 {
     }
 }
 
-/// Decode one 8x8 block into ZIGZAG-ordered coefficients (pre-dequant).
+/// Clamp an accumulated coefficient into the storage range. A valid
+/// stream never comes close; a corrupt one saturates rather than
+/// wrapping into a wildly wrong sample.
+#[inline]
+fn coef(v: i32) -> i16 {
+    v.clamp(i16::MIN as i32, i16::MAX as i32) as i16
+}
+
+/// Decode one sequential 8x8 block into ZIGZAG-ordered coefficients.
 /// `dc_pred` carries the component's DC predictor across blocks.
+/// `out` is the block's 64-coefficient slice (zero on entry).
 pub fn decode_block(
     r: &mut BitReader<'_>,
     dc: &HuffTable,
     ac: &HuffTable,
     dc_pred: &mut i32,
-) -> Result<[i32; 64]> {
-    let mut zz = [0i32; 64];
+    out: &mut [i16],
+) -> Result<()> {
+    debug_assert_eq!(out.len(), 64);
     // DC: size class, then the difference bits.
     let s = dc.decode(r)? as u32;
     if s > 11 {
@@ -196,7 +212,7 @@ pub fn decode_block(
     }
     let diff = extend(r.receive(s)?, s);
     *dc_pred += diff;
-    zz[0] = *dc_pred;
+    out[0] = coef(*dc_pred);
 
     // AC: run/size pairs, EOB, ZRL.
     let mut k = 1usize;
@@ -218,10 +234,166 @@ pub fn decode_block(
         if size > 10 {
             return Err(Error::Parse(format!("jpeg: AC size class {size} > 10")));
         }
-        zz[k] = extend(r.receive(size)?, size);
+        out[k] = coef(extend(r.receive(size)?, size));
         k += 1;
     }
-    Ok(zz)
+    Ok(())
+}
+
+/// Progressive DC, first pass (Ah = 0): the difference is decoded like
+/// the sequential DC and stored shifted left by the point transform
+/// `al` — later refinement scans fill the low bits back in.
+pub fn decode_dc_first(
+    r: &mut BitReader<'_>,
+    dc: &HuffTable,
+    dc_pred: &mut i32,
+    al: u32,
+    out: &mut [i16],
+) -> Result<()> {
+    debug_assert_eq!(out.len(), 64);
+    let s = dc.decode(r)? as u32;
+    if s > 11 {
+        return Err(Error::Parse(format!("jpeg: DC size class {s} > 11")));
+    }
+    let diff = extend(r.receive(s)?, s);
+    *dc_pred += diff;
+    out[0] = coef((((*dc_pred) as i64) << al).clamp(i32::MIN as i64, i32::MAX as i64) as i32);
+    Ok(())
+}
+
+/// Progressive DC, refinement pass (Ah > 0): one raw bit per block,
+/// OR-ed in at bit position `al` (T.81 G.1.2.1).
+pub fn decode_dc_refine(r: &mut BitReader<'_>, al: u32, out: &mut [i16]) -> Result<()> {
+    debug_assert_eq!(out.len(), 64);
+    if r.next_bit()? != 0 {
+        out[0] |= 1i16 << al;
+    }
+    Ok(())
+}
+
+/// Progressive AC, first pass (Ah = 0) over the spectral band
+/// `ss..=se`. Runs of all-zero blocks are coded as an EOB RUN that
+/// spans blocks, so `eobrun` is scan state, not block state.
+pub fn decode_ac_first(
+    r: &mut BitReader<'_>,
+    ac: &HuffTable,
+    ss: usize,
+    se: usize,
+    al: u32,
+    eobrun: &mut u32,
+    out: &mut [i16],
+) -> Result<()> {
+    debug_assert_eq!(out.len(), 64);
+    if *eobrun > 0 {
+        *eobrun -= 1;
+        return Ok(());
+    }
+    let mut k = ss;
+    while k <= se {
+        let rs = ac.decode(r)? as u32;
+        let run = (rs >> 4) as usize;
+        let size = rs & 0x0F;
+        if size == 0 {
+            if run != 15 {
+                // EOBn: this block plus (2^n - 1 + extra) further
+                // all-zero blocks in this band.
+                *eobrun = (1u32 << run) - 1;
+                if run > 0 {
+                    *eobrun += r.receive(run as u32)?;
+                }
+                break;
+            }
+            k += 16; // ZRL
+            continue;
+        }
+        k += run;
+        if k > se {
+            return Err(Error::Parse(
+                "jpeg: AC run past the end of the spectral band".into(),
+            ));
+        }
+        if size > 10 {
+            return Err(Error::Parse(format!("jpeg: AC size class {size} > 10")));
+        }
+        out[k] = coef(extend(r.receive(size)?, size) << al);
+        k += 1;
+    }
+    Ok(())
+}
+
+/// Progressive AC, refinement pass (Ah > 0) over `ss..=se`
+/// (T.81 G.1.2.3). Newly nonzero coefficients arrive as ±1 at bit
+/// `al`; already-nonzero ones each take one correction bit — including
+/// the ones swept over by an EOB run.
+pub fn decode_ac_refine(
+    r: &mut BitReader<'_>,
+    ac: &HuffTable,
+    ss: usize,
+    se: usize,
+    al: u32,
+    eobrun: &mut u32,
+    out: &mut [i16],
+) -> Result<()> {
+    debug_assert_eq!(out.len(), 64);
+    let p1 = 1i16 << al; // magnitude bit for a positive coefficient
+    let m1 = -1i16 << al; // ... and for a negative one
+    let mut k = ss;
+    if *eobrun == 0 {
+        while k <= se {
+            let rs = ac.decode(r)? as u32;
+            let mut run = (rs >> 4) as i32;
+            let size = rs & 0x0F;
+            let mut newval = 0i16;
+            if size != 0 {
+                if size != 1 {
+                    return Err(Error::Parse(
+                        "jpeg: AC refinement size class must be 1".into(),
+                    ));
+                }
+                newval = if r.next_bit()? != 0 { p1 } else { m1 };
+            } else if run != 15 {
+                *eobrun = 1u32 << run;
+                if run > 0 {
+                    *eobrun += r.receive(run as u32)?;
+                }
+                break;
+            }
+            // Walk to the run-th zero coefficient, spending one
+            // correction bit on every nonzero coefficient passed.
+            loop {
+                if out[k] != 0 {
+                    if r.next_bit()? != 0 && (out[k] & p1) == 0 {
+                        out[k] = out[k].saturating_add(if out[k] >= 0 { p1 } else { m1 });
+                    }
+                } else {
+                    run -= 1;
+                    if run < 0 {
+                        break;
+                    }
+                }
+                k += 1;
+                if k > se {
+                    break;
+                }
+            }
+            if newval != 0 && k <= se {
+                out[k] = newval;
+            }
+            k += 1;
+        }
+    }
+    if *eobrun > 0 {
+        // Inside an EOB run no new coefficients appear, but every
+        // nonzero one still carries its correction bit.
+        while k <= se {
+            if out[k] != 0 && r.next_bit()? != 0 && (out[k] & p1) == 0 {
+                out[k] = out[k].saturating_add(if out[k] >= 0 { p1 } else { m1 });
+            }
+            k += 1;
+        }
+        *eobrun -= 1;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

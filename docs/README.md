@@ -16,7 +16,7 @@ mosaic), software-rasterized 3D (GLB), themes, and animation.
 | [graphs-and-diagrams.md](graphs-and-diagrams.md) | The extension family (`abstracttui-graph`, `abstracttui-mermaid`): layout pass selection (layered vs force vs grid), the `GraphDesc -> Layout` contract, `GraphView` usage, the mermaid subset table and its atomic fallback, install lines and worked examples. |
 | [live-data.md](live-data.md) | Background threads into the UI: the ownership rule, source→signal bindings, bounded ingestion with honest drop counters, the `interval` time source, the connection lifecycle (reconnect with jittered backoff), worker lifecycle. |
 | [faq.md](faq.md) | Real questions: design rationale, SSH, terminal image support, headless testing, embedding, dependencies, Windows, clipboard policy, and more. |
-| [troubleshooting.md](troubleshooting.md) | Symptom → cause → fix: blank screens, dead keyboards, missing images, wrong colors, flicker, splash gates, slow frames, width misalignment, file drops pasting as text, hanging tests. |
+| [troubleshooting.md](troubleshooting.md) | Symptom → cause → fix: blank screens, dead keyboards, missing images, wrong colors, flicker, splash gates, slow frames, width misalignment, file drops pasting as text, images that reject by name, hanging tests. |
 
 ## Reference material
 

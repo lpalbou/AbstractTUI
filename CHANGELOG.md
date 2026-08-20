@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-08-20
+
+### Added
+
+- gfx: **progressive JPEG decoding**. `gfx::decode_image` and
+  `gfx::jpeg::decode` now read SOF2 (progressive) frames beside the
+  baseline and extended-sequential ones, with spectral selection,
+  successive approximation, EOB runs, and restart markers. Progressive
+  is what most editors emit by default, so image previews, markdown
+  image blocks, `Image::from_path`, and GLB base-color textures accept
+  the files users actually hand them instead of reporting
+  `jpeg: progressive JPEG not supported`. Sequential decoding is
+  unchanged in behavior and output.
+- gfx: single-component (non-interleaved) JPEG scans decode, so
+  multi-scan **sequential** files — previously rejected by name — now
+  decode as well.
+
+### Changed
+
+- gfx: unsupported-format messages no longer say "baseline JPEG". The
+  rejection text is now `image: unrecognized format (magic ...); PNG and
+  JPEG decode, GIF/WebP/AVIF/TIFF do not`. Callers that display the
+  message verbatim need no change; callers matching on its exact text
+  should update.
+- gfx: JPEG scan-header validation reports finer reasons —
+  successive approximation with `Ah != Al + 1`, a progressive AC scan
+  carrying more than one component, a progressive DC scan with
+  `Se != 0`, and any frame component the scans never mention each
+  reject by their own name. Arithmetic-coded, lossless, hierarchical,
+  12-bit, and CMYK JPEGs reject by name as before.
+
 ### Fixed
 
 - ci/tests: the RT5 controlling-terminal probes fork the test binary to
@@ -2031,7 +2062,13 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
-[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.2.17...HEAD
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/lpalbou/abstracttui/compare/v0.3.4...v0.3.5
+[0.3.4]: https://github.com/lpalbou/abstracttui/compare/v0.3.3...v0.3.4
+[0.3.3]: https://github.com/lpalbou/abstracttui/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/lpalbou/abstracttui/compare/v0.3.1...v0.3.2
+[0.3.1]: https://github.com/lpalbou/abstracttui/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/lpalbou/abstracttui/compare/v0.2.24...v0.3.0
 [0.2.24]: https://github.com/lpalbou/abstracttui/compare/v0.2.23...v0.2.24
 [0.2.23]: https://github.com/lpalbou/abstracttui/compare/v0.2.22...v0.2.23
 [0.2.22]: https://github.com/lpalbou/abstracttui/compare/v0.2.21...v0.2.22

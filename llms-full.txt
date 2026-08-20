@@ -13,7 +13,7 @@
 > 26 built-in themes over 36
 > contrast-audited semantic design tokens with a drop-in theme-switcher control
 > (grouped dark/light menu with live preview, or a one-click mode toggle that
-> remembers the theme per mode), PNG/baseline-JPEG images drawn through the best
+> remembers the theme per mode), PNG/JPEG images (baseline and progressive) drawn through the best
 > channel the terminal proves (kitty graphics, iTerm2, sixel, or unicode mosaic),
 > software-rasterized 3D from GLB files (textures, animation, skinning — no GPU),
 > cell-shader animation with tweens, easings, and timelines, streaming transcripts
@@ -146,8 +146,9 @@ through ordinary reactivity.*
   (hold-to-talk, labeled latch fallback, capture stops on focus loss), and
   `Meter` / `AudioScope` widgets that render live levels with real
   ballistics and go fully idle when the signal does.
-- **Images** — PNG and baseline JPEG decoding built in, drawn through the best
-  channel your terminal offers: kitty graphics, iTerm2, sixel, or unicode mosaic
+- **Images** — PNG and JPEG decoding built in (JPEG covers baseline and
+  progressive alike), drawn through the best channel your terminal offers:
+  kitty graphics, iTerm2, sixel, or unicode mosaic
   (half-block / quadrant / sextant / braille). Capability detection is automatic
   and every degradation is labeled, never silent.
 - **Software-rasterized 3D** — load GLB files (node hierarchies, textures,
@@ -495,8 +496,8 @@ Image::from_bitmap(bitmap.clone())
 ```
 
 `gfx::decode_image` sniffs the actual bytes (containers lie, bytes don't) and
-decodes PNG or baseline JPEG; unknown formats are rejected by name, never with
-a panic. The widget renders unicode mosaic — colored sub-cell glyphs that work
+decodes PNG or JPEG — baseline and progressive alike; unknown formats are
+rejected by name, never with a panic. The widget renders unicode mosaic — colored sub-cell glyphs that work
 in any terminal — and picks the best mosaic mode for the terminal's detected
 glyph and color support. For pixel-perfect output over the kitty, iTerm2, or sixel
 protocols, `gfx::ImageSession` manages placement at the app level; the
@@ -525,7 +526,7 @@ and a default light. `Viewport3D` software-rasterizes the scene into cells:
 drag orbits, the wheel zooms, and the widget reports deltas through
 `.on_orbit`/`.on_zoom` so camera state lives in your signals. Animated,
 skinned models play through `.animate(clip, t)`. The loader supports binary
-GLB with triangle meshes, embedded PNG/baseline-JPEG textures, LINEAR/STEP
+GLB with triangle meshes, embedded PNG/JPEG textures, LINEAR/STEP
 animation, and 4-joint skinning; unsupported features are rejected by name or
 degraded with a label, never guessed at. `cargo run --example viewer3d --
 path/to/model.glb` is the full viewer, with measured fps in the status row.
@@ -3266,8 +3267,9 @@ and [graphs-and-diagrams.md](graphs-and-diagrams.md)).
 ## gfx — images
 
 `gfx::decode_image(bytes)` sniffs the magic bytes (containers lie, bytes do
-not) and decodes PNG or baseline JPEG into a `Bitmap` — owned RGBA8 with
-get/set, nearest and bilinear resize, cropping, and a box-filter mip chain.
+not) and decodes PNG or JPEG (baseline and progressive) into a `Bitmap` —
+owned RGBA8 with get/set, nearest and bilinear resize, cropping, and a
+box-filter mip chain.
 Unknown formats are rejected by name, telling the caller what does decode;
 truncated or hostile bytes are named errors, never panics.
 
@@ -3505,9 +3507,11 @@ idle app still costs zero.
 
 Plain statements of current behavior:
 
-- **JPEG** decoding is baseline sequential only; progressive and arithmetic
-  variants reject by name. **PNG** supports 8-bit depths without interlacing
-  (Adam7 rejects by name).
+- **JPEG** decoding covers the 8-bit Huffman frames: baseline, extended
+  sequential, and progressive, in grayscale or YCbCr at 4:4:4, 4:2:2, 4:4:0,
+  and 4:2:0. Arithmetic-coded, lossless, hierarchical, 12-bit, and CMYK
+  variants reject by name. Chroma upsampling is nearest-neighbour. **PNG**
+  supports 8-bit depths without interlacing (Adam7 rejects by name).
 - **Sixel** uses one palette per emission: multiple live sixel images
   recolor each other — prefer one per screen. iTerm2 and sixel have no
   placement model (moves re-emit the payload); only kitty gets placement
@@ -3935,13 +3939,23 @@ silent: when the engine falls back to a lesser channel, the result says so.
 ### Bytes to picture
 
 `gfx::decode_image(bytes)` sniffs the magic bytes (containers lie, bytes
-don't) and decodes **PNG** or **baseline JPEG** into a `gfx::Bitmap` — an
-owned RGBA8 image with pixel `get`/`set`, nearest and bilinear resize,
-cropping, and a box-filter mip chain. Unknown formats reject by name,
-telling the caller what does decode ("PNG and baseline JPEG decode,
-GIF/WebP/AVIF/TIFF do not" — a message you can show verbatim). Truncated
+don't) and decodes **PNG** or **JPEG** into a `gfx::Bitmap` — an owned
+RGBA8 image with pixel `get`/`set`, nearest and bilinear resize, cropping,
+and a box-filter mip chain. Unknown formats reject by name, telling the
+caller what does decode ("PNG and JPEG decode, GIF/WebP/AVIF/TIFF do not"
+— a message you can show verbatim). Truncated
 or hostile bytes produce named errors, never panics; the decoders are
 fuzz-hardened.
+
+The JPEG side reads the 8-bit Huffman frames a camera or an image editor
+actually writes: **baseline**, **extended sequential**, and **progressive**,
+grayscale or YCbCr, at 4:4:4, 4:2:2, 4:4:0, or 4:2:0, with interleaved or
+per-component scans and restart markers. Progressive files — what most
+editors emit by default, and the usual shape of a photo saved for the web
+— decode through the full spectral-selection and successive-approximation
+ladder, so the result is the final picture, not a first-pass
+approximation. Arithmetic-coded, lossless, hierarchical, 12-bit, and CMYK
+JPEGs reject by name.
 
 ### Picture to terminal: the capability ladder
 
@@ -4086,9 +4100,9 @@ Binary GLB containers with embedded buffers; TRIANGLES primitives;
 positions, normals, UVs, and vertex colors; u8/u16/u32 indices or
 non-indexed geometry; node TRS and matrix hierarchies; multiple scenes
 (the default scene wins); `baseColorFactor` and `baseColorTexture`
-(embedded PNG or baseline JPEG); `emissiveFactor`; smooth-normal
-generation on request; and a 2-million-triangle budget enforced from
-metadata before decode.
+(embedded PNG or JPEG); `emissiveFactor`; smooth-normal generation on
+request; and a 2-million-triangle budget enforced from metadata before
+decode.
 
 Rejected **by name**: sparse accessors, Draco/meshopt compression,
 non-triangle primitive modes, and out-of-range anything. Labeled
@@ -4156,9 +4170,9 @@ animated, skinned test asset ships in the repository
 ### Textures and mip-mapping
 
 Base-color textures decode through the same image pipeline (embedded PNG /
-baseline JPEG) and build a box-filter mip chain. The rasterizer picks a
-mip level **per triangle** from the texels-per-pixel ratio, with bilinear
-sampling within the level; wrap mode is REPEAT.
+JPEG) and build a box-filter mip chain. The rasterizer picks a mip level
+**per triangle** from the texels-per-pixel ratio, with bilinear sampling
+within the level; wrap mode is REPEAT.
 
 ## The boot splash
 
@@ -4184,9 +4198,12 @@ pure-cell 2D path with its own particle field (everywhere else). Try both:
 
 ## Honest limits
 
-- **JPEG**: baseline sequential only; progressive and arithmetic coding
-  reject by name. Scan component selectors are validated against the
-  frame header; malformed scans reject rather than decode wrong.
+- **JPEG**: 8-bit Huffman frames only — baseline, extended sequential, and
+  progressive. Arithmetic coding, lossless, hierarchical, 12-bit precision,
+  and CMYK reject by name. Chroma upsampling is nearest-neighbour, which
+  costs a code or two against a smooth upsampler at terminal resolutions.
+  Scan component selectors are validated against the frame header;
+  malformed scans reject rather than decode wrong.
 - **PNG**: 8-bit depths, no interlacing (Adam7 rejects by name).
 - **Sixel**: one palette per emission — multiple live sixel images recolor
   each other. Prefer one sixel image per screen.
@@ -4858,6 +4875,23 @@ colored glyphs and needs nothing. The engine probes and picks; run
 to see the result. See [graphics-and-3d.md](graphics-and-3d.md) for the
 full ladder and the per-terminal expectations.
 
+## Which image formats decode?
+
+PNG and JPEG, decided by the file's magic bytes rather than its extension
+or a declared MIME type. PNG covers 8-bit depths without interlacing; JPEG
+covers the 8-bit Huffman frames — **baseline, extended sequential, and
+progressive** — in grayscale or YCbCr at 4:4:4, 4:2:2, 4:4:0, and 4:2:0,
+with interleaved or per-component scans and restart markers. Progressive is
+what most editors emit by default, so it decodes to the same final picture
+as a sequential file, not to a first-pass approximation.
+
+Everything else rejects **by name**, with a message you can show a user
+verbatim: interlaced PNG, arithmetic-coded / lossless / hierarchical /
+12-bit / CMYK JPEG, and GIF/WebP/AVIF/TIFF. Nothing renders a wrong picture
+in place of an unsupported one. See
+[graphics-and-3d.md](graphics-and-3d.md) for the decoder coverage and
+[troubleshooting.md](troubleshooting.md) for what to do with a refusal.
+
 ## Why is my emoji/wide-character layout off in one terminal?
 
 Because terminals genuinely disagree about the width of some characters.
@@ -5202,6 +5236,34 @@ round-trip probe and only then enables the pixel paths. Set
 re-check `--caps`. Mosaic output is not a bug — on terminals with no pixel
 protocol it *is* the correct answer, and the quadrant/sextant/braille
 modes are a deliberate quality ladder within it.
+
+## An image refuses to decode by name
+
+**Symptom**: the picture never appears and the widget (or the decoder's
+`Result`) carries a named message such as `image: unrecognized format` or
+`jpeg: arithmetic-coded JPEG not supported`.
+
+**Cause**: the bytes are outside what the engine decodes. `decode_image`
+routes on the MAGIC, never a declared MIME type or a file extension, so a
+`.jpg` that actually holds a WebP is rejected as an unrecognized format
+rather than decoded as JPEG. The supported set is PNG at
+8-bit depths without interlacing, and 8-bit Huffman JPEG — baseline,
+extended sequential, and progressive, grayscale or YCbCr. Arithmetic-coded,
+lossless, hierarchical, 12-bit, and CMYK JPEGs, interlaced (Adam7) PNGs,
+and GIF/WebP/AVIF/TIFF all reject by name rather than render wrong.
+
+**Check**: read the message — every rejection names the exact reason,
+and it is written to be shown to a user verbatim. `file image.jpg` (or
+`djpeg -verbose`) confirms the real container and JPEG variant.
+
+**Fix**: convert the asset to a supported encoding — a PNG or JPEG export
+from any image editor, or a command-line converter (`sips -s format png
+in.webp --out out.png` on macOS). Truncated downloads report truncation
+specifically; fetch the file again before converting.
+
+**Verify**: `gfx::decode_image` returns `Ok` and the widget shows the
+picture instead of the labeled broken-image state. See
+[graphics-and-3d.md](graphics-and-3d.md) for the full decoder coverage.
 
 ## Colors look wrong or washed out
 

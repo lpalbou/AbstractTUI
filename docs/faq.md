@@ -85,6 +85,23 @@ colored glyphs and needs nothing. The engine probes and picks; run
 to see the result. See [graphics-and-3d.md](graphics-and-3d.md) for the
 full ladder and the per-terminal expectations.
 
+## Which image formats decode?
+
+PNG and JPEG, decided by the file's magic bytes rather than its extension
+or a declared MIME type. PNG covers 8-bit depths without interlacing; JPEG
+covers the 8-bit Huffman frames — **baseline, extended sequential, and
+progressive** — in grayscale or YCbCr at 4:4:4, 4:2:2, 4:4:0, and 4:2:0,
+with interleaved or per-component scans and restart markers. Progressive is
+what most editors emit by default, so it decodes to the same final picture
+as a sequential file, not to a first-pass approximation.
+
+Everything else rejects **by name**, with a message you can show a user
+verbatim: interlaced PNG, arithmetic-coded / lossless / hierarchical /
+12-bit / CMYK JPEG, and GIF/WebP/AVIF/TIFF. Nothing renders a wrong picture
+in place of an unsupported one. See
+[graphics-and-3d.md](graphics-and-3d.md) for the decoder coverage and
+[troubleshooting.md](troubleshooting.md) for what to do with a refusal.
+
 ## Why is my emoji/wide-character layout off in one terminal?
 
 Because terminals genuinely disagree about the width of some characters.

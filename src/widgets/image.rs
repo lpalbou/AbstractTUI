@@ -125,10 +125,10 @@ impl Image {
         })
     }
 
-    /// Decode an image file at view-build time. PNG + baseline JPEG
-    /// (the engine's decoders, magic-routed — widened from PNG-only in
-    /// the 0144 wave); other formats produce the labeled broken-image
-    /// state, never a panic and never a silent blank.
+    /// Decode an image file at view-build time. PNG + JPEG
+    /// (the engine's decoders, magic-routed); other formats produce
+    /// the labeled broken-image state, never a panic and never a
+    /// silent blank.
     pub fn from_path(path: impl AsRef<std::path::Path>) -> Image {
         let path = path.as_ref();
         let source = match std::fs::read(path) {

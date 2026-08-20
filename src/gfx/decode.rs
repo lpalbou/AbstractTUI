@@ -60,7 +60,7 @@ pub fn decode_image(bytes: &[u8]) -> Result<Bitmap> {
         Some(ImageFormat::Png) => png::decode(bytes),
         Some(ImageFormat::Jpeg) => jpeg::decode(bytes),
         None => Err(Error::Parse(format!(
-            "image: unrecognized format (magic {:02X?}); PNG and baseline JPEG decode, \
+            "image: unrecognized format (magic {:02X?}); PNG and JPEG decode, \
              GIF/WebP/AVIF/TIFF do not",
             &bytes[..bytes.len().min(4)]
         ))),

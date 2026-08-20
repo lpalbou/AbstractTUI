@@ -49,10 +49,11 @@ fn cos_table() -> &'static [[f32; 8]; 8] {
 
 /// Dezigzag + dequantize into natural order. `zz` and `quant` are both
 /// in zigzag order (as they arrive on the wire).
-pub fn dequantize(zz: &[i32; 64], quant: &[u16; 64]) -> [f32; 64] {
+pub fn dequantize(zz: &[i16], quant: &[u16; 64]) -> [f32; 64] {
+    debug_assert_eq!(zz.len(), 64);
     let mut natural = [0.0f32; 64];
     for i in 0..64 {
-        natural[ZIGZAG[i]] = (zz[i] * quant[i] as i32) as f32;
+        natural[ZIGZAG[i]] = (zz[i] as i32 * quant[i] as i32) as f32;
     }
     natural
 }

@@ -97,8 +97,9 @@ through ordinary reactivity.*
   (hold-to-talk, labeled latch fallback, capture stops on focus loss), and
   `Meter` / `AudioScope` widgets that render live levels with real
   ballistics and go fully idle when the signal does.
-- **Images** — PNG and baseline JPEG decoding built in, drawn through the best
-  channel your terminal offers: kitty graphics, iTerm2, sixel, or unicode mosaic
+- **Images** — PNG and JPEG decoding built in (JPEG covers baseline and
+  progressive alike), drawn through the best channel your terminal offers:
+  kitty graphics, iTerm2, sixel, or unicode mosaic
   (half-block / quadrant / sextant / braille). Capability detection is automatic
   and every degradation is labeled, never silent.
 - **Software-rasterized 3D** — load GLB files (node hierarchies, textures,

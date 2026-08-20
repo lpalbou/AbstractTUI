@@ -198,8 +198,8 @@ Image::from_bitmap(bitmap.clone())
 ```
 
 `gfx::decode_image` sniffs the actual bytes (containers lie, bytes don't) and
-decodes PNG or baseline JPEG; unknown formats are rejected by name, never with
-a panic. The widget renders unicode mosaic — colored sub-cell glyphs that work
+decodes PNG or JPEG — baseline and progressive alike; unknown formats are
+rejected by name, never with a panic. The widget renders unicode mosaic — colored sub-cell glyphs that work
 in any terminal — and picks the best mosaic mode for the terminal's detected
 glyph and color support. For pixel-perfect output over the kitty, iTerm2, or sixel
 protocols, `gfx::ImageSession` manages placement at the app level; the
@@ -228,7 +228,7 @@ and a default light. `Viewport3D` software-rasterizes the scene into cells:
 drag orbits, the wheel zooms, and the widget reports deltas through
 `.on_orbit`/`.on_zoom` so camera state lives in your signals. Animated,
 skinned models play through `.animate(clip, t)`. The loader supports binary
-GLB with triangle meshes, embedded PNG/baseline-JPEG textures, LINEAR/STEP
+GLB with triangle meshes, embedded PNG/JPEG textures, LINEAR/STEP
 animation, and 4-joint skinning; unsupported features are rejected by name or
 degraded with a label, never guessed at. `cargo run --example viewer3d --
 path/to/model.glb` is the full viewer, with measured fps in the status row.

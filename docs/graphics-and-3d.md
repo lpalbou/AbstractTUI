@@ -11,13 +11,23 @@ silent: when the engine falls back to a lesser channel, the result says so.
 ### Bytes to picture
 
 `gfx::decode_image(bytes)` sniffs the magic bytes (containers lie, bytes
-don't) and decodes **PNG** or **baseline JPEG** into a `gfx::Bitmap` — an
-owned RGBA8 image with pixel `get`/`set`, nearest and bilinear resize,
-cropping, and a box-filter mip chain. Unknown formats reject by name,
-telling the caller what does decode ("PNG and baseline JPEG decode,
-GIF/WebP/AVIF/TIFF do not" — a message you can show verbatim). Truncated
+don't) and decodes **PNG** or **JPEG** into a `gfx::Bitmap` — an owned
+RGBA8 image with pixel `get`/`set`, nearest and bilinear resize, cropping,
+and a box-filter mip chain. Unknown formats reject by name, telling the
+caller what does decode ("PNG and JPEG decode, GIF/WebP/AVIF/TIFF do not"
+— a message you can show verbatim). Truncated
 or hostile bytes produce named errors, never panics; the decoders are
 fuzz-hardened.
+
+The JPEG side reads the 8-bit Huffman frames a camera or an image editor
+actually writes: **baseline**, **extended sequential**, and **progressive**,
+grayscale or YCbCr, at 4:4:4, 4:2:2, 4:4:0, or 4:2:0, with interleaved or
+per-component scans and restart markers. Progressive files — what most
+editors emit by default, and the usual shape of a photo saved for the web
+— decode through the full spectral-selection and successive-approximation
+ladder, so the result is the final picture, not a first-pass
+approximation. Arithmetic-coded, lossless, hierarchical, 12-bit, and CMYK
+JPEGs reject by name.
 
 ### Picture to terminal: the capability ladder
 
@@ -162,9 +172,9 @@ Binary GLB containers with embedded buffers; TRIANGLES primitives;
 positions, normals, UVs, and vertex colors; u8/u16/u32 indices or
 non-indexed geometry; node TRS and matrix hierarchies; multiple scenes
 (the default scene wins); `baseColorFactor` and `baseColorTexture`
-(embedded PNG or baseline JPEG); `emissiveFactor`; smooth-normal
-generation on request; and a 2-million-triangle budget enforced from
-metadata before decode.
+(embedded PNG or JPEG); `emissiveFactor`; smooth-normal generation on
+request; and a 2-million-triangle budget enforced from metadata before
+decode.
 
 Rejected **by name**: sparse accessors, Draco/meshopt compression,
 non-triangle primitive modes, and out-of-range anything. Labeled
@@ -232,9 +242,9 @@ animated, skinned test asset ships in the repository
 ### Textures and mip-mapping
 
 Base-color textures decode through the same image pipeline (embedded PNG /
-baseline JPEG) and build a box-filter mip chain. The rasterizer picks a
-mip level **per triangle** from the texels-per-pixel ratio, with bilinear
-sampling within the level; wrap mode is REPEAT.
+JPEG) and build a box-filter mip chain. The rasterizer picks a mip level
+**per triangle** from the texels-per-pixel ratio, with bilinear sampling
+within the level; wrap mode is REPEAT.
 
 ## The boot splash
 
@@ -260,9 +270,12 @@ pure-cell 2D path with its own particle field (everywhere else). Try both:
 
 ## Honest limits
 
-- **JPEG**: baseline sequential only; progressive and arithmetic coding
-  reject by name. Scan component selectors are validated against the
-  frame header; malformed scans reject rather than decode wrong.
+- **JPEG**: 8-bit Huffman frames only — baseline, extended sequential, and
+  progressive. Arithmetic coding, lossless, hierarchical, 12-bit precision,
+  and CMYK reject by name. Chroma upsampling is nearest-neighbour, which
+  costs a code or two against a smooth upsampler at terminal resolutions.
+  Scan component selectors are validated against the frame header;
+  malformed scans reject rather than decode wrong.
 - **PNG**: 8-bit depths, no interlacing (Adam7 rejects by name).
 - **Sixel**: one palette per emission — multiple live sixel images recolor
   each other. Prefer one sixel image per screen.

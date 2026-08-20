@@ -891,8 +891,9 @@ specifications; none is a port or derivation of existing decoder code
 
 ### Honest limits (docs cycle: publish these verbatim)
 
-- JPEG: BASELINE sequential only — progressive and arithmetic-coded
-  JPEGs reject by name (no silent fallback).
+- JPEG: 8-bit Huffman frames — baseline, extended sequential, and
+  progressive (see §4.10). Arithmetic-coded, lossless, hierarchical,
+  12-bit, and CMYK JPEGs reject by name (no silent fallback).
 - PNG: 8-bit depths, no interlace (Adam7 rejects by name), no 16-bit.
 - Sixel: ONE palette per emission — the last-emitted image owns the
   shared color registers; multiple live sixel images recolor each
@@ -920,6 +921,39 @@ specifications; none is a port or derivation of existing decoder code
 - Rasterizer: near-plane + guard-band clipping, top-left fill rule,
   perspective-correct depth/UV; COLOR interpolation is screen-linear
   (not perspective-correct — invisible at cell scale, documented).
+
+## 4.10 Progressive JPEG
+
+- **Why**: progressive is what most editors and "save for web" paths
+  emit, and what photo libraries hand on; a preview pane that refuses
+  it refuses a large share of real files.
+- **Shape**: every scan now decodes into a per-component COEFFICIENT
+  plane (`i16`, zigzag order) that survives across scans; dequantize +
+  IDCT run once per block after the last scan, component by component,
+  releasing each coefficient buffer as its samples appear. Sequential
+  decoding is the one-scan case of the same walk, so there is no second
+  code path to keep honest. Coefficient memory is `2 B` per component
+  sample, bounded by the same `png::MAX_PIXELS` budget the frame header
+  is checked against BEFORE allocation.
+- **Entropy** (`jpeg_entropy`): four progressive block decoders beside
+  the sequential one — DC first/refine and AC first/refine (T.81 G.2),
+  with EOB runs as scan state, restart markers resetting both the DC
+  predictors and the EOB run, and every coefficient store clamped so
+  corrupt input saturates instead of wrapping.
+- **Falls out**: single-component (non-interleaved) scans, which
+  progressive AC scans require, also make multi-scan SEQUENTIAL files
+  decode — those used to reject by name.
+- **Named rejections kept**: scans that reorder components against the
+  frame header, `Ah != Al + 1`, a progressive AC scan carrying more
+  than one component, a progressive DC scan with `Se != 0`, and any
+  component the scans never mention (an all-zero plane must never
+  assemble silently).
+- **Fixtures**: real `cjpeg` output for progressive 4:4:4, 4:2:0,
+  4:2:0 + restarts, progressive grayscale, and a `-scans` sequential
+  non-interleaved file, with the regeneration commands embedded. The
+  4:4:4 progressive fixture is the twin of the sequential one, so the
+  two decodes are pinned against each other; the truncation ladder and
+  marker-soup fuzz cover the progressive path too.
 
 ## 5. Open follow-ups (cycle 7+)
 

@@ -2279,8 +2279,9 @@ and [graphs-and-diagrams.md](graphs-and-diagrams.md)).
 ## gfx — images
 
 `gfx::decode_image(bytes)` sniffs the magic bytes (containers lie, bytes do
-not) and decodes PNG or baseline JPEG into a `Bitmap` — owned RGBA8 with
-get/set, nearest and bilinear resize, cropping, and a box-filter mip chain.
+not) and decodes PNG or JPEG (baseline and progressive) into a `Bitmap` —
+owned RGBA8 with get/set, nearest and bilinear resize, cropping, and a
+box-filter mip chain.
 Unknown formats are rejected by name, telling the caller what does decode;
 truncated or hostile bytes are named errors, never panics.
 
@@ -2518,9 +2519,11 @@ idle app still costs zero.
 
 Plain statements of current behavior:
 
-- **JPEG** decoding is baseline sequential only; progressive and arithmetic
-  variants reject by name. **PNG** supports 8-bit depths without interlacing
-  (Adam7 rejects by name).
+- **JPEG** decoding covers the 8-bit Huffman frames: baseline, extended
+  sequential, and progressive, in grayscale or YCbCr at 4:4:4, 4:2:2, 4:4:0,
+  and 4:2:0. Arithmetic-coded, lossless, hierarchical, 12-bit, and CMYK
+  variants reject by name. Chroma upsampling is nearest-neighbour. **PNG**
+  supports 8-bit depths without interlacing (Adam7 rejects by name).
 - **Sixel** uses one palette per emission: multiple live sixel images
   recolor each other — prefer one per screen. iTerm2 and sixel have no
   placement model (moves re-emit the payload); only kitty gets placement

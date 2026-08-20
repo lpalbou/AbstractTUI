@@ -55,6 +55,34 @@ re-check `--caps`. Mosaic output is not a bug — on terminals with no pixel
 protocol it *is* the correct answer, and the quadrant/sextant/braille
 modes are a deliberate quality ladder within it.
 
+## An image refuses to decode by name
+
+**Symptom**: the picture never appears and the widget (or the decoder's
+`Result`) carries a named message such as `image: unrecognized format` or
+`jpeg: arithmetic-coded JPEG not supported`.
+
+**Cause**: the bytes are outside what the engine decodes. `decode_image`
+routes on the MAGIC, never a declared MIME type or a file extension, so a
+`.jpg` that actually holds a WebP is rejected as an unrecognized format
+rather than decoded as JPEG. The supported set is PNG at
+8-bit depths without interlacing, and 8-bit Huffman JPEG — baseline,
+extended sequential, and progressive, grayscale or YCbCr. Arithmetic-coded,
+lossless, hierarchical, 12-bit, and CMYK JPEGs, interlaced (Adam7) PNGs,
+and GIF/WebP/AVIF/TIFF all reject by name rather than render wrong.
+
+**Check**: read the message — every rejection names the exact reason,
+and it is written to be shown to a user verbatim. `file image.jpg` (or
+`djpeg -verbose`) confirms the real container and JPEG variant.
+
+**Fix**: convert the asset to a supported encoding — a PNG or JPEG export
+from any image editor, or a command-line converter (`sips -s format png
+in.webp --out out.png` on macOS). Truncated downloads report truncation
+specifically; fetch the file again before converting.
+
+**Verify**: `gfx::decode_image` returns `Ok` and the widget shows the
+picture instead of the labeled broken-image state. See
+[graphics-and-3d.md](graphics-and-3d.md) for the full decoder coverage.
+
 ## Colors look wrong or washed out
 
 **Cause**: the terminal did not advertise truecolor, so every 24-bit color
