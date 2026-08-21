@@ -486,18 +486,30 @@ impl Scroll {
         // a gesture, so it neither disengages nor arms the follow —
         // and while following, the pin above computes the same value,
         // so the two effects can never fight.
-        // The FIRST measurement after the sentinel is provisional
+        // The FIRST measurement to ARRIVE after mount is provisional
         // (field-agora/0895) — see the effect below. Hint mode has no
         // measurement at all, so it is trusted from the first run.
+        //
+        // `at_build` is whatever the extent signal already held when
+        // this Scroll was constructed. On a fresh mount that is the
+        // (0,0) sentinel; with a caller-bound `extent_signal` it is the
+        // WARM value carried over from the previous mount. Neither is a
+        // measurement THIS mount took, so observing one must not spend
+        // the provisional exemption below — a warm extent doing exactly
+        // that is the whole of the warm-start bug.
+        let at_build = extent.get_untracked();
         let measured_once = Cell::new(hint.is_some());
         cx.effect(move || {
             let (content_w, content_h) = extent.get();
             let (view_w, view_h) = view_box.get();
-            if hint.is_none() && content_w == 0 && content_h == 0 {
-                // Measured mode before the first measurement: (0,0) is
-                // the unmeasured sentinel (a real solve gives the
-                // cross axis the viewport's extent). Clamping against
-                // it would destroy a restored offset at startup.
+            if hint.is_none() && (content_w, content_h) == at_build {
+                // Nothing has arrived yet this mount. The fresh-mount
+                // spelling is the (0,0) unmeasured sentinel (a real
+                // solve gives the cross axis the viewport's extent);
+                // the warm spelling is a remembered extent a remounting
+                // caller supplied through `extent_signal`. Clamping
+                // against either would destroy a restored or
+                // carried-over offset before one solve has run.
                 return;
             }
             if !measured_once.replace(true) {

@@ -216,10 +216,6 @@ fn feed_offset_survives_a_remount() {
 /// render-side clamp keeps the content visible throughout. What is
 /// still wrong is that the app's signal gets rewritten to 0.
 #[test]
-#[ignore = "separate from 0895: size_probe overwrites extent_signal's warm \
-            value with the provisional (w,1) solve, so the warm start the \
-            rustdoc promises never takes effect — fix belongs in the \
-            extent publishing path, not in the offset repair"]
 fn extent_signal_warm_start_does_not_protect_offset() {
     let (offset, _screen) = park_and_remount(warm_feed_page);
     assert_eq!(
