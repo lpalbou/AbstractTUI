@@ -240,6 +240,105 @@ fn feed_page_inside_the_drawer_scrolls() {
     );
 }
 
+/// Row index of the FIRST scrollbar-thumb cell in the rightmost column
+/// (`█` over the `▏` track), or `None` when no bar is drawn there.
+fn thumb_top(screen: &str) -> Option<usize> {
+    screen.lines().position(|line| line.ends_with('█'))
+}
+
+/// field-agora 0895 (`plan/agora-ui.md` §4 item 1): a drawer page driven
+/// by a BOUND `Scroll::offset_y` — no wheel, no key, the app owns the
+/// position. The sibling test above drives the same page by WHEEL, which
+/// is the path that always worked; the keyboard-first reader panes in
+/// `agora-tui` set the offset themselves, and that is the path that had
+/// to be self-windowed app-side (losing the native scrollbar with it).
+/// So this pins the programmatic write specifically: it must move the
+/// page, and the engine must not rewrite the app's signal behind it.
+#[test]
+fn bound_scroll_offset_drives_a_drawer_page() {
+    let size = Size::new(40, 10);
+    let (mut app, slot, mut term, clock) = rig(size, "page");
+    let overlays = app.overlays();
+    let mut driver = Driver::new(&mut app, &mut term, test_config()).expect("driver");
+    driver.set_clock({
+        let clock = clock.clone();
+        move || clock.get()
+    });
+    driver.turn(&mut app, &mut term).expect("frame 1");
+
+    let cx = slot.borrow().expect("scope");
+    // The APP owns the offset; the drawer page only reads it.
+    let oy = cx.signal(0i32);
+    let handle = Drawer::new(DrawerEdge::Right)
+        .size(DrawerSize::Cells(24))
+        .motion(Duration::ZERO)
+        .overlays(&overlays)
+        .install(cx, move |mount| {
+            let feed = FeedState::new(mount);
+            for i in 0..30 {
+                feed.push(format!("k{i}"), FeedItem::text(format!("item-{i:02}")));
+            }
+            Scroll::new(Feed::new(&feed).gap(0).view(mount))
+                .offset_y(oy)
+                .view(mount)
+        });
+    handle.open();
+    for _ in 0..3 {
+        driver.turn(&mut app, &mut term).expect("open turn");
+        clock.set(clock.get() + Duration::from_millis(4));
+    }
+    let screen = term.screen().to_text();
+    assert!(screen.contains("item-00"), "top of the feed:\n{screen}");
+    assert!(!screen.contains("item-29"), "tail off-screen:\n{screen}");
+    // The NATIVE scrollbar is the half of 0895 the app-side workaround
+    // could not keep: self-windowing draws rows, never a thumb.
+    let head_thumb = thumb_top(&screen).unwrap_or_else(|| {
+        panic!("a bound-offset drawer page still renders its scrollbar:\n{screen}")
+    });
+
+    // ---- the whole point: a programmatic write moves the page ----------
+    oy.set(12);
+    for _ in 0..3 {
+        driver.turn(&mut app, &mut term).expect("offset turn");
+    }
+    let screen = term.screen().to_text();
+    assert!(
+        !screen.contains("item-00"),
+        "a bound offset write scrolls the drawer page off the top:\n{screen}"
+    );
+    assert!(
+        screen.contains("item-12"),
+        "the bound row is the first visible one:\n{screen}"
+    );
+    // The thumb follows the BOUND offset, not just a wheel gesture — a
+    // scrollbar that only tracks gestures lies about a keyboard reader.
+    let scrolled_thumb = thumb_top(&screen)
+        .unwrap_or_else(|| panic!("scrollbar survives the programmatic scroll:\n{screen}"));
+    assert!(
+        scrolled_thumb > head_thumb,
+        "thumb moved down with the bound offset \
+         ({head_thumb} -> {scrolled_thumb}):\n{screen}"
+    );
+    // ...and the engine did not silently rewrite the app's own signal
+    // (a clamp against an unmeasured viewport is the 0895 failure shape).
+    assert_eq!(
+        oy.get_untracked(),
+        12,
+        "the drawer context left the bound offset alone"
+    );
+
+    // ---- and back to the head, the same way ----------------------------
+    oy.set(0);
+    for _ in 0..3 {
+        driver.turn(&mut app, &mut term).expect("rewind turn");
+    }
+    let screen = term.screen().to_text();
+    assert!(
+        screen.contains("item-00"),
+        "a bound write rewinds the page too:\n{screen}"
+    );
+}
+
 #[test]
 fn modal_from_drawer_layers_above_and_returns_input_on_close() {
     let size = Size::new(40, 12);
