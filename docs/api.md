@@ -1025,6 +1025,7 @@ its rightmost column and answers the same gestures:
 | drag after that press | the thumb tracks the pointer row for row, and keeps steering after the pointer leaves the strip (pointer capture) |
 | press on bare track | teleports: the thumb centers on the pressed row |
 | release | commits where it stands — no snap-back |
+| any of the above with SELECT MODE on | still the bar's: the strip is a drag zone, so the screen-text layer stands down over it |
 
 The thumb's length is proportional to the visible fraction with a floor
 of 3 rows (the exact proportion of a long transcript rounds to zero),
@@ -2057,6 +2058,19 @@ rules, stated plainly:
 - **Left Down while a region is VISIBLE**: the click DISMISSES the
   selection — clear + consume, both halves of the click (Esc parity:
   the user was clearing a highlight, not aiming at the widget beneath).
+- **Left Down inside a widget's DRAG ZONE**: the layer stands down —
+  no anchor arms, and the whole gesture (Down, Drag, Up) belongs to the
+  widget. Click-through is not enough for a widget that owns drags
+  rather than clicks: a scrollbar thumb takes hold on the Down, and the
+  claim one drag later would cancel that press. Every engine drag
+  surface declares its zone — both `Scroll` bars, the `List` / `Table` /
+  `FilePicker` internal bars, and an orbiting `Viewport3D` — so with
+  select mode on the thumb still scrolls and the camera still orbits.
+  Your own drag widgets declare one with
+  [`Element::drag_zone`](#ui--elements-views-composition); an invisible or
+  non-overflowing bar returns `None` and owns nothing. The **anchor**
+  decides: a drag that starts in content and crosses a strip keeps
+  selecting.
 
 **Every copy ends the gesture**: the region clears with the copy,
 so the app's next keystrokes — including Enter and `c` — route normally

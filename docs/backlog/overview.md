@@ -34,7 +34,7 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | --- | --- |
 | Planned | 5 |
 | Proposed | 84 |
-| Completed | 74 |
+| Completed | 75 |
 | Deprecated | 0 |
 | Recurrent | 0 |
 
@@ -45,6 +45,10 @@ continues at 1250, see the bands note below.)
 (Count reconciliation 2026-08-20, during the layout-honesty wave: the
 table had drifted from the directory across several waves and now
 matches a file count again. The directory is the truth.)
+
+(2026-08-21, drag-ownership wave: +1 completed — first-app/1335, filed
+directly in completed/ per the same-wave precedent. The first-app
+continuation band is now 1300/1310/1320/1330/1331/1335.)
 
 Counting rule: `NNNN_*.md` files on disk under each lifecycle directory
 (topic subfolders included). The completed ledger below additionally
@@ -90,7 +94,7 @@ field-gateway continues at 1000–1050, field-core owns 1100–1190,
 | live-data | `planned/live-data/`, `proposed/live-data/` | Mixed | Network-driven reactivity: async-source→signal binding, bounded ingestion, reconnect, the transport decision, and the read-only watcher milestone. |
 | app-widgets | `planned/app-widgets/`, `proposed/app-widgets/` | Mixed | The content-widget layer real apps need (feed/transcript, streaming markdown, multiline composer, follow-tail scroll, lexers) + the API-stability and platform-accuracy passes — now also home to the wave-12 measure/crush findings (0135/0175/0185). |
 | ports | `planned/ports/`, `proposed/ports/` | Mixed | The application epics that consume both tracks: a coding-agent console, an a2a chat TUI, and the gateway configuration wizard (0215, planned — validator app #2). |
-| first-app | `proposed/first-app/`, `completed/first-app/` | Mixed | Bug/footgun reports from the first shipped application (`abstractcode-tui`, 2026-07-21): reproduced engine defects with field workarounds to delete. 30 completed, 4 open. Band 0220–0299 full; continues at 1300–1340. |
+| first-app | `proposed/first-app/`, `completed/first-app/` | Mixed | Bug/footgun reports from the first shipped application (`abstractcode-tui`, 2026-07-21): reproduced engine defects with field workarounds to delete. 31 completed, 4 open. Band 0220–0299 full; continues at 1300–1340. |
 | control-plane | `proposed/control-plane/`, `completed/control-plane/` | Mixed | Making running apps observable and drivable from outside their own keyboard: lifecycle events, an automation bus + opt-in JSONL control server (MCP-bridgeable), declared-keys persistence with crash-resume, headless serve with attach/detach — plus the shipped observe primitives (0370 screenshots; 0380 files the damage-visualizer knob). |
 | extensions | `proposed/extensions/`, `completed/extensions/` | Mixed | Modularity architecture (ADR-0004, executed: the `abstracttui-*` sibling family is live) and the diagram-class capability lane: canvas layer (0420) + graph view (0440) + mermaid subset (0450) SHIPPED; editor (0430), reader enablement (0460), link seam (0480) and the wave-12 polish items (0445/0455) remain. |
 | app-kits | `proposed/app-kits/`, `completed/app-kits/` | Mixed | The application-kit layer over the content widgets: anchored-popup substrate + choice controls (0500/0515 shipped), PageHost (0545), Drawer (0585), double-click (0535), theme switcher (0595), panel ✕ (0605) — form kit, wizard, tables, chips, nav, tree, split panes remain, with the field-gateway track as their live evidence. |
@@ -128,6 +132,7 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0110 | `md::StreamSession` (open-block-only re-parse, equivalence-pinned) | completed/app-widgets/ |
 | 0270 | Text selection + clipboard copy (all three tiers: bypass docs, mouse-capture suspend verb, screen-text selection + OSC 52) — completed 2026-07-22 | completed/first-app/ |
 | 0290 | UX footgun fixed: every selection copy ENDS the gesture (release-copy and mid-drag Enter/`c`/Ctrl+C clear the region with the copy) — post-copy keys reach the app immediately — completed 2026-07-22 | completed/first-app/ |
+| 1335 | Select mode steals the drag from every widget that owns one — a press on a scrollbar thumb became a text selection (the selection layer's claim cancels the pressed widget's pointer capture); all five engine drag surfaces affected, including `Viewport3D`'s orbit. New declarative seam `Element::drag_zone` + `UiTree::press_probe_at`: a press inside a declared zone arms no anchor, so the gesture reaches the widget whole — completed 2026-08-21 | completed/first-app/ |
 | 0452 | Mermaid: the subset people actually write — edge chaining, infix labels, `&` cross products, the arrow vocabulary, ten node shapes, `subgraph` flattened with a named notice, and sequence control flow (`alt`/`else`/`opt`/`loop`/`par` frames + activation bars, depth-capped); plus ```mermaid fences rendered INSIDE markdown documents through the new core `widgets::FenceBlock` seam — completed 2026-08-21 | completed/extensions/ |
 | 0480 | Core seam `StyledCanvas::register_link` — a draw closure can mint the hyperlink id `Style::link` takes; defaults to `0`, so every existing canvas compiles unchanged — completed 2026-08-21 | completed/extensions/ |
 | 0455 | mermaid fallback live-link: an OSC-8 hyperlink where the terminal has one, a wrapped (never mid-URL ellipsis) URL where it does not — completed 2026-08-21 | completed/extensions/ |

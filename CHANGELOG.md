@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- app: **select mode no longer steals a widget's drag.** With
+  `app::selection` enabled, pressing a scrollbar thumb and dragging
+  painted a text selection instead of scrolling: the layer claimed the
+  gesture at the first cross-cell drag, and the claim cancels the
+  pressed widget's pointer capture — so the thumb it had just grabbed
+  went dead. Every drag surface in the engine had it: both `Scroll`
+  bars, the `List` / `Table` / `FilePicker` internal bars, and
+  `Viewport3D`'s orbit (a whole interaction mode lost while select mode
+  was on). A press that lands on a drag-owning surface now arms no
+  selection anchor at all, so the Down, the Drag and the Up reach the
+  widget together. The ANCHOR decides: a drag that starts in content and
+  crosses a strip still selects, and a bar that is hidden or has nothing
+  to scroll owns nothing.
+
+### Added
+
+- ui: **`Element::drag_zone`** — declare the sub-rect of an element that
+  owns pointer drags, and the screen-text selection layer stands down
+  over it. A sub-rect rather than a flag because `List`/`Table`/
+  `FilePicker` handle their bar on the same element as their rows: only
+  the strip stands down, every row stays selectable. Return `None` when
+  nothing is grabbable right now — an invisible target must not swallow
+  a selection either. This is what a third-party slider, splitter, or
+  canvas drag needs to survive select mode.
+- ui: **`UiTree::press_probe_at`** → `PressProbe` — the pane that would
+  clamp a selection from a point plus whether a drag zone owns it,
+  resolved in one descent. `pane_rect_at` is now a thin wrapper over it.
+
 ## [0.4.0] - 2026-08-21
 
 This release was prepared as `0.3.8` and is published as **0.4.0**: the

@@ -46,9 +46,10 @@ pub use event::{
     EventCtx, Key, KeyChord, KeyEvent, Mods, MouseButton, MouseEvent, MouseKind, Phase, UiEvent,
 };
 pub(crate) use tree::publish_layer_origin;
-pub use tree::{layer_origin, UiTree, ViewId};
+pub use tree::{layer_origin, PressProbe, UiTree, ViewId};
 pub use view::{
-    dyn_view, dyn_view_scoped, styled_text, text, DrawFn, Element, HandlerFn, ShortcutFn, View,
+    dyn_view, dyn_view_scoped, styled_text, text, DragZoneFn, DrawFn, Element, HandlerFn,
+    ShortcutFn, View,
 };
 
 #[cfg(test)]

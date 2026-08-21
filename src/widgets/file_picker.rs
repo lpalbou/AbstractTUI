@@ -614,6 +614,26 @@ impl FilePicker {
                             .grow(1.0),
                     )
                     .on(Phase::Bubble, mouse)
+                    // The bar strip owns left drags (first-app/1335):
+                    // screen select mode stands down over the STRIP only,
+                    // so the thumb keeps its gesture while the listing
+                    // stays selectable. Same geometry as the handler.
+                    .drag_zone({
+                        let state = state.clone();
+                        move |rect| {
+                            let (_, filtered, _) = state.filtered_and_sel();
+                            let total = filtered.len() as i32;
+                            (total > rect.h).then(|| {
+                                crate::widgets::scrollbar::metrics(
+                                    rect,
+                                    1,
+                                    state.offset.get_untracked(),
+                                    total,
+                                )
+                                .track
+                            })
+                        }
+                    })
                     .child(rows)
                     .build(),
             )

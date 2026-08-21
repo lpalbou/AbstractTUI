@@ -303,6 +303,15 @@ impl Viewport3D {
 
         // Interaction: drag-to-orbit with pointer capture, wheel zoom.
         if self.on_orbit.is_some() || self.on_zoom.is_some() {
+            // The whole surface owns left drags while orbiting is wired
+            // (first-app/1335): screen select mode stands down, so a drag
+            // orbits the camera instead of highlighting the mosaic cells
+            // it happens to be painted with. Nothing here is text worth
+            // copying — and an orbit that dies under select mode is a
+            // whole interaction mode lost.
+            if self.on_orbit.is_some() {
+                el = el.drag_zone(|rect| (!rect.is_empty()).then_some(rect));
+            }
             let mut on_orbit = self.on_orbit;
             let mut on_zoom = self.on_zoom;
             // Last drag position; shared with nothing (one closure), so
@@ -389,6 +398,37 @@ mod tests {
             }
         }
         n
+    }
+
+    /// first-app/1335: an orbiting viewport owns left drags, so screen
+    /// select mode stands down over it — otherwise the selection layer
+    /// claimed the drag and the orbit died the moment select mode was
+    /// on, losing a whole interaction mode to a highlight over mosaic
+    /// cells nobody wants to copy. A viewport with no orbit callback
+    /// declares nothing: there is no gesture to protect.
+    #[test]
+    fn an_orbiting_viewport_owns_its_drags() {
+        use crate::widgets::itest_util::{mount_widget, render};
+        let size = Size::new(24, 12);
+        let t = default_theme().tokens;
+        let (_root, mut tree) = mount_widget(size, |_cx| {
+            Viewport3D::new(cube_model())
+                .on_orbit(|_, _| {})
+                .element(&t)
+                .build()
+        });
+        render(&mut tree, size);
+        assert!(tree.press_probe_at(Point::new(10, 6)).drag_owner);
+
+        let t2 = default_theme().tokens;
+        let (_root2, mut inert) = mount_widget(size, |_cx| {
+            Viewport3D::new(cube_model()).element(&t2).build()
+        });
+        render(&mut inert, size);
+        assert!(
+            !inert.press_probe_at(Point::new(10, 6)).drag_owner,
+            "no orbit wired: no drag to protect"
+        );
     }
 
     #[test]

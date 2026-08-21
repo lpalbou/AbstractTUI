@@ -6,6 +6,8 @@
 //! subtree) when the signals it reads change — that is the fine-grained
 //! re-render unit this engine bets on.
 
+use std::rc::Rc;
+
 use crate::base::Rect;
 use crate::layout::Style;
 use crate::reactive::Signal;
@@ -20,6 +22,13 @@ use super::event::{EventCtx, KeyChord, Phase, UiEvent};
 /// Receives the styled canvas so widgets can emphasize (bold, reverse,
 /// links); plain `Canvas` methods remain available through the supertrait.
 pub type DrawFn = Box<dyn FnMut(&mut dyn StyledCanvas, Rect)>;
+
+/// Drag-zone callback: given the element's solved rect, the sub-rect
+/// that owns pointer drags (see [`Element::drag_zone`]). `Rc` + `Fn`
+/// rather than the boxed `FnMut` the draw path uses: the hit test clones
+/// the handle OUT of the tree borrow before calling it, so user code
+/// never runs while the core is borrowed.
+pub type DragZoneFn = Rc<dyn Fn(Rect) -> Option<Rect>>;
 
 /// Event handler attached to an element for a given phase.
 pub type HandlerFn = Box<dyn FnMut(&mut EventCtx, &UiEvent)>;
@@ -101,6 +110,8 @@ pub struct Element {
     /// widgets): consulted when an `Auto` axis needs a content size,
     /// exactly like a text leaf's measurement. See [`Element::measure`].
     pub(crate) measure: Option<crate::layout::MeasureFn>,
+    /// Sub-rect that owns pointer drags — see [`Element::drag_zone`].
+    pub(crate) drag_zone: Option<DragZoneFn>,
     pub(crate) draw: Option<DrawFn>,
     pub(crate) handlers: Vec<Handler>,
     pub(crate) shortcuts: Vec<Shortcut>,
@@ -133,6 +144,7 @@ impl Element {
             style: Style::default(),
             style_fn: None,
             measure: None,
+            drag_zone: None,
             draw: None,
             handlers: Vec::new(),
             shortcuts: Vec::new(),
@@ -198,6 +210,36 @@ impl Element {
         f: impl Fn(crate::base::Size) -> crate::base::Size + 'static,
     ) -> Element {
         self.measure = Some(Box::new(f));
+        self
+    }
+
+    /// The sub-rect of this element's solved rect that OWNS pointer
+    /// drags — a scrollbar strip, a splitter, a 3D orbit surface.
+    ///
+    /// The screen-text selection layer (`app::selection`) stands down
+    /// over it: a press that lands inside the zone arms no selection
+    /// anchor, so the whole gesture stays with the widget instead of
+    /// becoming a highlight. Without this the layer claims every drag
+    /// it sees, and claiming cancels the pressed widget's pointer
+    /// capture — which is exactly how a thumb drag turned into a text
+    /// selection with select mode on.
+    ///
+    /// A SUB-rect, not the whole element, because widgets that draw
+    /// their own scrollbar (`List`, `Table`, `FilePicker`) handle it on
+    /// the same element as their rows: only the strip may stand down,
+    /// or the rows would stop being selectable.
+    ///
+    /// Return `None` when nothing is grabbable at this moment — a bar
+    /// with no overflow, an auto-hidden strip. An invisible target must
+    /// not steer the offset (widgets already refuse), and it must not
+    /// swallow a selection either.
+    ///
+    /// `f` is called with the element's solved rect, at most once per
+    /// press, and must be pure over that geometry (the same contract
+    /// [`Element::measure`] carries). Reads of reactive state inside it
+    /// should be untracked: this is a hit test, not a render.
+    pub fn drag_zone(mut self, f: impl Fn(Rect) -> Option<Rect> + 'static) -> Element {
+        self.drag_zone = Some(Rc::new(f));
         self
     }
 

@@ -39,7 +39,7 @@ use crate::ui::SurfaceCanvas;
 
 use super::events::{convert_event, is_default_quit};
 use super::overlays::{Overlays, ROOT_LAYER_ID};
-use super::selection::{selection_pane, MouseCapture, Selection, SelectionAct};
+use super::selection::{selection_anchor, MouseCapture, Selection, SelectionAct};
 use super::theme::current_theme;
 use super::App;
 
@@ -793,7 +793,7 @@ impl Driver {
                 let size = self.size;
                 match self
                     .selection
-                    .on_input(&other, &mut |p| selection_pane(app, overlays, size, p))
+                    .on_input(&other, &mut |p| selection_anchor(app, overlays, size, p))
                 {
                     SelectionAct::Pass => {}
                     SelectionAct::Consumed => return,

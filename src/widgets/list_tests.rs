@@ -1032,6 +1032,41 @@ fn a_plain_row_accessory_takes_accent_not_error() {
     );
 }
 
+/// The strip is a DRAG ZONE (first-app/1335) so screen select mode
+/// stands down over it — but only over the STRIP: `List` handles its
+/// bar on the same element as its rows, and every row must stay
+/// selectable text.
+#[test]
+fn only_the_strip_column_owns_drags() {
+    let t = default_theme().tokens;
+    let size = Size::new(12, 6);
+    let (_root, mut tree) = mount_widget(size, |cx| {
+        List::of((0..60).map(|i| format!("item {i}")))
+            .element(cx, &t)
+            .build()
+    });
+    settle(&mut tree, size);
+    let bar_x = size.w - 1;
+    assert!(
+        tree.press_probe_at(Point::new(bar_x, 3)).drag_owner,
+        "the strip owns drags"
+    );
+    assert!(
+        !tree.press_probe_at(Point::new(2, 3)).drag_owner,
+        "row text stays selectable"
+    );
+
+    // A list that does not overflow draws no bar, and an absent bar
+    // owns nothing.
+    let (_root2, mut short) =
+        mount_widget(size, |cx| List::of(["one", "two"]).element(cx, &t).build());
+    settle(&mut short, size);
+    assert!(
+        !short.press_probe_at(Point::new(bar_x, 1)).drag_owner,
+        "no bar, no zone"
+    );
+}
+
 /// The strip used to be inert by design: `List` painted a scrollbar it
 /// refused to steer, while `Scroll` painted the same glyph and dragged.
 /// One seam, one gesture — the bar drags everywhere it is drawn.

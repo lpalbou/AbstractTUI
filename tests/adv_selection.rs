@@ -10,7 +10,7 @@ use abstracttui::prelude::*;
 use abstracttui::term::Capabilities;
 use abstracttui::testing::{Attrs, CaptureTerm};
 use abstracttui::ui::{text, Element};
-use abstracttui::widgets::{Button, Feed, FeedItem, FeedState};
+use abstracttui::widgets::{Button, Feed, FeedItem, FeedState, Scroll};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -921,5 +921,147 @@ fn a_successful_copy_reports_its_size() {
         notices.last().map(String::as_str),
         Some("copied 17 characters (2 lines) to the clipboard"),
         "{notices:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Drag zones: select mode stands down where a widget already owns drags
+// ---------------------------------------------------------------------------
+
+/// A `Scroll` over `rows` plain text lines. Plain on purpose: a column
+/// publishes its full extent in ONE frame, where a `Feed` needs two
+/// (see `tests/scroll_remount_offset.rs`) — this suite is about the
+/// gesture, not the measure.
+fn scrolled_column(size: Size, rows: i32) -> (App, Rc<RefCell<Option<Signal<i32>>>>) {
+    let mut app = App::new(size);
+    let wire: Rc<RefCell<Option<Signal<i32>>>> = Rc::new(RefCell::new(None));
+    let w = wire.clone();
+    app.mount(move |cx| {
+        let oy = cx.signal(0i32);
+        *w.borrow_mut() = Some(oy);
+        let mut col = Element::new().style(LayoutStyle::column());
+        for i in 0..rows {
+            col = col.child(text(format!("item-{i:02}")));
+        }
+        Scroll::new(col.build()).offset_y(oy).view(cx)
+    })
+    .unwrap();
+    (app, wire)
+}
+
+/// Any cell wearing the selection ink anywhere on screen.
+fn any_highlight(term: &CaptureTerm, size: Size) -> bool {
+    let sel_bg = current_theme().tokens.get(TokenId::SelectionBg);
+    (0..size.h).any(|y| {
+        (0..size.w).any(|x| {
+            term.screen()
+                .cell(x, y)
+                .is_some_and(|c| c.paint.bg == Some(sel_bg))
+        })
+    })
+}
+
+/// THE BUG: with select mode on, a press on the scrollbar thumb used to
+/// become a text selection — the layer claimed the gesture at the first
+/// cross-cell drag and the driver cancelled the strip's pointer capture
+/// with it, so the thumb never moved and the user got a highlight over
+/// the content they were trying to scroll.
+///
+/// A press that lands on a drag-owning surface belongs to that surface.
+/// The layer must never arm an anchor there.
+#[test]
+fn thumb_drag_scrolls_with_select_mode_on() {
+    let size = Size::new(30, 10);
+    let (mut app, wire) = scrolled_column(size, 30);
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
+    selection().set_enabled(true);
+    // Settle: the content extent publishes through a deferred `after(0)`
+    // (the `size_probe` seam), and the strip is inert until it lands.
+    for _ in 0..8 {
+        if driver.turn(&mut app, &mut term).unwrap().idle {
+            break;
+        }
+    }
+    let oy = wire.borrow().expect("offset wire");
+    assert_eq!(oy.get_untracked(), 0, "precondition: parked at the top");
+
+    // The strip is the last column; at offset 0 the thumb sits on the
+    // top rows. Grab it (col 30 = x 29, row 1 = y 0), then drag down.
+    term.push_input(b"\x1b[<0;30;1M");
+    term.push_input(b"\x1b[<32;30;6M");
+    driver.turn(&mut app, &mut term).unwrap();
+
+    assert!(
+        oy.get_untracked() > 0,
+        "the thumb drag must scroll the content (offset stayed {})",
+        oy.get_untracked()
+    );
+    assert!(
+        !selection().is_active(),
+        "a thumb drag is not a text selection"
+    );
+    assert!(
+        !any_highlight(&term, size),
+        "no cell may wear the selection ink for a thumb drag"
+    );
+
+    // Release copies nothing: there was never a region.
+    term.push_input(b"\x1b[<0;30;6m");
+    driver.turn(&mut app, &mut term).unwrap();
+    driver.turn(&mut app, &mut term).unwrap(); // custody emission turn
+    assert_eq!(
+        term.screen().clipboard(),
+        None,
+        "a thumb drag must not reach the clipboard"
+    );
+}
+
+/// The stand-down is anchored at the DOWN, not at the pointer: a drag
+/// that starts in the content and wanders over the strip keeps
+/// selecting. Only where the gesture BEGINS decides who owns it.
+#[test]
+fn a_selection_that_crosses_the_strip_keeps_selecting() {
+    let size = Size::new(30, 10);
+    let (mut app, wire) = scrolled_column(size, 30);
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
+    selection().set_enabled(true);
+    driver.turn(&mut app, &mut term).unwrap();
+    let oy = wire.borrow().expect("offset wire");
+
+    // Down in the text at (0,0), drag right ONTO the strip column.
+    term.push_input(b"\x1b[<0;1;1M");
+    term.push_input(b"\x1b[<32;30;1M");
+    driver.turn(&mut app, &mut term).unwrap();
+
+    assert!(selection().is_active(), "the anchor was in the content");
+    assert_eq!(
+        oy.get_untracked(),
+        0,
+        "somebody else's gesture never steers the offset"
+    );
+}
+
+/// An auto-hidden bar with fitting content is INVISIBLE, and an
+/// invisible target must not eat a gesture either way: it does not
+/// steer the offset (`scroll.rs` already refuses), and it must not
+/// suppress a selection that starts on it.
+#[test]
+fn an_invisible_bar_does_not_eat_a_selection() {
+    let size = Size::new(30, 10);
+    // Four rows in a ten-row viewport: nothing overflows, no thumb.
+    let (mut app, _wire) = scrolled_column(size, 4);
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
+    selection().set_enabled(true);
+    driver.turn(&mut app, &mut term).unwrap();
+
+    term.push_input(b"\x1b[<0;30;1M");
+    term.push_input(b"\x1b[<32;30;3M");
+    driver.turn(&mut app, &mut term).unwrap();
+    assert!(
+        selection().is_active(),
+        "no bar to own the drag: the selection layer keeps it"
     );
 }

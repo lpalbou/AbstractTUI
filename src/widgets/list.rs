@@ -76,7 +76,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use crate::base::Point;
+use crate::base::{Point, Rect};
 use crate::layout::{Dimension, Style as LayoutStyle};
 use crate::reactive::{Scope, Signal};
 use crate::render::rich::RichText;
@@ -792,6 +792,21 @@ impl List {
             // signal. A steady frame records an unchanged size and
             // schedules nothing.
             .draw(super::scroll::size_probe(view_box))
+            // The internal bar column owns left drags (first-app/1335):
+            // screen select mode stands down over the STRIP only, so the
+            // thumb keeps its gesture while every row stays selectable.
+            // Same condition the handler uses for the bar's existence.
+            .drag_zone(move |rect| {
+                let cols = list_columns(rect.w, total_rows > rect.h, accessory_w);
+                (cols.bar_w > 0).then(|| {
+                    Rect::new(
+                        rect.x + cols.body_w + cols.accessory_w,
+                        rect.y,
+                        cols.bar_w,
+                        rect.h,
+                    )
+                })
+            })
             .focusable();
         if let Some(focused) = self.focused {
             el = el.focus_signal(focused);

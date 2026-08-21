@@ -50,6 +50,11 @@ pub(super) struct Inst {
     /// [`Element::probe_when_culled`](super::Element::probe_when_culled)).
     /// Children still cull individually.
     pub(super) probe_when_culled: bool,
+    /// Sub-rect of this instance that owns pointer drags, so the
+    /// screen-text selection layer stands down over it (see
+    /// [`Element::drag_zone`](super::Element::drag_zone)). Consulted by
+    /// `UiTree::press_probe_at` at mouse-down only.
+    pub(super) drag_zone: Option<super::view::DragZoneFn>,
     pub(super) access: super::access::AccessProps,
     pub(super) payload: InstPayload,
 }
@@ -489,6 +494,8 @@ impl UiTree {
 
 #[path = "tree_dispatch.rs"]
 mod dispatch;
+
+pub use dispatch::PressProbe;
 
 // ---------------------------------------------------------------------------
 // Ambient layer origin (the event-time pattern, `ui::click`): draw

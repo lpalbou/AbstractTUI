@@ -435,6 +435,43 @@ fn column_solver_tiles_exactly() {
     assert_eq!(cols[0], 4);
 }
 
+/// The strip is a DRAG ZONE (first-app/1335) so screen select mode
+/// stands down over it — the STRIP only: `Table` handles its bar on the
+/// same element as its cells, which stay selectable text. The header row
+/// is outside the bar's body, so it is not a zone either.
+#[test]
+fn only_the_strip_column_owns_drags() {
+    let size = Size::new(20, 6);
+    let (_root, mut tree) = mount_widget(size, |cx| {
+        let t = &default_theme().tokens;
+        Table::new(vec![
+            Column::new("name", ColWidth::Flex(1.0)),
+            Column::new("size", ColWidth::Cells(6)),
+        ])
+        .rows(
+            (0..60)
+                .map(|i| vec![format!("file-{i}"), format!("{i} kB")])
+                .collect(),
+        )
+        .element(cx, t)
+        .build()
+    });
+    render(&mut tree, size);
+    let bar_x = size.w - 1;
+    assert!(
+        tree.press_probe_at(Point::new(bar_x, 3)).drag_owner,
+        "the strip owns drags"
+    );
+    assert!(
+        !tree.press_probe_at(Point::new(2, 3)).drag_owner,
+        "cell text stays selectable"
+    );
+    assert!(
+        !tree.press_probe_at(Point::new(bar_x, 0)).drag_owner,
+        "the header row is above the bar's body"
+    );
+}
+
 /// The scrollbar column belongs to the BAR, not to the row beside it.
 /// `Table` used to resolve rows from `pos.y` alone, so a press on the
 /// strip selected whatever row it landed next to — and `FilePicker`, on

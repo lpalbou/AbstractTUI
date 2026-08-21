@@ -45,6 +45,25 @@
 //!   0150's clipboard leg) — queue any text for OSC 52 emission through
 //!   the same custody path, from any component handler.
 //!
+//! ## Stand-down over drag owners (first-app/1335)
+//!
+//! Click-through is not enough for a widget that owns DRAGS rather than
+//! clicks. A scrollbar thumb arms its grab on the passed-through Down,
+//! and the layer's claim one drag later cancelled that press — so the
+//! thumb went dead and the user got a highlight instead of a scroll.
+//! Every drag surface in the engine had the same defect (the two
+//! `Scroll` bars, the `List`/`Table`/`FilePicker` internal bars, the
+//! `Viewport3D` orbit).
+//!
+//! So the anchor asks first. An element declares the sub-rect that owns
+//! drags with [`Element::drag_zone`](crate::ui::Element::drag_zone);
+//! [`UiTree::press_probe_at`](crate::ui::UiTree::press_probe_at) answers
+//! it at Down, and a press inside a zone arms NO anchor. With nothing
+//! armed, the later Drag and Up take the existing "not ours" branches
+//! and the whole gesture stays with the widget — no claim, no cancelled
+//! capture. The ANCHOR decides: a drag that starts in content and
+//! crosses a strip keeps selecting.
+//!
 //! ## A live selection freezes follow-tail (first-app/1300)
 //!
 //! The region is SCREEN space, so content that keeps scrolling under it
@@ -95,6 +114,7 @@ use crate::base::{Point, Rect, Rgba};
 use crate::input::{Event, KeyCode, KeyEventKind, Mods, MouseButton, MouseKind};
 use crate::reactive::request_frame;
 use crate::render::{Cell, Surface};
+use crate::ui::PressProbe;
 
 // ---------------------------------------------------------------------------
 // Thread-local stores (house pattern: app::theme / app::viewport — the app
@@ -305,14 +325,16 @@ impl Selection {
 
     // ---- driver plumbing (crate-internal) --------------------------------
 
-    /// Route one kernel event through the selection layer. `clamp_at`
-    /// resolves the pane rect under a fresh drag anchor (called at most
-    /// once, on left-down). See the module docs for the claim rules —
-    /// wheel, motion, and non-left buttons always pass.
+    /// Route one kernel event through the selection layer. `probe_at`
+    /// resolves the press target under a fresh drag anchor — the pane
+    /// rect that clamps it, and whether a widget there already owns
+    /// drags (called at most once, on left-down). See the module docs
+    /// for the claim rules — wheel, motion, and non-left buttons always
+    /// pass.
     pub(crate) fn on_input(
         &self,
         ev: &Event,
-        clamp_at: &mut dyn FnMut(Point) -> Rect,
+        probe_at: &mut dyn FnMut(Point) -> PressProbe,
     ) -> SelectionAct {
         let mut st = self.state.borrow_mut();
         match ev {
@@ -328,7 +350,28 @@ impl Selection {
                             request_frame();
                             publish_freeze(&st); // dismissal thaws the tail
                         }
-                        let clamp = clamp_at(m.pos);
+                        let probe = probe_at(m.pos);
+                        if probe.drag_owner {
+                            // The press landed where a widget already owns
+                            // drags (first-app/1335): a scrollbar strip, an
+                            // orbit surface. Arm NOTHING — with no anchor
+                            // the later Drag/Up take the "not ours"
+                            // branches, so the gesture reaches the widget
+                            // whole and its pointer capture is never
+                            // cancelled. A visible region still dismissed
+                            // above (the user cleared it), but the Down
+                            // itself PASSES: the widget must see the press
+                            // that takes hold of its thumb.
+                            return SelectionAct::Pass;
+                        }
+                        // No pane means the press missed every tree —
+                        // there is nothing to clamp a region to, so there
+                        // is nothing to select. (`selection_anchor` falls
+                        // back to the viewport for a live tree, so this is
+                        // the empty-app case.)
+                        let Some(clamp) = probe.pane else {
+                            return SelectionAct::Pass;
+                        };
                         st.drag = Some(DragArm {
                             anchor: clamp_point(m.pos, clamp),
                             clamp,
@@ -612,12 +655,12 @@ pub(crate) fn extract_text(frame: &Surface, region: &Region) -> String {
 /// tree answers, else the viewport. Always clipped to the viewport;
 /// degenerate (empty) panes fall back to the viewport rather than
 /// producing an unselectable region.
-pub(super) fn selection_pane(
+pub(super) fn selection_anchor(
     app: &mut super::App,
     overlays: &super::overlays::Overlays,
     viewport: crate::base::Size,
     p: Point,
-) -> Rect {
+) -> PressProbe {
     use super::overlays::{OverlayContent, ROOT_LAYER_ID};
     let vp = Rect::from_size(viewport);
     let mut candidates: Vec<(crate::ui::UiTree, Rect, i32)> = {
@@ -636,20 +679,28 @@ pub(super) fn selection_pane(
     candidates.sort_by_key(|(_, _, z)| std::cmp::Reverse(*z));
     for (tree, bounds, _) in candidates {
         if bounds.contains(p) {
+            // Overlay trees lay out LAYER-LOCAL: probe in local space,
+            // report the pane in screen space. Drag zones inside a drawer
+            // or modal therefore stand down like any other (a Scroll in a
+            // drawer page owns its thumb too).
             let local = Point::new(p.x - bounds.x, p.y - bounds.y);
-            let pane = tree
-                .pane_rect_at(local)
+            let probe = tree.press_probe_at(local);
+            let pane = probe
+                .pane
                 .map(|r| r.translate(bounds.x, bounds.y))
                 .unwrap_or(bounds)
                 .intersect(vp);
-            return if pane.is_empty() { vp } else { pane };
+            return PressProbe {
+                pane: Some(if pane.is_empty() { vp } else { pane }),
+                drag_owner: probe.drag_owner,
+            };
         }
     }
-    let pane = app.tree().pane_rect_at(p).unwrap_or(vp).intersect(vp);
-    if pane.is_empty() {
-        vp
-    } else {
-        pane
+    let probe = app.tree().press_probe_at(p);
+    let pane = probe.pane.unwrap_or(vp).intersect(vp);
+    PressProbe {
+        pane: Some(if pane.is_empty() { vp } else { pane }),
+        drag_owner: probe.drag_owner,
     }
 }
 

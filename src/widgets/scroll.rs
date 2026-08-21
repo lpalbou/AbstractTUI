@@ -580,10 +580,13 @@ impl Scroll {
         // The gesture is stateful on purpose: `Down` REMEMBERS where
         // inside the thumb the pointer grabbed and moves nothing; only
         // `Drag` scrolls, and only while that grab is live. A bare
-        // `Drag` with no grab (the driver drops a tree's capture when a
-        // press becomes a screen-text selection, and terminals emit
-        // motion-with-button after a lost `Up`) is somebody else's
-        // gesture and must never teleport the offset.
+        // `Drag` with no grab (terminals emit motion-with-button after a
+        // lost `Up`) is somebody else's gesture and must never teleport
+        // the offset. Screen select mode used to produce that state
+        // here too — the layer claimed the drag and the driver dropped
+        // this tree's capture with it — until the strip declared itself
+        // a `drag_zone` below (first-app/1335) and the layer learned to
+        // stand down over one.
         //
         // Under `scrollbar_auto_hide`, a fitting content hides the bar:
         // the strip paints bare ground (deterministic pixels — skipping
@@ -679,6 +682,20 @@ impl Scroll {
                             }
                             _ => {}
                         }
+                    })
+                    // The strip owns left drags (first-app/1335): screen
+                    // select mode stands down here, so the thumb keeps the
+                    // gesture instead of losing its capture to a
+                    // highlight. Exactly the conditions the handler above
+                    // uses to decide it is inert — an invisible or
+                    // non-overflowing bar claims nothing.
+                    .drag_zone(move |rect| {
+                        if rect.is_empty() || (auto_hide && content_h <= rect.h) {
+                            return None;
+                        }
+                        scrollbar::metrics(rect, rect.w, offset, content_h)
+                            .overflows()
+                            .then_some(rect)
                     })
                     .draw(move |canvas, rect| {
                         if rect.is_empty() {
