@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- widgets: **remounting a `Scroll` no longer destroys a bound
+  `offset_y`.** A `Scroll` bound to an offset signal over content that
+  measures in two frames (`Feed`, and anything whose height needs a
+  width only `draw` discovers) rewound to the top on remount *and*
+  overwrote the caller's own signal with 0 — reported as a drawer bug,
+  and neither a `Drawer` nor a `PageHost` defect. The first solve
+  publishes a `(w, 1)` placeholder with the cross axis already correct,
+  which is exactly what made it dangerous: the offset repair treated
+  anything that was not the `(0, 0)` sentinel as a real measurement and
+  clamped against a height of 1. The repair now treats the first
+  measurement after the sentinel as provisional and never clamps against
+  it, and the wrapper inset is clamped at RENDER time against the
+  current extent — which is what makes skipping the clamp safe, because
+  a culled child never draws, never discovers its width, and so can
+  never correct the extent it was culled for. A genuine shrink still
+  reclamps and still writes the bound signal.
+- widgets: **`Scroll::extent_signal`'s warm start now actually protects
+  a bound offset.** Its rustdoc promised that a supplied signal's
+  current value is kept until the first solve, so a remounting caller
+  warm-starts from its last measurement; with a caller-bound extent
+  signal it delivered the opposite. There is no `(0, 0)` sentinel in
+  that case, so the warm value itself spent the "first measurement is
+  provisional" exemption and the placeholder solve arrived TRUSTED,
+  clamping the bound offset to 0. A warm value is a remembered
+  measurement, not one this mount took: the repair now captures what the
+  signal held at build time and treats any observation still equal to it
+  as "nothing has arrived yet". Fresh mounts and hint mode are
+  unchanged.
 - app: **select mode no longer steals a widget's drag.** With
   `app::selection` enabled, pressing a scrollbar thumb and dragging
   painted a text selection instead of scrolling: the layer claimed the
