@@ -363,17 +363,41 @@ impl Scroll {
                 && follow.map(|f| f.get()).unwrap_or(false)
                 && oy.get() > 0
                 && !follow_frozen_signal().get();
+            // RENDER-side clamp (field-agora/0895). The repair effect
+            // below owns the app's signal and is deliberately slow to
+            // write it; this owns where the content is DRAWN and is
+            // always immediate. They are not redundant: an offset past
+            // the end must never park the content outside the clip,
+            // because a culled child never draws, a `Feed` that never
+            // draws never discovers its width, and a width it never
+            // discovers is an extent it never corrects. The pane would
+            // stay void forever waiting for a measurement that can only
+            // happen if it is visible. Clamping the inset breaks that
+            // deadlock without touching the caller's signal.
+            let (content_w, content_h) = extent.get();
+            let (view_w, view_h) = view_box.get();
+            // The unmeasured sentinel is exempt: a restored offset must
+            // not flash at the top for one frame before the first solve.
+            let unmeasured = hint.is_none() && content_w == 0 && content_h == 0;
+            let draw_at = |off: i32, content: i32, view: i32, on: bool| {
+                if unmeasured || !on || view <= 0 {
+                    off
+                } else {
+                    off.clamp(0, (content - view).max(0))
+                }
+            };
+            let left = -draw_at(ox.get(), content_w, view_w, horizontal);
             let inset = if tail_pinned {
                 Inset {
-                    left: Some(-ox.get()),
+                    left: Some(left),
                     top: None,
                     right: None,
                     bottom: Some(0),
                 }
             } else {
                 Inset {
-                    left: Some(-ox.get()),
-                    top: Some(-oy.get()),
+                    left: Some(left),
+                    top: Some(-draw_at(oy.get(), content_h, view_h, vertical)),
                     right: None,
                     bottom: None,
                 }
@@ -462,6 +486,10 @@ impl Scroll {
         // a gesture, so it neither disengages nor arms the follow —
         // and while following, the pin above computes the same value,
         // so the two effects can never fight.
+        // The FIRST measurement after the sentinel is provisional
+        // (field-agora/0895) — see the effect below. Hint mode has no
+        // measurement at all, so it is trusted from the first run.
+        let measured_once = Cell::new(hint.is_some());
         cx.effect(move || {
             let (content_w, content_h) = extent.get();
             let (view_w, view_h) = view_box.get();
@@ -470,6 +498,33 @@ impl Scroll {
                 // the unmeasured sentinel (a real solve gives the
                 // cross axis the viewport's extent). Clamping against
                 // it would destroy a restored offset at startup.
+                return;
+            }
+            if !measured_once.replace(true) {
+                // field-agora/0895: (0,0) is not the only untrustworthy
+                // extent. A widget whose height depends on a width it
+                // only learns inside DRAW publishes its size in two
+                // steps — a one-row placeholder first, the real count on
+                // the next turn. `Feed` does exactly this, deliberately:
+                // typesetting needs the width, and RT1-2 forbids writing
+                // the reactive height from a paint closure, so the
+                // correction rides an `after(0)` fixup (feed.rs). The
+                // placeholder is a REAL-LOOKING measurement — (w, 1),
+                // cross axis already correct — so the clamp below
+                // computed max_off = 0 and wrote the app's bound offset
+                // to zero. Remounting a bound `Scroll` over a `Feed`
+                // therefore rewound the reader to the top and destroyed
+                // the app's own state, every time.
+                //
+                // So the first measurement only establishes that we HAVE
+                // one; it never clamps. Every later change is trusted,
+                // which is where a genuine shrink (0281) lands. The
+                // narrow, deliberate gap: an offset restored beyond a
+                // content extent that never changes again stays out of
+                // range until the next extent or viewport change. That
+                // is strictly better than destroying a valid offset on
+                // every remount, and unlike a deferred re-check it costs
+                // no frame and cannot race the publisher's own fixup.
                 return;
             }
             if vertical && view_h > 0 {

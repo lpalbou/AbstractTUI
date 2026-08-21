@@ -179,16 +179,11 @@ fn plain_column_offset_survives_a_remount() {
     );
 }
 
-/// THE DEFECT (field-agora 0895). Red until `Feed` stops publishing a
-/// one-row placeholder extent on its first post-mount solve, or until
-/// `Scroll`'s offset repair refuses to clamp against a measurement it
-/// cannot yet trust.
-///
-/// Ignored, not deleted: this is the acceptance test for the fix, and
-/// `cargo test -- --ignored` is where it is meant to be read from.
+/// THE DEFECT (field-agora 0895), now fixed: `Scroll`'s offset repair
+/// treats the first measurement after the unmeasured sentinel as
+/// provisional and never clamps against it, so `Feed`'s one-row
+/// placeholder can no longer destroy a bound offset on remount.
 #[test]
-#[ignore = "field-agora 0895: Feed's first post-mount solve publishes (w,1) \
-            and Scroll's offset repair clamps the app's bound offset to 0"]
 fn feed_offset_survives_a_remount() {
     let (offset, screen) = park_and_remount(feed_page);
     assert_eq!(
@@ -201,13 +196,30 @@ fn feed_offset_survives_a_remount() {
     );
 }
 
-/// `Scroll::extent_signal` promises a remounting caller warm-starts
-/// from its last measurement. It does not help here: the partial solve
-/// overwrites the warm value first. Ignored for the same reason and
-/// fixed by the same change.
+/// A SEPARATE defect, uncovered by 0895 but not fixed with it — the
+/// ignore reason is narrower now than it was, on purpose.
+///
+/// `Scroll::extent_signal` promises that a remounting caller warm-starts
+/// from its last measurement. It does not. The provisional `(w, 1)`
+/// solve overwrites the warm `(w, 30)` before anything can use it, so
+/// the warm value buys nothing.
+///
+/// This is why the 0895 fix does not cover it: with a warm extent there
+/// is no `(0,0)` sentinel, so the warm value ITSELF is the first
+/// measurement and spends the one-shot trust exemption. The provisional
+/// solve then arrives as a trusted second observation and clamps. The
+/// bug is therefore in the publishing path — `size_probe` should not
+/// clobber a warm extent with a provisional one — not in the repair,
+/// and it wants fixing where the extent is written.
+///
+/// The offset is no longer LOST here in the way 0895 lost it: the
+/// render-side clamp keeps the content visible throughout. What is
+/// still wrong is that the app's signal gets rewritten to 0.
 #[test]
-#[ignore = "field-agora 0895: extent_signal's documented warm start is \
-            overwritten by the partial (w,1) solve before it can help"]
+#[ignore = "separate from 0895: size_probe overwrites extent_signal's warm \
+            value with the provisional (w,1) solve, so the warm start the \
+            rustdoc promises never takes effect — fix belongs in the \
+            extent publishing path, not in the offset repair"]
 fn extent_signal_warm_start_does_not_protect_offset() {
     let (offset, _screen) = park_and_remount(warm_feed_page);
     assert_eq!(
