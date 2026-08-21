@@ -841,3 +841,9 @@ mod tests;
 #[cfg(test)]
 #[path = "scroll_extent_tests.rs"]
 mod extent_tests;
+
+// field-agora 0910: why a child-offset readback cannot be built
+// app-side (the cull) and can be built engine-side (the exemption).
+#[cfg(test)]
+#[path = "scroll_child_probe_tests.rs"]
+mod child_probe_tests;
