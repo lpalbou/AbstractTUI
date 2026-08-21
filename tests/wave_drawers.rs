@@ -25,7 +25,7 @@ use abstracttui::reactive::{frame_tasks_pending, Scope};
 use abstracttui::term::{Capabilities, EnterOptions, MouseMode};
 use abstracttui::testing::CaptureTerm;
 use abstracttui::ui::{text, Element};
-use abstracttui::widgets::{Feed, FeedItem, FeedState, Scroll};
+use abstracttui::widgets::{Feed, FeedItem, FeedState, PageHost, Scroll};
 
 fn test_caps() -> Capabilities {
     Capabilities::with(|c| {
@@ -336,6 +336,116 @@ fn bound_scroll_offset_drives_a_drawer_page() {
     assert!(
         screen.contains("item-00"),
         "a bound write rewinds the page too:\n{screen}"
+    );
+}
+
+/// field-agora 0895, second shape: the word "pages" in the report points
+/// at a `PageHost` HOSTED INSIDE a drawer (`src/app/drawer_view.rs` §close
+/// documents that construction), and a hosted page owning a bound
+/// `Scroll::offset_y`. That seam had no test anywhere: nothing in `tests/`
+/// or `src/` combined PageHost with Drawer. Two things must hold that the
+/// bare-Scroll case cannot prove — the bound offset drives a page mounted
+/// on the host's per-activation GENERATION scope (not the drawer's mount
+/// scope), and it SURVIVES a page switch, because the signal is app-owned
+/// while the page scope is disposed and rebuilt under it.
+#[test]
+fn bound_scroll_offset_drives_a_page_hosted_in_a_drawer() {
+    let size = Size::new(44, 14);
+    let (mut app, slot, mut term, clock) = rig(size, "page");
+    let overlays = app.overlays();
+    let mut driver = Driver::new(&mut app, &mut term, test_config()).expect("driver");
+    driver.set_clock({
+        let clock = clock.clone();
+        move || clock.get()
+    });
+    driver.turn(&mut app, &mut term).expect("frame 1");
+
+    let cx = slot.borrow().expect("scope");
+    // Both signals are APP-owned, created OUTSIDE the page builder: the
+    // host disposes a page's generation scope on every switch, so state
+    // created inside would not survive one (the PageHost store recipe).
+    let oy = cx.signal(0i32);
+    let active = cx.signal(String::from("read"));
+    let builds: Rc<RefCell<u32>> = Rc::new(RefCell::new(0));
+    let b = builds.clone();
+    let handle = Drawer::new(DrawerEdge::Right)
+        .size(DrawerSize::Cells(28))
+        .motion(Duration::ZERO)
+        .overlays(&overlays)
+        .install(cx, move |mount| {
+            let b = b.clone();
+            PageHost::new()
+                .page("read", "Read", move |gcx| {
+                    *b.borrow_mut() += 1;
+                    let feed = FeedState::new(gcx);
+                    for i in 0..30 {
+                        feed.push(format!("k{i}"), FeedItem::text(format!("item-{i:02}")));
+                    }
+                    Scroll::new(Feed::new(&feed).gap(0).view(gcx))
+                        .view(gcx)
+                })
+                .page("other", "Other", |_| text("BODY OTHER"))
+                .active(active)
+                .view(mount)
+        });
+    handle.open();
+    for _ in 0..3 {
+        driver.turn(&mut app, &mut term).expect("open turn");
+        clock.set(clock.get() + Duration::from_millis(4));
+    }
+    let screen = term.screen().to_text();
+    assert!(
+        screen.contains("item-00"),
+        "top of the hosted page:\n{screen}"
+    );
+    assert!(!screen.contains("item-29"), "tail off-screen:\n{screen}");
+    let head_thumb = thumb_top(&screen).unwrap_or_else(|| {
+        panic!("a hosted bound-offset page still renders its scrollbar:\n{screen}")
+    });
+
+    // ---- the bound write moves the HOSTED page ------------------------
+    oy.set(9);
+    for _ in 0..3 {
+        driver.turn(&mut app, &mut term).expect("offset turn");
+    }
+    let screen = term.screen().to_text();
+    assert!(
+        !screen.contains("item-00"),
+        "a bound write scrolls the hosted page off the top:\n{screen}"
+    );
+    assert!(
+        screen.contains("item-09"),
+        "the bound row is the first visible one:\n{screen}"
+    );
+    let scrolled_thumb = thumb_top(&screen)
+        .unwrap_or_else(|| panic!("scrollbar survives the programmatic scroll:\n{screen}"));
+    assert!(
+        scrolled_thumb > head_thumb,
+        "thumb tracks the bound offset inside the host \
+         ({head_thumb} -> {scrolled_thumb}):\n{screen}"
+    );
+    assert_eq!(
+        oy.get_untracked(),
+        9,
+        "neither the drawer nor the host rewrote the app's offset"
+    );
+    assert_eq!(*builds.borrow(), 1, "scrolling never remounted the page");
+
+    // ---- the seam: switch away, and the page really unmounts -----------
+    // Switching BACK is where 0895 actually bites, and it is not a drawer
+    // property at all: see `scroll_remount_offset.rs`, which reduces it to
+    // Feed-in-Scroll with no Drawer and no PageHost.
+    active.set(String::from("other"));
+    for _ in 0..3 {
+        driver.turn(&mut app, &mut term).expect("switch turn");
+    }
+    let screen = term.screen().to_text();
+    assert!(screen.contains("BODY OTHER"), "switched pages:\n{screen}");
+    assert!(!screen.contains("item-09"), "reader unmounted:\n{screen}");
+    assert_eq!(
+        oy.get_untracked(),
+        9,
+        "unmounting the page left the app's offset alone"
     );
 }
 
