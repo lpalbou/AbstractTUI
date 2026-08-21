@@ -4,3 +4,8 @@
 /book
 untracked/
 runtime/
+
+.agora/
+.codex/
+.cursor/
+.abstractcode/
