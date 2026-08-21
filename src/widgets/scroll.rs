@@ -430,7 +430,7 @@ impl Scroll {
             // above the viewport, where a culled probe would starve —
             // the extent would freeze at the pre-shrink value and the
             // offset repair below could never see the shrink.
-            wrapper = wrapper.draw(size_probe(extent)).probe_when_culled();
+            wrapper = wrapper.draw(size_probe(cx, extent)).probe_when_culled();
         }
         let wrapper = wrapper.child(self.content);
 
@@ -448,7 +448,7 @@ impl Scroll {
             // The viewport box feeds the follow pin AND the offset
             // repair (0281), so the probe is unconditional now. Steady
             // frames record an unchanged size and schedule nothing.
-            .draw(size_probe(view_box));
+            .draw(size_probe(cx, view_box));
 
         if let Some(out) = viewport_out {
             cx.effect(move || {
@@ -808,9 +808,19 @@ impl Scroll {
 /// next turn — paint itself never writes signals (the Feed width-fixup
 /// pattern). Steady frames record an unchanged size and schedule
 /// nothing, so an idle scroll costs zero timers.
-pub(crate) fn size_probe(sig: Signal<(i32, i32)>) -> impl FnMut(&mut dyn StyledCanvas, Rect) {
+pub(crate) fn size_probe(
+    cx: Scope,
+    sig: Signal<(i32, i32)>,
+) -> impl FnMut(&mut dyn StyledCanvas, Rect) {
     let seen: Rc<Cell<(i32, i32)>> = Rc::new(Cell::new((-1, -1)));
     let pending: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+    // Liveness of the ELEMENT, which is not what signal liveness answers.
+    // See the note on the deferred publish below (field-agora 0910).
+    let alive: Rc<Cell<bool>> = Rc::new(Cell::new(true));
+    {
+        let alive = alive.clone();
+        cx.on_cleanup(move || alive.set(false));
+    }
     move |_canvas, rect| {
         let size = (rect.w, rect.h);
         if seen.get() == size {
@@ -820,12 +830,24 @@ pub(crate) fn size_probe(sig: Signal<(i32, i32)>) -> impl FnMut(&mut dyn StyledC
         if pending.replace(true) {
             return; // one deferred publish at a time; it reads `seen` late
         }
-        let (seen, pending) = (seen.clone(), pending.clone());
+        let (seen, pending, alive) = (seen.clone(), pending.clone(), alive.clone());
         crate::reactive::after(std::time::Duration::ZERO, move || {
             pending.set(false);
-            // A disposed UI scope leaves the signal dead: stay inert
-            // (an outliving timer must never panic the app).
-            if sig.try_get_untracked().is_some() {
+            // TWO liveness questions, and they are not the same one.
+            //
+            // `sig` alive keeps an outliving timer from panicking. But the
+            // signal is routinely owned by a scope that OUTLIVES this element
+            // — a pane binding one signal and re-binding it to whichever child
+            // is selected is the motivating case (field-agora 0910). There the
+            // signal is alive, this element is gone, and publishing writes a
+            // corpse's rect over the live child's. The reader sees an
+            // off-by-one; the cause is a lifetime.
+            //
+            // So: the ELEMENT's scope decides whether to publish at all.
+            // Measured, not assumed — `a_publish_scheduled_before_disposal_
+            // does_not_land_after_it` in tests/scroll_remount_offset.rs fails
+            // without this line.
+            if alive.get() && sig.try_get_untracked().is_some() {
                 sig.set_if_changed(seen.get());
             }
         });

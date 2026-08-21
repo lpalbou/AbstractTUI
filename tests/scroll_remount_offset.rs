@@ -61,7 +61,7 @@ fn config() -> RunConfig {
 }
 
 /// Signals the test drives, captured out of the mount closure.
-type Wires = Rc<RefCell<Option<(Signal<i32>, Signal<bool>)>>>;
+type Wires = Rc<RefCell<Option<(Signal<i32>, Signal<bool>, Signal<(i32, i32)>)>>>;
 
 /// A page builder. It gets the rebuilt GENERATION scope, plus two
 /// signals created on the APP scope that outlive every rebuild: the
@@ -81,7 +81,7 @@ fn remountable(size: Size, build: Box<PageFn>) -> (App, CaptureTerm, Wires) {
         // Created HERE, on the app scope — the rebuilt subtree below
         // never owns it, which is exactly the warm-start precondition.
         let ext = cx.signal((0i32, 0i32));
-        *w.borrow_mut() = Some((oy, show));
+        *w.borrow_mut() = Some((oy, show, ext));
         dyn_view_scoped(LayoutStyle::column(), move |gcx| {
             if show.get() {
                 build(gcx, oy, ext)
@@ -138,7 +138,7 @@ fn park_and_remount(
         panic!("loop failed to settle within 16 turns");
     };
     settle(&mut driver, &mut app, &mut term);
-    let (oy, show) = wires.borrow().expect("wires");
+    let (oy, show, _ext) = wires.borrow().expect("wires");
 
     oy.set(PARKED_AT);
     settle(&mut driver, &mut app, &mut term);
@@ -227,5 +227,97 @@ fn extent_signal_warm_start_protects_a_bound_offset() {
     assert_eq!(
         offset, PARKED_AT,
         "a warm-started extent must not clamp the offset to 0"
+    );
+}
+
+// ===========================================================================
+// field-agora 0910: an unmounting element must not PUBLISH.
+//
+// Different direction from everything above. Those assert that disposal never
+// writes a signal the app OWNS and the widget merely repairs (`offset_y`).
+// This asserts the other way round: a signal the widget PUBLISHES INTO from
+// layout must not receive a parting write as the element goes away.
+//
+// It is here because agora-tui's reader pane needs the answer before it can
+// build (DM, 2026-08-21). Their card column is a `dyn_view_scoped` that reads
+// the selection TRACKED, so a selection change disposes every card and
+// rebuilds — the binding moves from card A to card B in one pass. If A writes
+// on its way out, write ordering decides whether their ensure-visible reads
+// B's rect or A's corpse, and the symptom is a scroll to the PREVIOUS
+// selection: an off-by-one to look at, a lifetime bug in fact.
+//
+// `extent_signal` is the closest published-from-layout binding that exists
+// today, and the same class as the `rect_signal` 0910 would add — so this is
+// the guarantee measured on the mechanism rather than promised for one that
+// has not been written yet.
+//
+// The `show.set(false)` toggle is exactly the disposal their rebuild performs.
+#[test]
+fn disposal_does_not_publish_into_a_bound_layout_signal() {
+    let size = Size::new(44, 14);
+    let (mut app, mut term, wires) = remountable(size, Box::new(warm_feed_page));
+    let mut driver = Driver::new(&mut app, &mut term, config()).expect("driver");
+    let settle = |driver: &mut Driver, app: &mut App, term: &mut CaptureTerm| {
+        for _ in 0..16 {
+            if driver.turn(app, term).expect("turn").idle {
+                return;
+            }
+        }
+        panic!("loop failed to settle within 16 turns");
+    };
+
+    settle(&mut driver, &mut app, &mut term);
+    let (_oy, show, ext) = wires.borrow().expect("wires");
+
+    let published = ext.get_untracked();
+    assert_eq!(
+        published.1, ROWS,
+        "precondition: a mounted Scroll publishes its real extent, so this \
+         test is watching a signal that is actually live"
+    );
+
+    show.set(false);
+    settle(&mut driver, &mut app, &mut term);
+
+    assert_eq!(
+        ext.get_untracked(),
+        published,
+        "an unmounting element published into a bound layout signal — \
+         the value a survivor reads is now the corpse's"
+    );
+}
+
+/// The RACE the test above does not create, isolated.
+///
+/// `size_probe` does not publish from paint — it records the rect and defers
+/// ONE `after(0)`. So the dangerous window is: the probe schedules a publish,
+/// and the element is disposed before that timer fires. The guard in
+/// `size_probe` checks `sig.try_get_untracked().is_some()` — that the SIGNAL
+/// is alive, not that the ELEMENT is. When the signal is owned by a scope that
+/// outlives the element, which is exactly agora-tui's pane-level binding, that
+/// guard does not fire.
+///
+/// One turn, so the probe records and schedules; then dispose before settling.
+#[test]
+fn a_publish_scheduled_before_disposal_does_not_land_after_it() {
+    let size = Size::new(44, 14);
+    let (mut app, mut term, wires) = remountable(size, Box::new(warm_feed_page));
+    let mut driver = Driver::new(&mut app, &mut term, config()).expect("driver");
+
+    driver.turn(&mut app, &mut term).expect("turn");
+    let (_oy, show, ext) = wires.borrow().expect("wires");
+    let before_disposal = ext.get_untracked();
+
+    show.set(false);
+    for _ in 0..16 {
+        if driver.turn(&mut app, &mut term).expect("turn").idle {
+            break;
+        }
+    }
+
+    assert_eq!(
+        ext.get_untracked(),
+        before_disposal,
+        "a publish scheduled by an element that is now gone landed anyway"
     );
 }

@@ -791,7 +791,7 @@ impl List {
             // reaches the reactive graph without paint ever writing a
             // signal. A steady frame records an unchanged size and
             // schedules nothing.
-            .draw(super::scroll::size_probe(view_box))
+            .draw(super::scroll::size_probe(cx, view_box))
             // The internal bar column owns left drags (first-app/1335):
             // screen select mode stands down over the STRIP only, so the
             // thumb keeps its gesture while every row stays selectable.

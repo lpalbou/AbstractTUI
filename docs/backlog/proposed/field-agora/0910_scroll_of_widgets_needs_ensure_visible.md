@@ -226,12 +226,37 @@ ensure-visible that scrolls to the *previous* selection looks like an
 off-by-one, not like a lifetime bug.
 
 That guarantee is this engine's to make, not the consumer's to work
-around, and the mechanism already exists: `cx.on_cleanup` plus the
-arena's disposal ordering, with the guarded-write-during-teardown pattern
-`reactive/connection.rs` already uses for exactly this reason. It is
-recorded here as a **precondition of the API, before the API exists**, so
-whoever builds it cannot ship it without deciding. If it turns out not to
-be holdable, the consumer must be told before they build against it —
-they offered to key the effect on a `(rect, card-key)` pair so a stale
-write is detectable rather than merely wrong, and that fallback is theirs
-to take only if this engine declines the guarantee.
+around. **It did not hold, and it does now.**
+
+The paragraph that stood here said the mechanism "already exists" and
+pointed at `cx.on_cleanup`. That was reasoning about the engine rather
+than measuring it, and it was wrong. `size_probe` — the published-from-
+layout binding a `rect_signal` would be built on — does not write from
+paint: it records the rect and defers ONE `after(0)`. Its guard asked
+whether the SIGNAL was alive. That is not the same question as whether
+the ELEMENT is, and the difference is exactly this topology: a pane owns
+the signal, so it outlives every card, and a card disposed between
+scheduling and firing published its rect anyway.
+
+Measured, not argued —
+`a_publish_scheduled_before_disposal_does_not_land_after_it` in
+`tests/scroll_remount_offset.rs` fails against the old guard with a
+concrete corpse write: `(43, 1)` landing after the element was gone.
+
+Fixed by giving `size_probe` the mounting `Scope` and an `on_cleanup`
+liveness flag it checks before publishing. All four call sites in
+`scroll.rs` and `list.rs` pass their own `cx`, so the rule holds for
+`extent_signal`, `viewport_size_signal` and `List`'s viewport probe too —
+not only for the binding 0910 would add.
+
+**Note which test caught it.** The steady-state case written first —
+park, dispose, assert the signal is untouched — PASSED against the broken
+guard, because by then no publish was in flight. It is decoration for
+this hazard and is kept only for the case it does cover. The race needed
+constructing deliberately: one turn so the probe schedules, then dispose
+before settling. A disposal test that never has a pending write is
+testing nothing about disposal.
+
+The consumer offered to key the effect on a `(rect, card-key)` pair so a
+stale write would be detectable. They should not have to, and now they
+do not.
