@@ -7,7 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.8] - 2026-08-21
+## [0.4.0] - 2026-08-21
+
+This release was prepared as `0.3.8` and is published as **0.4.0**: the
+semver gate found two genuine source-breaking changes, and ADR-0001's
+rule is that the gate's red is the cue to bump the version, never to
+soften the gate. Both breaks are listed below with their migration; the
+rest of the release is additive.
+
+### Breaking
+
+- gfx: **`ImageFormat` gained a `Gif` variant** and is now
+  `#[non_exhaustive]`. An exhaustive `match` over the old two variants
+  no longer compiles — add a `_` arm. The marker is the actual fix:
+  this set grows every time a decoder lands, and the next one must not
+  break downstream code again. `AnimationFormat` is `#[non_exhaustive]`
+  from birth for the same reason.
+- widgets: **`MarkdownView` is no longer `Send`/`Sync`/`UnwindSafe`/
+  `RefUnwindSafe`.** The `fence_block` hook holds an
+  `Rc<dyn FenceBlock>`, and a claimant is chosen per document by the
+  app that owns it. These auto-traits were never designed in — they
+  were an accident of the struct's previous fields — and nothing in
+  this engine can use them: the whole reactive layer is `Rc`-based and
+  single-threaded by construction. Code that sent a `MarkdownView`
+  across a thread boundary must send the *source* instead and build the
+  view on the UI thread, which is where it has to be built anyway.
 
 ### Added
 
@@ -233,6 +257,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - examples: the list is 31, with `mermaid`, `mermaid_doc`, `workflow`,
   `network`, `animation` and `scrollbar` joining it; counts refreshed
   across `docs/README.md`, getting-started and the llms files.
+- contributing: a **release preflight** — `tools/preflight.sh` runs every
+  CI gate in one pass (fmt, clippy and rustdoc at `-D warnings`, the
+  workspace suite, MSRV, `cargo package`, and the semver gate), and
+  starts by updating the local stable toolchain. Both of this release's
+  CI failures were invisible to `cargo test`: a clippy lint that exists
+  only on a newer stable than the laptop had, and a semver break that no
+  test can see. CONTRIBUTING now says so, and says that a red semver
+  gate means bump the version rather than soften the gate.
+- ci: the semver gate covers **the whole published family** — the
+  sibling crates have had registry baselines since 0.2.0, and ADR-0004
+  always said they join the gate once published. One step per crate, so
+  a red step names the crate that broke.
 
 ### Scope note — no video decoding
 
@@ -2390,8 +2426,8 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
-[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.3.8...HEAD
-[0.3.8]: https://github.com/lpalbou/abstracttui/compare/v0.3.7...v0.3.8
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/lpalbou/abstracttui/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/lpalbou/abstracttui/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/lpalbou/abstracttui/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/lpalbou/abstracttui/compare/v0.3.4...v0.3.5

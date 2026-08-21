@@ -121,7 +121,12 @@ impl Animation {
 }
 
 /// The animated container `decode_animation` recognized.
+///
+/// `#[non_exhaustive]` from birth, for the reason
+/// [`ImageFormat`](crate::gfx::ImageFormat) learned the hard way: a new
+/// decoder must not break every match downstream.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum AnimationFormat {
     Gif,
     /// PNG carrying an `acTL` chunk.

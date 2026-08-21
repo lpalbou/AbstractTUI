@@ -412,7 +412,7 @@ impl Driver {
 
         let mut events = 0usize;
         let mut quit = false;
-        let pending: Vec<Event> = self.pending.drain(..).collect();
+        let pending: Vec<Event> = std::mem::take(&mut self.pending);
         for ev in pending {
             events += 1;
             self.handle_event(app, term, ev, &mut quit);

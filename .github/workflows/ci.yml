@@ -174,12 +174,20 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
-      - name: cargo-semver-checks
+      - name: cargo-semver-checks (core)
         uses: obi1kenobi/cargo-semver-checks-action@v2
         with:
-          # Core only: workspace members under extensions/ are
-          # UNPUBLISHED sibling crates with no registry baseline yet.
-          # Per ADR-0004 ("the semver gate covers the family once
-          # published"), each family crate joins this gate when its
-          # first release lands on crates.io.
           package: abstracttui
+      # Per ADR-0004 ("the semver gate covers the family once
+      # published"): `abstracttui-graph` and `abstracttui-mermaid` have
+      # had registry baselines since their 0.2.0 release, so they join
+      # the gate here. One step per crate — a red step then names the
+      # crate that broke, instead of a single opaque failure.
+      - name: cargo-semver-checks (graph)
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          package: abstracttui-graph
+      - name: cargo-semver-checks (mermaid)
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+        with:
+          package: abstracttui-mermaid

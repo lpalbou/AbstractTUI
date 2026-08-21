@@ -19,7 +19,7 @@ the mermaid parser is hand-rolled).
 
 ```toml
 [dependencies]
-abstracttui = "0.3"
+abstracttui = "0.4"
 abstracttui-graph = "0.3"    # graph layout + GraphView
 abstracttui-mermaid = "0.3"  # mermaid subset (depends on -graph)
 ```

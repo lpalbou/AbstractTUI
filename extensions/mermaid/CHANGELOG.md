@@ -7,7 +7,13 @@ SemVer.
 
 ## [0.3.0] - 2026-08-21
 
-Requires `abstracttui-graph` 0.3.
+### Changed
+
+- Requires `abstracttui` **0.4** (the engine took a breaking window this
+  release: `ImageFormat` gained a variant and is now `#[non_exhaustive]`,
+  and `MarkdownView` lost its accidental `Send`/`Sync`). This crate's own
+  API is unchanged by that; only the dependency floor moves. Also
+  requires `abstracttui-graph` **0.3**.
 
 ### Added
 

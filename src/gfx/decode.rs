@@ -16,7 +16,13 @@ use crate::gfx::{jpeg, png};
 const PNG_MAGIC: [u8; 8] = [0x89, b'P', b'N', b'G', b'\r', b'\n', 0x1A, b'\n'];
 
 /// The format `decode_image` recognized (or would recognize).
+///
+/// `#[non_exhaustive]`: this set grows whenever a decoder lands, so
+/// match on it with a `_` arm. Adding `Gif` in 0.4.0 was a breaking
+/// change for every exhaustive match downstream — the marker is here so
+/// the next format is not.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ImageFormat {
     Png,
     Jpeg,
@@ -26,8 +32,8 @@ pub enum ImageFormat {
     Gif,
 }
 
-/// Sniff the container format from leading bytes. `None` = neither a
-/// PNG nor a JPEG stream.
+/// Sniff the container format from leading bytes. `None` = none of the
+/// formats this crate decodes (PNG, JPEG, GIF).
 pub fn sniff_format(bytes: &[u8]) -> Option<ImageFormat> {
     if bytes.starts_with(&PNG_MAGIC) {
         Some(ImageFormat::Png)

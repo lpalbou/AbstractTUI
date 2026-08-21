@@ -4599,7 +4599,7 @@ the mermaid parser is hand-rolled).
 
 ```toml
 [dependencies]
-abstracttui = "0.3"
+abstracttui = "0.4"
 abstracttui-graph = "0.3"    # graph layout + GraphView
 abstracttui-mermaid = "0.3"  # mermaid subset (depends on -graph)
 ```
@@ -5984,8 +5984,8 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.3.8 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.3.8 (2026-08-21).
+- Crate: `abstracttui` 0.4.0 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.4.0 (2026-08-21).
 - Extension family (sibling crates in the repo workspace, installed only when needed;
   ADR-0004 — public core API only, same MIT license and dependency discipline):
   - `abstracttui-graph` 0.2.0 — graph auto-layout (`GraphDesc -> Layout`: layered /

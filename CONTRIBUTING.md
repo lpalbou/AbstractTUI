@@ -96,6 +96,43 @@ cargo clippy --all-targets
 
 Clippy is expected to produce zero warnings.
 
+CI runs clippy on `dtolnay/rust-toolchain@stable` — whatever stable is
+that day, with that day's new lints. A laptop that has not run
+`rustup update stable` recently is running an OLDER clippy and will pass
+locally on code CI rejects. Update before you trust a green run.
+
+## Release preflight — run the gates BEFORE tagging
+
+```sh
+tools/preflight.sh
+```
+
+It runs every CI gate in one pass: fmt, clippy with `-D warnings`,
+rustdoc with `-D warnings`, the workspace test suite, the MSRV check,
+`cargo package`, and — the one a local test suite can never stand in for
+— **the semver gate**:
+
+```sh
+cargo install cargo-semver-checks --locked   # once
+cargo semver-checks --package abstracttui    # vs the latest crates.io release
+```
+
+`cargo test` is perfectly happy with a new enum variant or a public type
+that quietly stopped being `Send`; downstream compilation is not, and
+the semver job is the only gate that sees it. It costs about five
+seconds.
+
+**A red semver gate means bump the version, not soften the gate.**
+ADR-0001 budgets breaking changes into deliberate windows; the gate
+going red is that window announcing itself. In 0.x that means the minor
+digit (0.3.x -> 0.4.0), and the break belongs in `CHANGELOG.md` under a
+`### Breaking` heading with the migration spelled out. `0.4.0` was
+prepared as `0.3.8` and renumbered for exactly this reason.
+
+Tag only after preflight is green, and after `gh run watch` on the push
+to `main` is green too — the tag is what triggers publication to
+crates.io, and an unpublished tag has to be deleted and re-cut.
+
 ## Documentation
 
 ```sh
