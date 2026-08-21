@@ -382,6 +382,7 @@ fn bound_scroll_offset_drives_a_page_hosted_in_a_drawer() {
                         feed.push(format!("k{i}"), FeedItem::text(format!("item-{i:02}")));
                     }
                     Scroll::new(Feed::new(&feed).gap(0).view(gcx))
+                        .offset_y(oy)
                         .view(gcx)
                 })
                 .page("other", "Other", |_| text("BODY OTHER"))
