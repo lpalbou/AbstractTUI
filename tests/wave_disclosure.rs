@@ -576,6 +576,19 @@ fn scroll_column_remeasures_when_a_disclosure_unfolds() {
 // a pure-TEXT body of the same row count under the same cap, and the same
 // rich body UNCAPPED. The report says both of those render completely, so if
 // either ever goes red the defect is not the one described here.
+//
+// CONFIRMED FROM THE CONSUMER SIDE, and the reason is what makes this suite
+// worth keeping. agora-tui reproduced nothing either (`bb890cc`,
+// `tests/field_0890.rs`, 3/3 against 0.4.0) — because their message cards
+// stopped being `Disclosure`s. A card is always open, its body renders under
+// the headline, and what folds is the thread trail, so `max_body_rows` is not
+// on their card path at all any more.
+//
+// So these tests no longer mirror a live usage: they are a PIN against a shape
+// nobody currently builds. Do not read that as "measured under load". The cap
+// has been exercised at 24 here and at 3 in their falsifying case, and nowhere
+// else. Anyone reintroducing a foldable rich body is the person this suite is
+// for, and 0890 should be reopened rather than assumed closed.
 // ===========================================================================
 
 /// One item: a rich META line, then two text rows. Three rows total, well
