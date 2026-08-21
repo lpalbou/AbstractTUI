@@ -101,7 +101,7 @@ field-gateway continues at 1000–1050, field-core owns 1100–1190,
 | media-av | `proposed/media-av/`, `completed/media-av/` | Mixed | Voice/AV UI plumbing (PTT contract, meters/scope, speaking highlight, external-process pattern) + image-path follow-ups from the study-2 truth audit. |
 | games | `proposed/games/`, `completed/games/` | Mixed | Retro-games feasibility band: key press/release state SHIPPED (0700); tick/sprites/board-grid remain. |
 | field-gateway | `proposed/field-gateway/` | Proposed | Bug/footgun reports from the second-wave validator build (`abstractgateway/console-tui`, the 0215 gateway config wizard): 15 open items — the form/wizard/table field evidence for app-kits 0510/0520/0530. Band 0900–0990, overflow 1000–1050. |
-| field-agora | `proposed/field-agora/` | Mixed | Bug/footgun reports from the second-wave validator build (`agora-tui`, the 0060 read-only multi-channel hub watcher): 14 open, 1 completed (0850) — the first networked field evidence for live-data 0010/0020/0040 and the 0050 transport ADR. Band 0800–0890, overflow 0895–0910. |
+| field-agora | `proposed/field-agora/` | Mixed | Bug/footgun reports from the second-wave validator build (`agora-tui`, the 0060 read-only multi-channel hub watcher): 11 open, 4 completed (0840, 0850, 0890, 0895) — the first networked field evidence for live-data 0010/0020/0040 and the 0050 transport ADR. Band 0800–0890, overflow 0895–0910. |
 | field-core | `proposed/field-core/` | Proposed | Feedback band for the third-wave validator (`abstractcore-console`, launched 2026-07-25 on 0.2.22). Band 1100–1190. Empty at this count — findings expected as that build proceeds. |
 | wave11 | `proposed/wave11/` | Proposed | Maintenance items from the wave-11 adversarial quality audit: one item (0990 file-size budget reconciliation — 12 splits done in wave 12, 15 files still >600 lines re-counted 2026-07-25). |
 
@@ -188,6 +188,8 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0271 | ChoicePrompt approval-gate adoption gaps: `body_width`, `dismiss_label`, `handle.retire()` — completed 2026-07-23 | completed/first-app/ |
 | 0260 | Disclosure card widget — fold/unfold title row, capped body with scrollbar (`widgets::Disclosure`) — completed 2026-07-24 | completed/first-app/ |
 | 0850 | Feed message-card enablers — `Feed::on_item_press` + `item_at_row`, `Scroll::extent_signal`/`scrollbar_auto_hide`, the documented card recipe — completed 2026-07-24 | completed/field-agora/ |
+| 0895 | Bound `Scroll::offset_y(Signal)` ignored inside Drawer pages — the cause was `Feed` × `Scroll` across a REMOUNT, not the Drawer: the provisional first measurement was trusted and clamped the restored offset to 0 (`335aea1`), plus the caller-bound `extent_signal` warm start that the same one-shot exemption defeated (`862525c`) — completed 2026-08-21 | completed/field-agora/ |
+| 0890 | Disclosure capped body under-measures rich feed items — does NOT reproduce on 0.4.0; closed by evidence and pinned by `tests/wave_disclosure.rs` so it stays closed (`fc0e2ac`) — completed 2026-08-21 | completed/field-agora/ |
 | 0585 | Global drawer system — `app::Drawer` edge-anchored overlay panels hosting full pages + the `animate` mid-flight disposal guard — completed 2026-07-24 | completed/app-kits/ |
 | 0535 | Double-click: engine click-chain synthesis (`EventCtx::click_count()`) + `Table::on_activate` — completed 2026-07-24 | completed/app-kits/ |
 | 0370 | Screenshot capture + exporters: `render::Screenshot` (deterministic `to_text`, replayable `to_ansi`, GitHub-renderable `to_svg`); three capture surfaces (driver, `app::request_screenshot`, testing rig); labeled protocol-image veils — completed 2026-07-24 (ledger row added 2026-07-25) | completed/control-plane/ |
@@ -271,8 +273,6 @@ the build / P2 cost real time, workaround holds / P3 paper cut.
 | field-agora | 0870 | FeedItem headline single-row/nowrap mode | capability gap | P3 |
 | field-agora | 0880 | FeedItem body max-measure for wide terminals | capability gap | P3 |
 | field-agora | 0885 | Disclosure title needs a rich-span slot (folded cards lose identity color) | capability gap | P2 |
-| field-agora | 0890 | Disclosure capped body under-measures rich feed items (rows clip) | bug | P2 |
-| field-agora | 0895 | Bound `Scroll::offset_y(Signal)` ignored inside Drawer pages | bug | P1 |
 | field-agora | 0900 | Completion panel occludes the row above a bottom-docked composer | API gap | P2 |
 | field-agora | 0905 | Drawer needs vertical insets so docked chrome stays visible | API gap | P3 |
 | field-agora | 0910 | Scroll of widgets: no ensure-visible / child-offset verb | API gap | P2 |
@@ -315,15 +315,16 @@ completed/.)
    the content-view half (MarkdownView/CodeView intrinsic measure) —
    the pattern to extend. Precondition on all three: failing-test pins
    first.
-2. **The two field P1s** — field-gateway 1000 (dead-keys window on
+2. **The field P1** — field-gateway 1000 (dead-keys window on
    async-mounting modals: silent, looks like a wedge, cost a night
-   hour to diagnose; the ask is a structural focus fallback) and
-   field-agora 0895 (bound `Scroll::offset_y` dead inside Drawer
-   pages: keyboard-first drawer pages — the 0.2.12 headline use case —
-   re-derive windowing by hand). Both verified still open 2026-07-25.
+   hour to diagnose; the ask is a structural focus fallback). Verified
+   still open 2026-07-25. (field-agora 0895 was the other one and is
+   CLOSED 2026-08-21 — its cause was `Feed` × `Scroll` across a
+   remount, not the Drawer.)
 3. **The P2 field cluster that feeds app-kits** — field-agora
-   0885/0890/0900/0910 (Disclosure rich titles + capped-body measure,
-   completion-panel reserved rows, ensure-visible) and field-gateway
+   0885/0900/0910 (Disclosure rich titles, completion-panel reserved
+   rows, ensure-visible; 0890's capped-body measure closed
+   2026-08-21 — does not reproduce on 0.4.0) and field-gateway
    0900/0905/0910/0930/0945/0960/0970 — these are simultaneously bug
    fixes AND the live evidence 0510/0520/0530 build on. Verified still
    open 2026-07-25 (no title_rich/margin_rows/inset/ensure-visible
@@ -362,10 +363,12 @@ completed/.)
 - **The wave-12 measure family is one investigation**: 0185 (solver
   measure/shrink) is the trunk; 0175's order-dependence half and
   0135's plain-tree half hang off the same seam — pin failing tests
-  first, fix once, re-verify all three plus field-agora 0860/0890
-  (the same class seen from the field). The ADR-0005 wave's
-  content-view fix (intrinsic measure + `basis(Cells(0))`) is the
-  established pattern.
+  first, fix once, re-verify all three plus field-agora 0860 (the same
+  class seen from the field; 0890 was in this family and closed
+  2026-08-21 — it no longer reproduces, and `tests/wave_disclosure.rs`
+  now pins the capped-rich-body case for whatever this investigation
+  changes). The ADR-0005 wave's content-view fix (intrinsic measure +
+  `basis(Cells(0))`) is the established pattern.
 - **Ports depend on both tracks**: 0200 (console) ← app-widgets +
   live-data 0010/0020/0030 (subprocess pipe, no network). 0210 (chat)
   ← both + 0040/0050; its read-only phase 1 IS the 0060 milestone.

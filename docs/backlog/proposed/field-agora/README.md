@@ -42,8 +42,6 @@ gap the same session.
 | 0870 | FeedItem headline single-row/nowrap mode (folded cards wrap into body-lookalikes) | capability gap | P3 |
 | 0880 | FeedItem body max-measure for wide terminals | capability gap | P3 |
 | 0885 | Disclosure title needs a rich-span slot (folded cards lose identity color) | capability gap | P2 |
-| 0890 | Disclosure capped body under-measures rich feed items (rows clip) | bug | P2 |
-| 0895 | Bound `Scroll::offset_y(Signal)` is ignored inside Drawer pages (keyboard-scrolled drawer pages re-derive windowing) | bug | P1 |
 | 0900 | Completion panel occludes the row above a bottom-docked composer (needs a reserved-rows/offset knob) | API gap | P2 |
 | 0905 | Drawer needs vertical insets so docked chrome stays visible | API gap | P3 |
 | 0910 | Scroll of widgets: no ensure-visible / child-offset verb (consumers hand-roll height models) | API gap | P2 |
@@ -54,6 +52,15 @@ collision on record: 0900/0905/0910 duplicate ids in
 `../field-gateway/` (their own band) — track+number is the working
 key; renumbering is the owners' call, the wave11/0990 precedent.
 field-gateway continues at 1000–1050; field-core owns 1100–1190.)
+
+Completed 2026-08-21 (the plan's ordered engine lane,
+`plan/agora-ui.md` §4 items 1 and 2 — moved to
+`../../completed/field-agora/`):
+
+| ID | Title | Class | Severity |
+| --- | --- | --- | --- |
+| 0895 | Bound `Scroll::offset_y(Signal)` ignored inside Drawer pages — FIXED (`335aea1`), plus the spun-off `extent_signal` warm-start half (`862525c`, documented `12bb12a`). The report's cause was wrong and its symptom exact: not the Drawer, not `PageHost` — `Feed` × `Scroll` across a REMOUNT, which a drawer page is just the commonest way to trigger. `tests/scroll_remount_offset.rs` 3/3, zero `#[ignore]` left. | bug | P1 |
+| 0890 | Disclosure capped body under-measures rich feed items — DOES NOT REPRODUCE on 0.4.0; closed by evidence, not by a fix, and pinned so it stays closed (`fc0e2ac`). All three reported shapes plus the report's own two controls are now regressions in `tests/wave_disclosure.rs`. The consumer-side receipt (agora-tui deleting its `panes.rs` workaround) is theirs, not ours. | bug | P2 |
 
 Completed 2026-08-20 (layout-honesty wave, moved to
 `../../completed/field-agora/`):

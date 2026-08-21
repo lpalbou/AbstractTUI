@@ -565,7 +565,7 @@ fn scroll_column_remeasures_when_a_disclosure_unfolds() {
 // field-agora 0890: the CAPPED body region under-measures a Feed body whose
 // items contain RICH blocks, so the last row silently clips.
 //
-// The reported shape (docs/backlog/proposed/field-agora/0890_*.md) is
+// The reported shape (docs/backlog/completed/field-agora/0890_*.md) is
 // agora-tui's card: one FeedItem carrying a RICH meta line above the message
 // text. Under any positive `max_body_rows(n)` the region settles SHORT — the
 // capped path sizes itself from `Scroll::extent_signal` (disclosure.rs, the
