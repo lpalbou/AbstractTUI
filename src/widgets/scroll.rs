@@ -228,6 +228,16 @@ impl Scroll {
     /// read it for "N more rows" chrome or height-capped wrappers
     /// (`Disclosure::max_body_rows` sizes its body region from it);
     /// writing it yourself desynchronizes clamps and the thumb.
+    ///
+    /// One caveat the warm start does NOT cover, so chrome reading this
+    /// signal is not surprised by it: content whose height depends on a
+    /// width discovered in draw (`Feed`, `MarkdownView`) solves in TWO
+    /// steps, and the FIRST is a placeholder — `(w, 1)` — which
+    /// overwrites the warm value for one turn before the real count
+    /// lands. Bound offsets are protected from that (field-agora/0895);
+    /// a reader rendering "N more rows" straight off this signal will
+    /// still see one frame of nonsense on mount. Debounce it, or drive
+    /// that chrome off a settled copy.
     pub fn extent_signal(mut self, sig: Signal<(i32, i32)>) -> Scroll {
         self.extent_out = Some(sig);
         self
