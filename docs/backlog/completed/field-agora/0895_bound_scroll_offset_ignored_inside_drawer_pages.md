@@ -163,8 +163,12 @@ anyone wants it fixed.
 Mutation-verified, each one precise: trusting the provisional
 measurement → RED; removing the render clamp → RED; reverting the
 warm-start guard to sentinel-only turns ONLY
-`extent_signal_warm_start_does_not_protect_offset` red and leaves the
-other two green.
+`extent_signal_warm_start_protects_a_bound_offset` red and leaves the
+other two green. (That test was named `..._does_not_protect_offset`
+until 2026-08-21: `862525c` shipped the fix and dropped the `#[ignore]`
+but left the name and doc asserting the defect as current. Renamed and
+rewritten then — a passing test under a name promising the opposite is
+read as prose, not as a result.)
 
 The thing this had to not break, checked rather than assumed: both
 first-app 0281 tests asserting the repair WRITES the bound signal still

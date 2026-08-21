@@ -24,10 +24,12 @@
 //! their page is rebuilt, which is what drove the app-side self-
 //! windowing workaround (and cost it the native scrollbar with it).
 //!
-//! Note also that `Scroll::extent_signal` documents a warm start for
-//! "a remounting caller" — that promise does NOT hold here either: the
-//! partial `(w, 1)` solve overwrites the warm value before the repair
-//! effect reads it (`extent_signal_warm_start_does_not_protect_offset`).
+//! `Scroll::extent_signal` documents a warm start for "a remounting
+//! caller", and that promise broke here too — the partial `(w, 1)`
+//! solve overwrote the warm value before the repair effect read it.
+//! Fixed separately in `862525c`, where the extent is PUBLISHED rather
+//! than in the repair; pinned by
+//! `extent_signal_warm_start_protects_a_bound_offset`.
 //!
 //! OWNER: tui (abstracttui). Source: `plan/agora-ui.md` §4 item 1.
 
@@ -165,7 +167,7 @@ fn park_and_remount(
 /// two-step Feed measurement and not about remounting in general.
 ///
 /// If this ever goes red, the offset repair broke for everyone and the
-/// ignored test below stops being the interesting one.
+/// Feed cases below stop being the interesting ones.
 #[test]
 fn plain_column_offset_survives_a_remount() {
     let (offset, screen) = park_and_remount(column_page);
@@ -196,27 +198,31 @@ fn feed_offset_survives_a_remount() {
     );
 }
 
-/// A SEPARATE defect, uncovered by 0895 but not fixed with it — the
-/// ignore reason is narrower now than it was, on purpose.
+/// A SEPARATE defect uncovered by 0895 and FIXED separately in
+/// `862525c` — `Scroll::extent_signal` promises that a remounting
+/// caller warm-starts from its last measurement, and now it delivers
+/// that.
 ///
-/// `Scroll::extent_signal` promises that a remounting caller warm-starts
-/// from its last measurement. It does not. The provisional `(w, 1)`
-/// solve overwrites the warm `(w, 30)` before anything can use it, so
-/// the warm value buys nothing.
+/// It needed its own fix because the 0895 repair could not cover it.
+/// With a warm extent there is no `(0, 0)` sentinel, so the warm value
+/// ITSELF was the first measurement and spent the one-shot trust
+/// exemption; the provisional `(w, 1)` solve then arrived as a trusted
+/// SECOND observation and clamped the offset to 0. The bug was in the
+/// publishing path rather than the repair — `size_probe` must not
+/// clobber a warm extent with a provisional one — and that is where it
+/// was fixed.
 ///
-/// This is why the 0895 fix does not cover it: with a warm extent there
-/// is no `(0,0)` sentinel, so the warm value ITSELF is the first
-/// measurement and spends the one-shot trust exemption. The provisional
-/// solve then arrives as a trusted second observation and clamps. The
-/// bug is therefore in the publishing path — `size_probe` should not
-/// clobber a warm extent with a provisional one — not in the repair,
-/// and it wants fixing where the extent is written.
-///
-/// The offset is no longer LOST here in the way 0895 lost it: the
-/// render-side clamp keeps the content visible throughout. What is
-/// still wrong is that the app's signal gets rewritten to 0.
+/// THIS DOC AND THIS TEST'S NAME WERE WRONG UNTIL 2026-08-21. `862525c`
+/// landed the fix and deleted the `#[ignore]`, but left behind a name
+/// saying `does_not_protect_offset` and a doc stating the defect as
+/// current. A passing test asserting `offset == PARKED_AT` under a name
+/// promising the opposite is worse than no test: the next reader
+/// believes the prose. It was found while answering a consumer asking
+/// whether 0895 is real on 0.4.0 — they would have read this file to
+/// decide, which is exactly the cost of a stale assertion in a place
+/// people go for the truth.
 #[test]
-fn extent_signal_warm_start_does_not_protect_offset() {
+fn extent_signal_warm_start_protects_a_bound_offset() {
     let (offset, _screen) = park_and_remount(warm_feed_page);
     assert_eq!(
         offset, PARKED_AT,
