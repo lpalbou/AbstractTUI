@@ -847,3 +847,9 @@ mod extent_tests;
 #[cfg(test)]
 #[path = "scroll_child_probe_tests.rs"]
 mod child_probe_tests;
+
+// field-agora 0910, slice 2: the rect readback is already public
+// (`UiTree::rect_of`, cull-immune); child IDENTITY is what is missing.
+#[cfg(test)]
+#[path = "scroll_child_identity_tests.rs"]
+mod child_identity_tests;
