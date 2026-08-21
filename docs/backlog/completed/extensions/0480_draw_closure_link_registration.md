@@ -159,3 +159,14 @@ even lands.
 - [ ] Unit + render + cap pins
 - [ ] 0430/0450 references updated when this lands (already pointing
       here as of cycle 3)
+
+## Shipped 2026-08-21
+
+`StyledCanvas::register_link(uri) -> u16` — defaulted to `0` (no link),
+so every existing canvas compiles unchanged and text printed with a `0`
+link is ordinary text. `SurfaceCanvas`, `ClippedCanvas` and `Surface`
+delegate to the surface's link table; `BufferCanvas` keeps the default.
+The producer half of the link channel: a draw closure can now mint the
+id `Style::link` takes, which only the render layer could do before.
+
+First consumer: 0455's mermaid.live link.

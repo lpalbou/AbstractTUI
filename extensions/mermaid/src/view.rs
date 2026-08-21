@@ -16,7 +16,7 @@
 
 use std::collections::HashMap;
 
-use abstracttui::app::use_theme;
+use abstracttui::app::{current_caps, use_theme};
 use abstracttui::base::{Point, Rgba};
 use abstracttui::layout::{Dimension, Style as LayoutStyle};
 use abstracttui::reactive::Scope;
@@ -95,6 +95,30 @@ impl MermaidView {
 
     fn flowchart_view(self, cx: Scope, outer: LayoutStyle, fc: &FlowchartIr) -> View {
         let tokens = use_theme(cx).get().tokens;
+        // A header with no statements is VALID mermaid and draws
+        // nothing — but a blank rectangle reads as a broken renderer.
+        // Say what happened instead.
+        if fc.nodes.is_empty() {
+            let mut root = Element::new().style(outer);
+            for notice in notice_lines(&fc.notices, tokens.warn) {
+                root = root.child(notice);
+            }
+            return root
+                .child(
+                    Element::new()
+                        .style(LayoutStyle::line(1))
+                        .draw(move |canvas, rect| {
+                            canvas.print(
+                                rect.origin(),
+                                "empty diagram — the source declares no nodes",
+                                tokens.text_faint,
+                                abstracttui::base::Rgba::TRANSPARENT,
+                            );
+                        })
+                        .build(),
+                )
+                .build();
+        }
         let style = self.graph_style.unwrap_or_else(|| {
             GraphStyle::from_tokens(&tokens)
                 .kind_accent("decision", tokens.warn)
@@ -123,6 +147,21 @@ impl MermaidView {
 
     fn sequence_view(self, cx: Scope, outer: LayoutStyle, seq: &SequenceIr) -> View {
         let tokens = use_theme(cx).get().tokens;
+        // Same honesty as the flowchart side: a header with no
+        // statements is valid mermaid that draws nothing, and a blank
+        // rectangle reads as a broken renderer.
+        if seq.participants.is_empty() {
+            let mut root = Element::new().style(outer);
+            for notice in notice_lines(&seq.notices, tokens.warn) {
+                root = root.child(notice);
+            }
+            return root
+                .child(one_line(
+                    "empty diagram — the source declares no participants".to_string(),
+                    tokens.text_faint,
+                ))
+                .build();
+        }
         let style = self
             .seq_style
             .unwrap_or_else(|| SeqStyle::from_tokens(&tokens));
@@ -158,8 +197,8 @@ impl MermaidView {
         let mut root = Element::new().style(outer);
         root = root.child(one_line(format!("⚠ {un}"), tokens.warn));
         if self.live_link {
-            root = root.child(one_line(
-                format!("view online: {}", live_link_url(&self.source)),
+            root = root.child(live_link_row(
+                live_link_url(&self.source),
                 tokens.text_faint,
             ));
         }
@@ -195,6 +234,78 @@ impl MermaidView {
 }
 
 /// One truncated single-row text line (notices, links).
+/// The escape hatch, rendered so it is actually USABLE.
+///
+/// A mermaid.live URL carries the whole diagram in its fragment, so it
+/// runs to hundreds of characters. Printed on one row it was truncated
+/// to dead text: too long to read, impossible to copy whole, and
+/// clickable nowhere. Two honest shapes instead:
+///
+/// - where the terminal does hyperlinks (OSC 8), one short row that IS
+///   the link;
+/// - where it does not, the URL WRAPPED across as many rows as it
+///   needs, so a mouse selection can take all of it.
+fn live_link_row(url: String, ink: Rgba) -> View {
+    let hyperlinks = current_caps().hyperlinks;
+    if hyperlinks {
+        return Element::new()
+            .style(
+                LayoutStyle::default()
+                    .height(Dimension::Cells(1))
+                    .shrink(0.0),
+            )
+            .draw(move |canvas: &mut dyn StyledCanvas, rect| {
+                if rect.w <= 0 {
+                    return;
+                }
+                let id = canvas.register_link(&url);
+                let label = truncate_ellipsis("view online ↗ (mermaid.live)", rect.w);
+                canvas.print_styled(
+                    rect.origin(),
+                    &label,
+                    &abstracttui::render::Style::new().fg(ink).link(id),
+                );
+            })
+            .build();
+    }
+    // No OSC 8: the text is the only carrier, so all of it must be on
+    // screen. Height is width-dependent, so it is measured, not fixed.
+    let for_measure = url.clone();
+    Element::new()
+        .style(LayoutStyle::default().shrink(0.0))
+        .measure(move |avail| {
+            let w = avail.w.max(1);
+            let rows = (width(&for_measure) as i32 + w - 1) / w;
+            abstracttui::base::Size::new(w, rows.clamp(1, 6) + 1)
+        })
+        .draw(move |canvas: &mut dyn StyledCanvas, rect| {
+            if rect.w <= 0 || rect.h <= 0 {
+                return;
+            }
+            canvas.print(rect.origin(), "view online:", ink, Rgba::TRANSPARENT);
+            let mut rest: &str = &url;
+            for row in 1..rect.h {
+                if rest.is_empty() {
+                    break;
+                }
+                let take = rest
+                    .char_indices()
+                    .nth(rect.w as usize)
+                    .map(|(i, _)| i)
+                    .unwrap_or(rest.len());
+                let (head, tail) = rest.split_at(take);
+                canvas.print(
+                    Point::new(rect.x, rect.y + row),
+                    head,
+                    ink,
+                    Rgba::TRANSPARENT,
+                );
+                rest = tail;
+            }
+        })
+        .build()
+}
+
 fn one_line(text: String, ink: Rgba) -> View {
     Element::new()
         .style(

@@ -26,7 +26,7 @@
 //!
 //! OWNER: REACT.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::layout::Dimension;
@@ -36,7 +36,7 @@ use crate::render::{Attrs, Style};
 use crate::theme::TokenSet;
 use crate::ui::{dyn_view, Element, EventCtx, Key, MouseButton, MouseKind, Phase, UiEvent};
 
-use super::list::draw_scrollbar;
+use super::scrollbar;
 
 #[derive(Copy, Clone, Debug)]
 pub enum ColWidth {
@@ -177,6 +177,11 @@ impl Table {
         let sel_fg = t.selection_fg;
         let track = t.border;
         let thumb = t.text_muted;
+        // Hover ink, §3.2's borderless-actionable rule: the hovered
+        // row's (and the grabbable strip's) ink shifts to `accent`, bg
+        // unchanged. `List` has always painted rows this way; a `Table`
+        // row is the same "row" case in the state table.
+        let hot_ink = t.accent;
 
         let widths: Vec<ColWidth> = self.columns.iter().map(|c| c.width).collect();
         let titles: Rc<Vec<String>> =
@@ -187,6 +192,13 @@ impl Table {
 
         let selection = self.selection.unwrap_or_else(|| cx.signal(0usize));
         let offset = cx.signal(0i32);
+        // Pointer state: signals, because the region must REPAINT to
+        // show it — only a tracked read damages it (the `List` hover
+        // pattern). `bar_hot` = pointer on the strip (or a live grab);
+        // `hover_row` = the body row under the pointer, header and strip
+        // excluded.
+        let bar_hot = cx.signal(false);
+        let hover_row = cx.signal(None::<usize>);
         let on_select: crate::widgets::SharedCallback<usize> =
             Rc::new(RefCell::new(self.on_select));
         let on_activate: crate::widgets::SharedCallback<usize> =
@@ -231,9 +243,23 @@ impl Table {
 
         let handler_widths = widths.clone();
         let activate = on_activate;
+        // Scrollbar grab (rows below the thumb's top edge); `None` = no
+        // drag of ours is live. See `widgets::scrollbar` for the gesture.
+        let bar_grab: Rc<Cell<Option<i32>>> = Rc::new(Cell::new(None));
         let handler = move |ctx: &mut EventCtx, ev: &UiEvent| {
             let rect = ctx.current_rect();
             let body_h = (rect.h - 1).max(1); // header takes row 0
+                                              // The strip the bar owns, when it is showing at all. Rows
+                                              // are resolved AFTER this: a press on the scrollbar column
+                                              // used to fall through to the row under it and select it.
+            let bar = (len as i32 > body_h).then(|| {
+                scrollbar::metrics(
+                    crate::base::Rect::new(rect.x, rect.y + 1, rect.w, body_h),
+                    1,
+                    offset.get_untracked(),
+                    len as i32,
+                )
+            });
             match ev {
                 UiEvent::Key(k) => {
                     // Activation keys (module docs): Enter always;
@@ -292,7 +318,50 @@ impl Table {
                     select(target, body_h);
                     ctx.stop_propagation();
                 }
+                UiEvent::MouseLeave => {
+                    hover_row.set_if_changed(None);
+                    // A live grab keeps the ink: the pointer leaves the
+                    // strip constantly mid-drag.
+                    if bar_grab.get().is_none() {
+                        bar_hot.set_if_changed(false);
+                    }
+                }
                 UiEvent::Mouse(m) => match m.kind {
+                    MouseKind::Move => {
+                        // Motion with no button reports only where the
+                        // app opted in (`RunConfig::hover_ink`).
+                        let over = bar
+                            .as_ref()
+                            .is_some_and(|b| b.overflows() && b.track.contains(m.pos));
+                        bar_hot.set_if_changed(over);
+                        // The hot row is what a press would ACT on: the
+                        // header and the strip own their own cells, so
+                        // neither lights a row (the one-resolver rule
+                        // `List` follows — what lights up is what a
+                        // click will do).
+                        let row = (!over && m.pos.y > rect.y)
+                            .then(|| (m.pos.y - rect.y - 1) + offset.get_untracked())
+                            .filter(|r| *r >= 0 && (*r as usize) < len)
+                            .map(|r| r as usize);
+                        hover_row.set_if_changed(row);
+                    }
+                    MouseKind::Up(MouseButton::Left) => {
+                        bar_grab.set(None);
+                        if !bar.as_ref().is_some_and(|b| b.track.contains(m.pos)) {
+                            bar_hot.set_if_changed(false); // released off-strip
+                        }
+                    }
+                    MouseKind::Drag(MouseButton::Left) => {
+                        // Only OUR grab scrolls; a bare drag belongs to
+                        // somebody else's gesture.
+                        let (Some(dy), Some(bar)) = (bar_grab.get(), bar.as_ref()) else {
+                            return;
+                        };
+                        if bar.overflows() {
+                            offset.set_if_changed(scrollbar::offset_at(bar, m.pos.y, dy));
+                            ctx.stop_propagation();
+                        }
+                    }
                     MouseKind::ScrollUp | MouseKind::ScrollDown => {
                         let delta = if m.kind == MouseKind::ScrollUp { -3 } else { 3 };
                         offset.update(|o| {
@@ -301,6 +370,21 @@ impl Table {
                         ctx.stop_propagation();
                     }
                     MouseKind::Down(MouseButton::Left) => {
+                        if let Some(bar) = bar.as_ref() {
+                            if let Some(zone) = scrollbar::hit(bar, m.pos) {
+                                if bar.overflows() {
+                                    let dy = scrollbar::grab_for(bar, zone);
+                                    bar_grab.set(Some(dy));
+                                    bar_hot.set_if_changed(true);
+                                    if matches!(zone, scrollbar::Zone::Track) {
+                                        offset
+                                            .set_if_changed(scrollbar::offset_at(bar, m.pos.y, dy));
+                                    }
+                                }
+                                ctx.stop_propagation();
+                                return;
+                            }
+                        }
                         if m.pos.y == rect.y {
                             // Header click: which column? -> sort hook.
                             let cols = solve_columns(&handler_widths, rect.w - 1);
@@ -374,6 +458,8 @@ impl Table {
             move || {
                 let sel = selection.get();
                 let first = offset.get().max(0);
+                let hot = bar_hot.get(); // tracked: hot ink repaints the strip
+                let hot_row = hover_row.get(); // tracked: ditto for the row
                 let rows = rows.clone();
                 let titles = titles.clone();
                 let widths = widths.clone();
@@ -437,14 +523,23 @@ impl Table {
                         for r in 0..body_h.min(len - first).max(0) {
                             let idx = (first + r) as usize;
                             let y = rect.y + 1 + r;
+                            // Selection outranks hover (§3.2): the
+                            // audited pair stays and BOLD marks the hot
+                            // row instead — the hover inks are NOT
+                            // contrast-audited against `selection_bg`.
                             let style = if idx == sel {
-                                let s = Style::new().fg(sel_fg).bg(sel_bg);
+                                let mut s = Style::new().fg(sel_fg).bg(sel_bg);
                                 canvas.fill_styled(
                                     crate::base::Rect::new(rect.x, y, usable, 1),
                                     ' ',
                                     &s,
                                 );
+                                if hot_row == Some(idx) {
+                                    s = s.attrs(Attrs::BOLD);
+                                }
                                 s
+                            } else if hot_row == Some(idx) {
+                                Style::new().fg(hot_ink).bg(ground)
                             } else {
                                 base
                             };
@@ -463,7 +558,8 @@ impl Table {
                         }
                         if show_bar {
                             let body = crate::base::Rect::new(rect.x, rect.y + 1, rect.w, body_h);
-                            draw_scrollbar(canvas, body, first, len, track, thumb, ground);
+                            let bar = scrollbar::metrics(body, 1, first, len);
+                            scrollbar::draw(canvas, &bar, hot, track, thumb, hot_ink, ground);
                         }
                     })
                     .build()

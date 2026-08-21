@@ -42,6 +42,16 @@ impl Fake {
             ]),
         );
         dirs.insert(join_path("/root", "src"), Ok(vec![]));
+        // Deliberately NOT listed inside "/root" (that listing is
+        // asserted verbatim elsewhere): a deep directory reachable only
+        // by starting in it, long enough to overflow the rows area and
+        // draw a scrollbar.
+        dirs.insert(
+            join_path("/root", "many"),
+            Ok((0..40)
+                .map(|i| FileEntry::file(format!("f{i:02}.txt"), Some(1)))
+                .collect()),
+        );
         dirs.insert(
             join_path("/root", "locked"),
             Err("permission denied".to_string()),
@@ -355,4 +365,68 @@ fn format_size_units() {
     assert_eq!(format_size(120_000), "120K");
     assert_eq!(format_size(1_500_000), "1.5M");
     assert_eq!(format_size(3_000_000_000), "3.0G");
+}
+
+/// The scrollbar column is the bar's. `FilePicker` resolved rows from
+/// `pos.y` alone and applied the click-on-selected-activates rule, so a
+/// second press on the strip could open a directory or commit a pick the
+/// user never aimed at.
+#[test]
+fn the_scrollbar_column_never_selects_or_activates_a_row() {
+    let (root, mut tree, picked) = mount_picker(|p| p.start_in(join_path("/root", "many")));
+    let before = screen(&mut tree);
+    let bar_x = SIZE.w - 1;
+    // Two presses on the same strip cell: the second is exactly the one
+    // that used to activate.
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), bar_x, 5);
+    mouse(&mut tree, MouseKind::Up(MouseButton::Left), bar_x, 5);
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), bar_x, 5);
+    mouse(&mut tree, MouseKind::Up(MouseButton::Left), bar_x, 5);
+    assert!(picked.borrow().is_empty(), "the strip picks nothing");
+    let after = screen(&mut tree);
+    assert_ne!(before, after, "...it scrolls the listing instead");
+    root.dispose();
+}
+
+/// Rows answer the pointer here too (§3.2 hover ink). A DIRECTORY row
+/// already wears `accent`, so hover also carries BOLD — otherwise the
+/// row kind users aim at most would answer the pointer with nothing.
+#[test]
+fn hover_ink_lights_the_row_under_the_pointer() {
+    let (root, mut tree, _) = mount_picker(|p| p);
+    // The fixture lists docs/ locked/ src/ then readme.md, zeta.txt.
+    let rows = screen(&mut tree);
+    let dir_y = rows
+        .iter()
+        .position(|r| r.contains("locked"))
+        .expect("dir row") as i32;
+    let file_y = rows
+        .iter()
+        .position(|r| r.contains("readme.md"))
+        .expect("file row") as i32;
+    let at = |tree: &mut UiTree, y: i32| {
+        let canvas = render(tree, SIZE);
+        let p = crate::base::Point::new(4, y);
+        let (_, fg, bg) = canvas.cell(p).expect("row cell");
+        (fg, bg, canvas.attrs_at(p))
+    };
+    // A FILE row: `text` -> `accent`, background untouched.
+    let (cold_fg, cold_bg, cold_attrs) = at(&mut tree, file_y);
+    mouse(&mut tree, MouseKind::Move, 4, file_y);
+    let (hot_fg, hot_bg, hot_attrs) = at(&mut tree, file_y);
+    assert_ne!(cold_fg, hot_fg, "the hovered row takes accent ink");
+    assert_eq!(cold_bg, hot_bg, "hover shifts INK only — bg unchanged");
+    assert_ne!(cold_attrs, hot_attrs, "and BOLD marks it");
+    // A DIRECTORY row is already accent: BOLD is what answers there.
+    let (dir_cold_fg, _, dir_cold_attrs) = at(&mut tree, dir_y);
+    mouse(&mut tree, MouseKind::Move, 4, dir_y);
+    let (dir_hot_fg, _, dir_hot_attrs) = at(&mut tree, dir_y);
+    assert_eq!(dir_cold_fg, dir_hot_fg, "a dir was already accent");
+    assert_ne!(
+        dir_cold_attrs, dir_hot_attrs,
+        "so hover has to answer with BOLD, or the row says nothing"
+    );
+    // Only the row under the pointer is hot.
+    assert_eq!(at(&mut tree, file_y).0, cold_fg);
+    root.dispose();
 }

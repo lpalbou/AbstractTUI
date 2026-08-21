@@ -1,6 +1,6 @@
 [package]
 name = "abstracttui-graph"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 # Same MSRV floor as core (see the root manifest's MSRV note); this crate
 # uses nothing newer than core's own std surface.

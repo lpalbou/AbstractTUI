@@ -12,20 +12,20 @@ size=110x32 cursor=0,31 modes=[7,25,1049]
  10|                                                                                                              |
  11|  hello, stranger!                                                                                            |
  12|                                                                                                              |
- 13|  ┌ list — arrows move, wheel scrolls ─────────────────────────────────────────────────────────────────────┐  |
- 14|  │abstract-dark                                                                                           │  |
- 15|  │observer-night                                                                                          │  |
- 16|  │catppuccin-mocha                                                                                        │  |
- 17|  │rose-pine                                                                                               │  |
- 18|  │tokyo-night                                                                                             │  |
- 19|  │nord                                                                                                    │  |
- 20|  │one-dark                                                                                                │  |
- 21|  │dracula                                                                                                 │  |
- 22|  │monokai                                                                                                 │  |
- 23|  │gruvbox                                                                                                 │  |
- 24|  │                                                                                                        │  |
- 25|  │                                                                                                        │  |
- 26|  │                                                                                                        │  |
+ 13|  ╭ pane 1 — cli  ✕ ╮ ╭ pane 2 ────── ✕ ╮ ╭ pane 3 ────── ✕ ╮                                                 |
+ 14|  │survivors re-flex│ │survivors re-flex│ │survivors re-flex│                                                 |
+ 15|  │                 │ │                 │ │                 │                                                 |
+ 16|  ╰─────────────────╯ ╰─────────────────╯ ╰─────────────────╯                                                 |
+ 17|                                                                                                              |
+ 18|  ┌ list — arrows move, wheel scrolls ─────────────────────────────────────────────────────────────────────┐  |
+ 19|  │abstract-dark                                                                                          █│  |
+ 20|  │observer-night                                                                                         █│  |
+ 21|  │catppuccin-mocha                                                                                       █│  |
+ 22|  │rose-pine                                                                                              █│  |
+ 23|  │tokyo-night                                                                                            █│  |
+ 24|  │nord                                                                                                   █│  |
+ 25|  │one-dark                                                                                               ▏│  |
+ 26|  │dracula                                                                                                ▏│  |
  27|  └────────────────────────────────────────────────────────────────────────────────────────────────────────┘  |
  28|                                                                                                              |
  29|                                                                                                              |
@@ -69,73 +69,105 @@ styles:
   12:0..110 fg=#eeeeee bg=#1a1a2e
   13:0..2 fg=#eeeeee bg=#1a1a2e
   13:2..3 fg=#3c3c4d bg=#16213e
-  13:3..38 fg=#aaaaaa bg=#16213e
-  13:38..108 fg=#3c3c4d bg=#16213e
-  13:108..110 fg=#eeeeee bg=#1a1a2e
+  13:3..20 fg=#aaaaaa bg=#16213e
+  13:20..21 fg=#3c3c4d bg=#16213e
+  13:21..22 fg=#eeeeee bg=#1a1a2e
+  13:22..23 fg=#3c3c4d bg=#16213e
+  13:23..31 fg=#aaaaaa bg=#16213e
+  13:31..37 fg=#3c3c4d bg=#16213e
+  13:37..40 fg=#aaaaaa bg=#16213e
+  13:40..41 fg=#3c3c4d bg=#16213e
+  13:41..42 fg=#eeeeee bg=#1a1a2e
+  13:42..43 fg=#3c3c4d bg=#16213e
+  13:43..51 fg=#aaaaaa bg=#16213e
+  13:51..57 fg=#3c3c4d bg=#16213e
+  13:57..60 fg=#aaaaaa bg=#16213e
+  13:60..61 fg=#3c3c4d bg=#16213e
+  13:61..110 fg=#eeeeee bg=#1a1a2e
   14:0..2 fg=#eeeeee bg=#1a1a2e
   14:2..3 fg=#3c3c4d bg=#16213e
-  14:3..107 fg=#eeeeee bg=#58273d
-  14:107..108 fg=#3c3c4d bg=#16213e
-  14:108..110 fg=#eeeeee bg=#1a1a2e
+  14:3..20 fg=#eeeeee bg=#16213e
+  14:20..21 fg=#3c3c4d bg=#16213e
+  14:21..22 fg=#eeeeee bg=#1a1a2e
+  14:22..23 fg=#3c3c4d bg=#16213e
+  14:23..40 fg=#eeeeee bg=#16213e
+  14:40..41 fg=#3c3c4d bg=#16213e
+  14:41..42 fg=#eeeeee bg=#1a1a2e
+  14:42..43 fg=#3c3c4d bg=#16213e
+  14:43..60 fg=#eeeeee bg=#16213e
+  14:60..61 fg=#3c3c4d bg=#16213e
+  14:61..110 fg=#eeeeee bg=#1a1a2e
   15:0..2 fg=#eeeeee bg=#1a1a2e
   15:2..3 fg=#3c3c4d bg=#16213e
-  15:3..107 fg=#eeeeee bg=#16213e
-  15:107..108 fg=#3c3c4d bg=#16213e
-  15:108..110 fg=#eeeeee bg=#1a1a2e
+  15:3..20 fg=#16213e bg=#16213e
+  15:20..21 fg=#3c3c4d bg=#16213e
+  15:21..22 fg=#eeeeee bg=#1a1a2e
+  15:22..23 fg=#3c3c4d bg=#16213e
+  15:23..40 fg=#16213e bg=#16213e
+  15:40..41 fg=#3c3c4d bg=#16213e
+  15:41..42 fg=#eeeeee bg=#1a1a2e
+  15:42..43 fg=#3c3c4d bg=#16213e
+  15:43..60 fg=#16213e bg=#16213e
+  15:60..61 fg=#3c3c4d bg=#16213e
+  15:61..110 fg=#eeeeee bg=#1a1a2e
   16:0..2 fg=#eeeeee bg=#1a1a2e
-  16:2..3 fg=#3c3c4d bg=#16213e
-  16:3..107 fg=#eeeeee bg=#16213e
-  16:107..108 fg=#3c3c4d bg=#16213e
-  16:108..110 fg=#eeeeee bg=#1a1a2e
-  17:0..2 fg=#eeeeee bg=#1a1a2e
-  17:2..3 fg=#3c3c4d bg=#16213e
-  17:3..107 fg=#eeeeee bg=#16213e
-  17:107..108 fg=#3c3c4d bg=#16213e
-  17:108..110 fg=#eeeeee bg=#1a1a2e
+  16:2..21 fg=#3c3c4d bg=#16213e
+  16:21..22 fg=#eeeeee bg=#1a1a2e
+  16:22..41 fg=#3c3c4d bg=#16213e
+  16:41..42 fg=#eeeeee bg=#1a1a2e
+  16:42..61 fg=#3c3c4d bg=#16213e
+  16:61..110 fg=#eeeeee bg=#1a1a2e
+  17:0..110 fg=#eeeeee bg=#1a1a2e
   18:0..2 fg=#eeeeee bg=#1a1a2e
   18:2..3 fg=#3c3c4d bg=#16213e
-  18:3..107 fg=#eeeeee bg=#16213e
-  18:107..108 fg=#3c3c4d bg=#16213e
+  18:3..38 fg=#aaaaaa bg=#16213e
+  18:38..108 fg=#3c3c4d bg=#16213e
   18:108..110 fg=#eeeeee bg=#1a1a2e
   19:0..2 fg=#eeeeee bg=#1a1a2e
   19:2..3 fg=#3c3c4d bg=#16213e
-  19:3..107 fg=#eeeeee bg=#16213e
+  19:3..106 fg=#eeeeee bg=#58273d
+  19:106..107 fg=#aaaaaa bg=#16213e
   19:107..108 fg=#3c3c4d bg=#16213e
   19:108..110 fg=#eeeeee bg=#1a1a2e
   20:0..2 fg=#eeeeee bg=#1a1a2e
   20:2..3 fg=#3c3c4d bg=#16213e
-  20:3..107 fg=#eeeeee bg=#16213e
+  20:3..106 fg=#eeeeee bg=#16213e
+  20:106..107 fg=#aaaaaa bg=#16213e
   20:107..108 fg=#3c3c4d bg=#16213e
   20:108..110 fg=#eeeeee bg=#1a1a2e
   21:0..2 fg=#eeeeee bg=#1a1a2e
   21:2..3 fg=#3c3c4d bg=#16213e
-  21:3..107 fg=#eeeeee bg=#16213e
+  21:3..106 fg=#eeeeee bg=#16213e
+  21:106..107 fg=#aaaaaa bg=#16213e
   21:107..108 fg=#3c3c4d bg=#16213e
   21:108..110 fg=#eeeeee bg=#1a1a2e
   22:0..2 fg=#eeeeee bg=#1a1a2e
   22:2..3 fg=#3c3c4d bg=#16213e
-  22:3..107 fg=#eeeeee bg=#16213e
+  22:3..106 fg=#eeeeee bg=#16213e
+  22:106..107 fg=#aaaaaa bg=#16213e
   22:107..108 fg=#3c3c4d bg=#16213e
   22:108..110 fg=#eeeeee bg=#1a1a2e
   23:0..2 fg=#eeeeee bg=#1a1a2e
   23:2..3 fg=#3c3c4d bg=#16213e
-  23:3..107 fg=#eeeeee bg=#16213e
+  23:3..106 fg=#eeeeee bg=#16213e
+  23:106..107 fg=#aaaaaa bg=#16213e
   23:107..108 fg=#3c3c4d bg=#16213e
   23:108..110 fg=#eeeeee bg=#1a1a2e
   24:0..2 fg=#eeeeee bg=#1a1a2e
   24:2..3 fg=#3c3c4d bg=#16213e
-  24:3..107 fg=#eeeeee bg=#16213e
+  24:3..106 fg=#eeeeee bg=#16213e
+  24:106..107 fg=#aaaaaa bg=#16213e
   24:107..108 fg=#3c3c4d bg=#16213e
   24:108..110 fg=#eeeeee bg=#1a1a2e
   25:0..2 fg=#eeeeee bg=#1a1a2e
   25:2..3 fg=#3c3c4d bg=#16213e
-  25:3..107 fg=#eeeeee bg=#16213e
-  25:107..108 fg=#3c3c4d bg=#16213e
+  25:3..106 fg=#eeeeee bg=#16213e
+  25:106..108 fg=#3c3c4d bg=#16213e
   25:108..110 fg=#eeeeee bg=#1a1a2e
   26:0..2 fg=#eeeeee bg=#1a1a2e
   26:2..3 fg=#3c3c4d bg=#16213e
-  26:3..107 fg=#eeeeee bg=#16213e
-  26:107..108 fg=#3c3c4d bg=#16213e
+  26:3..106 fg=#eeeeee bg=#16213e
+  26:106..108 fg=#3c3c4d bg=#16213e
   26:108..110 fg=#eeeeee bg=#1a1a2e
   27:0..2 fg=#eeeeee bg=#1a1a2e
   27:2..108 fg=#3c3c4d bg=#16213e

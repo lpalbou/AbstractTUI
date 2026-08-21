@@ -33,16 +33,16 @@
 <rect x="0" y="324" width="648" height="18" fill="#1a1a2e"/>
 <rect x="0" y="342" width="648" height="18" fill="#1a1a2e"/>
 </g>
-<text x="0" y="32" textLength="648" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> settings                                                               </text>
-<text x="0" y="68" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> channel </text>
+<text x="0" y="32" textLength="648" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> settings                                                               </text>
+<text x="0" y="68" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> channel </text>
 <text x="81" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">▐</text>
-<text x="90" y="68" textLength="225" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">stable                   </text>
+<text x="90" y="68" textLength="225" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">stable                   </text>
 <text x="315" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">▾▌</text>
-<text x="0" y="86" textLength="297" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">          stable                 </text>
+<text x="0" y="86" textLength="297" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">          stable                 </text>
 <text x="297" y="86" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">lts</text>
-<text x="0" y="104" textLength="648" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> [x] page beta                                                          </text>
-<text x="0" y="122" textLength="279" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">          nightly              </text>
+<text x="0" y="104" textLength="648" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> [x] page beta                                                          </text>
+<text x="0" y="122" textLength="279" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">          nightly              </text>
 <text x="279" y="122" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">daily</text>
-<text x="81" y="140" textLength="252" lengthAdjust="spacingAndGlyphs" fill="#666666"> archive                    </text>
-<text x="0" y="338" textLength="648" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> enter commits · esc abandons · click outside dismisses                 </text>
+<text x="81" y="140" textLength="252" lengthAdjust="spacingAndGlyphs" fill="#666666"> archive                    </text>
+<text x="0" y="338" textLength="648" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> enter commits · esc abandons · click outside dismisses                 </text>
 </svg>

@@ -1,27 +1,27 @@
 size=90x26 cursor=0,25 modes=[7,1002,1004,1006,1049,2004]
   0|╭ transcript ────────────────────────────────────────────────────────────────────────────╮|
-  1|│you — How does the feed stay cheap while streaming?                                    ┃│|
-  2|│                                                                                       ┃│|
-  3|│Two freezes                                                                            ┃│|
-  4|│───────────────────────────────────────────────────────────────────────────────────────┃│|
-  5|│                                                                                       ┃│|
-  6|│Closed blocks typeset exactly once:                                                    ┃│|
-  7|│  • sealed blocks: parsed once, frozen rows                                            ┃│|
-  8|│  • the open tail: re-typeset per token, O(one block)                                  ┃│|
-  9|│                                                                                       ┃│|
- 10|│you — Show me the follow-tail idiom.                                                   ┃│|
- 11|│                                                                                       ┃│|
- 12|│Bind one signal and the scroll does the bookkeeping:                                   ┃│|
- 13|│                                                                                       ┃│|
- 14|│  let follow = cx.signal(true);                                                        ┃│|
- 15|│  Scroll::new(feed_view)                                                               ┃│|
- 16|│      .follow_tail(fo                                                                  ┃│|
- 17|│                                                                                       ┃│|
- 18|│                                                                                       ┃│|
- 19|│                                                                                       ┃│|
- 20|│                                                                                       ┃│|
- 21|│                                                                                       ┃│|
- 22|│    /theme  switch theme                                                               ┃│|
+  1|│you — How does the feed stay cheap while streaming?                                    █│|
+  2|│                                                                                       █│|
+  3|│Two freezes                                                                            █│|
+  4|│───────────────────────────────────────────────────────────────────────────────────────█│|
+  5|│                                                                                       █│|
+  6|│Closed blocks typeset exactly once:                                                    █│|
+  7|│  • sealed blocks: parsed once, frozen rows                                            █│|
+  8|│  • the open tail: re-typeset per token, O(one block)                                  █│|
+  9|│                                                                                       █│|
+ 10|│you — Show me the follow-tail idiom.                                                   █│|
+ 11|│                                                                                       █│|
+ 12|│Bind one signal and the scroll does the bookkeeping:                                   █│|
+ 13|│                                                                                       █│|
+ 14|│  let follow = cx.signal(true);                                                        █│|
+ 15|│  Scroll::new(feed_view)                                                               █│|
+ 16|│      .follow_tail(fo                                                                  █│|
+ 17|│                                                                                       █│|
+ 18|│                                                                                       █│|
+ 19|│                                                                                       █│|
+ 20|│                                                                                       █│|
+ 21|│                                                                                       █│|
+ 22|│    /theme  switch theme                                                               █│|
  23|╰─── /thanks  be polite   ───────────────────────────────────────────────────────────────╯|
  24|▐/th                                                                                     ▌|
  25|4 items · 16 rows · following · streaming                                                 |

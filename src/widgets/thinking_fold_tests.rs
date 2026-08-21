@@ -336,7 +336,7 @@ fn a_50kb_thought_stays_capped_and_scrolls() {
     let bar: String = (1..9)
         .filter_map(|y| canvas.cell(Point::new(bar_col, y)).map(|c| c.0))
         .collect();
-    assert!(bar.contains('┃'), "thumb visible on overflow: {bar:?}");
+    assert!(bar.contains('█'), "thumb visible on overflow: {bar:?}");
     root.dispose();
 }
 

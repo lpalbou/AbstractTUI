@@ -26,28 +26,51 @@ notice naming the first unsupported construct, plus an optional
 fragment; nothing is sent anywhere by this crate). Partial rendering
 of a half-understood diagram misleads; the code block never lies.
 
-Supported in v1 (the crate docs carry the exhaustive spelling table —
-the contract):
+Supported (the crate docs carry the exhaustive spelling table — the
+contract):
 
-- `flowchart`/`graph` in all four directions (TD/TB, LR, BT, RL),
-  node shapes `id`, `id[text]`, `id(text)`, `id{text}`, `id([text])`
-  (quoted text inside brackets), edges `-->`, `---`, `-.->`, `==>`
-  with postfix `|label|`. Compiled to
+- `flowchart`/`graph` in all four directions, ten node shapes, the full
+  arrow vocabulary (any body length, dotted, thick, `x`/`o` heads),
+  postfix **and** infix edge labels, edge chaining (`A --> B --> C`)
+  and `&` groups (`A & B --> C & D`). Compiled to
   [`abstracttui-graph`](https://docs.rs/abstracttui-graph) layout and
   rendered by its `GraphView` — mermaid is a **compiler** here, not a
   second renderer.
-- `sequenceDiagram`: participants (with `as` aliases), the four
-  message arrows with `: text`, `Note left of/right of/over`. Rendered
-  by a deterministic, solverless column/row plan.
-- `stateDiagram-v2` **flat**: transitions with
-  labels and `[*]` — a third front end to the flowchart engine.
-- `classDef`/`style`/`%%{init}` directives are recognized and dropped
-  with a notice; `%%` comments drop silently.
+- `subgraph` blocks **flatten**: members render, the group box does
+  not, and the loss is a notice. The layout engine has no cluster
+  contract yet; a diagram that renders without its boxes beats one that
+  does not render.
+- `sequenceDiagram`: participants (with `as` aliases), the four message
+  arrows with `: text`, `Note left of/right of/over`, the control-flow
+  blocks `alt`/`else`, `opt`, `loop` and `par`/`and` (nested, drawn as
+  labeled frames), and activations — `activate`/`deactivate` or the
+  `->>+` / `-->>-` suffixes — as bars on the lifeline. Rendered by a
+  deterministic, solverless column/row plan.
+- `stateDiagram-v2` **flat**: transitions with labels and `[*]`.
+- `classDef`/`style`/`click`/`linkStyle`/`class`/`direction`/`%%{init}`
+  are recognized and dropped with a notice; `%%` comments drop
+  silently.
 
-Everything else — `subgraph`, sequence blocks/activations,
+Rendered with a **labeled downgrade** (never silently): `x`/`o`
+arrowheads and `<-->` draw as plain arrows, and `<br/>` flattens to a
+word break because a card is one line.
+
+Everything else — sequence `rect`/`critical`/`break`/`box`,
 classDiagram, erDiagram, gantt, pie, journey, mindmap, timeline,
-gitGraph, infix labels, `&`-chaining — falls back atomically with a
-named reason.
+gitGraph — falls back atomically with a named reason.
+
+## In a markdown document
+
+```rust
+use abstracttui::widgets::MarkdownView;
+use abstracttui_mermaid::MermaidFence;
+use std::rc::Rc;
+
+MarkdownView::new(doc).fence_block(Rc::new(MermaidFence::new()))
+```
+
+A ```mermaid fence becomes a diagram in place, inside the document's
+own scroll surface, outline, and search index.
 
 ## Example
 
@@ -72,8 +95,11 @@ Pure-data entry points for other consumers: `parse(&str)` (IR or a
 named `Unsupported`), `to_graph(&FlowchartIr)` (the graph-crate
 contract), `live_link_url(&str)`.
 
-Run the demo: `cargo run -p abstracttui-mermaid --example mermaid`
-(optionally with a `.mmd` file path).
+Run the demos from the WORKSPACE ROOT — the examples live in the root
+crate so one `cargo run --example` list covers the whole family:
+`cargo run --example mermaid` (nine samples, optionally with a `.mmd`
+path) and `cargo run --example mermaid_doc` (a markdown document whose
+```mermaid fences render as diagrams in place).
 
 ## License
 

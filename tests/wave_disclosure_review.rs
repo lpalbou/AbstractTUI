@@ -559,7 +559,7 @@ fn cap_equal_content_hides_the_bar_and_takes_natural_height() {
     );
     assert!(rows[5].contains("BELOW"), "no padding row: {rows:#?}");
     assert!(
-        !rows.iter().any(|r| r.contains('┃') || r.contains('│')),
+        !rows.iter().any(|r| r.contains('█') || r.contains('▏')),
         "content == cap fits: the bar must hide: {rows:#?}"
     );
     root.dispose();

@@ -367,9 +367,9 @@
 <rect x="0" y="648" width="1008" height="18" fill="#1a1a2e"/>
 <rect x="0" y="666" width="1008" height="18" fill="#1a1a2e"/>
 </g>
-<text x="0" y="32" textLength="126" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">      Abstract</text>
+<text x="0" y="32" textLength="126" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">      Abstract</text>
 <text x="126" y="32" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#e94560">TUI</text>
-<text x="225" y="32" textLength="216" lengthAdjust="spacingAndGlyphs" fill="#e94560"> Dark (Abstract) · dark </text>
+<text x="225" y="32" textLength="216" lengthAdjust="spacingAndGlyphs" fill="#e94560"> Dark (Abstract) · dark </text>
 <text x="531" y="32" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">●</text>
 <text x="549" y="32" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#666666">·</text>
 <text x="567" y="32" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#666666">·</text>
@@ -396,26 +396,26 @@
 <text x="945" y="32" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#666666">·</text>
 <text x="963" y="32" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#666666">·</text>
 <text x="981" y="32" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#666666">·</text>
-<text x="9" y="50" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">the terminal, composed</text>
+<text x="9" y="50" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">the terminal, composed</text>
 <text x="9" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">┌</text>
-<text x="18" y="86" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> tokens </text>
+<text x="18" y="86" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> tokens </text>
 <text x="90" y="86" textLength="216" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">───────────────────────┐</text>
 <text x="324" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">┌</text>
-<text x="333" y="86" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> widgets </text>
+<text x="333" y="86" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> widgets </text>
 <text x="414" y="86" textLength="261" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">────────────────────────────┐</text>
 <text x="693" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">┌</text>
-<text x="702" y="86" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> content </text>
+<text x="702" y="86" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> content </text>
 <text x="783" y="86" textLength="207" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">──────────────────────┐</text>
 <text x="9" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="104" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#666666">grounds</text>
 <text x="297" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="333" y="104" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e94560"> acc </text>
-<text x="387" y="104" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#27ae60"> ok </text>
-<text x="432" y="104" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#f39c12"> wrn </text>
-<text x="486" y="104" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e74c3c"> err </text>
-<text x="540" y="104" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#60a5fa"> inf </text>
-<text x="594" y="104" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> mut </text>
+<text x="333" y="104" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e94560"> acc </text>
+<text x="387" y="104" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#27ae60"> ok </text>
+<text x="432" y="104" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#f39c12"> wrn </text>
+<text x="486" y="104" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e74c3c"> err </text>
+<text x="540" y="104" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#60a5fa"> inf </text>
+<text x="594" y="104" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> mut </text>
 <text x="666" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="702" y="104" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#666666">100</text>
@@ -426,9 +426,9 @@
 <text x="9" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1a1a2e">██</text>
 <text x="45" y="122" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">bg</text>
-<text x="216" y="122" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Aa </text>
-<text x="243" y="122" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">Aa </text>
-<text x="270" y="122" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#666666">Aa </text>
+<text x="216" y="122" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Aa </text>
+<text x="243" y="122" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">Aa </text>
+<text x="270" y="122" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#666666">Aa </text>
 <text x="297" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="666" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
@@ -440,15 +440,15 @@
 <text x="918" y="122" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#e94560">⠈⠉⢢</text>
 <text x="981" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="18" y="140" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#16213e">██ </text>
+<text x="18" y="140" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#16213e">██ </text>
 <text x="45" y="140" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">surface</text>
-<text x="216" y="140" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Aa </text>
-<text x="243" y="140" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">Aa </text>
-<text x="270" y="140" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#666666">Aa </text>
+<text x="216" y="140" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Aa </text>
+<text x="243" y="140" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">Aa </text>
+<text x="270" y="140" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#666666">Aa </text>
 <text x="297" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="333" y="140" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> action </text>
-<text x="414" y="140" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#666666"> disabled </text>
+<text x="333" y="140" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> action </text>
+<text x="414" y="140" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#666666"> disabled </text>
 <text x="666" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="738" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
@@ -461,9 +461,9 @@
 <text x="9" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="158" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#0f3460">██</text>
 <text x="45" y="158" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">raised</text>
-<text x="216" y="158" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Aa </text>
-<text x="243" y="158" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">Aa </text>
-<text x="270" y="158" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#666666">Aa </text>
+<text x="216" y="158" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Aa </text>
+<text x="243" y="158" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">Aa </text>
+<text x="270" y="158" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#666666">Aa </text>
 <text x="297" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="666" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
@@ -481,7 +481,7 @@
 <text x="9" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="297" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│▐</text>
-<text x="342" y="176" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#666666">focus me, type…</text>
+<text x="342" y="176" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#666666">focus me, type…</text>
 <text x="657" y="176" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">▌│</text>
 <text x="693" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="702" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#666666">0</text>
@@ -509,14 +509,14 @@
 <text x="153" y="212" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">inf</text>
 <text x="297" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="212" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│▐</text>
-<text x="342" y="212" textLength="315" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">stable                            ▾</text>
+<text x="342" y="212" textLength="315" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">stable                            ▾</text>
 <text x="657" y="212" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">▌│</text>
 <text x="693" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="981" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="18" y="230" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#e94560">accent </text>
-<text x="81" y="230" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">alt link </text>
-<text x="162" y="230" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> sel </text>
+<text x="18" y="230" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#e94560">accent </text>
+<text x="81" y="230" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">alt link </text>
+<text x="162" y="230" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> sel </text>
 <text x="297" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="666" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
@@ -528,7 +528,7 @@
 <text x="9" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="297" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│▐</text>
-<text x="342" y="248" textLength="315" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">a multiline composer —             </text>
+<text x="342" y="248" textLength="315" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">a multiline composer —             </text>
 <text x="657" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">▌│</text>
 <text x="693" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="702" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">▅▅</text>
@@ -538,10 +538,10 @@
 <text x="810" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e74c3c">██</text>
 <text x="981" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="18" y="266" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#666666">chart ramp</text>
+<text x="18" y="266" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#666666">chart ramp</text>
 <text x="297" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="266" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│▐</text>
-<text x="342" y="266" textLength="315" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">it grows with content              </text>
+<text x="342" y="266" textLength="315" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">it grows with content              </text>
 <text x="657" y="266" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">▌│</text>
 <text x="693" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="981" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
@@ -558,20 +558,20 @@
 <text x="324" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="666" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="702" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#666666">1 </text>
+<text x="702" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#666666">1 </text>
 <text x="720" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="738" y="284" textLength="162" lengthAdjust="spacingAndGlyphs" fill="#818181">// tokens, not hex</text>
+<text x="738" y="284" textLength="162" lengthAdjust="spacingAndGlyphs" fill="#818181">// tokens, not hex</text>
 <text x="981" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="297" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="333" y="302" textLength="243" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">[x] selection pair on focus</text>
+<text x="333" y="302" textLength="243" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">[x] selection pair on focus</text>
 <text x="666" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="702" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#666666">2 </text>
+<text x="702" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#666666">2 </text>
 <text x="720" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="738" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eb7b8d">fn</text>
-<text x="756" y="302" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> theme</text>
+<text x="756" y="302" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> theme</text>
 <text x="810" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">(</text>
 <text x="819" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">id</text>
 <text x="837" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">:</text>
@@ -579,53 +579,53 @@
 <text x="864" y="302" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">str</text>
 <text x="891" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">)</text>
 <text x="909" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">-&gt;</text>
-<text x="927" y="302" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> u32 </text>
+<text x="927" y="302" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> u32 </text>
 <text x="972" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">{</text>
 <text x="981" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="18" y="320" textLength="162" lengthAdjust="spacingAndGlyphs" fill="#666666">syntax (on raised)</text>
+<text x="18" y="320" textLength="162" lengthAdjust="spacingAndGlyphs" fill="#666666">syntax (on raised)</text>
 <text x="297" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="666" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="702" y="320" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#666666">3 </text>
+<text x="702" y="320" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#666666">3 </text>
 <text x="720" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="774" y="320" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eb7b8d">let</text>
-<text x="801" y="320" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> floor </text>
+<text x="801" y="320" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> floor </text>
 <text x="864" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">=</text>
 <text x="882" y="320" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#f39c12">4.5</text>
 <text x="909" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">;</text>
 <text x="981" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="27" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eb7b8d">fn</text>
-<text x="45" y="338" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#7ab2f8"> name</text>
+<text x="45" y="338" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#7ab2f8"> name</text>
 <text x="90" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">(</text>
 <text x="99" y="338" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#2fb166">&quot;str&quot;</text>
-<text x="144" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">, </text>
+<text x="144" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">, </text>
 <text x="162" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f39c12">42</text>
 <text x="180" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">)</text>
 <text x="297" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="338" textLength="126" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│─────────────</text>
-<text x="450" y="338" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> progress </text>
+<text x="450" y="338" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> progress </text>
 <text x="540" y="338" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">──────────────│</text>
 <text x="693" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="702" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#666666">4 </text>
+<text x="702" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#666666">4 </text>
 <text x="720" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="729" y="338" textLength="108" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">     resolve</text>
+<text x="729" y="338" textLength="108" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">     resolve</text>
 <text x="837" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">(</text>
 <text x="846" y="338" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">id</text>
 <text x="864" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">,</text>
 <text x="882" y="338" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#2fb166">&quot;dark&quot;</text>
 <text x="936" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">,</text>
-<text x="945" y="338" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> flo</text>
+<text x="945" y="338" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> flo</text>
 <text x="981" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="27" y="356" textLength="162" lengthAdjust="spacingAndGlyphs" fill="#818181">// comments recede</text>
+<text x="27" y="356" textLength="162" lengthAdjust="spacingAndGlyphs" fill="#818181">// comments recede</text>
 <text x="297" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="666" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="702" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#666666">5 </text>
+<text x="702" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#666666">5 </text>
 <text x="720" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="738" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">}</text>
 <text x="981" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
@@ -636,29 +636,29 @@
 <text x="693" y="374" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="981" y="374" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="392" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="18" y="392" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#666666">border · border_focus</text>
+<text x="18" y="392" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#666666">border · border_focus</text>
 <text x="297" y="392" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="392" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="333" y="392" textLength="117" lengthAdjust="spacingAndGlyphs" fill="#e94560">█████████████</text>
 <text x="666" y="392" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="392" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="702" y="392" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">@@ -1,2 +1,2 @@</text>
-<text x="837" y="392" textLength="144" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> fn theme()     </text>
+<text x="702" y="392" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">@@ -1,2 +1,2 @@</text>
+<text x="837" y="392" textLength="144" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> fn theme()     </text>
 <text x="981" y="392" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="9" y="410" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│────  </text>
+<text x="9" y="410" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│────  </text>
 <text x="72" y="410" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#e94560">────</text>
 <text x="297" y="410" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="410" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="666" y="410" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="410" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="702" y="410" textLength="153" lengthAdjust="spacingAndGlyphs" fill="#e74c3c">-let floor = 4.4;</text>
+<text x="702" y="410" textLength="153" lengthAdjust="spacingAndGlyphs" fill="#e74c3c">-let floor = 4.4;</text>
 <text x="981" y="410" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="428" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="297" y="428" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="428" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="666" y="428" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="428" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="702" y="428" textLength="153" lengthAdjust="spacingAndGlyphs" fill="#27ae60">+let floor = 4.5;</text>
+<text x="702" y="428" textLength="153" lengthAdjust="spacingAndGlyphs" fill="#27ae60">+let floor = 4.5;</text>
 <text x="981" y="428" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="446" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="297" y="446" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
@@ -666,7 +666,7 @@
 <text x="333" y="446" textLength="243" lengthAdjust="spacingAndGlyphs" fill="#f39c12">██████████████████████████▋</text>
 <text x="666" y="446" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="446" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="702" y="446" textLength="279" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> resolve(id)                   </text>
+<text x="702" y="446" textLength="279" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> resolve(id)                   </text>
 <text x="981" y="446" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="464" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="297" y="464" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
@@ -680,7 +680,7 @@
 <text x="333" y="482" textLength="315" lengthAdjust="spacingAndGlyphs" fill="#e74c3c">██████████████████████████████████▍</text>
 <text x="666" y="482" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="482" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="702" y="482" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#e94560" font-weight="700">Rich text</text>
+<text x="702" y="482" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#e94560" font-weight="700">Rich text</text>
 <text x="981" y="482" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="500" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="297" y="500" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
@@ -697,18 +697,18 @@
 <text x="450" y="518" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">line</text>
 <text x="666" y="518" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="518" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="702" y="518" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Body with </text>
+<text x="702" y="518" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Body with </text>
 <text x="792" y="518" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#eeeeee" font-weight="700">bold</text>
-<text x="828" y="518" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">, </text>
+<text x="828" y="518" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">, </text>
 <text x="846" y="518" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#eeeeee" font-style="italic">italic</text>
-<text x="900" y="518" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">, code</text>
+<text x="900" y="518" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">, code</text>
 <text x="981" y="518" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="536" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="297" y="536" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="536" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="666" y="536" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="536" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="702" y="536" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">and a </text>
+<text x="702" y="536" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">and a </text>
 <text x="756" y="536" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">link</text>
 <text x="792" y="536" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">.</text>
 <text x="981" y="536" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
@@ -716,7 +716,7 @@
 <text x="297" y="554" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="554" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="333" y="554" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">╭</text>
-<text x="342" y="554" textLength="126" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> focused pane </text>
+<text x="342" y="554" textLength="126" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> focused pane </text>
 <text x="468" y="554" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#e94560">─────────────────────╮</text>
 <text x="666" y="554" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="554" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
@@ -725,11 +725,11 @@
 <text x="297" y="572" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="324" y="572" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="333" y="572" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">│</text>
-<text x="342" y="572" textLength="153" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">border_focus ring</text>
+<text x="342" y="572" textLength="153" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">border_focus ring</text>
 <text x="657" y="572" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">│</text>
 <text x="666" y="572" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="572" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│▎</text>
-<text x="720" y="572" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">quotes recede politely</text>
+<text x="720" y="572" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">quotes recede politely</text>
 <text x="981" y="572" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="590" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="297" y="590" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
@@ -737,12 +737,12 @@
 <text x="333" y="590" textLength="333" lengthAdjust="spacingAndGlyphs" fill="#e94560">╰───────────────────────────────────╯</text>
 <text x="666" y="590" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="693" y="590" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="720" y="590" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">• </text>
-<text x="738" y="590" textLength="234" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">lists mark with accent_alt</text>
+<text x="720" y="590" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">• </text>
+<text x="738" y="590" textLength="234" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">lists mark with accent_alt</text>
 <text x="981" y="590" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="608" textLength="297" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">└───────────────────────────────┘</text>
 <text x="324" y="608" textLength="351" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">└─────────────────────────────────────┘</text>
 <text x="693" y="608" textLength="297" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">└───────────────────────────────┘</text>
-<text x="0" y="662" textLength="1008" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> t/T theme · tab focus · enter/space activate · space spin · q quit                                             </text>
+<text x="0" y="662" textLength="1008" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> t/T theme · tab focus · enter/space activate · space spin · q quit                                             </text>
 <rect x="756" y="537" width="36" height="1" fill="#60a5fa"/>
 </svg>

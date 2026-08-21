@@ -57,7 +57,7 @@ fn parse_statement(fc: &mut FlowchartIr, stmt: &Stmt) -> Result<(), Unsupported>
                         "transition label after `:` is empty",
                     ));
                 }
-                (t, Some(l.to_string()))
+                (t, Some(crate::flowchart::clean_label(l)))
             }
             None => (rhs, None),
         };

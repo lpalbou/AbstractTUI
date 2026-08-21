@@ -136,12 +136,12 @@
 <rect x="0" y="504" width="990" height="18" fill="#1a1a2e"/>
 <rect x="0" y="522" width="990" height="18" fill="#1a1a2e"/>
 </g>
-<text x="0" y="32" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> grid — 3 equal fr columns    (g cycles · t theme · q quit)                                                   </text>
+<text x="0" y="32" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> grid — 3 equal fr columns    (g cycles · t theme · q quit)                                                   </text>
 <text x="9" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╭</text>
-<text x="18" y="68" textLength="171" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> hero — col_span 2 </text>
+<text x="18" y="68" textLength="171" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> hero — col_span 2 </text>
 <text x="189" y="68" textLength="459" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">──────────────────────────────────────────────────╮</text>
 <text x="666" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╭</text>
-<text x="675" y="68" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> beta </text>
+<text x="675" y="68" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> beta </text>
 <text x="729" y="68" textLength="243" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">──────────────────────────╮</text>
 <text x="9" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="86" textLength="306" lengthAdjust="spacingAndGlyphs" fill="#e94560">▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄</text>
@@ -150,21 +150,21 @@
 <text x="675" y="86" textLength="144" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄</text>
 <text x="963" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="18" y="104" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 0</text>
+<text x="18" y="104" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 0</text>
 <text x="639" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="666" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="675" y="104" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 1</text>
+<text x="675" y="104" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 1</text>
 <text x="963" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="122" textLength="639" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╰─────────────────────────────────────────────────────────────────────╯</text>
 <text x="666" y="122" textLength="306" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╰────────────────────────────────╯</text>
 <text x="9" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╭</text>
-<text x="18" y="158" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> gamma </text>
+<text x="18" y="158" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> gamma </text>
 <text x="81" y="158" textLength="243" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">──────────────────────────╮</text>
 <text x="342" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╭</text>
-<text x="351" y="158" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> delta </text>
+<text x="351" y="158" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> delta </text>
 <text x="414" y="158" textLength="234" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">─────────────────────────╮</text>
 <text x="666" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╭</text>
-<text x="675" y="158" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> alpha </text>
+<text x="675" y="158" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> alpha </text>
 <text x="738" y="158" textLength="234" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">─────────────────────────╮</text>
 <text x="9" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="176" textLength="144" lengthAdjust="spacingAndGlyphs" fill="#27ae60">▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄</text>
@@ -176,25 +176,25 @@
 <text x="675" y="176" textLength="144" lengthAdjust="spacingAndGlyphs" fill="#e74c3c">▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄</text>
 <text x="963" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="18" y="194" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 2</text>
+<text x="18" y="194" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 2</text>
 <text x="315" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="342" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="351" y="194" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 3</text>
+<text x="351" y="194" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 3</text>
 <text x="639" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="666" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="675" y="194" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 4</text>
+<text x="675" y="194" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 4</text>
 <text x="963" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="212" textLength="315" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╰─────────────────────────────────╯</text>
 <text x="342" y="212" textLength="306" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╰────────────────────────────────╯</text>
 <text x="666" y="212" textLength="306" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╰────────────────────────────────╯</text>
 <text x="9" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╭</text>
-<text x="18" y="248" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> beta </text>
+<text x="18" y="248" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> beta </text>
 <text x="72" y="248" textLength="252" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">───────────────────────────╮</text>
 <text x="342" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╭</text>
-<text x="351" y="248" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> gamma </text>
+<text x="351" y="248" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> gamma </text>
 <text x="414" y="248" textLength="234" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">─────────────────────────╮</text>
 <text x="666" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╭</text>
-<text x="675" y="248" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> delta </text>
+<text x="675" y="248" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> delta </text>
 <text x="738" y="248" textLength="234" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">─────────────────────────╮</text>
 <text x="9" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="18" y="266" textLength="144" lengthAdjust="spacingAndGlyphs" fill="#a575ad">▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄</text>
@@ -206,13 +206,13 @@
 <text x="675" y="266" textLength="144" lengthAdjust="spacingAndGlyphs" fill="#ed7427">▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄</text>
 <text x="963" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="18" y="284" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 5</text>
+<text x="18" y="284" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 5</text>
 <text x="315" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="342" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="351" y="284" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 6</text>
+<text x="351" y="284" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 6</text>
 <text x="639" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="666" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="675" y="284" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 7</text>
+<text x="675" y="284" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">cell 7</text>
 <text x="963" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="302" textLength="315" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╰─────────────────────────────────╯</text>
 <text x="342" y="302" textLength="306" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╰────────────────────────────────╯</text>

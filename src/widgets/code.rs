@@ -232,6 +232,13 @@ impl CodeView {
     }
 
     /// First visible source line (app-managed scrolling, clamped).
+    /// Scrolling this widget yourself gets you KEYBOARD scrolling and
+    /// nothing else — the wheel, PgUp/PgDn, Home/End and a draggable
+    /// scrollbar thumb all live in [`Scroll`](crate::widgets::Scroll),
+    /// which measures this widget and moves it for you:
+    /// `Scroll::new(view.view(cx))`. Reach for this setter only when
+    /// the app genuinely owns the offset (a synced split view, a
+    /// replay).
     pub fn scroll_offset(mut self, lines: i32) -> CodeView {
         self.scroll_offset = lines.max(0);
         self

@@ -16,6 +16,7 @@
 //!
 //! File ownership header convention: each widget file names its owner.
 
+pub mod animated_image;
 pub mod audio_scope;
 pub mod badge;
 pub mod block;
@@ -40,6 +41,9 @@ pub mod progress;
 pub mod radio;
 pub mod richtext;
 pub mod scroll;
+/// The shared scroll-strip seam (geometry, hit test, inverse,
+/// paint) behind `Scroll`, `List`, `Table` and `FilePicker`.
+mod scrollbar;
 pub mod separator;
 pub mod spinner;
 pub mod table;
@@ -52,6 +56,7 @@ pub mod viewport3d;
 /// `Image::from_bitmap` wants (wrapped in `Arc`) without hunting
 /// through `gfx`.
 pub use crate::gfx::Bitmap;
+pub use animated_image::AnimatedImage;
 pub use badge::{Badge, Tone};
 pub use block::{Block, BorderKind, TitleAlign};
 pub use button::{Button, ButtonStyle};
@@ -64,7 +69,7 @@ pub use image::{Image, ImageAlign, ImageFit};
 pub use input::TextInput;
 pub use list::List;
 pub use logo::Logo;
-pub use markdown::MarkdownView;
+pub use markdown::{FenceBlock, MarkdownView};
 pub use progress::Progress;
 pub use radio::RadioGroup;
 pub use richtext::RichTextView;
@@ -181,8 +186,9 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 45] = [
+    const SOURCES: [(&str, &str); 47] = [
         ("mod.rs", include_str!("mod.rs")),
+        ("animated_image.rs", include_str!("animated_image.rs")),
         ("audio_scope.rs", include_str!("audio_scope.rs")),
         ("meter.rs", include_str!("meter.rs")),
         ("badge.rs", include_str!("badge.rs")),
@@ -232,6 +238,9 @@ mod lint_tests {
         ("radio.rs", include_str!("radio.rs")),
         ("richtext.rs", include_str!("richtext.rs")),
         ("scroll.rs", include_str!("scroll.rs")),
+        // The shared scroll-strip seam: private shipped sibling,
+        // listed by hand like feed_typeset.rs.
+        ("scrollbar.rs", include_str!("scrollbar.rs")),
         ("separator.rs", include_str!("separator.rs")),
         ("spinner.rs", include_str!("spinner.rs")),
         ("table.rs", include_str!("table.rs")),

@@ -67,6 +67,9 @@ pub(crate) struct Row {
     /// One mosaic slice of an in-flow image (0144): when set, the row
     /// paints image cells instead of `line` (which stays empty).
     pub(crate) image: Option<imageflow::MdImageSlice>,
+    /// One row of a fence claimed by a [`FenceBlock`]: the row paints
+    /// through the block instead of as code.
+    pub(crate) fence: Option<FenceSlice>,
 }
 
 /// The width-keyed typeset cache one `MarkdownView` element shares
@@ -83,6 +86,7 @@ impl Row {
             quote: false,
             rule: false,
             image: None,
+            fence: None,
         }
     }
 }
@@ -112,6 +116,8 @@ impl Row {
 /// unbounded transcripts prefer [`Feed`](super::Feed), which
 /// virtualizes rows.
 pub struct MarkdownView {
+    /// Claimant for fenced blocks (`fence_block`).
+    fence: Option<Rc<dyn FenceBlock>>,
     source: String,
     scroll_offset: i32,
     layout: Option<LayoutStyle>,
@@ -125,6 +131,7 @@ pub struct MarkdownView {
 impl MarkdownView {
     pub fn new(source: impl Into<String>) -> MarkdownView {
         MarkdownView {
+            fence: None,
             source: source.into(),
             scroll_offset: 0,
             layout: None,
@@ -133,7 +140,26 @@ impl MarkdownView {
         }
     }
 
+    /// Let `block` claim fenced code blocks it recognizes — a mermaid
+    /// diagram, a chart, anything — so they render INSIDE the
+    /// document instead of as code. Fences it declines are unchanged.
+    ///
+    /// The engine ships no diagram languages; this is how a sibling
+    /// crate brings one without the core knowing it exists. See
+    /// [`FenceBlock`].
+    pub fn fence_block(mut self, block: Rc<dyn FenceBlock>) -> MarkdownView {
+        self.fence = Some(block);
+        self
+    }
+
     /// First visible typeset row (app-managed scrolling).
+    /// Scrolling this widget yourself gets you KEYBOARD scrolling and
+    /// nothing else — the wheel, PgUp/PgDn, Home/End and a draggable
+    /// scrollbar thumb all live in [`Scroll`](crate::widgets::Scroll),
+    /// which measures this widget and moves it for you:
+    /// `Scroll::new(view.view(cx))`. Reach for this setter only when
+    /// the app genuinely owns the offset (a synced split view, a
+    /// replay).
     pub fn scroll_offset(mut self, rows: i32) -> MarkdownView {
         self.scroll_offset = rows.max(0);
         self
@@ -249,6 +275,8 @@ impl MarkdownView {
         let cache: TypesetCache = Rc::new(RefCell::new(None));
         let measure_cache = Rc::clone(&cache);
         let measure_source = source.clone();
+        let draw_fence = self.fence.clone();
+        let measure_fence = draw_fence.clone();
         Element::new()
             .style(layout)
             // The measure seam (wave 13, the "doesn't scroll" fix): an
@@ -268,7 +296,13 @@ impl MarkdownView {
                 let rows = match &mut *slot {
                     Some((w, rows)) if *w == avail.w => rows,
                     slot => {
-                        let rows = doc::layout_doc(&measure_source, &tokens, avail.w).rows;
+                        let rows = doc::layout_doc_with(
+                            &measure_source,
+                            &tokens,
+                            avail.w,
+                            measure_fence.clone(),
+                        )
+                        .rows;
                         &mut slot.insert((avail.w, rows)).1
                     }
                 };
@@ -287,7 +321,8 @@ impl MarkdownView {
                 let rows = match &mut *slot {
                     Some((w, rows)) if *w == rect.w => rows,
                     slot => {
-                        let rows = doc::layout_doc(&source, &tokens, rect.w).rows;
+                        let rows =
+                            doc::layout_doc_with(&source, &tokens, rect.w, draw_fence.clone()).rows;
                         &mut slot.insert((rect.w, rows)).1
                     }
                 };
@@ -325,11 +360,90 @@ pub(crate) fn md_styles(t: &TokenSet) -> MdStyles {
     }
 }
 
+/// Render a fenced code block as something OTHER than code.
+///
+/// The engine knows nothing about mermaid, dot, or any other diagram
+/// language — and must not. This is the seam that lets a sibling
+/// crate (or an app) claim a fence by its info string and paint cells
+/// where the code would have gone, INSIDE the document: one scroll
+/// surface, one outline, one search index.
+///
+/// Both calls are pure with respect to the document. An implementation
+/// that renders something expensive should cache keyed by
+/// `(source, width)` — `measure` and `draw_row` are called for the same
+/// block many times as the reader scrolls.
+///
+/// ```no_run
+/// use abstracttui::base::{Point, Rgba};
+/// use abstracttui::theme::TokenSet;
+/// use abstracttui::ui::StyledCanvas;
+/// use abstracttui::widgets::{FenceBlock, MarkdownView};
+/// use std::rc::Rc;
+///
+/// struct Banner;
+/// impl FenceBlock for Banner {
+///     fn measure(&self, lang: &str, _source: &str, _width: i32) -> Option<i32> {
+///         (lang == "banner").then_some(1)
+///     }
+///     fn draw_row(
+///         &self,
+///         _lang: &str,
+///         source: &str,
+///         _row: i32,
+///         at: Point,
+///         width: i32,
+///         t: &TokenSet,
+///         canvas: &mut dyn StyledCanvas,
+///     ) {
+///         let text: String = source.chars().take(width.max(0) as usize).collect();
+///         canvas.print(at, &text, t.text, Rgba::TRANSPARENT);
+///     }
+/// }
+///
+/// let view = MarkdownView::new("```banner\nhello\n```").fence_block(Rc::new(Banner));
+/// # let _ = view;
+/// ```
+pub trait FenceBlock {
+    /// Rows this block needs at `width`, or `None` to decline it —
+    /// declining renders the fence as code, exactly as before.
+    fn measure(&self, lang: &str, source: &str, width: i32) -> Option<i32>;
+
+    /// Paint row `row` (0-based within the block) at `at`, `width`
+    /// cells wide, in the document's own tokens — a block is content,
+    /// and content wears the theme like everything else. Only rows the
+    /// reader can see are drawn.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_row(
+        &self,
+        lang: &str,
+        source: &str,
+        row: i32,
+        at: Point,
+        width: i32,
+        tokens: &TokenSet,
+        canvas: &mut dyn StyledCanvas,
+    );
+}
+
+/// One row of a [`FenceBlock`]-rendered fence, the way
+/// [`imageflow::MdImageSlice`] is one row of an in-flow image.
+#[derive(Clone)]
+pub(crate) struct FenceSlice {
+    pub(crate) block: Rc<dyn FenceBlock>,
+    pub(crate) lang: String,
+    pub(crate) source: Rc<String>,
+    pub(crate) row: i32,
+    pub(crate) width: i32,
+}
+
 /// The block -> typeset-rows recipe, crate-shared (backlog 0100): the
 /// Feed widget caches rows per item/block through this same fold, so a
 /// feed item and a `MarkdownView` can never typeset differently.
 pub(crate) struct BlockTypesetter {
     styles: MdStyles,
+    /// Set by `MarkdownView::fence_block`: the claimant for fenced
+    /// blocks it recognizes.
+    fence: Option<Rc<dyn FenceBlock>>,
     lexer: CLikeLexer,
     diff: DiffLexer,
     json: JsonLexer,
@@ -342,6 +456,7 @@ impl BlockTypesetter {
     pub(crate) fn new(t: &TokenSet) -> BlockTypesetter {
         BlockTypesetter {
             styles: md_styles(t),
+            fence: None,
             lexer: CLikeLexer::default(),
             diff: DiffLexer::new(),
             json: JsonLexer::new(),
@@ -349,6 +464,12 @@ impl BlockTypesetter {
             code_base: Style::new().fg(t.text),
             t: *t,
         }
+    }
+
+    /// Install the fenced-block claimant.
+    pub(crate) fn with_fence_block(mut self, fence: Option<Rc<dyn FenceBlock>>) -> BlockTypesetter {
+        self.fence = fence;
+        self
     }
 
     /// The span styles matching this typesetter's tokens — parse
@@ -399,6 +520,7 @@ impl BlockTypesetter {
                         quote: false,
                         rule: true,
                         image: None,
+                        fence: None,
                     });
                 }
             }
@@ -432,6 +554,7 @@ impl BlockTypesetter {
                         quote: false,
                         rule: false,
                         image: None,
+                        fence: None,
                     });
                 }
             }
@@ -456,11 +579,39 @@ impl BlockTypesetter {
                         quote: true,
                         rule: false,
                         image: None,
+                        fence: None,
                     });
                 }
             }
             Block::CodeFence { lang, lines } => {
                 blank(out);
+                // A claimed fence renders through its block: the code
+                // never reaches the screen, and the rows live in this
+                // document's scroll surface like any other rows.
+                if let Some(fence) = &self.fence {
+                    let source = lines.join("\n");
+                    if let Some(rows) = fence.measure(lang, &source, width) {
+                        let source = Rc::new(source);
+                        for row in 0..rows.max(0) {
+                            out.push(Row {
+                                line: RichLine::new(),
+                                indent: 0,
+                                ground: None,
+                                quote: false,
+                                rule: false,
+                                image: None,
+                                fence: Some(FenceSlice {
+                                    block: Rc::clone(fence),
+                                    lang: lang.clone(),
+                                    source: Rc::clone(&source),
+                                    row,
+                                    width,
+                                }),
+                            });
+                        }
+                        return;
+                    }
+                }
                 // Fence labels route the lexer (0140's diff slice +
                 // wave 13's data slice): ```diff / ```patch tint
                 // through the diff mapping, ```json / ```yaml (and
@@ -493,6 +644,7 @@ impl BlockTypesetter {
                         quote: false,
                         rule: false,
                         image: None,
+                        fence: None,
                     });
                 }
             }
@@ -505,6 +657,7 @@ impl BlockTypesetter {
                     quote: false,
                     rule: true,
                     image: None,
+                    fence: None,
                 });
             }
         }
@@ -538,6 +691,18 @@ pub(crate) fn draw_rows(
         // cells only. The row's `line` is empty by construction.
         if let Some(slice) = &row.image {
             imageflow::draw_image_row(canvas, rect, y, t, row.indent, slice);
+            continue;
+        }
+        if let Some(slice) = &row.fence {
+            slice.block.draw_row(
+                &slice.lang,
+                &slice.source,
+                slice.row,
+                Point::new(rect.x, y),
+                slice.width.min(rect.w),
+                t,
+                canvas,
+            );
             continue;
         }
         if let Some(ground) = row.ground {

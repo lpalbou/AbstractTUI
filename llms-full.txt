@@ -13,8 +13,10 @@
 > 26 built-in themes over 36
 > contrast-audited semantic design tokens with a drop-in theme-switcher control
 > (grouped dark/light menu with live preview, or a one-click mode toggle that
-> remembers the theme per mode), PNG/JPEG images (baseline and progressive) drawn through the best
-> channel the terminal proves (kitty graphics, iTerm2, sixel, or unicode mosaic),
+> remembers the theme per mode), PNG/JPEG/GIF images (baseline and progressive
+> JPEG) drawn through the best channel the terminal proves
+> (kitty graphics, iTerm2, sixel, or unicode mosaic), animated GIF/APNG
+> played in the cell grid (video is refused by name, never decoded),
 > software-rasterized 3D from GLB files (textures, animation, skinning — no GPU),
 > cell-shader animation with tweens, easings, and timelines, streaming transcripts
 > (`Feed` + follow-tail scroll that pauses during a screen-text selection + a multiline composer
@@ -146,11 +148,16 @@ through ordinary reactivity.*
   (hold-to-talk, labeled latch fallback, capture stops on focus loss), and
   `Meter` / `AudioScope` widgets that render live levels with real
   ballistics and go fully idle when the signal does.
-- **Images** — PNG and JPEG decoding built in (JPEG covers baseline and
-  progressive alike), drawn through the best channel your terminal offers:
+- **Images** — PNG, JPEG (baseline and progressive), and GIF decoding built
+  in, drawn through the best channel your terminal offers:
   kitty graphics, iTerm2, sixel, or unicode mosaic
   (half-block / quadrant / sextant / braille). Capability detection is automatic
   and every degradation is labeled, never silent.
+- **Animation** — animated GIF and APNG play in the cell grid through
+  `AnimatedImage`, one timer per frame and nothing between frames. Video
+  (`.mp4`, `.mov`, `.avi`, `.webm`) is NOT decoded — those codecs are
+  patent-pooled and larger than this crate; the file is recognized, named,
+  and refused with the command that converts it.
 - **Software-rasterized 3D** — load GLB files (node hierarchies, textures,
   vertex colors, animation, skinning) and render them into the same cell
   pipeline. No GPU, no native dependencies.
@@ -359,7 +366,8 @@ Line by line:
   signals.
 - **Defaults you did not write** — Tab/Shift+Tab move focus, Enter and Space
   activate the focused widget, Ctrl+C quits. Override any of them by consuming
-  the event in a handler or shortcut.
+  the event in a handler or shortcut. Nothing is focused until the first Tab or
+  click; the next section shows how to start with the caret already in a field.
 
 ## Adding interactivity
 
@@ -396,6 +404,28 @@ Run it with `App::simple(form)`. Tab moves between the input and the button;
 the input handles cursor movement, selection (Shift+arrows), word jumps
 (Alt+arrows), and paste for you. Mouse clicks focus and activate the same
 widgets — no extra code.
+
+**Start with the caret in the field.** A root tree focuses nothing at boot, so
+the form above waits for a Tab or a click before it accepts typing. Ask for
+focus at mount with `.autofocus()`, available on the element form of the
+focusable widgets:
+
+```rust
+let t = use_theme(cx).get().tokens;
+
+TextInput::new()
+    .placeholder("your name")
+    .value(name)
+    .element(cx, &t)   // Element, not View
+    .autofocus()       // focused from frame one
+    .build()
+```
+
+Mark exactly one widget per screen — the one that should own the keyboard.
+Modal overlays need no such marking: they establish their own initial focus
+when they open. The [API guide](api.md#focus--who-receives-keys) has the full
+rule, including why a bare-letter global shortcut such as `q`-to-quit is a trap
+in an app with a text field.
 
 The same one-import surface covers the rest of a form or chat screen:
 `Select`/`Combobox`/`MultiSelect` for choices (a one-row trigger opening an
@@ -523,6 +553,9 @@ in any terminal — and picks the best mosaic mode for the terminal's detected
 glyph and color support (`.mode(MosaicMode::Sextant)` pins the densest family
 when you know the font carries it — see
 [graphics-and-3d.md](graphics-and-3d.md#getting-more-resolution-out-of-a-picture)).
+Animations work the same way: `AnimatedImage::from_path("loading.gif")`
+plays an animated GIF or an APNG. Video files are refused by name — the
+engine decodes no video codecs.
 For pixel-perfect output over the kitty, iTerm2, or sixel
 protocols, `gfx::ImageSession` manages placement at the app level; the
 `images` example (`cargo run --example images`) shows both paths side by side,
@@ -638,7 +671,7 @@ the headless-test recipe.
   the honest mermaid subset (`abstracttui-mermaid`), installed only
   when you need them.
 - [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
-- [Examples catalog](../examples/README.md) — twenty-six runnable programs
+- [Examples catalog](../examples/README.md) — 31 runnable programs
   (three of them in the extension crates) ordered as a learning path, from
   the 53-line `hello` to the full `dashboard`, with the keys each answers to. For content-heavy apps start
   with `transcript` (streaming markdown chat), `reader` (tables, images,
@@ -693,7 +726,7 @@ graph BT
     subgraph content["content layer"]
         canvas["canvas<br/>sub-cell dot grids, vector strokes"]
         widgets["widgets<br/>built-in library"]
-        gfx["gfx<br/>bitmaps, mosaic, pixel protocols"]
+        gfx["gfx<br/>bitmaps, animation, mosaic, pixel protocols"]
         three["three<br/>GLB loading, 3D rasterizer"]
     end
 
@@ -1158,6 +1191,72 @@ the endorsed pattern is a store struct of signals provided as context —
 Signals are `Copy` handles, so cloning the store shares state: no prop
 drilling, no reducer framework.
 
+### Focus — who receives keys
+
+Every key and paste goes to the **focused** node, falling back to the
+tree root when nothing is focused. A root tree starts with **nothing
+focused**: focus arrives when a node asks for it (`.autofocus()`), when
+the user Tabs (Tab/Shift+Tab walk the focusables in visual order), when
+a click lands on one (the nearest focusable ancestor-or-self of the hit
+target — clicking empty space keeps the keyboard where it is), or when
+the app sets it (`app.tree().focus_first()` after `mount`, or
+`set_focus`; programmatic focus crosses focus traps, which constrain
+Tab cycling only).
+
+**An app whose first screen has a text field should say so.** Without
+`.autofocus()`, the first keystrokes reach the root instead of the
+field, and the user has to Tab or click into it before typing lands.
+Widget builders expose the element form for exactly this — `.view(cx)`
+is the one-call shape, `.element(cx, &t)` the same widget as an
+`Element` you can still decorate:
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::widgets::{TextArea, TextAreaState};
+
+fn composer(cx: Scope) -> View {
+    let t = use_theme(cx).get().tokens;
+    let state = TextAreaState::new(cx);
+    TextArea::new()
+        .state(&state)
+        .placeholder("Message — Enter sends")
+        .rows(1, 4)
+        .element(cx, &t)   // Element, not View
+        .autofocus()       // focused from frame one
+        .build()
+}
+```
+
+The same `.element(cx, &t).autofocus()` route works for `TextInput`,
+`List`, and the other focusable widgets. The last `.autofocus()` mounted
+wins, so a screen that mounts several marks only the one that should
+own the caret. An autofocused field paints no placeholder by default —
+see [TextArea](#textarea--the-multiline-composer) for
+`.placeholder_while_focused(true)`.
+
+**Modal trees do this for you.** Overlays that own input —
+[`Modal`](#app--the-runtime), a modal
+[`Drawer`](#appdrawer--edge-anchored-overlay-panels),
+[`ChoicePrompt`](#appchoiceprompt--the-modal-decision-gate) — establish
+initial focus when they open: an `.autofocus()` node wins, otherwise
+the first focusable, otherwise the panel's content element. A modal
+answers keys from frame one with no ritual; the root tree is the one
+that needs the opt-in.
+
+**Resolution order for one key**, first to consume it wins:
+
+1. element handlers along capture → target → bubble;
+2. `KeyChord` shortcuts registered on the root → focus path;
+3. the built-in Tab traversal;
+4. the global [`Actions`](#app--the-runtime) registry.
+
+Focused widgets therefore always beat global bindings — a focused
+editor consumes ordinary characters, so a bare-letter shortcut such as
+`q`-to-quit fires only while focus is elsewhere, **including at boot
+while nothing is focused**. In an app that has a text field anywhere,
+give global verbs a modified chord (`Ctrl+Q`, `Ctrl+C`) and let
+autofocus put the caret in the field.
+
 ### Double-click
 
 Terminals report only raw press/release — the engine synthesizes
@@ -1283,16 +1382,16 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Block** — the bordered panel primitive: title, fill, focus ring, `BorderKind`, and an opt-in close affordance (`on_close` — a mouse-only ✕ on the title row; see the Block section below).
 - **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
-- **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
+- **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, wheel scrolling (the window moves, the caret stays; any edit re-attaches), and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
 - **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`, bindable `selection`/`offset_y`, hover ink. Removable rows in one call (`on_remove`), or the general trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), and timed double-click on the body (`on_row_double_click`). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
 - **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful.
-- **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
+- **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, hover ink, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
 - **PageHost** — the page-level tab host: N FULL pages behind one themed tab bar, exactly one mounted (see [its own section](#widgetspagehost--the-page-level-tab-host) below).
 - **DrawerDock** — the right-edge drawer rail: always-visible vertical tabs, each fronting a docked side panel — at most one open, fully collapsed to the bare rail otherwise, with reactive badge dots (see [its own section](#widgetsdrawerdock--the-right-edge-drawer-rail) below).
 - **Disclosure** — the fold/unfold card: a one-row title header (glyph + truncating title + muted detail slot) that expands a body in place. Click or Enter/Space toggles; `max_body_rows` caps the body behind a scrollbar; state is widget-internal (`initially_folded`) or app-owned (`folded(Signal<bool>)`).
 - **FilePicker** — directory browser for modals and attach flows: breadcrumb header, type-to-filter input, entry rows with kind glyphs and an optional size column, opt-in multi-select, `on_pick(Vec<String>)`; entries come from the pluggable `FileSource` seam (see [the file-attachments section](#file-attachments--paste-intercept-drop-classifier-filepicker) below).
-- **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override) and can be read back through `extent_signal`; `follow_tail` binds the pinned-to-bottom idiom; `scrollbar_auto_hide` hides the bar while content fits.
+- **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override) and can be read back through `extent_signal`; `follow_tail` binds the pinned-to-bottom idiom; `scrollbar_auto_hide` hides the bar while content fits, and `scrollbar_width` widens its reserved gutter.
 - **Checkbox** — `[x] label` bound to a `Signal<bool>`.
 - **RadioGroup** — one-of-N bound to a `Signal<usize>`; one tab stop, Up/Down move the selection.
 - **Progress** — bar with sub-cell precision; optional ok→warn→error ramp.
@@ -1305,7 +1404,8 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Grid** — container widget over `Display::Grid`; spans ride each child's own style.
 - **Image** — bitmap display through the mosaic pipeline (`ImageFit`; `Bitmap` re-exported beside it). Measures as its native cell footprint, so it holds real space in `Auto`-sized rows/panels.
 - **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals. Grows into its region by default (a draw widget has no intrinsic size to grow from, so the default layout claims the available space).
-- **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables with the crush-honesty ladder, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code (C-like, diff, json/yaml lexers). Both content views carry an intrinsic measure (wave 13): `Scroll::new(view)` scrolls the true extent out of the box, and content-sized panels hug the document instead of collapsing it to zero.
+- **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables with the crush-honesty ladder, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code (C-like, diff, json/yaml lexers). Both content views carry an intrinsic measure (wave 13): `Scroll::new(view)` scrolls the true extent out of the box, and content-sized panels hug the document instead of collapsing it to zero. Wrapping in `Scroll` is also what gives a document the WHEEL, PgUp/PgDn and a draggable thumb — the `scroll_offset(rows)` setter is for apps that genuinely own the offset, and gets keyboard scrolling only.
+- **`widgets::FenceBlock`** — a fenced code block rendered as something other than code, INSIDE the document. `MarkdownView::fence_block(claimant)` installs it; the claimant measures the fences it recognizes and paints their rows, so a diagram lives in the document's own scroll surface, outline and search index instead of forcing the app to splice widgets between document fragments. Fences it declines render as code, unchanged. The engine ships no diagram languages — `abstracttui-mermaid`'s `MermaidFence` is the reference claimant (see [graphs-and-diagrams.md](graphs-and-diagrams.md)).
 - **Meter / AudioScope** — live level rendering: dB meter with real ballistics (instant attack, timed decay, peak hold) and a rolling braille waveform — see the live-levels section below.
 - **Logo** — the AbstractTUI wordmark for headers, about screens, empty states.
 
@@ -1474,8 +1574,9 @@ are the general form — a trailing column holding a badge, an unread
 count, or a per-row action. The engine owns body/accessory/scrollbar
 column widths. The accessory column is one click target edge to edge on
 the row that draws it; rows whose `row_accessory` returns `None` leave
-that column as ordinary body. Accessory clicks never change selection,
-and scrollbar-column clicks are inert. Styled body labels ride
+that column as ordinary body. Accessory clicks never change selection;
+scrollbar-column presses belong to the bar (see
+[The scrollbar](#the-scrollbar), which every scrolling widget shares). Styled body labels ride
 [`List::rich_items`](crate::widgets::List::rich_items) (same length as
 `items`; accessories stay plain text).
 
@@ -1960,6 +2061,40 @@ copies the text it highlights (see
 [app::selection](#appselection--screen-text-selection-and-clipboard-copy));
 apps can drive it for their own freezes.
 
+### The scrollbar
+
+Every widget that scrolls a viewport — `Scroll`, `List`, `Table`,
+`FilePicker`, and the folds built on them — paints the same strip in
+its rightmost column and answers the same gestures:
+
+| gesture | result |
+|---|---|
+| press on the thumb | takes hold; **nothing moves** |
+| drag after that press | the thumb tracks the pointer row for row, and keeps steering after the pointer leaves the strip (pointer capture) |
+| press on bare track | teleports: the thumb centers on the pressed row |
+| release | commits where it stands — no snap-back |
+
+The thumb's length is proportional to the visible fraction with a floor
+of 3 rows (the exact proportion of a long transcript rounds to zero),
+and it never fills a track that still has travel: a thumb parked on the
+last cell means the offset really is at its maximum. The strip is a
+RESERVED gutter, so content never re-wraps when the bar appears or
+hides.
+
+`Scroll::scrollbar_width(cells)` (default 1, max 4) widens the strip for
+apps with room for a comfortable mouse target — the cells come out of
+the content, so a pane that measures its own text against the viewport
+width must widen with it. `Scroll::scrollbar_auto_hide(true)` hides the
+bar while the content fits; the column stays reserved and the invisible
+strip steers nothing.
+
+The thumb takes accent ink while the pointer is over the strip or a drag
+is live, in every widget that draws one — and so does the row under the
+pointer (`List`, `Table`, `FilePicker`): hover shifts INK to `accent`
+with the background untouched, while a selected row keeps its audited
+pair and takes BOLD instead. Hover motion only reports where the app opted in
+([`RunConfig::hover_ink`](#app--the-runtime)); a drag always does.
+
 ### Modal content that can overflow
 
 Put the overflow inside a `Scroll` and keep the fixed rows fixed — the
@@ -2020,6 +2155,12 @@ fn composer(cx: Scope) -> View {
         .view(cx)
 }
 ```
+
+**Focus it at startup.** `.view(cx)` builds the widget unfocused, and a
+root tree focuses nothing on its own — so a composer that should own the
+keyboard from frame one is built through the element form,
+`.element(cx, &t).autofocus().build()`. See
+[Focus — who receives keys](#focus--who-receives-keys).
 
 **Placeholder while focused.** By default the
 placeholder paints only while the field is empty AND unfocused — the
@@ -2204,7 +2345,7 @@ the right edge, each fronting a docked side panel. At most one drawer
 is open; while none is, the panel column vanishes entirely and the
 content takes every cell up to the rail. The panel DOCKS in layout —
 content reflows around it. (The transient, sliding, scrimmed cousin is
-[`app::drawer`](#appdrawer); reach for the dock when the drawers are
+[`app::drawer`](#appdrawer--edge-anchored-overlay-panels); reach for the dock when the drawers are
 permanent chrome, for the drawer when they are an occasional overlay.)
 
 ```rust
@@ -3335,6 +3476,17 @@ assert_eq!(cells.len(), 8 * 4);
   `MosaicMode::Sextant` is the denser opt-in where the font carries the
   Unicode 13 block sextants. See
   [graphics-and-3d.md](graphics-and-3d.md#getting-more-resolution-out-of-a-picture).
+- `gfx::decode_animation(bytes)` decodes an **animated GIF** or an
+  **APNG** into an `Animation` (frames, per-frame delays, loop count). A
+  still decodes as a one-frame animation, so one path shows any picture.
+  `widgets::AnimatedImage` plays one: `.playing(signal)` pauses,
+  `.repeat(bool)` overrides the file's own loop declaration, and each
+  frame arms exactly one timer for its own delay (a paused or finished
+  clip arms none). VIDEO IS NOT DECODED: `.mp4`, `.mov`, `.avi`,
+  `.webm`, and `.mpg` are recognized, named, and refused with an
+  `ffmpeg` conversion line. See
+  [graphics-and-3d.md](graphics-and-3d.md#animated-pictures-and-why-video-is-not-one-of-them)
+  for the external-decoder pattern that plays video.
 - `gfx::ImageSession` manages the pixel protocols (kitty, iTerm2, sixel):
   slots keyed by the caller, content versions, minimal traffic per channel —
   kitty transmits once and re-places on move; iTerm2 and sixel honestly
@@ -3544,7 +3696,16 @@ captures carry no regions (the rig consumes protocol payloads as
 counted, unmodeled frames). Hyperlink targets are not captured (a visual
 capture has no click surface — the styled debug dumps show them);
 `blink` exports as static; `undercurl` draws as a straight underline in
-SVG. Capture is on-demand only: nothing here runs per-frame, and an
+both PNG and SVG.
+
+`Screenshot::to_png()` / `to_png_with(PngOpts)` / `to_bitmap()` /
+`write_png()` render the capture as pixels the engine decides itself:
+text from an embedded 8x16 bitmap, and the ranges that must TILE — box
+drawing, block elements, braille, sextants — drawn geometrically, so
+strokes meet exactly at every cell boundary on any machine. Output is
+deterministic. `to_svg` remains the EMBEDDABLE artifact (GitHub renders
+it inline in a README) at the cost of depending on the viewer's
+monospace font; the PNG is the faithful one. Capture is on-demand only: nothing here runs per-frame, and an
 idle app still costs zero.
 
 ## Stability and limits
@@ -3556,6 +3717,19 @@ Plain statements of current behavior:
   and 4:2:0. Arithmetic-coded, lossless, hierarchical, 12-bit, and CMYK
   variants reject by name. Chroma upsampling is nearest-neighbour. **PNG**
   supports 8-bit depths without interlacing (Adam7 rejects by name).
+- **Animation** decodes for animated GIF and APNG. **Video does not
+  decode at all**: `.mp4`, `.mov`, `.avi`, `.webm`, and `.mpg` reject by
+  name with a conversion command — their codecs are patent-pooled and
+  out of scope for an in-tree decoder. A decoded sequence is held in
+  memory (64 Mpx budget across its frames).
+- **Screenshots** export as text, ANSI, PNG, and SVG. The **PNG is the
+  faithful one** — the engine draws every pixel, so box-drawing strokes
+  meet and glyph metrics cannot drift; its coverage is ASCII plus the
+  geometric ranges plus ~60 symbols, and anything else (CJK, emoji)
+  draws a labeled placeholder. The **SVG is the embeddable one** —
+  GitHub renders it inline in a README, at the cost of depending on the
+  viewer's monospace font, which can stretch glyphs and break stroke
+  joins.
 - **Sixel** uses one palette per emission: multiple live sixel images
   recolor each other — prefer one per screen. iTerm2 and sixel have no
   placement model (moves re-emit the payload); only kitty gets placement
@@ -4062,6 +4236,59 @@ fit (weighted least squares):
 non-UTF-8 locales get HalfBlock (U+2580 survives most legacy codepages),
 monochrome terminals get Braille, color terminals get Quadrant.
 
+### Animated pictures (and why video is not one of them)
+
+The engine plays a frame sequence in the cell grid. Two formats decode
+in-tree: **animated GIF** and **APNG**. Both are permissively licensed,
+free of patent pools, need no dependency the crate does not already
+have, and are small enough to review.
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::widgets::{AnimatedImage, ImageFit};
+
+# fn build(cx: Scope) -> View {
+AnimatedImage::from_path("loading.gif")
+    .fit(ImageFit::Contain)
+    .view(cx)
+# }
+```
+
+`gfx::decode_animation(bytes)` is the decoder behind it, magic-routed
+like `decode_image`, and a still decodes to a one-frame animation — so
+one code path shows any picture, moving or not. `Animation::frame_at`
+answers "which frame shows now" for a caller driving its own clock.
+
+**Video does not decode here.** `.mp4`, `.mov`, `.avi`, `.webm` and
+`.mpg` carry H.264, H.265, VP9, or MPEG-4. Those are patent-pooled, and
+a correct real-time decoder for any one of them is larger than this
+entire crate, so the engine does not pretend: the container is
+recognized, named, and refused with the line that converts it into
+something that does play.
+
+```text
+mp4/mov: video is not decoded (animated GIF and APNG are).
+Convert with: ffmpeg -i IN -vf 'fps=12,scale=480:-1' OUT.gif
+```
+
+**To play video as it is**, decode it OUTSIDE the engine and feed frames
+in — the same shape a terminal app uses for audio. Spawn
+`ffmpeg -i clip.mp4 -f rawvideo -pix_fmt rgba -`, read frames on a
+thread into a `reactive::bounded_source`, build a `gfx::Bitmap` per
+frame, and show each one with `Image::from_bitmap`. Kill the child in
+the scope's `on_cleanup`: an orphaned decoder holds the file and the
+CPU. That dependency is the CALLER's, deliberately — the engine ships no
+bindings to ffmpeg, claims no video support, and works without it.
+
+**What playback costs.** A moving picture is the one thing here that
+cannot be idle, so the cost is stated rather than hidden: each frame
+arms ONE timer for that frame's own delay, so a playing clip costs one
+wakeup per frame, nothing between frames, and nothing at all once it is
+paused or finished. Bytes are the channel's business — a mosaic repaint
+is a cell diff (only what changed), which makes the universal path the
+cheapest one for motion, while kitty, iTerm2, and sixel each re-send a
+full payload per frame.
+
 ### Getting more resolution out of a picture
 
 A mosaic cell carries one glyph and two colors, so a picture's resolution
@@ -4289,6 +4516,12 @@ pure-cell 2D path with its own particle field (everywhere else). Try both:
   Scan component selectors are validated against the frame header;
   malformed scans reject rather than decode wrong.
 - **PNG**: 8-bit depths, no interlacing (Adam7 rejects by name).
+- **Animation**: animated GIF and APNG decode in-tree. **Video does
+  not** — `.mp4`, `.mov`, `.avi`, `.webm`, `.mpg` are recognized, named,
+  and refused with a conversion command, because their codecs are
+  patent-pooled and far larger than this crate. Frames are held decoded
+  in memory (budget: 64 Mpx across a sequence), so a long clip belongs
+  on the external-decoder path rather than in a `Vec`.
 - **Sixel**: one palette per emission — multiple live sixel images recolor
   each other. Prefer one sixel image per screen.
 - **iTerm2/sixel** have no placement model: any move or resize re-emits
@@ -4367,8 +4600,8 @@ the mermaid parser is hand-rolled).
 ```toml
 [dependencies]
 abstracttui = "0.3"
-abstracttui-graph = "0.2"    # graph layout + GraphView
-abstracttui-mermaid = "0.2"  # mermaid subset (depends on -graph)
+abstracttui-graph = "0.3"    # graph layout + GraphView
+abstracttui-mermaid = "0.3"  # mermaid subset (depends on -graph)
 ```
 
 ## The one data contract: `GraphDesc -> Layout`
@@ -4458,9 +4691,9 @@ test-pinned. Algorithm selection: `.algo(GraphAlgo::Force(opts))`, or
 `.with_layout(layout)` to render positions you computed (or dragged)
 yourself.
 
-Run the crate examples: `cargo run -p abstracttui-graph --example
-workflow` (layered pipeline with a marked retry cycle) and `--example
-network` (force-directed).
+Run the examples: `cargo run --example workflow` (layered pipeline with
+a marked retry cycle) and `cargo run --example network`
+(force-directed).
 
 ## Mermaid: the honest subset
 
@@ -4524,7 +4757,7 @@ let view = MermaidView::new(
 // live_link_url(&str) -> String                  (the escape hatch)
 ```
 
-Run the demo: `cargo run -p abstracttui-mermaid --example mermaid`
+Run the demo: `cargo run --example mermaid`
 (four embedded samples including an honest fallback; or pass a `.mmd`
 path).
 
@@ -4961,18 +5194,28 @@ full ladder and the per-terminal expectations.
 
 ## Which image formats decode?
 
-PNG and JPEG, decided by the file's magic bytes rather than its extension
-or a declared MIME type. PNG covers 8-bit depths without interlacing; JPEG
-covers the 8-bit Huffman frames — **baseline, extended sequential, and
-progressive** — in grayscale or YCbCr at 4:4:4, 4:2:2, 4:4:0, and 4:2:0,
-with interleaved or per-component scans and restart markers. Progressive is
-what most editors emit by default, so it decodes to the same final picture
-as a sequential file, not to a first-pass approximation.
+PNG, JPEG, and GIF, decided by the file's magic bytes rather than its
+extension or a declared MIME type. PNG covers 8-bit depths without
+interlacing; JPEG covers the 8-bit Huffman frames — **baseline, extended
+sequential, and progressive** — in grayscale or YCbCr at 4:4:4, 4:2:2,
+4:4:0, and 4:2:0, with interleaved or per-component scans and restart
+markers. Progressive is what most editors emit by default, so it decodes to
+the same final picture as a sequential file, not to a first-pass
+approximation.
+
+Animations decode too — animated GIF and APNG, through
+`gfx::decode_animation` and the `AnimatedImage` widget. **Video does
+not**: `.mp4`, `.mov`, `.avi`, `.webm`, and `.mpg` are recognized and
+refused by name with a conversion command, because their codecs are
+patent-pooled and each is larger than this whole crate. To play video,
+decode it with an external tool and feed frames in (see
+[graphics-and-3d.md](graphics-and-3d.md#animated-pictures-and-why-video-is-not-one-of-them)).
 
 Everything else rejects **by name**, with a message you can show a user
 verbatim: interlaced PNG, arithmetic-coded / lossless / hierarchical /
-12-bit / CMYK JPEG, and GIF/WebP/AVIF/TIFF. Nothing renders a wrong picture
-in place of an unsupported one. See
+12-bit / CMYK JPEG, WebP/AVIF/TIFF, and the patent-pooled video codecs
+(H.264, H.265, VP9, AV1, MPEG-1/2/4). Nothing renders a wrong picture in
+place of an unsupported one. See
 [graphics-and-3d.md](graphics-and-3d.md) for the decoder coverage and
 [troubleshooting.md](troubleshooting.md) for what to do with a refusal.
 
@@ -5148,6 +5391,24 @@ The two routes are exclusive: a copy the host clipboard accepted is not
 also written over OSC 52, because terminals and tmux cap that payload and
 the second write could truncate a long selection.
 
+## Why doesn't my app start with the caret in its input box?
+
+Because no widget claims the keyboard implicitly. Keys go to the focused
+node — with nothing focused they fall back to the tree root — and a root
+tree focuses nothing at boot, so the first field takes typing only after a
+Tab or a click. Say which widget should own the caret by building it
+through the element form and marking it: `.element(cx, &t).autofocus()`.
+Modal overlays are the exception and need no marking: a `Modal`, a modal
+`Drawer`, or a `ChoicePrompt` establishes initial focus when it opens, so
+it answers keys from frame one.
+
+This is also why a bare-letter global shortcut is a trap in an app with a
+text field: a focused editor consumes ordinary characters, so a plain `q`
+binding is live exactly while no field holds focus — including at
+startup. Use `Ctrl+Q` or `Ctrl+C` for global verbs. See
+[Focus — who receives keys](api.md#focus--who-receives-keys) and the
+[troubleshooting entry](troubleshooting.md#typing-does-nothing-until-i-click-or-tab-into-the-input).
+
 ## Why doesn't Ctrl+Enter (or Shift+Enter) do anything?
 
 On the classic terminal wire, Ctrl+Enter, Shift+Enter, and Ctrl+Backspace
@@ -5304,6 +5565,59 @@ genuinely dead, check the notices first; if the engine could not find any
 workable descriptor it fails with an actionable error rather than starting
 deaf.
 
+## Typing does nothing until I click or Tab into the input
+
+**Symptom**: the app starts, the composer or form field is visible, but
+the first characters go nowhere. Press Tab once, or click the field, and
+typing works from then on. A variant of the same cause: a single-letter
+global shortcut (`q` to quit) fires on the very first keystroke instead
+of being typed into the field.
+
+**Cause**: nothing is focused. Keys go to the focused node and fall back
+to the tree root when there is none, and a root tree starts with nothing
+focused — no widget claims the keyboard implicitly, because the engine
+cannot know which one should own it. With focus at the root, characters
+reach no editor, and root-level `KeyChord` shortcuts see every key.
+
+**Check**: press Tab. If the field takes focus (its side strokes turn to
+`border_focus`) and typing lands, this is the cause. Modal overlays are
+not affected — they establish initial focus when they open — so a
+composer inside a `Modal` that works while the root-level one does not
+confirms it too.
+
+**Fix**: ask for focus at mount. Build the field through the element form
+of the widget and mark it:
+
+```rust
+let t = use_theme(cx).get().tokens;
+
+TextArea::new()
+    .state(&state)
+    .rows(1, 4)
+    .on_submit(submit)
+    .element(cx, &t)   // Element, not View
+    .autofocus()       // focused from frame one
+    .build()
+```
+
+Mark one widget per screen — the last `.autofocus()` mounted wins. An app
+that would rather pick by document order can call
+`app.tree().focus_first()` after `mount`. While you are there, move any
+bare-letter global verb onto a modified chord (`Ctrl+Q`, `Ctrl+C`): a
+focused editor consumes ordinary characters, so a plain `q` shortcut is
+live exactly when no field holds focus, which includes the moment the app
+starts.
+
+**Verify**: launch and type immediately — the characters land in the
+field, and the placeholder yields to the caret. An autofocused field
+shows no placeholder by default; `.placeholder_while_focused(true)` keeps
+the hint visible beside the caret.
+
+See [Focus — who receives keys](api.md#focus--who-receives-keys) for the
+full resolution order and
+[getting-started.md](getting-started.md#adding-interactivity) for the
+same recipe in context.
+
 ## Images don't show (or fall back to blocky glyphs)
 
 **Cause**: the terminal didn't prove a pixel protocol. Image channels are
@@ -5330,11 +5644,18 @@ modes are a deliberate quality ladder within it.
 **Cause**: the bytes are outside what the engine decodes. `decode_image`
 routes on the MAGIC, never a declared MIME type or a file extension, so a
 `.jpg` that actually holds a WebP is rejected as an unrecognized format
-rather than decoded as JPEG. The supported set is PNG at
-8-bit depths without interlacing, and 8-bit Huffman JPEG — baseline,
-extended sequential, and progressive, grayscale or YCbCr. Arithmetic-coded,
-lossless, hierarchical, 12-bit, and CMYK JPEGs, interlaced (Adam7) PNGs,
-and GIF/WebP/AVIF/TIFF all reject by name rather than render wrong.
+rather than decoded as JPEG. The supported set is PNG at 8-bit depths
+without interlacing, 8-bit Huffman JPEG (baseline, extended sequential,
+and progressive, grayscale or YCbCr), and GIF; animations add APNG through
+`decode_animation`.
+Arithmetic-coded, lossless, hierarchical, 12-bit, and CMYK JPEGs,
+interlaced (Adam7) PNGs, and WebP/AVIF/TIFF all reject by name rather
+than render wrong.
+
+**Cause, for a video file**: the engine decodes NO video codecs. Every
+`.mp4`, `.mov`, `.avi`, `.webm`, and `.mpg` is recognized by container,
+named, and refused — those codecs are patent-pooled and each is larger
+than this whole crate. The message carries the conversion line.
 
 **Check**: read the message — every rejection names the exact reason,
 and it is written to be shown to a user verbatim. `file image.jpg` (or
@@ -5342,8 +5663,13 @@ and it is written to be shown to a user verbatim. `file image.jpg` (or
 
 **Fix**: convert the asset to a supported encoding — a PNG or JPEG export
 from any image editor, or a command-line converter (`sips -s format png
-in.webp --out out.png` on macOS). Truncated downloads report truncation
-specifically; fetch the file again before converting.
+in.webp --out out.png` on macOS). For video, the message's own line does
+it: `ffmpeg -i IN -vf 'fps=12,scale=480:-1' OUT.gif` turns a clip into an
+animation the engine plays. To play video as it is, decode outside the
+engine and feed frames in — see
+[graphics-and-3d.md](graphics-and-3d.md#animated-pictures-and-why-video-is-not-one-of-them). Truncated
+downloads report truncation specifically; fetch the file again before
+converting.
 
 **Verify**: `gfx::decode_image` returns `Ok` and the widget shows the
 picture instead of the labeled broken-image state. See
@@ -5658,8 +5984,8 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.3.3 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.3.3 (2026-08-19).
+- Crate: `abstracttui` 0.3.8 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.3.8 (2026-08-21).
 - Extension family (sibling crates in the repo workspace, installed only when needed;
   ADR-0004 — public core API only, same MIT license and dependency discipline):
   - `abstracttui-graph` 0.2.0 — graph auto-layout (`GraphDesc -> Layout`: layered /
@@ -5669,10 +5995,11 @@ timeouts, and no sleeps.
 - Description: a reactive, compositor-grade terminal UI engine — fine-grained signals,
   layered rendering with damage tracking, streaming transcripts and live-data ingestion,
   file-attachment surfaces (paste intercept, drop classifier, FilePicker),
-  text selection with OSC 52 copy, images (kitty/iTerm2/sixel/mosaic),
+  text selection with OSC 52 copy, images (PNG/JPEG/GIF over
+  kitty/iTerm2/sixel/mosaic) with animated GIF/APNG playback,
   software-rasterized 3D (GLB), a sub-cell vector canvas, themes (with a drop-in
   theme switcher) and animation.
-- Examples: 26 runnable in-crate examples (`examples/README.md`, ordered as a learning
+- Examples: 28 runnable in-crate examples (`examples/README.md`, ordered as a learning
   path; includes `presence_board` for rich list rows with accessories) plus 3 extension-crate
   examples (`workflow`/`network` in `extensions/graph`, `mermaid` in `extensions/mermaid`);
   every example exits cleanly without a tty.

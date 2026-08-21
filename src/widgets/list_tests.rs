@@ -171,7 +171,7 @@ fn variable_heights_window_by_content_rows_and_click_maps_rows_to_items() {
     // or thumb: the 1320 thumb floor makes this row thumb at this
     // geometry, and which glyph lands here is the bar's business).
     assert!(
-        matches!(canvas.row_text(1).trim(), "│" | "┃"),
+        matches!(canvas.row_text(1).trim(), "▏" | "█"),
         "spacer row of the 2-tall item holds only the bar: {:?}",
         canvas.row_text(1)
     );
@@ -1030,4 +1030,43 @@ fn a_plain_row_accessory_takes_accent_not_error() {
         (t.accent, Attrs::BOLD),
         "badge is not a dismiss"
     );
+}
+
+/// The strip used to be inert by design: `List` painted a scrollbar it
+/// refused to steer, while `Scroll` painted the same glyph and dragged.
+/// One seam, one gesture — the bar drags everywhere it is drawn.
+#[test]
+fn the_scrollbar_strip_grabs_and_drags_the_window() {
+    let t = default_theme().tokens;
+    let size = Size::new(12, 6);
+    let off_probe: Rc<RefCell<Option<Signal<i32>>>> = Rc::new(RefCell::new(None));
+    let out = off_probe.clone();
+    let (_root, mut tree) = mount_widget(size, |cx| {
+        let off = cx.signal(0i32);
+        *out.borrow_mut() = Some(off);
+        List::of((0..60).map(|i| format!("item {i}")))
+            .offset_y(off)
+            .element(cx, &t)
+            .build()
+    });
+    let off = off_probe.borrow().unwrap();
+    let bar_x = size.w - 1;
+    // Bare track, low down: a teleport that lands the thumb on the row
+    // pressed (never the row-selection the press used to fall through to).
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), bar_x, 4);
+    let after_press = off.get_untracked();
+    assert!(after_press > 0, "the strip steers the window now");
+    let canvas = render(&mut tree, size);
+    assert_eq!(
+        canvas.row_text(4).chars().nth(bar_x as usize),
+        Some('█'),
+        "row 4 was pressed, row 4 wears the thumb"
+    );
+    // ...and the drag that follows tracks the pointer.
+    mouse(&mut tree, MouseKind::Drag(MouseButton::Left), bar_x, 0);
+    assert_eq!(off.get_untracked(), 0, "dragged back to the head");
+    mouse(&mut tree, MouseKind::Up(MouseButton::Left), bar_x, 0);
+    // A bare drag after the release belongs to nobody: it must not steer.
+    mouse(&mut tree, MouseKind::Drag(MouseButton::Left), bar_x, 5);
+    assert_eq!(off.get_untracked(), 0, "no grab, no steering");
 }

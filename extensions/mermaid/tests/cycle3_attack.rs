@@ -123,28 +123,39 @@ fn lowercase_note_falls_back_naming_the_exact_line() {
 }
 
 // ---------------------------------------------------------------------------
-// (4) Edge chaining stays a table decision (NOT widened) — and the
-// fallback reason is the TARGETED one, visible on screen.
+// (4) Edge chaining is SUPPORTED: `A --> B --> C` is two edges, and the
+// per-link labels stay attached to the link they followed.
 // ---------------------------------------------------------------------------
 
 #[test]
-fn edge_chaining_falls_back_with_the_targeted_reason() {
+fn edge_chaining_produces_one_edge_per_link() {
     let src = "graph TD\nA --> B --> C";
-    let err = parse(src).expect_err("chaining is a v2 row");
-    assert!(
-        err.reason.contains("edge chaining"),
-        "targeted, not generic: {}",
-        err.reason
-    );
-    assert!(err.reason.contains("one edge per statement"));
-    let mut rig = Rig::mount(Size::new(72, 8), || MermaidView::new(src));
+    let Ok(Diagram::Flowchart(fc)) = parse(src) else {
+        panic!("chaining parses");
+    };
+    let pairs: Vec<(&str, &str)> = fc
+        .edges
+        .iter()
+        .map(|e| (e.from.as_str(), e.to.as_str()))
+        .collect();
+    assert_eq!(pairs, [("A", "B"), ("B", "C")], "one edge per link");
+
+    // Labels belong to their own link, not to the whole statement.
+    let Ok(Diagram::Flowchart(fc)) = parse("graph LR\nA -->|one| B -- two --> C") else {
+        panic!("labelled chain parses");
+    };
+    let labels: Vec<Option<&str>> = fc.edges.iter().map(|e| e.label.as_deref()).collect();
+    assert_eq!(labels, [Some("one"), Some("two")]);
+
+    // A chain still renders as a diagram, not as a fallback fence.
+    let mut rig = Rig::mount(Size::new(72, 12), || MermaidView::new(src));
     let rows = rig.rows();
     assert!(
-        rows[0].contains("edge chaining"),
-        "the user sees the targeted reason: {:?}",
+        !rows[0].contains("not supported"),
+        "a chain must not fall back: {:?}",
         rows[0]
     );
-    assert_eq!(rig.count_char('╭'), 0, "atomic: no partial diagram");
+    assert_eq!(rig.count_char('╭'), 3, "three cards, one per chained node");
 }
 
 // ---------------------------------------------------------------------------
@@ -187,25 +198,40 @@ fn arrows_cross_intermediate_lifelines_legibly_golden() {
 }
 
 // ---------------------------------------------------------------------------
-// (6) First-explicit-wins, pinned for BOTH diagram kinds.
+// (6) Re-declaration follows MERMAID: the last explicit declaration
+// wins, while first-mention order still decides layout order.
 // ---------------------------------------------------------------------------
 
 #[test]
-fn flowchart_first_explicit_declaration_wins_and_bare_mentions_never_reset() {
+fn flowchart_last_explicit_declaration_wins_like_mermaid() {
     let src = "graph TD\nA --> B\nB[Named]\nB(Other)\nB --> C";
     let Ok(Diagram::Flowchart(fc)) = parse(src) else {
         panic!("supported flowchart");
     };
     let b = fc.nodes.iter().find(|n| n.id == "B").expect("B registered");
+    // mermaid renders the LAST declaration; rendering the first one
+    // drew a DIFFERENT diagram than the source describes — a
+    // divergence that looked like a rendering bug to anyone comparing
+    // against mermaid.live.
+    assert_eq!(
+        b.text.as_deref(),
+        Some("Other"),
+        "the LAST explicit declaration wins"
+    );
+    assert_eq!(b.shape, abstracttui_mermaid::NodeShape::Rounded);
+    // A BARE mention still never resets a declared node...
+    let Ok(Diagram::Flowchart(fc)) = parse("graph TD\nB[Named]\nB --> C") else {
+        panic!("supported flowchart");
+    };
+    let b = fc.nodes.iter().find(|n| n.id == "B").unwrap();
     assert_eq!(
         b.text.as_deref(),
         Some("Named"),
-        "the FIRST explicit declaration wins"
+        "a bare mention is not a declaration"
     );
-    // The bare mention on line 2 reserved the slot (input order), and
-    // the later `B(Other)` did not re-shape it.
+    // ...and the slot keeps first-mention order for layout.
     let ids: Vec<&str> = fc.nodes.iter().map(|n| n.id.as_str()).collect();
-    assert_eq!(ids, ["A", "B", "C"], "first-mention order");
+    assert_eq!(ids, ["B", "C"], "first-mention order");
 }
 
 /// FAILING-FIRST for the sequence half (citation: flowchart.rs

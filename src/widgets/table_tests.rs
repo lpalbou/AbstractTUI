@@ -434,3 +434,152 @@ fn column_solver_tiles_exactly() {
     assert_eq!(cols.iter().sum::<i32>() + gaps, 24, "{cols:?}");
     assert_eq!(cols[0], 4);
 }
+
+/// The scrollbar column belongs to the BAR, not to the row beside it.
+/// `Table` used to resolve rows from `pos.y` alone, so a press on the
+/// strip selected whatever row it landed next to — and `FilePicker`, on
+/// the same unguarded math, could activate one.
+#[test]
+fn the_scrollbar_column_scrolls_instead_of_selecting_a_row() {
+    let size = Size::new(20, 6);
+    let sel_probe: Rc<RefCell<Option<Signal<usize>>>> = Rc::new(RefCell::new(None));
+    let out = sel_probe.clone();
+    let (_root, mut tree) = mount_widget(size, move |cx| {
+        let t = &default_theme().tokens;
+        let sel = cx.signal(0usize);
+        *out.borrow_mut() = Some(sel);
+        Table::new(vec![
+            Column::new("name", ColWidth::Flex(1.0)),
+            Column::new("size", ColWidth::Cells(6)),
+        ])
+        .rows(
+            (0..60)
+                .map(|i| vec![format!("file-{i}"), format!("{i} kB")])
+                .collect(),
+        )
+        .selection(sel)
+        .element(cx, t)
+        .build()
+    });
+    let sel = sel_probe.borrow().unwrap();
+    let bar_x = size.w - 1;
+    let before = canvas_first_row(&mut tree, size);
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), bar_x, 4);
+    assert_eq!(sel.get_untracked(), 0, "the strip selects nothing");
+    assert_ne!(
+        canvas_first_row(&mut tree, size),
+        before,
+        "...it scrolls instead"
+    );
+    // A body press still selects normally.
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), 2, 2);
+    assert!(
+        sel.get_untracked() > 0,
+        "rows still answer their own column"
+    );
+}
+
+fn canvas_first_row(tree: &mut UiTree, size: Size) -> String {
+    render(tree, size).row_text(1)
+}
+
+/// Parity with `List` and `Scroll`: the strip answers the pointer. A
+/// bar that cannot say "grab me" reads as decoration — the field report
+/// that followed the seam ("mouse-over works on the other three panes").
+#[test]
+fn the_scrollbar_thumb_lights_under_the_pointer() {
+    let size = Size::new(20, 8);
+    let (_root, mut tree) = mount_widget(size, move |cx| {
+        let t = &default_theme().tokens;
+        Table::new(vec![
+            Column::new("name", ColWidth::Flex(1.0)),
+            Column::new("size", ColWidth::Cells(6)),
+        ])
+        .rows(
+            (0..60)
+                .map(|i| vec![format!("file-{i}"), format!("{i} kB")])
+                .collect(),
+        )
+        .element(cx, t)
+        .build()
+    });
+    let bar_x = size.w - 1;
+    let ink = |tree: &mut UiTree, y: i32| {
+        render(tree, size)
+            .cell(crate::base::Point::new(bar_x, y))
+            .map(|(_, fg, _)| fg)
+    };
+    let cold = ink(&mut tree, 1).expect("thumb cell");
+    mouse(&mut tree, MouseKind::Move, bar_x, 1);
+    let hot = ink(&mut tree, 1).expect("thumb cell");
+    assert_ne!(cold, hot, "the strip answers the pointer");
+    // Moving off the strip cools it; the row body is not the bar.
+    mouse(&mut tree, MouseKind::Move, 2, 1);
+    assert_eq!(
+        ink(&mut tree, 1),
+        Some(cold),
+        "cools when the pointer leaves"
+    );
+    // A live grab keeps the ink even while the pointer wanders away.
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), bar_x, 3);
+    mouse(&mut tree, MouseKind::Drag(MouseButton::Left), 0, 5);
+    let dragging = ink(&mut tree, 5).expect("thumb cell");
+    assert_eq!(dragging, hot, "still lit mid-drag, off-strip");
+}
+
+/// §3.2's borderless-actionable rule, applied to a `Table` row: the row
+/// under the pointer shifts its ink to `accent`, bg unchanged, and
+/// selection outranks hover (the audited pair stays; BOLD marks the hot
+/// row instead, because the hover inks are not audited against
+/// `selection_bg`). `List` has always painted rows this way.
+#[test]
+fn hover_ink_lights_the_row_under_the_pointer() {
+    let size = Size::new(20, 8);
+    let sel_probe: Rc<RefCell<Option<Signal<usize>>>> = Rc::new(RefCell::new(None));
+    let out = sel_probe.clone();
+    let (_root, mut tree) = mount_widget(size, move |cx| {
+        let t = &default_theme().tokens;
+        let sel = cx.signal(0usize);
+        *out.borrow_mut() = Some(sel);
+        Table::new(vec![
+            Column::new("name", ColWidth::Flex(1.0)),
+            Column::new("size", ColWidth::Cells(6)),
+        ])
+        .rows(
+            (0..60)
+                .map(|i| vec![format!("file-{i}"), format!("{i} kB")])
+                .collect(),
+        )
+        .selection(sel)
+        // A fixed height leaves ground BELOW the widget, so the pointer
+        // can leave it (`MouseLeave` is synthesized by hit testing —
+        // dispatching one by hand is a no-op, by design).
+        .layout(LayoutStyle::default().height(Dimension::Cells(6)))
+        .element(cx, t)
+        .build()
+    });
+    let sel = sel_probe.borrow().unwrap();
+    let cell = |tree: &mut UiTree, y: i32| {
+        render(tree, size)
+            .cell(crate::base::Point::new(1, y))
+            .expect("row cell")
+    };
+    // Row 2 of the body (selection sits on row 0, out of the way).
+    let (_, cold, cold_bg) = cell(&mut tree, 3);
+    mouse(&mut tree, MouseKind::Move, 2, 3);
+    let (_, hot, hot_bg) = cell(&mut tree, 3);
+    assert_ne!(cold, hot, "the hovered row takes accent ink");
+    assert_eq!(cold_bg, hot_bg, "hover shifts INK only — bg unchanged");
+    assert_eq!(sel.get_untracked(), 0, "hover never selects");
+    // The header owns its own row, and the strip owns its column:
+    // neither lights a body row.
+    mouse(&mut tree, MouseKind::Move, 2, 0);
+    assert_eq!(cell(&mut tree, 3).1, cold, "header hover lights no row");
+    mouse(&mut tree, MouseKind::Move, size.w - 1, 3);
+    assert_eq!(cell(&mut tree, 3).1, cold, "strip hover lights no row");
+    // Leaving the widget cools it.
+    mouse(&mut tree, MouseKind::Move, 2, 3);
+    assert_eq!(cell(&mut tree, 3).1, hot);
+    mouse(&mut tree, MouseKind::Move, 2, 7); // off the widget entirely
+    assert_eq!(cell(&mut tree, 3).1, cold, "cools when the pointer leaves");
+}

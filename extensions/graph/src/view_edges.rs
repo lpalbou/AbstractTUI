@@ -133,17 +133,36 @@ pub(crate) fn plan_edges(desc: &GraphDesc, layout: &Layout) -> Vec<PlannedEdge> 
             if t.is_empty() {
                 return None;
             }
-            // Never overprint a card (cycle-3 attack item): the label
-            // run [mid.x+1, mid.x+width] on row mid.y must not cross
-            // any node rect — a label over a title is illegible both
-            // ways. Strokes are fine to cross (labels paint last).
+            // Never overprint a card (cycle-3 attack item): a label
+            // over a title is illegible both ways. Strokes are fine to
+            // cross (labels paint last).
+            //
+            // The run is CENTRED on the midpoint, not left-anchored
+            // from it. Left-anchoring cost a horizontal flow most of
+            // its labels: the run jutted downstream into the next card
+            // unless the corridor was twice the label wide, so
+            // `A -->|yes| B` in an LR diagram silently lost "yes".
+            // When the centred run still collides, nudge it along the
+            // edge before giving up.
             let w = abstracttui::text::width(&t);
-            let run = Rect::new(mid.x + 1, mid.y, w, 1);
-            let clear = layout
-                .nodes
-                .iter()
-                .all(|n| n.rect.intersect(run).is_empty());
-            clear.then_some((mid, t))
+            let fits = |x: i32, y: i32| {
+                let run = Rect::new(x, y, w, 1);
+                layout
+                    .nodes
+                    .iter()
+                    .all(|n| n.rect.intersect(run).is_empty())
+            };
+            let centred = mid.x - (w - 1) / 2;
+            for nudge in [0, -1, 1, -2, 2, -3, 3] {
+                for row in [mid.y, mid.y - 1, mid.y + 1] {
+                    if fits(centred + nudge, row) {
+                        // The anchor is the run's LEFT cell; the
+                        // painter adds no offset of its own.
+                        return Some((Point::new(centred + nudge, row), t));
+                    }
+                }
+            }
+            None
         });
 
         planned.push(PlannedEdge {
@@ -263,7 +282,7 @@ pub(crate) fn draw_edges<C: abstracttui::ui::StyledCanvas + ?Sized>(
         }
         if let Some((cell, text)) = &e.label {
             canvas.print(
-                Point::new(origin.x + cell.x + 1, origin.y + cell.y),
+                Point::new(origin.x + cell.x, origin.y + cell.y),
                 text,
                 label_ink,
                 Rgba::TRANSPARENT,

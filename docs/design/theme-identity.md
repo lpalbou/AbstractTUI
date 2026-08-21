@@ -366,7 +366,7 @@ Rules that make the table safe:
 | input | framed: `border` -> `border_focus` strokes, `text` on `surface`, placeholder `text_faint`, caret `cursor`, selected text = selection pair |
 | list / table | rows `text` on `surface`; selected row = selection pair (kept when unfocused — the owning pane's `border_focus` says where keys go); table header labels `text_muted` on `surface_raised` (sorted column may step to `text`) |
 | tabs | active `text` + `border_focus` strip drawn as cells (never SGR underline — survives 16-color); inactive `text_muted` |
-| scrollbar (list/scroll/table) | track `border`, thumb `text_muted`; no hover state required |
+| scrollbar (list/scroll/table/picker) | rail `border`, thumb `text_muted` (block elements: `▏` rail, `█` thumb); hover/drag shifts the thumb ink to `accent`, the §3.2 borderless-actionable rule — the strip is grabbable, so it answers the pointer |
 | chart | series = `chart[slot]` (slot in, color never); axes `border`, range labels `text_faint` |
 
 ## 4. Extension points (later cycles)

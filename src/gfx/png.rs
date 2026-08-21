@@ -26,7 +26,7 @@ pub const SIGNATURE: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
 pub const MAX_PIXELS: u64 = 1 << 24;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum ColorType {
+pub(crate) enum ColorType {
     Gray,      // 0
     Rgb,       // 2
     Palette,   // 3
@@ -57,14 +57,14 @@ impl ColorType {
     }
 }
 
-struct Ihdr {
-    w: u32,
-    h: u32,
-    color: ColorType,
+pub(crate) struct Ihdr {
+    pub(crate) w: u32,
+    pub(crate) h: u32,
+    pub(crate) color: ColorType,
 }
 
 /// Transparency info from tRNS, interpreted per color type.
-enum Trns {
+pub(crate) enum Trns {
     None,
     /// Palette alpha table (may be shorter than PLTE; rest opaque).
     PaletteAlpha(Vec<u8>),
@@ -181,7 +181,41 @@ pub fn decode(bytes: &[u8]) -> Result<Bitmap> {
     to_bitmap(&scanlines, &ihdr, palette.as_deref(), &trns)
 }
 
-fn parse_ihdr(data: &[u8]) -> Result<Ihdr> {
+/// Decode one APNG sub-frame: a zlib stream of `w` x `h` scanlines in
+/// the FILE's color type, with the file's palette and tRNS. The
+/// still path calls the same unfilter + pixel expansion, so an
+/// animated PNG and a plain one cannot drift apart.
+pub(crate) fn decode_subimage(
+    zlib: &[u8],
+    w: u32,
+    h: u32,
+    color: ColorType,
+    palette: Option<&[Rgba]>,
+    trns: &Trns,
+) -> Result<Bitmap> {
+    if w == 0 || h == 0 {
+        return Err(Error::Parse("png: zero frame dimension".into()));
+    }
+    if (w as u64) * (h as u64) > MAX_PIXELS {
+        return Err(Error::Parse(format!(
+            "png: {w}x{h} frame exceeds pixel budget"
+        )));
+    }
+    let bpp = color.bytes_per_pixel();
+    let expected = h as usize * (1 + w as usize * bpp);
+    let raw = miniz_oxide::inflate::decompress_to_vec_zlib_with_limit(zlib, expected)
+        .map_err(|e| Error::Parse(format!("png: frame inflate failed: {e:?}")))?;
+    if raw.len() != expected {
+        return Err(Error::Parse(format!(
+            "png: frame decompressed size {} != expected {expected}",
+            raw.len()
+        )));
+    }
+    let scan = unfilter(raw, w as usize, h as usize, bpp)?;
+    to_bitmap(&scan, &Ihdr { w, h, color }, palette, trns)
+}
+
+pub(crate) fn parse_ihdr(data: &[u8]) -> Result<Ihdr> {
     if data.len() != 13 {
         return Err(Error::Parse(format!(
             "png: IHDR length {} != 13",
@@ -225,7 +259,7 @@ fn parse_ihdr(data: &[u8]) -> Result<Ihdr> {
     Ok(Ihdr { w, h, color })
 }
 
-fn parse_trns(data: &[u8], color: ColorType) -> Result<Trns> {
+pub(crate) fn parse_trns(data: &[u8], color: ColorType) -> Result<Trns> {
     match color {
         ColorType::Palette => Ok(Trns::PaletteAlpha(data.to_vec())),
         // Colorkeys are stored as 16-bit samples even at depth 8; the

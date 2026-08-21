@@ -63,6 +63,16 @@ pub enum NodeShape {
     Diamond,
     /// `id([text])` — stadium.
     Stadium,
+    /// `id((text))` — circle.
+    Circle,
+    /// `id[[text]]` — subroutine.
+    Subroutine,
+    /// `id[(text)]` — cylinder (a database).
+    Cylinder,
+    /// `id{{text}}` — hexagon.
+    Hexagon,
+    /// `id>text]` — asymmetric flag.
+    Asymmetric,
 }
 
 /// One flowchart edge.
@@ -79,6 +89,12 @@ pub struct FlowEdge {
 }
 
 /// Edge arrow vocabulary (`#[non_exhaustive]`: v2 spellings grow it).
+///
+/// The BODY decides the kind (dashes, equals, dots); an arrowhead
+/// decides only whether the link is directed. Heads mermaid spells
+/// with `x` and `o`, and the bidirectional `<-->`, parse and render as
+/// a plain arrow with a notice — the cell vocabulary has no glyph for
+/// them, and a labeled downgrade beats a silent one.
 #[non_exhaustive]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum EdgeKind {
@@ -123,7 +139,7 @@ impl Participant {
     }
 }
 
-/// One sequence event (`#[non_exhaustive]`: v2 adds blocks).
+/// One sequence event (`#[non_exhaustive]`).
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SeqItem {
@@ -131,6 +147,110 @@ pub enum SeqItem {
     Message(Message),
     /// A note anchored to one or two participants.
     Note(Note),
+    /// A control-flow block (`alt`/`else`, `opt`, `loop`, `par`/`and`)
+    /// and everything inside it.
+    Block(Block),
+    /// A participant becomes active (`activate X`, or the `+` suffix
+    /// on a message that targets it).
+    Activate(String),
+    /// A participant stops being active (`deactivate X`, or the `-`
+    /// suffix on a message it sends).
+    Deactivate(String),
+}
+
+/// A control-flow block: its kind and its branches.
+///
+/// Blocks are a TREE, not a start/end token stream, because the
+/// balance is the invariant every consumer depends on. A parser can
+/// fail on `alt` without `end` exactly once, here; layout and
+/// rendering then recurse over something that cannot be malformed —
+/// no depth counter to get wrong, no unclosed block to discover at
+/// paint time.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Block {
+    /// Which control-flow construct this is.
+    pub kind: BlockKind,
+    /// The opening branch — `alt is lunchtime`, `loop every minute`.
+    ///
+    /// Split from [`Block::rest`] rather than held in one `Vec`
+    /// because "never empty" is the same kind of invariant as "blocks
+    /// are balanced": worth making unrepresentable, not worth
+    /// documenting and then papering over with `unwrap_or`.
+    pub first: Branch,
+    /// Further branches, one per `else` / `and` divider.
+    pub rest: Vec<Branch>,
+}
+
+impl Block {
+    /// Every branch in source order, opener first.
+    pub fn branches(&self) -> impl Iterator<Item = &Branch> {
+        std::iter::once(&self.first).chain(self.rest.iter())
+    }
+
+    /// The label shown in the frame's tab — what mermaid writes on the
+    /// opening line.
+    pub fn label(&self) -> &str {
+        &self.first.label
+    }
+}
+
+/// One branch of a [`Block`]: the text on its opening/divider line,
+/// and the items it contains.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Branch {
+    /// `alt is lunchtime` / `else not yet` / `and to Carl` — may be
+    /// empty when the source wrote none.
+    pub label: String,
+    /// Items in source order; blocks nest.
+    pub items: Vec<SeqItem>,
+}
+
+/// The control-flow constructs the subset draws
+/// (`#[non_exhaustive]`: more can join).
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum BlockKind {
+    /// `alt` — mutually exclusive branches, divided by `else`.
+    Alt,
+    /// `opt` — a single conditional branch.
+    Opt,
+    /// `loop` — a repeated branch.
+    Loop,
+    /// `par` — concurrent branches, divided by `and`.
+    Par,
+}
+
+impl BlockKind {
+    /// The keyword that opens this block — also the tab's prefix.
+    pub fn keyword(self) -> &'static str {
+        match self {
+            BlockKind::Alt => "alt",
+            BlockKind::Opt => "opt",
+            BlockKind::Loop => "loop",
+            BlockKind::Par => "par",
+        }
+    }
+
+    /// The keyword that divides this block's branches, when it has
+    /// one (`alt` -> `else`, `par` -> `and`).
+    pub fn divider(self) -> Option<&'static str> {
+        match self {
+            BlockKind::Alt => Some("else"),
+            BlockKind::Par => Some("and"),
+            BlockKind::Opt | BlockKind::Loop => None,
+        }
+    }
+
+    /// Parse an opening keyword.
+    pub fn from_keyword(word: &str) -> Option<BlockKind> {
+        match word {
+            "alt" => Some(BlockKind::Alt),
+            "opt" => Some(BlockKind::Opt),
+            "loop" => Some(BlockKind::Loop),
+            "par" => Some(BlockKind::Par),
+            _ => None,
+        }
+    }
 }
 
 /// One sequence message.

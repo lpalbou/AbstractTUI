@@ -1,7 +1,7 @@
 # AbstractTUI backlog — overview
 
 Planning memory for AbstractTUI (the Rust terminal-UI engine, published as
-`abstracttui` — 0.3.7 as of 2026-08-20). The engine itself is complete and
+`abstracttui` — 0.3.8 as of 2026-08-21). The engine itself is complete and
 shipped — content widgets (Feed/TextArea/MarkdownView + the doc vocabulary),
 app-shell chrome (PageHost, Drawer, ChoicePrompt, ThemeSwitcher), the
 live-data lane with connection lifecycle, key-state/PTT, attachments, the
@@ -33,8 +33,8 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | State | Count |
 | --- | --- |
 | Planned | 5 |
-| Proposed | 86 |
-| Completed | 69 |
+| Proposed | 84 |
+| Completed | 74 |
 | Deprecated | 0 |
 | Recurrent | 0 |
 
@@ -128,6 +128,11 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0110 | `md::StreamSession` (open-block-only re-parse, equivalence-pinned) | completed/app-widgets/ |
 | 0270 | Text selection + clipboard copy (all three tiers: bypass docs, mouse-capture suspend verb, screen-text selection + OSC 52) — completed 2026-07-22 | completed/first-app/ |
 | 0290 | UX footgun fixed: every selection copy ENDS the gesture (release-copy and mid-drag Enter/`c`/Ctrl+C clear the region with the copy) — post-copy keys reach the app immediately — completed 2026-07-22 | completed/first-app/ |
+| 0452 | Mermaid: the subset people actually write — edge chaining, infix labels, `&` cross products, the arrow vocabulary, ten node shapes, `subgraph` flattened with a named notice, and sequence control flow (`alt`/`else`/`opt`/`loop`/`par` frames + activation bars, depth-capped); plus ```mermaid fences rendered INSIDE markdown documents through the new core `widgets::FenceBlock` seam — completed 2026-08-21 | completed/extensions/ |
+| 0480 | Core seam `StyledCanvas::register_link` — a draw closure can mint the hyperlink id `Style::link` takes; defaults to `0`, so every existing canvas compiles unchanged — completed 2026-08-21 | completed/extensions/ |
+| 0455 | mermaid fallback live-link: an OSC-8 hyperlink where the terminal has one, a wrapped (never mid-URL ellipsis) URL where it does not — completed 2026-08-21 | completed/extensions/ |
+| 0490 | PNG screenshots — `Screenshot::to_png`/`to_bitmap`/`write_png`: engine-drawn pixels from an embedded 8x16 bitmap font, with box/block/braille/sextant glyphs drawn geometrically so strokes tile exactly; the faithful capture beside the embeddable SVG — completed 2026-08-21 | completed/control-plane/ |
+| 0667 | Animation — in-tree animated GIF + APNG decoding (`gfx::decode_animation`) and the `AnimatedImage` playback lane (one timer per frame, nothing between); video containers are recognized and refused by name with a conversion command, never decoded — completed 2026-08-21 | completed/media-av/ |
 | 0151 | Images draw at the terminal's own mosaic density — `widgets::Image` and markdown image blocks follow `MosaicMode::auto` (quadrants on a UTF-8 color terminal) instead of pinning half blocks; measured +3 dB PSNR on a photo pane — completed 2026-08-20 | completed/app-widgets/ |
 | 0149 | Progressive JPEG decode (`gfx::jpeg` reads SOF2 beside SOF0/SOF1, plus single-component scans, so multi-scan sequential files decode too); image previews of editor-default JPEGs show the picture instead of a labeled refusal — completed 2026-08-20 | completed/app-widgets/ |
 | 1255 | DrawerDock — right-edge rail of always-visible vertical tabs + docked side panel (one open, full collapse, reactive badges); the persistent sibling of app::drawer, layout-docked so content reflows — completed 2026-08-19 | completed/app-kits/ |
@@ -220,10 +225,8 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0410 | Feature-gate `three`/`jpeg`/`proto` (default-on trim; gltf_json promotion coordinated with 0320) | extensions | ADR-0004 landed; integrator Cargo.toml sign-off; batch with the 0.2/0.3 window (0170). |
 | 0430 | `abstracttui-graph`: interactive node-graph editor (cards/ports/edges/pan/drag/tooltips), staged M1-M3, keyboard-first | extensions | 0420 + 0440 landed (both DONE); a named dataflow-editor consumer remains the gate. |
 | 0445 | GraphView: force layouts open mostly off-view — first-render bbox centering / `.center()` (wave-12 §4) | extensions | Small; agreed by the code seat ("next wave"); bound offsets keep app ownership. |
-| 0455 | mermaid fallback live-link as an OSC-8 hyperlink — clipped URL must stay whole (wave-12 §3) | extensions | Small; agreed by the code seat ("next wave"); caps-off shape = wrap, never mid-URL ellipsis. |
 | 0460 | mdpad-class reader enablement: parity dashboard + four core-gap seeds (0142-0148 all SHIPPED; ADR-0005 folded the mdpad survey — table wrap + nesting now live in the 1200-band filings) | extensions | Reassess against ADR-0005's decision 4: the remaining scope may be discharged or superseded by the 1200-band items. |
 | 0470 | Web/HTML feasibility — verdict: full web NEVER; readable-subset slice gated on four criteria | extensions | All four criteria met — else the verdict stands. |
-| 0480 | Core seam: `StyledCanvas::register_link` (producer half of the link channel; OSC 8 works pre-0165) | extensions | Any canvas-link consumer (0430 M3, 0455's generalization) or 0165's scheduling; may merge into 0165. |
 | 0510 | Form kit: field rows, form state signals, validation, submit gating — `TextInput::masked` SHIPPED | app-kits | 0520 or a second settings form; field-gateway 0930/0935/0990 are its live evidence. |
 | 0520 | Wizard flow: multi-step container on the form kit; crash-resume via 0340 (its first consumer) | app-kits | 0510 landing; field-gateway 0920/1010 are its live evidence. |
 | 0530 | Table upgrades: rich cells, badges, row actions, activation event, row identity | app-kits | Admin-console validator scheduling; field-gateway 0900/0970/0980 are its live evidence; builds ON 0535's activation. |

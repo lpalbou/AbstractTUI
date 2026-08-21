@@ -146,6 +146,8 @@ pub(crate) fn draw_rows(
     content: &RowsContent,
     p: &PickerPalette,
     show_sizes: bool,
+    bar_hot: bool,
+    hover_row: Option<usize>,
 ) {
     if rect.is_empty() {
         return;
@@ -183,15 +185,30 @@ pub(crate) fn draw_rows(
                 }
                 let entry = &entries[filtered[row as usize]];
                 let selected = row as usize == *sel;
+                let hot = hover_row == Some(row as usize);
                 let y = rect.y + vis;
                 let (name_fg, aux_fg, glyph_fg, mark_fg, bg) = if selected {
                     // Whole-row selection pair; auxiliary inks fold
                     // into sel_fg for readability on sel_bg.
                     (p.sel_fg, p.sel_fg, p.sel_fg, p.sel_fg, p.sel_bg)
+                } else if hot {
+                    // Hover shifts ink to `accent`, bg unchanged (§3.2).
+                    // A DIRECTORY already wears accent, so hover also
+                    // carries BOLD — otherwise the one row kind users
+                    // aim at most would answer the pointer with nothing.
+                    (p.accent, p.accent, p.accent, p.mark, p.ground)
                 } else {
                     let name = if entry.is_dir { p.accent } else { p.text };
                     let glyph = if entry.is_dir { p.accent } else { p.muted };
                     (name, p.muted, glyph, p.mark, p.ground)
+                };
+                let ink = |fg| {
+                    let st = Style::new().fg(fg).bg(bg);
+                    if hot && !selected {
+                        st.attrs(crate::render::Attrs::BOLD)
+                    } else {
+                        st
+                    }
                 };
                 if selected {
                     canvas.fill_styled(
@@ -205,11 +222,11 @@ pub(crate) fn draw_rows(
                     // Mark column exists only in multi-select (the
                     // widget passes an empty vec otherwise).
                     let glyph = if is_marked { "●" } else { " " };
-                    canvas.print_styled(Point::new(x, y), glyph, &Style::new().fg(mark_fg).bg(bg));
+                    canvas.print_styled(Point::new(x, y), glyph, &ink(mark_fg));
                     x += 2;
                 }
                 let kind = if entry.is_dir { "▸" } else { "·" };
-                canvas.print_styled(Point::new(x, y), kind, &Style::new().fg(glyph_fg).bg(bg));
+                canvas.print_styled(Point::new(x, y), kind, &ink(glyph_fg));
                 x += 2;
                 // Size column (files only, opt-in): right-aligned,
                 // one gap cell from the name.
@@ -222,18 +239,19 @@ pub(crate) fn draw_rows(
                             canvas.print_styled(
                                 Point::new(rect.x + text_w - sw, y),
                                 &s,
-                                &Style::new().fg(aux_fg).bg(bg),
+                                &ink(aux_fg),
                             );
                             name_w -= sw + 1;
                         }
                     }
                 }
                 let shown = crate::text::truncate_ellipsis(&entry.name, name_w);
-                canvas.print_styled(Point::new(x, y), &shown, &Style::new().fg(name_fg).bg(bg));
+                canvas.print_styled(Point::new(x, y), &shown, &ink(name_fg));
             }
             if show_bar {
-                crate::widgets::list::draw_scrollbar(
-                    canvas, rect, first, total, p.track, p.thumb, p.ground,
+                let bar = crate::widgets::scrollbar::metrics(rect, 1, first, total);
+                crate::widgets::scrollbar::draw(
+                    canvas, &bar, bar_hot, p.track, p.thumb, p.accent, p.ground,
                 );
             }
         }

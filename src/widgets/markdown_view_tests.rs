@@ -164,3 +164,117 @@ fn wrapping_and_tiny_rects_never_panic() {
         let _ = draw_into(MarkdownView::new(DOC).element(&t), size);
     }
 }
+
+// ---------------------------------------------------------------------------
+// FenceBlock: a fenced block claimed by a sibling crate renders INSIDE
+// the document — one scroll surface, one outline, one search index.
+// ---------------------------------------------------------------------------
+
+/// A stand-in for a diagram renderer: claims ```box and draws a frame
+/// with the source's first line inside it.
+struct BoxFence;
+
+impl crate::widgets::FenceBlock for BoxFence {
+    fn measure(&self, lang: &str, _source: &str, _width: i32) -> Option<i32> {
+        (lang == "box").then_some(3)
+    }
+
+    fn draw_row(
+        &self,
+        _lang: &str,
+        source: &str,
+        row: i32,
+        at: crate::base::Point,
+        width: i32,
+        t: &crate::theme::TokenSet,
+        canvas: &mut dyn crate::ui::StyledCanvas,
+    ) {
+        let w = width.max(2) as usize;
+        let text = match row {
+            0 => format!("┌{}┐", "─".repeat(w - 2)),
+            1 => {
+                let body: String = source
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .chars()
+                    .take(w - 2)
+                    .collect();
+                format!("│{body:<0$}│", w - 2)
+            }
+            _ => format!("└{}┘", "─".repeat(w - 2)),
+        };
+        canvas.print(at, &text, t.text, Rgba::TRANSPARENT);
+    }
+}
+
+#[test]
+fn a_claimed_fence_renders_in_place_of_its_code() {
+    let src = "# Title\n\n```box\ndiagram here\n```\n\nafter";
+    let canvas = draw_into(
+        MarkdownView::new(src)
+            .fence_block(std::rc::Rc::new(BoxFence))
+            .element(&default_theme().tokens),
+        Size::new(24, 12),
+    );
+    let screen: Vec<String> = (0..12).map(|y| canvas.row_text(y)).collect();
+    let joined = screen.join("\n");
+    assert!(joined.contains("┌"), "the block drew its frame:\n{joined}");
+    assert!(
+        joined.contains("diagram here"),
+        "the block drew its content:\n{joined}"
+    );
+    assert!(
+        !joined.contains("```"),
+        "the fence markers never reach the screen:\n{joined}"
+    );
+    // The document continues after it, in the same surface.
+    assert!(joined.contains("after"), "{joined}");
+    assert!(joined.contains("Title"), "{joined}");
+}
+
+#[test]
+fn a_declined_fence_still_renders_as_code() {
+    let src = "```rust\nlet x = 1;\n```";
+    let canvas = draw_into(
+        MarkdownView::new(src)
+            .fence_block(std::rc::Rc::new(BoxFence))
+            .element(&default_theme().tokens),
+        Size::new(30, 6),
+    );
+    let joined: String = (0..6)
+        .map(|y| canvas.row_text(y))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        joined.contains("let x = 1;"),
+        "code is untouched:\n{joined}"
+    );
+    assert!(!joined.contains("┌"), "the claimant declined:\n{joined}");
+}
+
+/// Claimed rows are ROWS: they scroll, and the document's row count
+/// includes them, so `Scroll` and the outline stay correct.
+#[test]
+fn claimed_rows_participate_in_scrolling_and_measurement() {
+    let src = "```box\nd\n```\n\ntail";
+    let t = crate::theme::default_theme().tokens;
+    let plain = MarkdownView::rows(src, &t, 24);
+    // 3 rows for the block instead of the fence's own code rows.
+    let with_block = super::doc::layout_doc_with(src, &t, 24, Some(std::rc::Rc::new(BoxFence)))
+        .rows
+        .len();
+    assert_ne!(plain, with_block, "the block changes the row count");
+    let canvas = draw_into(
+        MarkdownView::new(src)
+            .fence_block(std::rc::Rc::new(BoxFence))
+            .scroll_offset(1)
+            .element(&default_theme().tokens),
+        Size::new(24, 3),
+    );
+    assert!(
+        canvas.row_text(0).contains("│"),
+        "scrolled INTO the block: {:?}",
+        canvas.row_text(0)
+    );
+}

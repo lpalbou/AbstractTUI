@@ -13,10 +13,13 @@
 //! I/O, no escape emission. Protocol emitters (cycle 2) will produce
 //! byte buffers that the render/present layer owns writing out.
 
+pub mod anim;
+pub mod apng;
 pub mod base64;
 pub mod bitmap;
 pub mod decode;
 pub mod dither;
+pub mod gif;
 pub mod jpeg;
 mod jpeg_dsp;
 mod jpeg_entropy;
@@ -31,12 +34,15 @@ pub mod quantize;
 pub mod session;
 
 #[cfg(test)]
+pub(crate) mod anim_fixtures;
+#[cfg(test)]
 mod jpeg_fixtures;
 #[cfg(test)]
 mod mosaic_quality_tests;
 #[cfg(test)]
 mod png_test_encoder;
 
+pub use anim::{decode_animation, sniff_animation, Animation, AnimationFormat, Frame};
 pub use bitmap::Bitmap;
 pub use decode::{decode_image, sniff_format, ImageFormat};
 pub use mosaic::{

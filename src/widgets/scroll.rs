@@ -59,7 +59,13 @@
 //! Wheel scrolls vertically (horizontal wheel scrolls x); arrows/PgUp/
 //! PgDn/Home/End work while focused; the scrollbar thumb drags with
 //! pointer capture (mouse-down auto-captures, so drags keep steering the
-//! thumb after the pointer leaves it).
+//! thumb after the pointer leaves it). The strip's geometry, hit test
+//! and pointer→offset inverse are the shared seam
+//! (`widgets::scrollbar`, private) every scrolling widget
+//! uses, so a press takes hold of the thumb where it was drawn instead
+//! of jumping the content out from under it, and
+//! [`scrollbar_width`](Scroll::scrollbar_width) widens the gutter for
+//! apps with room for a bigger mouse target.
 //!
 //! [`Feed`]: super::Feed
 //!
@@ -76,7 +82,7 @@ use crate::ui::{
     dyn_view, Element, EventCtx, Key, MouseButton, MouseKind, Phase, StyledCanvas, UiEvent, View,
 };
 
-use super::list::draw_scrollbar;
+use super::scrollbar;
 
 // ---------------------------------------------------------------------------
 // Follow-tail freeze (first-app/1300)
@@ -130,7 +136,8 @@ pub fn follow_tail_frozen() -> bool {
 }
 
 /// A clipped viewport over oversized mounted content: wheel, arrows,
-/// PgUp/PgDn, drag-able scrollbars, and the transcript idiom
+/// PgUp/PgDn, a drag-able vertical scrollbar (the horizontal axis
+/// scrolls by wheel and keys — it draws no bar), and the transcript idiom
 /// [`follow_tail`](Scroll::follow_tail) (pin to the bottom until the
 /// user scrolls up; re-arm by reaching it again or setting the signal).
 ///
@@ -153,6 +160,7 @@ pub struct Scroll {
     /// Mirror of the viewport's solved size (cells); optional app tap.
     viewport_out: Option<Signal<(i32, i32)>>,
     scrollbar_auto_hide: bool,
+    scrollbar_width: i32,
     layout: Option<LayoutStyle>,
 }
 
@@ -169,6 +177,7 @@ impl Scroll {
             extent_out: None,
             viewport_out: None,
             scrollbar_auto_hide: false,
+            scrollbar_width: 1,
             layout: None,
         }
     }
@@ -244,6 +253,17 @@ impl Scroll {
         self
     }
 
+    /// Width of the vertical scrollbar's column, in cells (default 1,
+    /// clamped to 1..=4). The strip is a RESERVED gutter — widening it
+    /// takes the cells from the content, so a pane that measures its own
+    /// text against the viewport width must widen with it. Two cells is
+    /// the comfortable mouse target on a dense screen; one is the
+    /// terminal-native default that costs content nothing.
+    pub fn scrollbar_width(mut self, cells: i32) -> Scroll {
+        self.scrollbar_width = cells.clamp(1, 4);
+        self
+    }
+
     pub fn layout(mut self, layout: LayoutStyle) -> Scroll {
         self.layout = Some(layout);
         self
@@ -262,6 +282,10 @@ impl Scroll {
     pub fn element(self, cx: Scope, t: &TokenSet) -> Element {
         let track = t.border;
         let thumb = t.text_muted;
+        // The hot ink: what the thumb wears while the pointer is on the
+        // strip or a drag is live — the same accent `List` lights its
+        // own strip with.
+        let hot_ink = t.accent;
         let ground = t.surface;
 
         let hint = self.content_size;
@@ -548,46 +572,112 @@ impl Scroll {
         };
 
         // Scrollbar: its own Dyn column so offset/extent changes damage
-        // exactly this strip; drag maps pointer y to offset with capture
-        // keeping the drag alive outside the strip. Under
-        // `scrollbar_auto_hide`, a fitting content hides the bar: the
-        // strip paints bare ground (deterministic pixels — skipping the
-        // draw would leave the previous frame's glyphs in a damaged
+        // exactly this strip. Geometry, hit test and the pointer->offset
+        // inverse all come from the shared seam (`widgets::scrollbar`),
+        // so what the drag computes is what the paint drew — the thumb
+        // stays under the cursor for the whole gesture.
+        //
+        // The gesture is stateful on purpose: `Down` REMEMBERS where
+        // inside the thumb the pointer grabbed and moves nothing; only
+        // `Drag` scrolls, and only while that grab is live. A bare
+        // `Drag` with no grab (the driver drops a tree's capture when a
+        // press becomes a screen-text selection, and terminals emit
+        // motion-with-button after a lost `Up`) is somebody else's
+        // gesture and must never teleport the offset.
+        //
+        // Under `scrollbar_auto_hide`, a fitting content hides the bar:
+        // the strip paints bare ground (deterministic pixels — skipping
+        // the draw would leave the previous frame's glyphs in a damaged
         // region) and ignores drags (an invisible target must never
         // steer the offset).
         let auto_hide = self.scrollbar_auto_hide;
+        let bar_w = self.scrollbar_width.clamp(1, 4);
+        // Grab state (rows below the thumb's top edge): a plain cell, so
+        // taking hold of the thumb re-renders nothing. Hover IS a signal
+        // — the strip has to repaint to show its hot ink, and only a
+        // tracked read damages it (the `List` hover pattern).
+        let grab: Rc<Cell<Option<i32>>> = Rc::new(Cell::new(None));
+        let hot: Signal<bool> = cx.signal(false);
+        let grab_h = grab.clone();
         let bar = dyn_view(
             LayoutStyle::default()
-                .width(Dimension::Cells(1))
+                .width(Dimension::Cells(bar_w))
                 .height(Dimension::Percent(1.0)),
             move || {
                 let offset = oy.get();
                 let content_h = extent.get().1; // tracked: thumb resizes with growth
+                let is_hot = hot.get(); // tracked: hot ink repaints the strip
+                let grab = grab_h.clone();
                 Element::new()
                     .style(
                         LayoutStyle::default()
-                            .width(Dimension::Cells(1))
+                            .width(Dimension::Cells(bar_w))
                             .height(Dimension::Percent(1.0)),
                     )
                     .on(Phase::Bubble, move |ctx: &mut EventCtx, ev: &UiEvent| {
-                        if let UiEvent::Mouse(m) = ev {
-                            let grabbed = matches!(
-                                m.kind,
-                                MouseKind::Down(MouseButton::Left)
-                                    | MouseKind::Drag(MouseButton::Left)
-                            );
-                            if grabbed {
-                                let bar = ctx.current_rect();
-                                if auto_hide && content_h <= bar.h {
-                                    return; // hidden bar: inert strip
+                        // Hover is the affordance that answers "can I
+                        // grab this?" before the user has to guess. It
+                        // rides `MouseEnter`/`MouseLeave`, so it lights
+                        // only where the app opted into hover motion
+                        // (`RunConfig::hover_ink`); a live drag lights it
+                        // everywhere, since drag motion always reports.
+                        match ev {
+                            UiEvent::MouseEnter => {
+                                hot.set_if_changed(true);
+                                return;
+                            }
+                            UiEvent::MouseLeave => {
+                                // A live drag keeps the ink: the pointer
+                                // leaves the strip constantly mid-drag.
+                                if grab.get().is_none() {
+                                    hot.set_if_changed(false);
                                 }
-                                let usable = (bar.h - 1).max(1);
-                                let frac = (m.pos.y - bar.y).clamp(0, usable);
-                                let max_off = (content_h - bar.h).max(0);
-                                oy.set((frac * max_off) / usable);
-                                derive_follow(bar.h);
+                                return;
+                            }
+                            _ => {}
+                        }
+                        let UiEvent::Mouse(m) = ev else { return };
+                        if matches!(m.kind, MouseKind::Up(MouseButton::Left)) {
+                            grab.set(None);
+                            if !ctx.current_rect().contains(m.pos) {
+                                hot.set_if_changed(false); // released off-strip
+                            }
+                            return;
+                        }
+                        let strip = ctx.current_rect();
+                        if auto_hide && content_h <= strip.h {
+                            return; // hidden bar: inert strip
+                        }
+                        let bar = scrollbar::metrics(strip, strip.w, offset, content_h);
+                        if !bar.overflows() {
+                            return; // nothing to steer
+                        }
+                        match m.kind {
+                            MouseKind::Down(MouseButton::Left) => {
+                                let Some(zone) = scrollbar::hit(&bar, m.pos) else {
+                                    return;
+                                };
+                                let dy = scrollbar::grab_for(&bar, zone);
+                                grab.set(Some(dy));
+                                hot.set_if_changed(true);
+                                // A press ON the thumb moves nothing —
+                                // it only takes hold. Bare track is the
+                                // teleport (thumb centers on the
+                                // pointer) the macOS convention ships.
+                                if matches!(zone, scrollbar::Zone::Track) {
+                                    oy.set(scrollbar::offset_at(&bar, m.pos.y, dy));
+                                    derive_follow(strip.h);
+                                }
                                 ctx.stop_propagation();
                             }
+                            MouseKind::Drag(MouseButton::Left) => {
+                                // Only OUR gesture scrolls (see above).
+                                let Some(dy) = grab.get() else { return };
+                                oy.set(scrollbar::offset_at(&bar, m.pos.y, dy));
+                                derive_follow(strip.h);
+                                ctx.stop_propagation();
+                            }
+                            _ => {}
                         }
                     })
                     .draw(move |canvas, rect| {
@@ -599,7 +689,8 @@ impl Scroll {
                             canvas.fill_styled(rect, ' ', &blank);
                             return;
                         }
-                        draw_scrollbar(canvas, rect, offset, content_h, track, thumb, ground);
+                        let bar = scrollbar::metrics(rect, rect.w, offset, content_h);
+                        scrollbar::draw(canvas, &bar, is_hot, track, thumb, hot_ink, ground);
                     })
                     .build()
             },

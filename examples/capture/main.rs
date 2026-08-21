@@ -443,20 +443,31 @@ fn example_bin_dir() -> PathBuf {
 
 // ------------------------------------------------------------- artifacts
 
-/// Write all three views of a screen — plain text, styled dump, and the
-/// GitHub-renderable SVG (`VtScreen::screenshot().to_svg()`, the
-/// control-plane/0370 exporter) — returns the relative artifact names.
+/// Write every view of a screen — plain text, styled dump, the
+/// pixel-exact PNG, and the GitHub-renderable SVG — returning the
+/// relative artifact names.
+///
+/// The PNG is the FAITHFUL one: every pixel is decided by the engine
+/// (embedded bitmap glyphs, geometrically drawn box/block/braille
+/// strokes), so it looks the same everywhere. The SVG is the
+/// EMBEDDABLE one: GitHub renders it inline in a README, at the cost
+/// of depending on whatever monospace font the viewer resolves.
 fn write_shot(out: &Path, name: &str, screen: &VtScreen) -> Vec<String> {
     let text_path = out.join(format!("{name}.txt"));
     let styled_path = out.join(format!("{name}.styled.txt"));
+    let png_path = out.join(format!("{name}.png"));
     let svg_path = out.join(format!("{name}.svg"));
     fs::write(&text_path, screen.to_text()).expect("write text capture");
     fs::write(&styled_path, screen.to_styled_dump()).expect("write styled capture");
-    screen
-        .screenshot()
-        .write_svg(&svg_path)
-        .expect("write svg capture");
-    vec![rel(&text_path), rel(&styled_path), rel(&svg_path)]
+    let shot = screen.screenshot();
+    shot.write_png(&png_path).expect("write png capture");
+    shot.write_svg(&svg_path).expect("write svg capture");
+    vec![
+        rel(&text_path),
+        rel(&styled_path),
+        rel(&png_path),
+        rel(&svg_path),
+    ]
 }
 
 fn rel(p: &Path) -> String {

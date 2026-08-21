@@ -8,7 +8,7 @@
 //! consumer.
 
 use abstracttui::text::width;
-use abstracttui_graph::{EdgeDesc, GraphDesc, LayeredOpts, NodeDesc};
+use abstracttui_graph::{Direction, EdgeDesc, GraphDesc, LayeredOpts, NodeDesc};
 
 use crate::ir::{EdgeKind, FlowchartIr, NodeShape};
 
@@ -44,8 +44,33 @@ pub fn to_graph(fc: &FlowchartIr) -> (GraphDesc, LayeredOpts) {
         }
         desc = desc.with_edge(ed);
     }
+    // Edge labels live in the corridor BETWEEN ranks. In a horizontal
+    // flow that corridor is the rank gap itself, so a default gap of 2
+    // leaves nowhere for `-->|label|` to sit and the label gets
+    // suppressed to avoid overprinting a card. Size the gap from the
+    // widest label the diagram actually carries.
+    let widest = fc
+        .edges
+        .iter()
+        .filter_map(|e| e.label.as_deref())
+        .map(|l| (width(l) as i32).min(NODE_W_MAX))
+        .max()
+        .unwrap_or(0);
+    let horizontal = matches!(fc.direction, Direction::LeftRight | Direction::RightLeft);
+    let rank_gap = if widest == 0 {
+        2
+    } else if horizontal {
+        // The label sits in the gap, so the gap must hold it whole,
+        // plus a cell of air on each side.
+        (widest + 2).clamp(3, NODE_W_MAX)
+    } else {
+        // Vertically the label sits beside the stroke and only needs
+        // its own row.
+        3
+    };
     let opts = LayeredOpts {
         direction: fc.direction,
+        rank_gap,
         ..Default::default()
     };
     (desc, opts)
@@ -62,6 +87,11 @@ pub fn shape_kind(shape: NodeShape) -> Option<&'static str> {
         NodeShape::Rounded => Some("rounded"),
         NodeShape::Diamond => Some("decision"),
         NodeShape::Stadium => Some("stadium"),
+        NodeShape::Circle => Some("rounded"),
+        NodeShape::Subroutine => Some("stadium"),
+        NodeShape::Cylinder => Some("stadium"),
+        NodeShape::Hexagon => Some("decision"),
+        NodeShape::Asymmetric => Some("decision"),
     }
 }
 
@@ -74,6 +104,16 @@ pub fn shape_badge(shape: NodeShape) -> Option<&'static str> {
         NodeShape::Rounded => Some("○"),
         NodeShape::Diamond => Some("◆"),
         NodeShape::Stadium => Some("◎"),
+        // Cards stay cards; the shape arrives as a sigil (the same
+        // cell-honest mapping the four v1 shapes use). Sigils are
+        // chosen from what a real monospace font carries: the obvious
+        // picks (⛁ for a database, ⬡ for a hexagon) are missing from
+        // DejaVu Sans Mono, which means a terminal would show tofu.
+        NodeShape::Circle => Some("●"),
+        NodeShape::Subroutine => Some("▤"),
+        NodeShape::Cylinder => Some("⌸"),
+        NodeShape::Hexagon => Some("◈"),
+        NodeShape::Asymmetric => Some("▷"),
     }
 }
 

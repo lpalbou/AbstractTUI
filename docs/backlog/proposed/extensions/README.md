@@ -43,10 +43,8 @@ Two ideas structure the track:
 | 0440 | Read-only auto-layout graph view (layered v1; designed force v1.5; `GraphDesc -> Layout` contract) | needs-design | 0400, 0420 |
 | 0445 | GraphView: force layouts open mostly off-view — first-render bbox centering / `.center()` (wave-12 pixel review §4) | v1-able (small) | 0440 (shipped) |
 | 0450 | `abstracttui-mermaid`: honest-subset diagram rendering (spelling-exact table, atomic fallback) | needs-design | 0400, 0420, 0440 |
-| 0455 | mermaid fallback live-link as OSC-8 hyperlink (clipped URL is dead text today — wave-12 pixel review §3) | v1-able (small) | 0450 (shipped) |
 | 0460 | mdpad-class markdown reader enablement (core gap list) | v1-able per gap | 0160/0165 (band 0100), 0450 |
 | 0470 | Web/HTML readable-subset renderer: feasibility verdict | research (verdict recorded) | 0400, 0460 |
-| 0480 | Link registration from draw closures (`StyledCanvas::register_link`) — CORE seam, producer half of 0165's channel | v1-able (small, additive) | none (0165 is the consumer half, either lands first) |
 
 ## Sequencing
 - **0400 first** — it is a decision, not a build; every other item
@@ -171,3 +169,20 @@ Recorded here so no item re-litigates them; 0400 carries the rationale.
   hyperlink; never mid-URL ellipsis) — evidence in
   `reviews/wave12/visual-to-code-handoff.md` §3/§4, both sized "small,
   next wave" by the code seat.
+- **2026-08-21 (mermaid subset wave)**: **0455, 0480 and 0452 COMPLETED**,
+  the last two engine-code items of this track among them. 0480 shipped
+  as `StyledCanvas::register_link` (defaulted, additive) and 0455
+  immediately consumed it — the mermaid.live URL is an OSC-8 hyperlink
+  where the terminal has one and WRAPS where it does not, so a mouse
+  selection can always take the whole thing. 0452 (filed and closed in
+  the same wave, report in
+  `docs/backlog/completed/extensions/0452_mermaid_subset_and_document_fences.md`)
+  widened 0450's accepted subset to what people actually write — edge
+  chaining, infix labels, `&` groups, the full arrow vocabulary, ten node
+  shapes, flattened `subgraph` with a named notice, and sequence control
+  flow (`alt`/`else`/`opt`/`loop`/`par` + activations, depth-capped at
+  64) — and answered a piece of 0460 early: a ```mermaid fence now
+  renders as a DIAGRAM inside a `MarkdownView`, through a new core seam
+  (`widgets::FenceBlock`) that any fence claimant can use. Remaining in
+  this band: 0430 (editor), 0445 (GraphView centering), 0460's residue,
+  0470 (standing verdict).

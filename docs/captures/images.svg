@@ -610,18 +610,18 @@
 <rect x="0" y="504" width="900" height="18" fill="#1a1a2e"/>
 <rect x="0" y="522" width="900" height="18" fill="#1a1a2e"/>
 </g>
-<text x="0" y="32" textLength="900" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> images — procedural test card (160x96 px)                                                          </text>
+<text x="0" y="32" textLength="900" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> images — procedural test card (160x96 px)                                                          </text>
 <text x="9" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">┌</text>
-<text x="18" y="68" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> halfblock 1x2 </text>
+<text x="18" y="68" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> halfblock 1x2 </text>
 <text x="153" y="68" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">───────┐</text>
 <text x="234" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">┌</text>
-<text x="243" y="68" textLength="126" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> quadrant 2x2 </text>
+<text x="243" y="68" textLength="126" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> quadrant 2x2 </text>
 <text x="369" y="68" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">────────┐</text>
 <text x="459" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">┌</text>
-<text x="468" y="68" textLength="117" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> sextant 2x3 </text>
+<text x="468" y="68" textLength="117" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> sextant 2x3 </text>
 <text x="585" y="68" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">─────────┐</text>
 <text x="684" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">┌</text>
-<text x="693" y="68" textLength="117" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> braille 2x4 </text>
+<text x="693" y="68" textLength="117" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> braille 2x4 </text>
 <text x="810" y="68" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">────────┐</text>
 <text x="9" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="216" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
@@ -1149,6 +1149,6 @@
 <text x="234" y="464" textLength="216" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">└──────────────────────┘</text>
 <text x="459" y="464" textLength="216" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">└──────────────────────┘</text>
 <text x="684" y="464" textLength="207" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">└─────────────────────┘</text>
-<text x="0" y="500" textLength="900" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> dither: off (truecolor)    protocol: off — would use mosaic                                        </text>
-<text x="0" y="518" textLength="900" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> d dither · p protocol · t theme · q quit                                                           </text>
+<text x="0" y="500" textLength="900" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> dither: off (truecolor)    protocol: off — would use mosaic                                        </text>
+<text x="0" y="518" textLength="900" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> d dither · p protocol · t theme · q quit                                                           </text>
 </svg>

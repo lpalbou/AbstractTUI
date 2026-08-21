@@ -13,9 +13,12 @@
 > 26 built-in themes over 36
 > contrast-audited semantic design tokens with a drop-in theme-switcher control
 > (grouped dark/light menu with live preview, or a one-click mode toggle that
-> remembers the theme per mode), PNG/JPEG images (baseline and progressive)
-> drawn through the best channel the terminal proves
-> (kitty graphics, iTerm2, sixel, or unicode mosaic),
+> remembers the theme per mode), PNG/JPEG/GIF images (baseline and progressive
+> JPEG) drawn through the best channel the terminal proves
+> (kitty graphics, iTerm2, sixel, or unicode mosaic), animated GIF/APNG
+> played in the cell grid (video is refused by name, never decoded),
+> mermaid diagrams rendered INSIDE markdown documents (flowcharts,
+> sequence diagrams with control-flow frames, flattened subgraphs),
 > software-rasterized 3D from GLB files (textures, animation, skinning — no GPU),
 > cell-shader animation with tweens, easings, and timelines, streaming transcripts
 > (`Feed` + follow-tail scroll that pauses during a screen-text selection + a multiline composer
@@ -59,10 +62,15 @@
   layer (capabilities, kitty keyboard, tmux, restore), the 3D pipeline, platform posture.
 - [API guide](docs/api.md): The public surface, module by module — prelude, reactive
   (plus the `reactive::connection` lifecycle with jittered-backoff reconnect), ui
-  (including double-click synthesis: `click_count()`, the ambient event-time rule, and
+  (including the focus rule — keys go to the focused node, a root tree focuses
+  nothing at boot, `.autofocus()` or `focus_first` claims the caret, and modal
+  overlays establish their own initial focus — plus double-click synthesis:
+  `click_count()`, the ambient event-time rule, and
   the single-click-selects / double-click-activates convention), layout (with the
   small-terminals & content-pressure guarantees and recipes),
-  the widget catalog (`List` and `Table` selection-vs-activation, `List` removable
+  the widget catalog (the shared scrollbar — grab the thumb, drag it row for row,
+  teleport from bare track, `Scroll::scrollbar_width` for the gutter;
+  `List` and `Table` selection-vs-activation, `List` removable
   rows (`on_remove`), row accessories, hover ink, bindable `selection`/`offset_y`
   and `on_row_double_click`, masked `TextInput`, Codex-compatible word/line navigation
   and word-delete chords in both text widgets, and `scroll::freeze_follow_tail` for
@@ -119,14 +127,17 @@
 - [FAQ](docs/faq.md): Real questions — design rationale, an honest architectural
   comparison with ratatui/Textual/Bubble Tea/notcurses/Ink (update models, media,
   testing, maturity limits), SSH, which terminals support
-  images, which image formats decode, wide-character widths, headless testing,
+  images, which image formats decode (stills and animations),
+  why an app does not start with the caret in its input box,
+  wide-character widths, headless testing,
   screenshots, letting users switch themes (`ThemeSwitcher`), `click_count()`
   and scrollable rich lists, attaching files dropped onto the terminal,
   embedding in an existing event loop,
   the near-zero dependency policy, theme readability, `NO_COLOR`/dumb terminals, Windows
   status, crate size, shareable components, damage debugging, and the clipboard policy.
 - [Troubleshooting](docs/troubleshooting.md): Symptom → cause → fix — nothing renders,
-  dead keyboard, images falling back to mosaic, images that reject by name,
+  dead keyboard, typing that lands nowhere until you Tab or click into the field,
+  images falling back to mosaic, images that reject by name,
   washed-out colors, flicker/tearing,
   Ctrl+Enter behaving like Enter, the splash not playing, slow frames, wide-character
   misalignment, rows vanishing on small terminals, an input panel that is a row short
@@ -138,7 +149,7 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, **0.3.7** (2026-08-20) the current one.
+  (2026-07-21) is the first public release, **0.3.8** (2026-08-21) the current one.
   The extension family is at `abstracttui-graph` 0.2.0 and
   `abstracttui-mermaid` 0.2.0, each with its own changelog under `extensions/`.
 - [Contributing](CONTRIBUTING.md): Building, the test suite (~2,120 core tests; ~2,245
@@ -162,13 +173,13 @@
 - [src/lib.rs](src/lib.rs): Crate root with the layer map — `base`, `term`, `input`,
   `render`, `text`, `anim`, `reactive`, `layout`, `ui`, `canvas`, `widgets`, `gfx`,
   `three`, `theme`, `app`, `boot`, `testing`.
-- [examples/](examples/README.md): The catalog of the twenty-six runnable examples,
+- [examples/](examples/README.md): The catalog of the 31 runnable examples,
   ordered as a learning path —
   `hello`,
   `widgets`, `components`, `gallery`, `themes`, `grid`, `activate`, `presence_board`,
-  `decide`, `feed`,
+  `scrollbar`, `decide`, `feed`,
   `transcript`, `attachments`, `reader`, `voice_mock`, `shell`, `drawers`, `dashboard`,
-  `images`,
+  `images`, `animation`,
   `effects`, `splash`, `viewer3d`,
   `screenshot`, `caps`, `capture` — plus the extension-crate examples
   (`workflow`/`network` in `extensions/graph`, `mermaid` in `extensions/mermaid`); each
@@ -181,7 +192,9 @@
   code, scrolled feed, doc-vocabulary reader table), plus `themes-table.md` — every token
   hex value of all 26 themes; regenerable with `cargo run --example capture`.
 - [extensions/](extensions/README.md): The sibling-crate family workspace —
-  `extensions/graph/` (`abstracttui-graph`: layout passes + `GraphView`, examples
-  `workflow`/`network`) and `extensions/mermaid/` (`abstracttui-mermaid`: subset parser,
-  compiler, sequence renderer, a 30-fixture corpus, example `mermaid`); each crate
-  carries its own README and CHANGELOG.
+  `extensions/graph/` (`abstracttui-graph`: layout passes + `GraphView`) and
+  `extensions/mermaid/` (`abstracttui-mermaid`: subset parser, compiler, sequence
+  renderer with control-flow blocks, the `MermaidFence` markdown claimant, a
+  35-fixture corpus); each crate carries its own README and CHANGELOG. Their
+  examples (`workflow`, `network`, `mermaid`, `mermaid_doc`) live in the root
+  crate's `examples/`, so `cargo run --example <name>` finds them.

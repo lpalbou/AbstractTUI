@@ -110,7 +110,7 @@ fn scrollbar_auto_hide_hides_on_fit_shows_on_overflow_and_inerts_drags() {
         .filter_map(|y| canvas.cell(crate::base::Point::new(11, y)).map(|c| c.0))
         .collect();
     assert!(
-        bar_cells.contains('┃'),
+        bar_cells.contains('█'),
         "thumb visible on overflow: {bar_cells:?}"
     );
     mouse(&mut tree2, MouseKind::Down(MouseButton::Left), 11, 3);

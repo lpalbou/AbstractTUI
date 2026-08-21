@@ -46,7 +46,7 @@
 //!
 //! OWNER: REACT.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::layout::{Dimension, Style as LayoutStyle};
@@ -372,13 +372,83 @@ impl FilePicker {
             }
         };
 
+        // Pointer over the scrollbar strip (or a live grab): a signal,
+        // because the strip must REPAINT to show its hot ink — only a
+        // tracked read damages the region.
+        let bar_hot = cx.signal(false);
+        // The body row under the pointer (the strip owns its own cells,
+        // so it never lights a row): §3.2 hover ink, the same rule
+        // `List` paints rows with.
+        let hover_row = cx.signal(None::<usize>);
+
         // ---- mouse on the rows area ---------------------------------
         let mouse = {
             let state = state.clone();
+            // Scrollbar grab (rows below the thumb's top edge); `None` =
+            // no drag of ours is live.
+            let bar_grab: Rc<Cell<Option<i32>>> = Rc::new(Cell::new(None));
             move |ctx: &mut EventCtx, ev: &UiEvent| {
+                if matches!(ev, UiEvent::MouseLeave) {
+                    hover_row.set_if_changed(None);
+                    // A live grab keeps the ink (the pointer leaves the
+                    // strip constantly mid-drag).
+                    if bar_grab.get().is_none() {
+                        bar_hot.set_if_changed(false);
+                    }
+                    return;
+                }
                 let UiEvent::Mouse(m) = ev else { return };
                 let rect = ctx.current_rect();
+                // The strip, when the listing overflows: hover ink and
+                // gestures both resolve against it (`widgets::scrollbar`).
+                let bar = {
+                    let (_, filtered, _) = state.filtered_and_sel();
+                    let total = filtered.len() as i32;
+                    (total > rect.h).then(|| {
+                        crate::widgets::scrollbar::metrics(
+                            rect,
+                            1,
+                            state.offset.get_untracked(),
+                            total,
+                        )
+                    })
+                };
                 match m.kind {
+                    MouseKind::Move => {
+                        // Motion with no button reports only where the
+                        // app opted in (`RunConfig::hover_ink`).
+                        let over = bar
+                            .as_ref()
+                            .is_some_and(|b| b.overflows() && b.track.contains(m.pos));
+                        bar_hot.set_if_changed(over);
+                        // What lights up is what a press would act on.
+                        let (_, filtered, _) = state.filtered_and_sel();
+                        let row = (!over)
+                            .then(|| (m.pos.y - rect.y) + state.offset.get_untracked())
+                            .filter(|r| *r >= 0 && (*r as usize) < filtered.len())
+                            .map(|r| r as usize);
+                        hover_row.set_if_changed(row);
+                    }
+                    MouseKind::Up(MouseButton::Left) => {
+                        bar_grab.set(None);
+                        if !bar.as_ref().is_some_and(|b| b.track.contains(m.pos)) {
+                            bar_hot.set_if_changed(false); // released off-strip
+                        }
+                    }
+                    MouseKind::Drag(MouseButton::Left) => {
+                        // Only OUR grab scrolls (see `widgets::scrollbar`).
+                        let (Some(dy), Some(bar)) = (bar_grab.get(), bar.as_ref()) else {
+                            return;
+                        };
+                        if bar.overflows() {
+                            state
+                                .offset
+                                .set_if_changed(crate::widgets::scrollbar::offset_at(
+                                    bar, m.pos.y, dy,
+                                ));
+                            ctx.stop_propagation();
+                        }
+                    }
                     MouseKind::ScrollUp | MouseKind::ScrollDown => {
                         let delta = if m.kind == MouseKind::ScrollUp { -3 } else { 3 };
                         let (_, filtered, _) = state.filtered_and_sel();
@@ -391,6 +461,33 @@ impl FilePicker {
                     MouseKind::Down(MouseButton::Left) => {
                         let row = (m.pos.y - rect.y) + state.offset.get_untracked();
                         let (_, filtered, sel) = state.filtered_and_sel();
+                        // The scrollbar column is the bar's, not a row's:
+                        // without this guard a press on the strip selects
+                        // the row beside it — and a second press on an
+                        // already-selected one ACTIVATES, opening a
+                        // directory the user never aimed at.
+                        let total = filtered.len() as i32;
+                        if total > rect.h {
+                            let bar = crate::widgets::scrollbar::metrics(
+                                rect,
+                                1,
+                                state.offset.get_untracked(),
+                                total,
+                            );
+                            if let Some(zone) = crate::widgets::scrollbar::hit(&bar, m.pos) {
+                                if bar.overflows() {
+                                    let dy = crate::widgets::scrollbar::grab_for(&bar, zone);
+                                    bar_grab.set(Some(dy));
+                                    if matches!(zone, crate::widgets::scrollbar::Zone::Track) {
+                                        state.offset.set_if_changed(
+                                            crate::widgets::scrollbar::offset_at(&bar, m.pos.y, dy),
+                                        );
+                                    }
+                                }
+                                ctx.stop_propagation();
+                                return;
+                            }
+                        }
                         if row >= 0 && (row as usize) < filtered.len() {
                             // The List convention: click selects,
                             // click-on-selected activates (double-click
@@ -484,6 +581,8 @@ impl FilePicker {
                     RowsContent::Rows { sel, .. } => *sel + 1,
                     _ => 0,
                 };
+                let hot = bar_hot.get(); // tracked: hot ink repaints the strip
+                let hot_row = hover_row.get(); // tracked: ditto for the row
                 Element::new()
                     .style(
                         LayoutStyle::default()
@@ -493,7 +592,7 @@ impl FilePicker {
                     .role(crate::ui::Role::List)
                     .access_value(move || format!("{entry_count} entries, selected {sel_now}"))
                     .draw(move |canvas, rect| {
-                        draw_rows(canvas, rect, &content, &palette, show_sizes);
+                        draw_rows(canvas, rect, &content, &palette, show_sizes, hot, hot_row);
                     })
                     .build()
             },

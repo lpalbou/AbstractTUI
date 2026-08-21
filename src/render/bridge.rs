@@ -95,6 +95,10 @@ impl Canvas for Surface {
 /// `&mut Surface` borrow behind other ui plumbing; both routes end in
 /// [`Surface::draw_text`], the one canonical rich-draw call.
 impl StyledCanvas for Surface {
+    fn register_link(&mut self, uri: &str) -> u16 {
+        Surface::register_link(self, uri)
+    }
+
     /// Full fidelity: the style patch goes straight to the surface —
     /// attrs, links, underline color all survive. Grapheme-correct
     /// (wide pairs, ZWJ clusters); returns real columns advanced.

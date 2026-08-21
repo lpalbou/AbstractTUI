@@ -87,18 +87,28 @@ full ladder and the per-terminal expectations.
 
 ## Which image formats decode?
 
-PNG and JPEG, decided by the file's magic bytes rather than its extension
-or a declared MIME type. PNG covers 8-bit depths without interlacing; JPEG
-covers the 8-bit Huffman frames — **baseline, extended sequential, and
-progressive** — in grayscale or YCbCr at 4:4:4, 4:2:2, 4:4:0, and 4:2:0,
-with interleaved or per-component scans and restart markers. Progressive is
-what most editors emit by default, so it decodes to the same final picture
-as a sequential file, not to a first-pass approximation.
+PNG, JPEG, and GIF, decided by the file's magic bytes rather than its
+extension or a declared MIME type. PNG covers 8-bit depths without
+interlacing; JPEG covers the 8-bit Huffman frames — **baseline, extended
+sequential, and progressive** — in grayscale or YCbCr at 4:4:4, 4:2:2,
+4:4:0, and 4:2:0, with interleaved or per-component scans and restart
+markers. Progressive is what most editors emit by default, so it decodes to
+the same final picture as a sequential file, not to a first-pass
+approximation.
+
+Animations decode too — animated GIF and APNG, through
+`gfx::decode_animation` and the `AnimatedImage` widget. **Video does
+not**: `.mp4`, `.mov`, `.avi`, `.webm`, and `.mpg` are recognized and
+refused by name with a conversion command, because their codecs are
+patent-pooled and each is larger than this whole crate. To play video,
+decode it with an external tool and feed frames in (see
+[graphics-and-3d.md](graphics-and-3d.md#animated-pictures-and-why-video-is-not-one-of-them)).
 
 Everything else rejects **by name**, with a message you can show a user
 verbatim: interlaced PNG, arithmetic-coded / lossless / hierarchical /
-12-bit / CMYK JPEG, and GIF/WebP/AVIF/TIFF. Nothing renders a wrong picture
-in place of an unsupported one. See
+12-bit / CMYK JPEG, WebP/AVIF/TIFF, and the patent-pooled video codecs
+(H.264, H.265, VP9, AV1, MPEG-1/2/4). Nothing renders a wrong picture in
+place of an unsupported one. See
 [graphics-and-3d.md](graphics-and-3d.md) for the decoder coverage and
 [troubleshooting.md](troubleshooting.md) for what to do with a refusal.
 
@@ -273,6 +283,24 @@ copy would otherwise overwrite the clipboard of whoever ran the suite.
 The two routes are exclusive: a copy the host clipboard accepted is not
 also written over OSC 52, because terminals and tmux cap that payload and
 the second write could truncate a long selection.
+
+## Why doesn't my app start with the caret in its input box?
+
+Because no widget claims the keyboard implicitly. Keys go to the focused
+node — with nothing focused they fall back to the tree root — and a root
+tree focuses nothing at boot, so the first field takes typing only after a
+Tab or a click. Say which widget should own the caret by building it
+through the element form and marking it: `.element(cx, &t).autofocus()`.
+Modal overlays are the exception and need no marking: a `Modal`, a modal
+`Drawer`, or a `ChoicePrompt` establishes initial focus when it opens, so
+it answers keys from frame one.
+
+This is also why a bare-letter global shortcut is a trap in an app with a
+text field: a focused editor consumes ordinary characters, so a plain `q`
+binding is live exactly while no field holds focus — including at
+startup. Use `Ctrl+Q` or `Ctrl+C` for global verbs. See
+[Focus — who receives keys](api.md#focus--who-receives-keys) and the
+[troubleshooting entry](troubleshooting.md#typing-does-nothing-until-i-click-or-tab-into-the-input).
 
 ## Why doesn't Ctrl+Enter (or Shift+Enter) do anything?
 

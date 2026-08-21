@@ -20,7 +20,7 @@ Media capabilities the engine owes applications, in two families:
 | 0630 | Speaking-highlight primitive (offset-driven, shares 0148's text↔cells mapping) | voice |
 | 0640 | External audio-process lifecycle pattern (docs + example; engine code NOT needed — verified) | voice |
 | 0660 | Images inside `Feed`/content widgets via protocol placement | image |
-| 0665 | Animated image sessions (kitty `a=f` frames; mosaic timer fallback) | image |
+| 0665 | Animated image sessions — kitty `a=f` frames for zero-steady-state looping content (the timer lane and the decoders SHIPPED with 0667; this is the kitty half) | image |
 | 0670 | Cell-pixel-size refresh on resize (font zoom re-renders sixel/3D scale) | image |
 | 0675 | Scroll-shift × image re-place (restore the scroll byte-win with live images) | image |
 | 0680 | Sixel bottom-row/off-screen honesty (clamp + DECSET 8452 probe) | image |
@@ -31,6 +31,12 @@ Completed 2026-07-22 (moved to `../../completed/media-av/`):
 | ID | Title | Family |
 | --- | --- | --- |
 | 0685 | Probed-capabilities signal (`use_caps`) — discharged by first-app 0295 (one accessor, both consumers); the images example's channel label is truthful now | image |
+
+Completed 2026-08-21 (moved to `../../completed/media-av/`):
+
+| ID | Title | Family |
+| --- | --- | --- |
+| 0667 | Animation — in-tree animated GIF + APNG decoders, `decode_animation`, and the `AnimatedImage` playback lane (one timer per frame); video is recognized and refused by name, never decoded | image |
 
 Completed 2026-07-23, wave 3 INPUTAV (moved to `../../completed/media-av/`):
 

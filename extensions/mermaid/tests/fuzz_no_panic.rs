@@ -34,7 +34,7 @@ fn byte_soup_never_panics() {
 
 #[test]
 fn token_soup_never_panics() {
-    const VOCAB: [&str; 24] = [
+    const VOCAB: [&str; 35] = [
         "graph",
         "flowchart",
         "sequenceDiagram",
@@ -59,6 +59,19 @@ fn token_soup_never_panics() {
         "%%",
         "\"",
         "\n",
+        // The sequence control-flow vocabulary: without these the
+        // fuzzer cannot reach blocks or activations at all.
+        "alt",
+        "else",
+        "opt",
+        "loop",
+        "par",
+        "and",
+        "end",
+        "activate",
+        "deactivate",
+        "->>+",
+        "-->>-",
     ];
     let mut rng = Rng(0xBEEF);
     for _ in 0..2000 {

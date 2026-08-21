@@ -97,11 +97,16 @@ through ordinary reactivity.*
   (hold-to-talk, labeled latch fallback, capture stops on focus loss), and
   `Meter` / `AudioScope` widgets that render live levels with real
   ballistics and go fully idle when the signal does.
-- **Images** — PNG and JPEG decoding built in (JPEG covers baseline and
-  progressive alike), drawn through the best channel your terminal offers:
+- **Images** — PNG, JPEG (baseline and progressive), and GIF decoding built
+  in, drawn through the best channel your terminal offers:
   kitty graphics, iTerm2, sixel, or unicode mosaic
   (half-block / quadrant / sextant / braille). Capability detection is automatic
   and every degradation is labeled, never silent.
+- **Animation** — animated GIF and APNG play in the cell grid through
+  `AnimatedImage`, one timer per frame and nothing between frames. Video
+  (`.mp4`, `.mov`, `.avi`, `.webm`) is NOT decoded — those codecs are
+  patent-pooled and larger than this crate; the file is recognized, named,
+  and refused with the command that converts it.
 - **Software-rasterized 3D** — load GLB files (node hierarchies, textures,
   vertex colors, animation, skinning) and render them into the same cell
   pipeline. No GPU, no native dependencies.
@@ -147,7 +152,10 @@ fn main() -> abstracttui::base::Result<()> {
 ```
 
 Tab focus, Enter/Space activation, and Ctrl+C quit are all defaults. The count
-line re-renders fine-grained through `dyn_view` — nothing else repaints. The
+line re-renders fine-grained through `dyn_view` — nothing else repaints. Keys go
+to the focused widget, and a screen that should start with the caret in a field
+says so with `.autofocus()` — see
+[Focus — who receives keys](docs/api.md#focus--who-receives-keys). The
 walkthrough lives in [docs/getting-started.md](docs/getting-started.md).
 
 ## Install

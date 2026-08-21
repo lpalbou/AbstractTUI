@@ -194,7 +194,7 @@ impl Image {
     /// terminal's own answer. Resolved per draw, so a capability
     /// upgrade (the probe replies after first paint) sharpens the next
     /// repaint without a rebuild.
-    fn resolved_mode(pinned: Option<MosaicMode>) -> MosaicMode {
+    pub(crate) fn resolved_mode(pinned: Option<MosaicMode>) -> MosaicMode {
         pinned.unwrap_or_else(|| MosaicMode::auto(&crate::app::current_caps()).0)
     }
 
@@ -230,7 +230,10 @@ impl Image {
     /// aspect stays correct in cell space). Broken sources answer the
     /// labeled state's footprint ("⌧ image" + one message row) so the
     /// label survives `Auto` contexts instead of collapsing away.
-    fn natural_cells(source: &Result<Arc<Bitmap>, String>, mode: MosaicMode) -> crate::base::Size {
+    pub(crate) fn natural_cells(
+        source: &Result<Arc<Bitmap>, String>,
+        mode: MosaicMode,
+    ) -> crate::base::Size {
         match source {
             Ok(bitmap) => {
                 let (subw, subh) = mode.cell_pixels();
@@ -291,7 +294,7 @@ impl Image {
 
 /// Fit resolution: (target cell rect, source crop). Pure — unit-tested
 /// directly, the draw closure is a thin shell around it.
-fn resolve_fit(
+pub(crate) fn resolve_fit(
     rect: Rect,
     iw: u32,
     ih: u32,
@@ -361,7 +364,7 @@ fn resolve_fit(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn draw_fitted(
+pub(crate) fn draw_fitted(
     canvas: &mut dyn StyledCanvas,
     rect: Rect,
     bitmap: &Bitmap,

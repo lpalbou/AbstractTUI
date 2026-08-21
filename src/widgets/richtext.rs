@@ -58,6 +58,13 @@ impl RichTextView {
     }
 
     /// First visible row (app-managed scrolling; clamped to content).
+    /// Scrolling this widget yourself gets you KEYBOARD scrolling and
+    /// nothing else — the wheel, PgUp/PgDn, Home/End and a draggable
+    /// scrollbar thumb all live in [`Scroll`](crate::widgets::Scroll),
+    /// which measures this widget and moves it for you:
+    /// `Scroll::new(view.view(cx))`. Reach for this setter only when
+    /// the app genuinely owns the offset (a synced split view, a
+    /// replay).
     pub fn scroll_offset(mut self, rows: i32) -> RichTextView {
         self.scroll_offset = rows.max(0);
         self

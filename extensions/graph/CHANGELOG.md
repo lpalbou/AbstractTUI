@@ -5,6 +5,18 @@ own their changelogs; core's CHANGELOG covers the engine). The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 SemVer.
 
+## [0.3.0] - 2026-08-21
+
+### Fixed
+
+- `GraphView` drew edge labels left-anchored from the edge's midpoint,
+  so in a horizontal flow (`LR`/`RL`) the run collided with the
+  downstream card and was suppressed to avoid overprinting it — the
+  label simply vanished, and nothing landed in `Layout::fallback` to
+  say so. Labels are now CENTRED on the midpoint and nudged along the
+  edge before any suppression, so a diagram keeps the labels its source
+  wrote.
+
 ## [0.1.0] - 2026-07-24
 
 First release, published alongside `abstracttui` 0.2.13 (ADR-0004

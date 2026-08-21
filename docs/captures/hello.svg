@@ -71,24 +71,24 @@
 <rect x="0" y="414" width="720" height="18" fill="#1a1a2e"/>
 </g>
 <text x="9" y="32" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╭</text>
-<text x="18" y="32" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> hello </text>
+<text x="18" y="32" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> hello </text>
 <text x="81" y="32" textLength="630" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">─────────────────────────────────────────────────────────────────────╮</text>
 <text x="9" y="50" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="63" y="50" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Abstract</text>
 <text x="135" y="50" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#e94560">TUI</text>
 <text x="702" y="50" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="18" y="68" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">the terminal, composed</text>
+<text x="18" y="68" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">the terminal, composed</text>
 <text x="702" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="702" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="18" y="104" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">space pressed 0 times</text>
+<text x="18" y="104" textLength="189" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">space pressed 0 times</text>
 <text x="702" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="702" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="18" y="140" textLength="270" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">space · count up      q · quit</text>
+<text x="18" y="140" textLength="270" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">space · count up      q · quit</text>
 <text x="702" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="702" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>

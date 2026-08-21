@@ -38,6 +38,59 @@ genuinely dead, check the notices first; if the engine could not find any
 workable descriptor it fails with an actionable error rather than starting
 deaf.
 
+## Typing does nothing until I click or Tab into the input
+
+**Symptom**: the app starts, the composer or form field is visible, but
+the first characters go nowhere. Press Tab once, or click the field, and
+typing works from then on. A variant of the same cause: a single-letter
+global shortcut (`q` to quit) fires on the very first keystroke instead
+of being typed into the field.
+
+**Cause**: nothing is focused. Keys go to the focused node and fall back
+to the tree root when there is none, and a root tree starts with nothing
+focused — no widget claims the keyboard implicitly, because the engine
+cannot know which one should own it. With focus at the root, characters
+reach no editor, and root-level `KeyChord` shortcuts see every key.
+
+**Check**: press Tab. If the field takes focus (its side strokes turn to
+`border_focus`) and typing lands, this is the cause. Modal overlays are
+not affected — they establish initial focus when they open — so a
+composer inside a `Modal` that works while the root-level one does not
+confirms it too.
+
+**Fix**: ask for focus at mount. Build the field through the element form
+of the widget and mark it:
+
+```rust
+let t = use_theme(cx).get().tokens;
+
+TextArea::new()
+    .state(&state)
+    .rows(1, 4)
+    .on_submit(submit)
+    .element(cx, &t)   // Element, not View
+    .autofocus()       // focused from frame one
+    .build()
+```
+
+Mark one widget per screen — the last `.autofocus()` mounted wins. An app
+that would rather pick by document order can call
+`app.tree().focus_first()` after `mount`. While you are there, move any
+bare-letter global verb onto a modified chord (`Ctrl+Q`, `Ctrl+C`): a
+focused editor consumes ordinary characters, so a plain `q` shortcut is
+live exactly when no field holds focus, which includes the moment the app
+starts.
+
+**Verify**: launch and type immediately — the characters land in the
+field, and the placeholder yields to the caret. An autofocused field
+shows no placeholder by default; `.placeholder_while_focused(true)` keeps
+the hint visible beside the caret.
+
+See [Focus — who receives keys](api.md#focus--who-receives-keys) for the
+full resolution order and
+[getting-started.md](getting-started.md#adding-interactivity) for the
+same recipe in context.
+
 ## Images don't show (or fall back to blocky glyphs)
 
 **Cause**: the terminal didn't prove a pixel protocol. Image channels are
@@ -64,11 +117,18 @@ modes are a deliberate quality ladder within it.
 **Cause**: the bytes are outside what the engine decodes. `decode_image`
 routes on the MAGIC, never a declared MIME type or a file extension, so a
 `.jpg` that actually holds a WebP is rejected as an unrecognized format
-rather than decoded as JPEG. The supported set is PNG at
-8-bit depths without interlacing, and 8-bit Huffman JPEG — baseline,
-extended sequential, and progressive, grayscale or YCbCr. Arithmetic-coded,
-lossless, hierarchical, 12-bit, and CMYK JPEGs, interlaced (Adam7) PNGs,
-and GIF/WebP/AVIF/TIFF all reject by name rather than render wrong.
+rather than decoded as JPEG. The supported set is PNG at 8-bit depths
+without interlacing, 8-bit Huffman JPEG (baseline, extended sequential,
+and progressive, grayscale or YCbCr), and GIF; animations add APNG through
+`decode_animation`.
+Arithmetic-coded, lossless, hierarchical, 12-bit, and CMYK JPEGs,
+interlaced (Adam7) PNGs, and WebP/AVIF/TIFF all reject by name rather
+than render wrong.
+
+**Cause, for a video file**: the engine decodes NO video codecs. Every
+`.mp4`, `.mov`, `.avi`, `.webm`, and `.mpg` is recognized by container,
+named, and refused — those codecs are patent-pooled and each is larger
+than this whole crate. The message carries the conversion line.
 
 **Check**: read the message — every rejection names the exact reason,
 and it is written to be shown to a user verbatim. `file image.jpg` (or
@@ -76,8 +136,13 @@ and it is written to be shown to a user verbatim. `file image.jpg` (or
 
 **Fix**: convert the asset to a supported encoding — a PNG or JPEG export
 from any image editor, or a command-line converter (`sips -s format png
-in.webp --out out.png` on macOS). Truncated downloads report truncation
-specifically; fetch the file again before converting.
+in.webp --out out.png` on macOS). For video, the message's own line does
+it: `ffmpeg -i IN -vf 'fps=12,scale=480:-1' OUT.gif` turns a clip into an
+animation the engine plays. To play video as it is, decode outside the
+engine and feed frames in — see
+[graphics-and-3d.md](graphics-and-3d.md#animated-pictures-and-why-video-is-not-one-of-them). Truncated
+downloads report truncation specifically; fetch the file again before
+converting.
 
 **Verify**: `gfx::decode_image` returns `Ok` and the widget shows the
 picture instead of the labeled broken-image state. See

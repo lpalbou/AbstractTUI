@@ -99,6 +99,7 @@ fn mapping_round_trips_at_cluster_boundaries() {
         line,
         indent: 3,
         ground: None,
+        fence: None,
         quote: false,
         rule: false,
         image: None,

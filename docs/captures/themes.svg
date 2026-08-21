@@ -47,15 +47,15 @@
 <rect x="0" y="504" width="990" height="18" fill="#1a1a2e"/>
 <rect x="0" y="522" width="990" height="18" fill="#1a1a2e"/>
 </g>
-<text x="0" y="14" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">☾ theme menu · ☾ dark/light toggle                                                                            </text>
+<text x="0" y="14" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">☾ theme menu · ☾ dark/light toggle                                                                            </text>
 <text x="9" y="32" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#e94560">Themes</text>
-<text x="63" y="32" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">  —  </text>
-<text x="108" y="32" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Dark (Abstract)</text>
-<text x="243" y="32" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> (dark)</text>
+<text x="63" y="32" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">  —  </text>
+<text x="108" y="32" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Dark (Abstract)</text>
+<text x="243" y="32" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> (dark)</text>
 <text x="702" y="50" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#666666">preview</text>
-<text x="9" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#27ae60">● </text>
-<text x="27" y="68" textLength="684" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Dark (Abstract)            Light (Abstract)                                 </text>
-<text x="711" y="68" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e94560">▲ app</text>
+<text x="9" y="68" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#27ae60">● </text>
+<text x="27" y="68" textLength="684" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Dark (Abstract)            Light (Abstract)                                 </text>
+<text x="711" y="68" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e94560">▲ app</text>
 <text x="927" y="68" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">12:04</text>
 <text x="27" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1a1a2e">██</text>
 <text x="45" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#16213e">██</text>
@@ -75,9 +75,9 @@
 <text x="378" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#b16105">██</text>
 <text x="396" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#dc2626">██</text>
 <text x="414" y="86" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#2563eb">██</text>
-<text x="0" y="104" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">                                                                               primary text                   </text>
-<text x="0" y="122" textLength="711" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Observer Night             Catppuccin Mocha                                 </text>
-<text x="711" y="122" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">secondary label</text>
+<text x="0" y="104" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">                                                                               primary text                   </text>
+<text x="0" y="122" textLength="711" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Observer Night             Catppuccin Mocha                                 </text>
+<text x="711" y="122" textLength="135" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">secondary label</text>
 <text x="27" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#0b0f14">██</text>
 <text x="45" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#10161e">██</text>
 <text x="63" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#161e28">██</text>
@@ -98,10 +98,10 @@
 <text x="414" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#89b4fa">██</text>
 <text x="711" y="140" textLength="99" lengthAdjust="spacingAndGlyphs" fill="#666666">placeholder</text>
 <text x="711" y="158" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#27ae60">●ok</text>
-<text x="738" y="158" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#f39c12"> ●warn</text>
-<text x="792" y="158" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e74c3c"> ●err</text>
-<text x="837" y="158" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#60a5fa"> ●info</text>
-<text x="0" y="176" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Catppuccin Macchiato       Catppuccin Frappe                                                               </text>
+<text x="738" y="158" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#f39c12"> ●warn</text>
+<text x="792" y="158" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e74c3c"> ●err</text>
+<text x="837" y="158" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#60a5fa"> ●info</text>
+<text x="0" y="176" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Catppuccin Macchiato       Catppuccin Frappe                                                               </text>
 <text x="27" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#24273a">██</text>
 <text x="45" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1e2030">██</text>
 <text x="63" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#363a4f">██</text>
@@ -120,10 +120,10 @@
 <text x="378" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e5c890">██</text>
 <text x="396" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e78284">██</text>
 <text x="414" y="194" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#8caaee">██</text>
-<text x="432" y="194" textLength="558" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">                                selected row                  </text>
-<text x="0" y="212" textLength="801" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">                                                                                action   </text>
+<text x="432" y="194" textLength="558" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">                                selected row                  </text>
+<text x="0" y="212" textLength="801" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">                                                                                action   </text>
 <text x="801" y="212" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">link</text>
-<text x="0" y="230" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Rose Pine                  Rose Pine Moon                                                                  </text>
+<text x="0" y="230" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Rose Pine                  Rose Pine Moon                                                                  </text>
 <text x="27" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#191724">██</text>
 <text x="45" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1f1d2e">██</text>
 <text x="63" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#26233a">██</text>
@@ -143,8 +143,8 @@
 <text x="396" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#eb6f92">██</text>
 <text x="414" y="248" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#459bbd">██</text>
 <text x="711" y="248" textLength="171" lengthAdjust="spacingAndGlyphs" fill="#e94560">███████████████████</text>
-<text x="0" y="284" textLength="711" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Tokyo Night                Nord                                             </text>
-<text x="711" y="284" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">──────  </text>
+<text x="0" y="284" textLength="711" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   Tokyo Night                Nord                                             </text>
+<text x="711" y="284" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">──────  </text>
 <text x="783" y="284" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#e94560">──────</text>
 <text x="27" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#1a1b26">██</text>
 <text x="45" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#24283b">██</text>
@@ -164,7 +164,7 @@
 <text x="378" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ebcb8b">██</text>
 <text x="396" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#d89fa4">██</text>
 <text x="414" y="302" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#9bb0cb">██</text>
-<text x="0" y="338" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   One Dark                   Dracula                                                                         </text>
+<text x="0" y="338" textLength="990" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   One Dark                   Dracula                                                                         </text>
 <text x="27" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#282c34">██</text>
 <text x="45" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#21252b">██</text>
 <text x="63" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#3a3f4b">██</text>
@@ -183,22 +183,22 @@
 <text x="378" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f1fa8c">██</text>
 <text x="396" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ff7979">██</text>
 <text x="414" y="356" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#8be9fd">██</text>
-<text x="468" y="428" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">· · ·</text>
-<text x="9" y="446" textLength="810" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">Dark (Abstract)  text 14.7:1 · muted 7.3:1 · faint 3.0:1 · accent 4.5:1 · selection 10.2:1</text>
-<text x="0" y="464" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> text </text>
+<text x="468" y="428" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">· · ·</text>
+<text x="9" y="446" textLength="810" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">Dark (Abstract)  text 14.7:1 · muted 7.3:1 · faint 3.0:1 · accent 4.5:1 · selection 10.2:1</text>
+<text x="0" y="464" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> text </text>
 <text x="54" y="464" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">muted</text>
 <text x="108" y="464" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#666666">faint</text>
-<text x="171" y="464" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#27ae60">● </text>
+<text x="171" y="464" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#27ae60">● </text>
 <text x="189" y="464" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">ok</text>
-<text x="216" y="464" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f39c12">● </text>
+<text x="216" y="464" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#f39c12">● </text>
 <text x="234" y="464" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">warn</text>
-<text x="279" y="464" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e74c3c">● </text>
+<text x="279" y="464" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e74c3c">● </text>
 <text x="297" y="464" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">error</text>
-<text x="351" y="464" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">● </text>
+<text x="351" y="464" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">● </text>
 <text x="369" y="464" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">info</text>
-<text x="414" y="464" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">● </text>
+<text x="414" y="464" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">● </text>
 <text x="432" y="464" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">accent</text>
-<text x="495" y="464" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">● </text>
+<text x="495" y="464" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">● </text>
 <text x="513" y="464" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">alt</text>
 <text x="9" y="482" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">chart</text>
 <text x="63" y="482" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#e94560">██</text>
@@ -209,11 +209,11 @@
 <text x="153" y="482" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#a575ad">██</text>
 <text x="171" y="482" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#44aaad">██</text>
 <text x="189" y="482" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#ed7427">██</text>
-<text x="207" y="482" textLength="783" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   selection                                                                           </text>
+<text x="207" y="482" textLength="783" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">   selection                                                                           </text>
 <text x="9" y="536" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#e94560">←↑↓→</text>
-<text x="45" y="536" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> move  </text>
+<text x="45" y="536" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> move  </text>
 <text x="108" y="536" textLength="45" lengthAdjust="spacingAndGlyphs" fill="#e94560">enter</text>
-<text x="153" y="536" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> apply  </text>
+<text x="153" y="536" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> apply  </text>
 <text x="225" y="536" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">q</text>
-<text x="234" y="536" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> quit  </text>
+<text x="234" y="536" textLength="63" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> quit  </text>
 </svg>

@@ -41,113 +41,113 @@
 <rect x="0" y="450" width="810" height="18" fill="#1a1a2e"/>
 </g>
 <text x="0" y="14" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╭</text>
-<text x="9" y="14" textLength="108" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> transcript </text>
+<text x="9" y="14" textLength="108" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa"> transcript </text>
 <text x="117" y="14" textLength="693" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">────────────────────────────────────────────────────────────────────────────╮</text>
 <text x="0" y="32" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="32" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee" font-weight="700">you</text>
-<text x="36" y="32" textLength="432" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> — How does the feed stay cheap while streaming?</text>
-<text x="792" y="32" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="36" y="32" textLength="432" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> — How does the feed stay cheap while streaming?</text>
+<text x="792" y="32" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="32" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="50" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="792" y="50" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="792" y="50" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="50" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="9" y="68" textLength="99" lengthAdjust="spacingAndGlyphs" fill="#e94560" font-weight="700">Two freezes</text>
-<text x="792" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="9" y="68" textLength="99" lengthAdjust="spacingAndGlyphs" fill="#e94560" font-weight="700">Two freezes</text>
+<text x="792" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="68" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="86" textLength="792" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│───────────────────────────────────────────────────────────────────────────────────────</text>
-<text x="792" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="792" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="86" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="792" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="792" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="104" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="9" y="122" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Closed blocks typeset </text>
-<text x="207" y="122" textLength="108" lengthAdjust="spacingAndGlyphs" fill="#eeeeee" font-weight="700">exactly once</text>
+<text x="9" y="122" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Closed blocks typeset </text>
+<text x="207" y="122" textLength="108" lengthAdjust="spacingAndGlyphs" fill="#eeeeee" font-weight="700">exactly once</text>
 <text x="315" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">:</text>
-<text x="792" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="792" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="122" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="27" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">• </text>
-<text x="45" y="140" textLength="351" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">sealed blocks: parsed once, frozen rows</text>
-<text x="792" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="27" y="140" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">• </text>
+<text x="45" y="140" textLength="351" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">sealed blocks: parsed once, frozen rows</text>
+<text x="792" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="140" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="27" y="158" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">• </text>
-<text x="45" y="158" textLength="441" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">the open tail: re-typeset per token, O(one block)</text>
-<text x="792" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="27" y="158" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#60a5fa">• </text>
+<text x="45" y="158" textLength="441" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">the open tail: re-typeset per token, O(one block)</text>
+<text x="792" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="158" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="792" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="792" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="176" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="9" y="194" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee" font-weight="700">you</text>
-<text x="36" y="194" textLength="297" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> — Show me the follow-tail idiom.</text>
-<text x="792" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="36" y="194" textLength="297" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> — Show me the follow-tail idiom.</text>
+<text x="792" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="194" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="792" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="792" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="212" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="9" y="230" textLength="468" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Bind one signal and the scroll does the bookkeeping:</text>
-<text x="792" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="9" y="230" textLength="468" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">Bind one signal and the scroll does the bookkeeping:</text>
+<text x="792" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="230" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="792" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="792" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="248" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="27" y="266" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eb7b8d">let</text>
-<text x="54" y="266" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> follow </text>
+<text x="54" y="266" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> follow </text>
 <text x="126" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">=</text>
-<text x="135" y="266" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> cx</text>
+<text x="135" y="266" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> cx</text>
 <text x="162" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">.</text>
 <text x="171" y="266" textLength="54" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">signal</text>
 <text x="225" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">(</text>
 <text x="234" y="266" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#eb7b8d">true</text>
 <text x="270" y="266" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">);</text>
-<text x="792" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="792" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="266" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="9" y="284" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">  Scroll</text>
+<text x="9" y="284" textLength="72" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">  Scroll</text>
 <text x="81" y="284" textLength="18" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">::</text>
 <text x="99" y="284" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">new</text>
 <text x="126" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">(</text>
 <text x="135" y="284" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">feed_view</text>
 <text x="216" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">)</text>
-<text x="792" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="792" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="284" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="63" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">.</text>
 <text x="72" y="302" textLength="99" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">follow_tail</text>
 <text x="171" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">(</text>
-<text x="180" y="302" textLength="612" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">fo                                                                  </text>
-<text x="792" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="180" y="302" textLength="612" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">fo                                                                  </text>
+<text x="792" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="302" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="792" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="792" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="320" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="792" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="792" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="338" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="792" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="792" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="356" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="374" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="792" y="374" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="792" y="374" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="374" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="392" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="792" y="392" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="792" y="392" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="392" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="410" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
-<text x="36" y="410" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> /theme  switch theme </text>
-<text x="792" y="410" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">┃</text>
+<text x="36" y="410" textLength="198" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> /theme  switch theme </text>
+<text x="792" y="410" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">█</text>
 <text x="801" y="410" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">│</text>
 <text x="0" y="428" textLength="36" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">╰───</text>
-<text x="36" y="428" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> /thanks  </text>
-<text x="126" y="428" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">be polite</text>
+<text x="36" y="428" textLength="90" lengthAdjust="spacingAndGlyphs" fill="#eeeeee"> /thanks  </text>
+<text x="126" y="428" textLength="81" lengthAdjust="spacingAndGlyphs" fill="#aaaaaa">be polite</text>
 <text x="234" y="428" textLength="576" lengthAdjust="spacingAndGlyphs" fill="#3c3c4d">───────────────────────────────────────────────────────────────╯</text>
 <text x="0" y="446" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">▐</text>
 <text x="9" y="446" textLength="27" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">/th</text>
 <text x="801" y="446" textLength="9" lengthAdjust="spacingAndGlyphs" fill="#e94560">▌</text>
-<text x="0" y="464" textLength="810" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">4 items · 16 rows · following · streaming                                                 </text>
+<text x="0" y="464" textLength="810" lengthAdjust="spacingAndGlyphs" fill="#eeeeee">4 items · 16 rows · following · streaming                                                 </text>
 </svg>

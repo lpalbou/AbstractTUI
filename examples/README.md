@@ -28,6 +28,7 @@ the previous one:
 | 4 · interaction | `activate.rs` | selection vs activation on `List` and `Table`; double-click, honestly |
 | 4 · interaction | `presence_board.rs` | rich list rows + trailing × accessory + timed double-click body (chat sidebar pattern) |
 | 4 · interaction | `interaction_affordances.rs` | hover ink, removable rows, live filtering, nested scroll wheel bubbling |
+| 4 · interaction | `scrollbar.rs` | the shared scroll strip: grab the thumb, drag it, teleport from the track — `Scroll`, `List` and `Table` side by side |
 | 4 · interaction | `drawer_dock.rs` | the right-edge drawer rail (`DrawerDock`): docked panels, full collapse, badge dots |
 | 4 · interaction | `decide.rs` | the modal decision gate (`ChoicePrompt`): confirmations, multi-pick, chains |
 | 5 · content + live data | `feed.rs` | background threads → bounded ingestion → `Feed` with follow-tail |
@@ -40,18 +41,20 @@ the previous one:
 | 6 · the app shell | `drawers.rs` | the drawer system alone: modal inspector vs passive nav panel |
 | 6 · the app shell | `dashboard/` | the flagship capstone: charts, log tail, sortable table, toasts, modal, pane nav |
 | 7 · graphics + 3D | `images.rs` | four mosaic families, dithering, pixel-protocol placement |
+| 7 · graphics + 3D | `animation.rs` | animated GIF/APNG played in cells — and video refused by name |
 | 7 · graphics + 3D | `effects.rs` | compositor layers wearing cell shaders; transforms, toasts |
 | 7 · graphics + 3D | `splash.rs` | the 2-second boot identity, 3D or 2D through one player |
 | 7 · graphics + 3D | `viewer3d.rs` | orbit a GLB with textures, animation, measured fps |
-| 8 · extensions | `workflow` / `network` (in `extensions/graph/`) | graph auto-layout (layered / force) + `GraphView` |
-| 8 · extensions | `mermaid` (in `extensions/mermaid/`) | the honest mermaid subset with atomic fallback |
+| 8 · extensions | `workflow` / `network` | graph auto-layout (layered / force) + `GraphView` |
+| 8 · extensions | `mermaid` | the mermaid subset: flowcharts, chaining, `&` groups, flattened subgraphs, sequences, atomic fallback |
+| 8 · extensions | `mermaid_doc` | ```mermaid fences rendered INSIDE a markdown document (the `FenceBlock` seam) |
 | 9 · testing + capture | `screenshot.rs` | text/ANSI/SVG stills from a key binding or a headless test |
 | 9 · testing + capture | `caps.rs` (tool) | the live terminal-capability report |
 | 9 · testing + capture | `capture/` (tool) | the deterministic screenshot pipeline into `docs/captures/` |
 
 Extension examples run with `-p`:
-`cargo run -p abstracttui-graph --example workflow` (also `network`) and
-`cargo run -p abstracttui-mermaid --example mermaid`.
+`cargo run --example workflow` (also `network`) and
+`cargo run --example mermaid`.
 
 The sections below describe each example in path order: keys,
 requirements, and what it should look like.
@@ -204,6 +207,31 @@ hover-reactive app needs.
 - Looks like: a "channels" block with a filter row, a scrollable list of
   removable channels, a notes panel below it, and a footer showing the
   match count and outer scroll offset.
+
+## scrollbar
+
+Four panes over the same 200 rows — two `Scroll`s, a `List` and a
+`Table` — so the one strip every scrolling widget shares can be grabbed
+and compared side by side. Press a thumb and NOTHING moves: the press
+takes hold, and the drag that follows tracks the pointer row for row,
+including after the pointer leaves the strip. Press bare track and the
+thumb teleports under the cursor. Press the `Table`'s strip and the row
+beside it keeps its selection (footer shows the selected row).
+
+`w` cycles the second pane's gutter through `Scroll::scrollbar_width`
+(1..=4) — the strip is a reserved column, so the cells come out of the
+content and the text re-wraps as it widens. The pane keeps its position
+across the rebuild because its offset signal lives outside it.
+
+Hover ink on the strip needs motion reporting, so this app opts in with
+`RunConfig::hover_ink` like `interaction_affordances` does.
+
+- Keys: drag the bars · `w` cycle gutter width · wheel/arrows scroll ·
+  `q` quit.
+- Needs: any tty; a mouse is the point.
+- Run: `cargo run --example scrollbar`
+- Looks like: a 2×2 of bordered panes, each with a heavy `█` thumb on a
+  `▏` rail at its right edge, over a footer of live offsets.
 
 ## decide
 
@@ -432,6 +460,25 @@ Takes a PNG/JPEG path or generates a procedural test card.
 - Needs: any tty; pixel protocols where the terminal offers one.
 - Looks like: the same picture four ways, sharpening left to right.
 
+## animation
+
+A moving picture in the cell grid: decode an animated GIF or an APNG and
+play it with `widgets::AnimatedImage` — space pauses, `r` restarts, `f`
+cycles the mosaic family under the picture. Without an argument it plays
+a generated hue-sweep clip, so the example runs with no assets.
+
+Point it at a video file (`.mp4`, `.mov`, `.avi`) to see the other half
+of the design: the engine decodes no video codecs, so the file is
+recognized, named, and refused with the `ffmpeg` line that converts it
+into an animation it can play.
+
+- Keys: `space` play/pause, `r` restart, `f` family, `s` fit, `t` theme,
+  `q` quit. `--caps` prints the capability report.
+- Needs: any tty. Playback costs one timer per frame and nothing between
+  frames; a paused or finished clip costs nothing at all.
+- Looks like: motion that reads at cell resolution, with the cost stated
+  in the footer.
+
 ## effects
 
 Compositor-level: overlay layers via `app.overlays()` wearing RENDER's
@@ -475,10 +522,10 @@ the glass.
 - Needs: a GLB with embedded buffers; truecolor recommended.
 - Looks like: a lit, textured model turning inside themed chrome.
 
-## workflow and network (extensions/graph)
+## workflow and network
 
-The graph-extension examples, run with
-`cargo run -p abstracttui-graph --example workflow` (or `network`).
+The graph-family examples, run with
+`cargo run --example workflow` (or `network`).
 `workflow` lays a pipeline DAG through the LAYERED pass — status
 tints, badge counts, a dotted async edge, and a deliberate retry cycle
 so the broken-edge honesty marker is on screen. `network` runs cyclic
@@ -490,20 +537,38 @@ same picture), hover tooltips, pan across an oversized canvas.
 - Needs: any tty.
 - Looks like: node cards joined by sub-cell strokes, laid out for you.
 
-## mermaid (extensions/mermaid)
+## mermaid
 
 The mermaid-subset renderer over embedded samples or a `.mmd` file:
-`cargo run -p abstracttui-mermaid --example mermaid [-- file.mmd]`.
-Four samples show the honest range — a TD flowchart, an LR flowchart
-with labels and shapes, a sequence diagram, and a gantt chart falling
-back ATOMICALLY (verbatim code fence + named reason + mermaid.live
-link), the subset contract made visible.
+`cargo run --example mermaid [-- file.mmd]`.
+Nine samples show the honest range — flowcharts in both directions,
+edge chaining with infix labels, `&` groups across the shape
+vocabulary, a `subgraph` flattening with its notice on screen,
+sequence diagrams with `alt`/`else` frames and activation bars, and a
+gantt chart falling back ATOMICALLY (verbatim code fence + named
+reason + mermaid.live link).
 
 - Keys: Left/Right (or h/l) switch samples · Tab focuses the diagram
   (arrows pan, Enter selects flowchart nodes) · `q` quit.
 - Needs: any tty.
-- Looks like: real diagrams in the terminal — and an honest refusal
-  when the dialect is out of subset.
+- Looks like: real diagrams in the terminal, the labeled downgrades
+  said out loud, and an honest refusal when the dialect is out of
+  subset.
+
+## mermaid_doc
+
+Diagrams INSIDE a document:
+`cargo run --example mermaid_doc [-- NOTES.md]`.
+A markdown page whose ```mermaid fences render as diagrams in place —
+one widget, one scroll offset, one search index — with a ```rust fence
+left as code and an out-of-subset diagram falling back in place, so the
+whole contract is visible on one screen. The integration is one call:
+`MarkdownView::new(doc).fence_block(Rc::new(MermaidFence::new()))`.
+
+- Keys: ↑/↓ (or j/k) scroll · PgUp/PgDn page · g/G ends · `t` theme ·
+  `q` quit.
+- Needs: any tty.
+- Looks like: a README that draws its own diagrams.
 
 ## screenshot
 

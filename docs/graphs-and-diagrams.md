@@ -20,8 +20,8 @@ the mermaid parser is hand-rolled).
 ```toml
 [dependencies]
 abstracttui = "0.3"
-abstracttui-graph = "0.2"    # graph layout + GraphView
-abstracttui-mermaid = "0.2"  # mermaid subset (depends on -graph)
+abstracttui-graph = "0.3"    # graph layout + GraphView
+abstracttui-mermaid = "0.3"  # mermaid subset (depends on -graph)
 ```
 
 ## The one data contract: `GraphDesc -> Layout`
@@ -111,9 +111,9 @@ test-pinned. Algorithm selection: `.algo(GraphAlgo::Force(opts))`, or
 `.with_layout(layout)` to render positions you computed (or dragged)
 yourself.
 
-Run the crate examples: `cargo run -p abstracttui-graph --example
-workflow` (layered pipeline with a marked retry cycle) and `--example
-network` (force-directed).
+Run the examples: `cargo run --example workflow` (layered pipeline with
+a marked retry cycle) and `cargo run --example network`
+(force-directed).
 
 ## Mermaid: the honest subset
 
@@ -126,17 +126,40 @@ the YES rows enumerate accepted SPELLINGS, and any spelling outside
 them triggers the fallback naming the first unrecognized line —
 unknown syntax is safe by construction:
 
-| Mermaid | v1 | Accepted spellings (exhaustive) | Behavior |
+| Mermaid | Status | Accepted spellings | Behavior |
 | --- | --- | --- | --- |
-| `flowchart` / `graph` TD/TB/LR/BT/RL | YES | header keyword + direction token only | layered layout (BT/RL as transposes) |
-| Node shapes | YES | `id`, `id[text]`, `id(text)`, `id{text}`, `id([text])`; quoted `"text"` inside brackets | cards; shape = accent + badge sigil (see below) |
-| Edges | YES | `-->`, `---`, `-.->`, `==>`; label as postfix `\|label\|` only | strokes; dotted/thick as stroke styles |
-| `subgraph` | NO (v2) | — | atomic fallback |
+| `flowchart` / `graph` TD/TB/LR/BT/RL | YES | header keyword + direction token | layered layout (BT/RL as transposes) |
+| Node shapes | YES | `id`, `id[text]`, `id(text)`, `id{text}`, `id([text])`, `id((text))`, `id[[text]]`, `id[(text)]`, `id{{text}}`, `id>text]`; quoted `"text"` inside brackets | cards; shape = accent + badge sigil (see below) |
+| Edges | YES | any body length (`-->`, `--->`, `---`, `-----`), dotted (`-.->`, `-..->`, `-.-`), thick (`==>`, `===`); heads `>`, `x`, `o`; `<-->` | strokes; dotted/thick as stroke styles |
+| Edge labels | YES | postfix `\|label\|` and infix (`-- label -->`, `-. label .->`, `== label ==>`) | drawn centred in the rank corridor |
+| Chaining / `&` groups | YES | `A --> B --> C`; `A & B --> C & D` | one edge per link; `&` is a cross product |
+| `subgraph` | FLATTENED | `subgraph id`, `subgraph id [Title]`, nesting, `direction` inside | members render; the GROUP BOX does not, with a notice |
 | `sequenceDiagram` | YES | `participant id [as alias]`; messages `->>`, `-->>`, `->`, `-->` with `: text`; `Note left of/right of/over` | deterministic columns/rows — no solver |
-| sequence `loop`/`alt`/`par`/activations | NO (v2) | — | atomic fallback |
+| sequence blocks | YES | `alt` + `else`, `opt`, `loop`, `par` + `and`, nested | a labeled frame with dashed branch dividers |
+| sequence activations | YES | `activate id` / `deactivate id`, and the `->>+` / `-->>-` suffixes | a bar on the lifeline; nested bars step right |
+| sequence `rect`/`critical`/`break`/`box` | NO | — | atomic fallback |
 | `stateDiagram-v2` (flat) | YES | `[*]`, `id`, `id : label`, `-->` with `: label` | compiles to the flowchart engine |
 | `classDiagram`, `erDiagram`, `gantt`, `pie`, `journey`, `mindmap`, `timeline`, `gitGraph` | NO | — | atomic fallback |
-| `classDef`, `style`, `%%{init}` directives | IGNORED | recognized-and-dropped WITH a notice; `%%` comments drop silently | render proceeds |
+| `classDef`, `style`, `click`, `linkStyle`, `class`, `direction`, `%%{init}` | IGNORED | recognized-and-dropped WITH a notice; `%%` comments drop silently | render proceeds |
+
+**The link rule that decides chaining vs labels.** A body of exactly
+TWO dashes (`--`, `==`) OPENS a labelled link whose text runs to the
+closing body; THREE or more (`---`, `----`) is a complete open link. So
+`A -- B --> C` is one labelled edge and `A --- B --> C` is a two-edge
+chain — mermaid's own rule, and the only way to tell them apart without
+guessing.
+
+Sequence frames are chrome drawn UNDER the conversation: where a
+frame's border crosses a lifeline or an activation bar, the border wins
+the cell — one cell cannot show both, and a broken frame reads worse
+than a broken line. Block nesting is capped at 64; deeper input falls
+back by name rather than recursing the renderer into a stack overflow.
+
+**Labeled downgrades** (rendered, and said out loud in a notice): the
+`x` and `o` arrowheads and `<-->` bidirectionality have no cell glyph
+and draw as plain arrows; `<br/>` in a label flattens to a word break
+because a card is one line; a `subgraph` renders its members without
+the group box.
 
 Flat `stateDiagram-v2` parses as a third
 front end to the flowchart IR (`[*]` becomes synthetic start/end
@@ -160,6 +183,29 @@ diagram travels in the URL FRAGMENT, never to a server; nothing is
 shared until the user opens the link. Partial rendering of a
 half-understood diagram misleads; the code block never lies.
 
+### Diagrams inside a markdown document
+
+A ```mermaid fence renders as a diagram in place, in the document's own
+scroll surface — not as a code block, and not as a separate widget the
+app has to splice in:
+
+```rust
+use abstracttui::widgets::MarkdownView;
+use abstracttui_mermaid::MermaidFence;
+use std::rc::Rc;
+
+MarkdownView::new(source).fence_block(Rc::new(MermaidFence::new()))
+```
+
+The seam is `widgets::FenceBlock` in the core: a claimant measures a
+fence it recognizes and paints its rows. Fences it declines render as
+code, unchanged. The engine ships no diagram languages — this is how a
+sibling crate brings one without the core knowing it exists.
+
+`MermaidFence` renders once per (source, width, theme) and serves rows
+from that, so scrolling a long document does not re-render its
+diagrams.
+
 ### Usage
 
 ```rust
@@ -177,9 +223,15 @@ let view = MermaidView::new(
 // live_link_url(&str) -> String                  (the escape hatch)
 ```
 
-Run the demo: `cargo run -p abstracttui-mermaid --example mermaid`
-(four embedded samples including an honest fallback; or pass a `.mmd`
-path).
+Run the demos:
+
+- `cargo run --example mermaid` — nine embedded
+  samples: chaining, infix labels, `&` groups, the shape vocabulary, a
+  flattened `subgraph` with its notice, sequence control-flow blocks,
+  activations, and an honest fallback (or pass a `.mmd` path).
+- `cargo run --example mermaid_doc` — a markdown
+  document whose ```mermaid fences render as diagrams in place (or pass
+  a `.md` path).
 
 ## Honest limits (v1)
 

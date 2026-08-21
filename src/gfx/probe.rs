@@ -29,7 +29,17 @@ pub fn probe_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
     match sniff_format(bytes)? {
         ImageFormat::Png => png_dimensions(bytes),
         ImageFormat::Jpeg => jpeg_dimensions(bytes),
+        ImageFormat::Gif => gif_dimensions(bytes),
     }
+}
+
+/// GIF: the Logical Screen Descriptor sits right behind the 6-byte
+/// header — canvas width and height, little-endian.
+fn gif_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    let d = bytes.get(6..10)?;
+    let w = u16::from_le_bytes([d[0], d[1]]) as u32;
+    let h = u16::from_le_bytes([d[2], d[3]]) as u32;
+    (w != 0 && h != 0).then_some((w, h))
 }
 
 /// PNG: the IHDR chunk is mandated first — width/height are the first
@@ -136,7 +146,16 @@ mod tests {
     #[test]
     fn rejects_non_images_and_zero_dimensions() {
         assert_eq!(probe_dimensions(b""), None);
-        assert_eq!(probe_dimensions(b"GIF89a...."), None);
+        assert_eq!(probe_dimensions(b"RIFF\x24\x00\x00\x00WEBPVP8 "), None);
+        // A GIF screen descriptor IS probeable even when the body that
+        // follows is junk — the standing contract: a probe success is
+        // not a decode guarantee, only a probe FAILURE is definitive.
+        assert_eq!(probe_dimensions(b"GIF89a\x10\x00\x08\x00"), Some((16, 8)));
+        assert_eq!(
+            probe_dimensions(b"GIF89a\x00\x00\x00\x00"),
+            None,
+            "zero canvas"
+        );
         assert_eq!(probe_dimensions(b"\x89PNG\r\n\x1a\n"), None, "magic only");
         // A PNG header claiming 0 width: probeable bytes, useless size.
         let mut zero = Vec::new();

@@ -47,6 +47,17 @@ fn corpus_prefixes_are_the_assertion() {
         }
     }
     println!("corpus: {accepted} accepted, {fell_back} fell back");
-    assert!(accepted >= 11, "accepting corpus shrank: {accepted}");
-    assert!(fell_back >= 19, "fallback corpus shrank: {fell_back}");
+    // Ratchets, not targets. The accepted floor rose and the fallback
+    // floor fell by the same five when edge chaining, infix labels,
+    // `&`-groups, the `--x`/`--o` heads and `subgraph` flattening were
+    // implemented: those fixtures were PROMOTED, never deleted, so the
+    // corpus TOTAL is the guard that matters. Five more moved when the
+    // sequence blocks (`alt`/`opt`/`loop`/`par`) and activations
+    // landed.
+    assert!(accepted >= 21, "accepting corpus shrank: {accepted}");
+    assert!(fell_back >= 9, "fallback corpus shrank: {fell_back}");
+    assert!(
+        accepted + fell_back >= 30,
+        "corpus total shrank: {accepted} + {fell_back}"
+    );
 }

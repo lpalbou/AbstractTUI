@@ -75,3 +75,18 @@ Both halves are small; the handoff sized this "small, next wave".
 - Completed extensions 0450 (the fallback contract), extensions 0480
   (draw-closure link registration — the generalized seam; this item
   needs only the rich-span path), app-widgets 0165 (consumer half).
+
+## Shipped 2026-08-21
+
+The fallback's mermaid.live URL carries the whole diagram in its
+fragment, so on one row it truncated to dead text — too long to read,
+impossible to copy whole, clickable nowhere. Two honest shapes now:
+
+- terminal does OSC 8 (via 0480's `StyledCanvas::register_link`): one
+  short row that IS the link;
+- terminal does not: the URL WRAPS across rows, so a mouse selection
+  can take all of it — never a mid-URL ellipsis, exactly as this item
+  specified.
+
+Pinned by a test that reconstructs the whole URL from the rendered
+rows.

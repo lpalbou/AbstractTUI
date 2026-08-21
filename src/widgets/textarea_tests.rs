@@ -7,8 +7,8 @@ use super::model::{self, Caret, EditOutcome, History, RowMap, SubmitPolicy};
 use super::*;
 use crate::base::{Point, Size};
 use crate::theme::default_theme;
-use crate::ui::{Key, Mods, UiEvent, UiTree};
-use crate::widgets::itest_util::{key, key_mod, mount_widget, render, type_str};
+use crate::ui::{Key, Mods, MouseKind, UiEvent, UiTree};
+use crate::widgets::itest_util::{key, key_mod, mount_widget, mouse, render, type_str};
 
 // ------------------------------------------------------------------ model
 
@@ -644,4 +644,78 @@ fn replace_range_snaps_to_cluster_boundaries() {
         "mid-cluster insert snapped to the end"
     );
     assert_eq!(state.caret_byte(), 10);
+}
+
+/// Every scrolling surface in the engine answers the wheel; a text
+/// area that only answered the keyboard was the odd one out. The
+/// wheel moves the WINDOW and leaves the caret where the user types.
+#[test]
+fn the_wheel_scrolls_the_window_without_moving_the_caret() {
+    let size = Size::new(24, 8);
+    let t = &default_theme().tokens;
+    let holder: std::rc::Rc<std::cell::RefCell<Option<TextAreaState>>> = Default::default();
+    let h2 = holder.clone();
+    let (_root, mut tree) = mount_widget(size, move |cx| {
+        let state = TextAreaState::new(cx);
+        state.value().set(
+            (1..=40)
+                .map(|i| format!("line {i}"))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        );
+        *h2.borrow_mut() = Some(state.clone());
+        TextArea::new()
+            .state(&state)
+            .rows(1, 4)
+            .element(cx, t)
+            .build()
+    });
+    let state = holder.borrow().clone().unwrap();
+
+    // The first content row names itself, so the window's position is
+    // readable off the screen.
+    let top = |tree: &mut UiTree| -> i32 {
+        let canvas = render(tree, size);
+        for y in 0..size.h {
+            let row = canvas.row_text(y);
+            // Rows carry the widget's border glyphs, so find the label
+            // rather than expecting it at the start.
+            if let Some(at) = row.find("line ") {
+                let rest = &row[at + "line ".len()..];
+                if let Ok(n) = rest.split_whitespace().next().unwrap_or("").parse::<i32>() {
+                    return n;
+                }
+            }
+        }
+        -1
+    };
+
+    let first = top(&mut tree);
+    assert!(first >= 1, "content is visible: {first}");
+    let caret_before = state.caret_byte();
+
+    assert!(
+        mouse(&mut tree, MouseKind::ScrollDown, 4, 2),
+        "the wheel is consumed while there is room to scroll"
+    );
+    let after = top(&mut tree);
+    assert!(after > first, "the window moved down: {first} -> {after}");
+    assert_eq!(
+        state.caret_byte(),
+        caret_before,
+        "scrolling is not editing: the caret stays put"
+    );
+
+    mouse(&mut tree, MouseKind::ScrollUp, 4, 2);
+    assert!(top(&mut tree) < after, "the wheel scrolled back up");
+
+    // At the top there is nothing left to give: the event is NOT
+    // consumed, so an outer scroll pane can take it.
+    for _ in 0..40 {
+        mouse(&mut tree, MouseKind::ScrollUp, 4, 2);
+    }
+    assert!(
+        !mouse(&mut tree, MouseKind::ScrollUp, 4, 2),
+        "a wheel at the top passes through to an outer pane"
+    );
 }

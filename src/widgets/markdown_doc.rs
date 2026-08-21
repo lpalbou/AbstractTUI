@@ -42,7 +42,17 @@ pub(crate) struct DocLayout {
 
 /// Parse + typeset at `width`. Pure over (source, tokens, width).
 pub(crate) fn layout_doc(source: &str, t: &TokenSet, width: i32) -> DocLayout {
-    let ts = BlockTypesetter::new(t);
+    layout_doc_with(source, t, width, None)
+}
+
+/// [`layout_doc`] with a fenced-block claimant installed.
+pub(crate) fn layout_doc_with(
+    source: &str,
+    t: &TokenSet,
+    width: i32,
+    fence: Option<std::rc::Rc<dyn crate::widgets::FenceBlock>>,
+) -> DocLayout {
+    let ts = BlockTypesetter::new(t).with_fence_block(fence);
     let mut rows: Vec<Row> = Vec::new();
     let mut heading_rows = Vec::new();
     for block in md::parse_doc(source, ts.styles()) {
@@ -270,6 +280,7 @@ impl BlockTypesetter {
                 quote: false,
                 rule: false,
                 image: None,
+                fence: None,
             });
         }
     }

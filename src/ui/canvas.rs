@@ -30,6 +30,35 @@ pub trait StyledCanvas: Canvas {
         )
     }
 
+    /// Mint a hyperlink id for `uri` in the target surface's link
+    /// table, for [`Style::link`](crate::render::Style::link).
+    ///
+    /// `0` means "this canvas carries no links" — the default, and
+    /// what a plain buffer returns. Text printed with a `0` link is
+    /// ordinary text, so a caller never has to branch: register,
+    /// attach, print. Whether the TERMINAL renders it as clickable is
+    /// a capability question (`Capabilities::hyperlinks`), and a
+    /// caller that wants a visible fallback for terminals without
+    /// OSC-8 should check that rather than this id.
+    ///
+    /// ```
+    /// use abstracttui::base::{Point, Rgba, Size};
+    /// use abstracttui::render::Style;
+    /// use abstracttui::ui::{BufferCanvas, StyledCanvas};
+    ///
+    /// let mut canvas = BufferCanvas::new(Size::new(20, 1));
+    /// let id = canvas.register_link("https://example.com");
+    /// canvas.print_styled(
+    ///     Point::new(0, 0),
+    ///     "docs",
+    ///     &Style::new().fg(Rgba::WHITE).link(id),
+    /// );
+    /// ```
+    fn register_link(&mut self, uri: &str) -> u16 {
+        let _ = uri;
+        0
+    }
+
     /// Fill a rect with a styled character. Default: per-row prints.
     fn fill_styled(&mut self, rect: Rect, ch: char, style: &crate::render::Style) {
         let mut buf = [0u8; 4];
@@ -232,6 +261,10 @@ impl Canvas for SurfaceCanvas<'_> {
 }
 
 impl StyledCanvas for SurfaceCanvas<'_> {
+    fn register_link(&mut self, uri: &str) -> u16 {
+        self.surface.register_link(uri)
+    }
+
     /// Full fidelity: the style patch goes straight to the surface —
     /// attrs, links, underline color all survive.
     fn print_styled(&mut self, p: Point, text: &str, style: &crate::render::Style) -> i32 {
@@ -322,6 +355,11 @@ impl Canvas for ClippedCanvas<'_> {
 }
 
 impl StyledCanvas for ClippedCanvas<'_> {
+    /// Links belong to the target surface, not to the clip: delegate.
+    fn register_link(&mut self, uri: &str) -> u16 {
+        self.inner.register_link(uri)
+    }
+
     fn print_styled(&mut self, p: Point, text: &str, style: &crate::render::Style) -> i32 {
         if p.y < self.clip.y || p.y >= self.clip.bottom() {
             return 0;

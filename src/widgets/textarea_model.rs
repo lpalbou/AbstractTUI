@@ -51,6 +51,11 @@ pub(crate) struct Caret {
     pub sticky: bool,
     /// First visible visual row (internal scroll once past max_rows).
     pub top: i32,
+    /// The view was scrolled AWAY from the caret (a wheel gesture), so
+    /// redraws must not snap it back. Any caret move or edit re-attaches
+    /// it — which is what an editor does, and what a reader scrolling a
+    /// long draft expects.
+    pub detached: bool,
 }
 
 impl Caret {
@@ -61,6 +66,7 @@ impl Caret {
             goal: None,
             sticky: false,
             top: 0,
+            detached: false,
         }
     }
 }
@@ -558,6 +564,13 @@ fn word_step_bytes(text: &str, from: usize, dir: i32) -> usize {
 /// Keep the caret's visual row inside the `visible`-row window.
 pub(crate) fn adjust_top(c: &mut Caret, caret_row: i32, total_rows: i32, visible: i32) {
     let visible = visible.max(1);
+    if c.detached {
+        // The reader scrolled away from the caret on purpose: hold the
+        // window where they put it (clamped), and let the next caret
+        // move or edit re-attach it.
+        c.top = c.top.clamp(0, (total_rows - visible).max(0));
+        return;
+    }
     if caret_row < c.top {
         c.top = caret_row;
     }

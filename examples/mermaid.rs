@@ -1,15 +1,21 @@
 //! mermaid — the subset renderer over embedded samples or a file.
 //!
-//! Four embedded samples show the honest range: a TD flowchart, an LR
-//! flowchart with labels + shapes, a sequence diagram, and a gantt
-//! chart falling back atomically (code fence + named notice +
-//! mermaid.live link).
+//! Nine embedded samples show the honest range: flowcharts in both
+//! directions, edge chaining with infix labels, `&` groups over the
+//! shape vocabulary, a `subgraph` flattening with its notice on
+//! screen, sequence diagrams with `alt`/`else` frames and activation
+//! bars, and a gantt chart falling back atomically (code fence +
+//! named notice + mermaid.live link).
+//!
+//! The notices ARE the point of several samples: a labeled downgrade
+//! (a flattened group, a flattened `<br/>`) is the engine's contract,
+//! and this is where you see it.
 //!
 //! Keys: Left/Right (or h/l) switch samples · Tab focuses the diagram
 //! (arrows pan; Enter selects flowchart nodes) · q quits.
 //!
-//! Try: `cargo run -p abstracttui-mermaid --example mermaid`
-//! Or:  `cargo run -p abstracttui-mermaid --example mermaid -- file.mmd`
+//! Try: `cargo run --example mermaid`
+//! Or:  `cargo run --example mermaid -- file.mmd`
 //!
 //! Docs: docs/graphs-and-diagrams.md.
 
@@ -17,14 +23,34 @@ use abstracttui::prelude::*;
 use abstracttui::ui::{dyn_view_scoped, text};
 use abstracttui_mermaid::MermaidView;
 
-const SAMPLES: [(&str, &str); 4] = [
+const SAMPLES: [(&str, &str); 9] = [
     (
         "flowchart TD",
         "graph TD;\n    A[Start] --> B{Ship it?};\n    B -->|yes| C(Release);\n    C --> D([Done]);\n    B -->|no| E[Fix];\n    E -.-> B;",
     ),
     (
-        "flowchart LR",
+        "flowchart LR + labels",
         "flowchart LR\n    A[Christmas] -->|Get money| B(Go shopping)\n    B --> C{Let me think}\n    C -->|One| D[Laptop]\n    C -->|Two| E[iPhone]\n    C -->|Three| F[Car]",
+    ),
+    (
+        "chaining + infix labels",
+        "flowchart LR\n    Edit --> Build -- ok --> Test -- pass --> Ship\n    Test -. fail .-> Edit",
+    ),
+    (
+        "`&` groups + shapes",
+        "flowchart TD\n    Web((web)) & Cli>cli] --> Api[[api]]\n    Api --> Cache[(cache)] & Store[(store)]\n    Cache --> Warm{{warm?}}",
+    ),
+    (
+        "subgraph (flattened, noticed)",
+        "flowchart TB\n    In[request] --> Parse\n    subgraph engine [Engine]\n      direction LR\n      Parse --> Plan --> Run\n    end\n    Run --> Out[response]",
+    ),
+    (
+        "sequence blocks",
+        "sequenceDiagram\n    participant Alice\n    participant Bob\n    Alice->>Bob: Hungry?\n    alt is lunchtime\n      Bob-->>Alice: Yes!\n    else not yet\n      Bob-->>Alice: Later\n    end",
+    ),
+    (
+        "sequence activations",
+        "sequenceDiagram\n    participant Web\n    participant Api\n    Web->>+Api: GET /orders\n    loop every page\n      Api->>Api: fetch batch\n    end\n    Api-->>-Web: 200 OK",
     ),
     (
         "sequence",

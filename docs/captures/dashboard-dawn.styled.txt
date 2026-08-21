@@ -1,6 +1,6 @@
 size=120x35 cursor=0,34 modes=[7,25,1049]
-  0| ▲ AbstractTUI  ops dashboard                                                          Dawn (Abstract)  ·  12:34:56 UTC |
-  1| ┌ nav ────────┐  ┌ traffic — rx/tx (MB/s) ──────────────────────────────────────┐  ┌ load ─────────────────────────┐   |
+  0| ▲ AbstractTUI  ops dashboard                                                   Dawn (Abstract)  ·  12:34:56 UTC     ☼  |
+  1| layout: child #0 and its siblings need 9 rows in a 8-row content box (parent content Rect { x: 85, y: 2, w: 31, h: 8 })|
   2| │  overview   │  │ ── rx   ── tx                                                │  │ cpu                       76% │   |
   3| │  traffic    │  │100 │                                               ⢀⡀        │  │███████████████████████▌       │   |
   4| │  sessions   │  │    │⠉⠉⠖⠒⠒⣄⠔⠢⡀⡄                              ⡰⢢⣀⠖⠔⠒⠉⠁⠈⠱⠒⡄⢀⣀⣀  │  │⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒⠒│   |
@@ -11,49 +11,39 @@ size=120x35 cursor=0,34 modes=[7,25,1049]
   9| │             │  │    └───────-15s───────────-10s─────────────-5s────────────now│  │█████████████▉                 │   |
  10| │             │  └──────────────────────────────────────────────────────────────┘  └⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤⠤┘   |
  11| │             │                                                                                                        |
- 12| │             │  ┌ events ───────────────────────────┐  ┌ sessions — s toggles sort ────────────────────────────────┐  |
- 13| │             │  │                                   │  │host         region   rx▼            tx            state   │  |
- 14| │             │  │                                   │  │edge-2       eu-w     41.3 MB/s      20.8 MB/s     healthy │  |
- 15| │             │  │                                   │  │core-a       us-e     41.1 MB/s      18.6 MB/s     syncing │  |
- 16| │             │  │                                   │  │edge-1       eu-w     38.7 MB/s      7.2 MB/s      healthy │  |
- 17| │             │  │                                   │  │edge-3       us-e     38.1 MB/s      23.6 MB/s     syncing │  |
- 18| │             │  │                                   │  │cache-2      ap-s     25.2 MB/s      16.5 MB/s     healthy │  |
- 19| │             │  │                                   │  │core-b       ap-s     22.8 MB/s      8.4 MB/s      syncing │  |
- 20| │             │  │                                   │  │cache-1      eu-n     13.4 MB/s      19.9 MB/s     healthy │  |
- 21| │             │  │                                   │  │                                                           │  |
- 22| │             │  │                                   │  │                                                           │  |
- 23| │             │  │                                   │  │                                                           │  |
- 24| │             │  │                                   │  │                                                           │  |
- 25| │             │  │ 00:00 info  session opened from … │  │                                                           │  |
- 26| │             │  │ 00:00 ok    tls renewed for gate… │  │                                                           │  |
- 27| │             │  │ 00:01 ok    backup verified       │  │                                                           │  |
- 28| │             │  │ 00:01 info  session opened from … │  │                                                           │  |
- 29| │             │  │ 00:02 info  session opened from … │  │                                                           │  |
- 30| │             │  │ 00:02 warn  backpressure on shar… │  │                                                           │  |
- 31| │             │  │ 00:03 ok    shard 2 caught up     │  │                                                           │  |
- 32| └─────────────┘  └───────────────────────────────────┘  └───────────────────────────────────────────────────────────┘  |
+ 12| │             │  ┌ events ──────────────────────────────┐  ┌ sessions — s toggles sort ─────────────────────────────┐  |
+ 13| │             │  │00:00 info  session opened from      █│  │host         region   rx▼          tx           state   │  |
+ 14| │             │  │edge-3                               █│  │edge-2       eu-w     41.3 MB/s    20.8 MB/s    healthy │  |
+ 15| │             │  │00:00 ok    tls renewed for gateway  █│  │core-a       us-e     41.1 MB/s    18.6 MB/s    syncing │  |
+ 16| │             │  │00:01 ok    backup verified          █│  │edge-1       eu-w     38.7 MB/s    7.2 MB/s     healthy │  |
+ 17| │             │  │00:01 info  session opened from      █│  │edge-3       us-e     38.1 MB/s    23.6 MB/s    syncing │  |
+ 18| │             │  │edge-3                               █│  │cache-2      ap-s     25.2 MB/s    16.5 MB/s    healthy │  |
+ 19| │             │  │00:02 info  session opened from      █│  │core-b       ap-s     22.8 MB/s    8.4 MB/s     syncing │  |
+ 20| │             │  │core-a                               █│  │cache-1      eu-n     13.4 MB/s    19.9 MB/s    healthy │  |
+ 21| │             │  │00:02 warn  backpressure on shard 2  █│  │                                                        │  |
+ 22| │             │  │                                     █│  │                                                        │  |
+ 23| │             │  │                                     █│  │                                                        │  |
+ 24| │             │  │                                     █│  │                                                        │  |
+ 25| │             │  │                                     █│  │                                                        │  |
+ 26| │             │  │                                     █│  │                                                        │  |
+ 27| │             │  │                                     █│  │                                                        │  |
+ 28| │             │  │                                     █│  │                                                        │  |
+ 29| │             │  │                                     █│  │                                                        │  |
+ 30| │             │  │                                     █│  │                                                        │  |
+ 31| │             │  │                                     █│  │                                                        │  |
+ 32| └─────────────┘  └──────────────────────────────────────┘  └────────────────────────────────────────────────────────┘  |
  33|                                                                                                                        |
- 34| tab focus  alt+←→ panes  s sort  n toast  b mark  ? help  ctrl+t theme  q quit                                         |
+ 34| tab focus  alt+←→ panes  s sort  n toast  b mark  ? help  ctrl+t cycle  q quit                                         |
 styles:
   0:0..1 fg=#2b3442 bg=#fbfcfe
   0:1..14 fg=#4a72c4 bg=#fbfcfe
   0:14..29 fg=#55617a bg=#fbfcfe
-  0:29..87 fg=#2b3442 bg=#fbfcfe
-  0:87..119 fg=#55617a bg=#fbfcfe
-  0:119..120 fg=#2b3442 bg=#fbfcfe
-  1:0..1 fg=#2b3442 bg=#f2f4f7
-  1:1..2 fg=#c2c6cc bg=#fbfcfe
-  1:2..7 fg=#55617a bg=#fbfcfe
-  1:7..16 fg=#c2c6cc bg=#fbfcfe
-  1:16..18 fg=#2b3442 bg=#f2f4f7
-  1:18..19 fg=#c2c6cc bg=#fbfcfe
-  1:19..43 fg=#55617a bg=#fbfcfe
-  1:43..82 fg=#c2c6cc bg=#fbfcfe
-  1:82..84 fg=#2b3442 bg=#f2f4f7
-  1:84..85 fg=#c2c6cc bg=#fbfcfe
-  1:85..91 fg=#55617a bg=#fbfcfe
-  1:91..117 fg=#c2c6cc bg=#fbfcfe
-  1:117..120 fg=#2b3442 bg=#f2f4f7
+  0:29..80 fg=#2b3442 bg=#fbfcfe
+  0:80..112 fg=#55617a bg=#fbfcfe
+  0:112..117 fg=#2b3442 bg=#fbfcfe
+  0:117..118 fg=#2b3442
+  0:118..120 fg=#2b3442 bg=#fbfcfe
+  1:0..120 fg=#4a72c4 bg=#e3e7ee
   2:0..1 fg=#2b3442 bg=#f2f4f7
   2:1..2 fg=#c2c6cc bg=#fbfcfe
   2:2..15 fg=#2b3442 bg=#c0cde8
@@ -290,11 +280,11 @@ styles:
   12:17..18 fg=#2b3442 bg=#f2f4f7
   12:18..19 fg=#c2c6cc bg=#fbfcfe
   12:19..27 fg=#55617a bg=#fbfcfe
-  12:27..55 fg=#c2c6cc bg=#fbfcfe
-  12:55..57 fg=#2b3442 bg=#f2f4f7
-  12:57..58 fg=#c2c6cc bg=#fbfcfe
-  12:58..85 fg=#55617a bg=#fbfcfe
-  12:85..118 fg=#c2c6cc bg=#fbfcfe
+  12:27..58 fg=#c2c6cc bg=#fbfcfe
+  12:58..60 fg=#2b3442 bg=#f2f4f7
+  12:60..61 fg=#c2c6cc bg=#fbfcfe
+  12:61..88 fg=#55617a bg=#fbfcfe
+  12:88..118 fg=#c2c6cc bg=#fbfcfe
   12:118..120 fg=#2b3442 bg=#f2f4f7
   13:0..1 fg=#2b3442 bg=#f2f4f7
   13:1..2 fg=#c2c6cc bg=#fbfcfe
@@ -303,14 +293,18 @@ styles:
   13:16..17 fg=#c6c9cf bg=#c6c9cf
   13:17..18 fg=#2b3442 bg=#f2f4f7
   13:18..19 fg=#c2c6cc bg=#fbfcfe
-  13:19..54 fg=#fbfcfe bg=#fbfcfe
-  13:54..55 fg=#c2c6cc bg=#fbfcfe
-  13:55..56 fg=#c6c9cf bg=#c6c9cf
-  13:56..57 fg=#2b3442 bg=#f2f4f7
+  13:19..25 fg=#7c8699 bg=#fbfcfe
+  13:25..31 fg=#2f7fa8 bg=#fbfcfe
+  13:31..50 fg=#2b3442 bg=#fbfcfe
+  13:50..56 fg=#fbfcfe bg=#fbfcfe
+  13:56..57 fg=#55617a bg=#fbfcfe
   13:57..58 fg=#c2c6cc bg=#fbfcfe
-  13:58..80 fg=#55617a bg=#e3e7ee attrs=B
-  13:80..83 fg=#2b3442 bg=#e3e7ee attrs=B
-  13:83..117 fg=#55617a bg=#e3e7ee attrs=B
+  13:58..59 fg=#c6c9cf bg=#c6c9cf
+  13:59..60 fg=#2b3442 bg=#f2f4f7
+  13:60..61 fg=#c2c6cc bg=#fbfcfe
+  13:61..83 fg=#55617a bg=#e3e7ee attrs=B
+  13:83..86 fg=#2b3442 bg=#e3e7ee attrs=B
+  13:86..117 fg=#55617a bg=#e3e7ee attrs=B
   13:117..118 fg=#c2c6cc bg=#fbfcfe
   13:118..119 fg=#c6c9cf bg=#c6c9cf
   13:119..120 fg=#2b3442 bg=#f2f4f7
@@ -321,12 +315,14 @@ styles:
   14:16..17 fg=#c6c9cf bg=#c6c9cf
   14:17..18 fg=#2b3442 bg=#f2f4f7
   14:18..19 fg=#c2c6cc bg=#fbfcfe
-  14:19..54 fg=#fbfcfe bg=#fbfcfe
-  14:54..55 fg=#c2c6cc bg=#fbfcfe
-  14:55..56 fg=#c6c9cf bg=#c6c9cf
-  14:56..57 fg=#2b3442 bg=#f2f4f7
+  14:19..25 fg=#2b3442 bg=#fbfcfe
+  14:25..56 fg=#fbfcfe bg=#fbfcfe
+  14:56..57 fg=#55617a bg=#fbfcfe
   14:57..58 fg=#c2c6cc bg=#fbfcfe
-  14:58..117 fg=#2b3442 bg=#c0cde8
+  14:58..59 fg=#c6c9cf bg=#c6c9cf
+  14:59..60 fg=#2b3442 bg=#f2f4f7
+  14:60..61 fg=#c2c6cc bg=#fbfcfe
+  14:61..117 fg=#2b3442 bg=#c0cde8
   14:117..118 fg=#c2c6cc bg=#fbfcfe
   14:118..119 fg=#c6c9cf bg=#c6c9cf
   14:119..120 fg=#2b3442 bg=#f2f4f7
@@ -337,12 +333,16 @@ styles:
   15:16..17 fg=#c6c9cf bg=#c6c9cf
   15:17..18 fg=#2b3442 bg=#f2f4f7
   15:18..19 fg=#c2c6cc bg=#fbfcfe
-  15:19..54 fg=#fbfcfe bg=#fbfcfe
-  15:54..55 fg=#c2c6cc bg=#fbfcfe
-  15:55..56 fg=#c6c9cf bg=#c6c9cf
-  15:56..57 fg=#2b3442 bg=#f2f4f7
+  15:19..25 fg=#7c8699 bg=#fbfcfe
+  15:25..31 fg=#3d8a4e bg=#fbfcfe
+  15:31..54 fg=#2b3442 bg=#fbfcfe
+  15:54..56 fg=#fbfcfe bg=#fbfcfe
+  15:56..57 fg=#55617a bg=#fbfcfe
   15:57..58 fg=#c2c6cc bg=#fbfcfe
-  15:58..117 fg=#2b3442 bg=#fbfcfe
+  15:58..59 fg=#c6c9cf bg=#c6c9cf
+  15:59..60 fg=#2b3442 bg=#f2f4f7
+  15:60..61 fg=#c2c6cc bg=#fbfcfe
+  15:61..117 fg=#2b3442 bg=#fbfcfe
   15:117..118 fg=#c2c6cc bg=#fbfcfe
   15:118..119 fg=#c6c9cf bg=#c6c9cf
   15:119..120 fg=#2b3442 bg=#f2f4f7
@@ -353,12 +353,16 @@ styles:
   16:16..17 fg=#c6c9cf bg=#c6c9cf
   16:17..18 fg=#2b3442 bg=#f2f4f7
   16:18..19 fg=#c2c6cc bg=#fbfcfe
-  16:19..54 fg=#fbfcfe bg=#fbfcfe
-  16:54..55 fg=#c2c6cc bg=#fbfcfe
-  16:55..56 fg=#c6c9cf bg=#c6c9cf
-  16:56..57 fg=#2b3442 bg=#f2f4f7
+  16:19..25 fg=#7c8699 bg=#fbfcfe
+  16:25..31 fg=#3d8a4e bg=#fbfcfe
+  16:31..46 fg=#2b3442 bg=#fbfcfe
+  16:46..56 fg=#fbfcfe bg=#fbfcfe
+  16:56..57 fg=#55617a bg=#fbfcfe
   16:57..58 fg=#c2c6cc bg=#fbfcfe
-  16:58..117 fg=#2b3442 bg=#fbfcfe
+  16:58..59 fg=#c6c9cf bg=#c6c9cf
+  16:59..60 fg=#2b3442 bg=#f2f4f7
+  16:60..61 fg=#c2c6cc bg=#fbfcfe
+  16:61..117 fg=#2b3442 bg=#fbfcfe
   16:117..118 fg=#c2c6cc bg=#fbfcfe
   16:118..119 fg=#c6c9cf bg=#c6c9cf
   16:119..120 fg=#2b3442 bg=#f2f4f7
@@ -369,12 +373,16 @@ styles:
   17:16..17 fg=#c6c9cf bg=#c6c9cf
   17:17..18 fg=#2b3442 bg=#f2f4f7
   17:18..19 fg=#c2c6cc bg=#fbfcfe
-  17:19..54 fg=#fbfcfe bg=#fbfcfe
-  17:54..55 fg=#c2c6cc bg=#fbfcfe
-  17:55..56 fg=#c6c9cf bg=#c6c9cf
-  17:56..57 fg=#2b3442 bg=#f2f4f7
+  17:19..25 fg=#7c8699 bg=#fbfcfe
+  17:25..31 fg=#2f7fa8 bg=#fbfcfe
+  17:31..50 fg=#2b3442 bg=#fbfcfe
+  17:50..56 fg=#fbfcfe bg=#fbfcfe
+  17:56..57 fg=#55617a bg=#fbfcfe
   17:57..58 fg=#c2c6cc bg=#fbfcfe
-  17:58..117 fg=#2b3442 bg=#fbfcfe
+  17:58..59 fg=#c6c9cf bg=#c6c9cf
+  17:59..60 fg=#2b3442 bg=#f2f4f7
+  17:60..61 fg=#c2c6cc bg=#fbfcfe
+  17:61..117 fg=#2b3442 bg=#fbfcfe
   17:117..118 fg=#c2c6cc bg=#fbfcfe
   17:118..119 fg=#c6c9cf bg=#c6c9cf
   17:119..120 fg=#2b3442 bg=#f2f4f7
@@ -385,12 +393,14 @@ styles:
   18:16..17 fg=#c6c9cf bg=#c6c9cf
   18:17..18 fg=#2b3442 bg=#f2f4f7
   18:18..19 fg=#c2c6cc bg=#fbfcfe
-  18:19..54 fg=#fbfcfe bg=#fbfcfe
-  18:54..55 fg=#c2c6cc bg=#fbfcfe
-  18:55..56 fg=#c6c9cf bg=#c6c9cf
-  18:56..57 fg=#2b3442 bg=#f2f4f7
+  18:19..25 fg=#2b3442 bg=#fbfcfe
+  18:25..56 fg=#fbfcfe bg=#fbfcfe
+  18:56..57 fg=#55617a bg=#fbfcfe
   18:57..58 fg=#c2c6cc bg=#fbfcfe
-  18:58..117 fg=#2b3442 bg=#fbfcfe
+  18:58..59 fg=#c6c9cf bg=#c6c9cf
+  18:59..60 fg=#2b3442 bg=#f2f4f7
+  18:60..61 fg=#c2c6cc bg=#fbfcfe
+  18:61..117 fg=#2b3442 bg=#fbfcfe
   18:117..118 fg=#c2c6cc bg=#fbfcfe
   18:118..119 fg=#c6c9cf bg=#c6c9cf
   18:119..120 fg=#2b3442 bg=#f2f4f7
@@ -401,12 +411,16 @@ styles:
   19:16..17 fg=#c6c9cf bg=#c6c9cf
   19:17..18 fg=#2b3442 bg=#f2f4f7
   19:18..19 fg=#c2c6cc bg=#fbfcfe
-  19:19..54 fg=#fbfcfe bg=#fbfcfe
-  19:54..55 fg=#c2c6cc bg=#fbfcfe
-  19:55..56 fg=#c6c9cf bg=#c6c9cf
-  19:56..57 fg=#2b3442 bg=#f2f4f7
+  19:19..25 fg=#7c8699 bg=#fbfcfe
+  19:25..31 fg=#2f7fa8 bg=#fbfcfe
+  19:31..50 fg=#2b3442 bg=#fbfcfe
+  19:50..56 fg=#fbfcfe bg=#fbfcfe
+  19:56..57 fg=#55617a bg=#fbfcfe
   19:57..58 fg=#c2c6cc bg=#fbfcfe
-  19:58..117 fg=#2b3442 bg=#fbfcfe
+  19:58..59 fg=#c6c9cf bg=#c6c9cf
+  19:59..60 fg=#2b3442 bg=#f2f4f7
+  19:60..61 fg=#c2c6cc bg=#fbfcfe
+  19:61..117 fg=#2b3442 bg=#fbfcfe
   19:117..118 fg=#c2c6cc bg=#fbfcfe
   19:118..119 fg=#c6c9cf bg=#c6c9cf
   19:119..120 fg=#2b3442 bg=#f2f4f7
@@ -417,12 +431,14 @@ styles:
   20:16..17 fg=#c6c9cf bg=#c6c9cf
   20:17..18 fg=#2b3442 bg=#f2f4f7
   20:18..19 fg=#c2c6cc bg=#fbfcfe
-  20:19..54 fg=#fbfcfe bg=#fbfcfe
-  20:54..55 fg=#c2c6cc bg=#fbfcfe
-  20:55..56 fg=#c6c9cf bg=#c6c9cf
-  20:56..57 fg=#2b3442 bg=#f2f4f7
+  20:19..25 fg=#2b3442 bg=#fbfcfe
+  20:25..56 fg=#fbfcfe bg=#fbfcfe
+  20:56..57 fg=#55617a bg=#fbfcfe
   20:57..58 fg=#c2c6cc bg=#fbfcfe
-  20:58..117 fg=#2b3442 bg=#fbfcfe
+  20:58..59 fg=#c6c9cf bg=#c6c9cf
+  20:59..60 fg=#2b3442 bg=#f2f4f7
+  20:60..61 fg=#c2c6cc bg=#fbfcfe
+  20:61..117 fg=#2b3442 bg=#fbfcfe
   20:117..118 fg=#c2c6cc bg=#fbfcfe
   20:118..119 fg=#c6c9cf bg=#c6c9cf
   20:119..120 fg=#2b3442 bg=#f2f4f7
@@ -433,12 +449,16 @@ styles:
   21:16..17 fg=#c6c9cf bg=#c6c9cf
   21:17..18 fg=#2b3442 bg=#f2f4f7
   21:18..19 fg=#c2c6cc bg=#fbfcfe
-  21:19..54 fg=#fbfcfe bg=#fbfcfe
-  21:54..55 fg=#c2c6cc bg=#fbfcfe
-  21:55..56 fg=#c6c9cf bg=#c6c9cf
-  21:56..57 fg=#2b3442 bg=#f2f4f7
+  21:19..25 fg=#7c8699 bg=#fbfcfe
+  21:25..31 fg=#a06b12 bg=#fbfcfe
+  21:31..54 fg=#2b3442 bg=#fbfcfe
+  21:54..56 fg=#fbfcfe bg=#fbfcfe
+  21:56..57 fg=#55617a bg=#fbfcfe
   21:57..58 fg=#c2c6cc bg=#fbfcfe
-  21:58..117 fg=#2b3442 bg=#fbfcfe
+  21:58..59 fg=#c6c9cf bg=#c6c9cf
+  21:59..60 fg=#2b3442 bg=#f2f4f7
+  21:60..61 fg=#c2c6cc bg=#fbfcfe
+  21:61..117 fg=#2b3442 bg=#fbfcfe
   21:117..118 fg=#c2c6cc bg=#fbfcfe
   21:118..119 fg=#c6c9cf bg=#c6c9cf
   21:119..120 fg=#2b3442 bg=#f2f4f7
@@ -449,12 +469,13 @@ styles:
   22:16..17 fg=#c6c9cf bg=#c6c9cf
   22:17..18 fg=#2b3442 bg=#f2f4f7
   22:18..19 fg=#c2c6cc bg=#fbfcfe
-  22:19..54 fg=#fbfcfe bg=#fbfcfe
-  22:54..55 fg=#c2c6cc bg=#fbfcfe
-  22:55..56 fg=#c6c9cf bg=#c6c9cf
-  22:56..57 fg=#2b3442 bg=#f2f4f7
+  22:19..56 fg=#fbfcfe bg=#fbfcfe
+  22:56..57 fg=#55617a bg=#fbfcfe
   22:57..58 fg=#c2c6cc bg=#fbfcfe
-  22:58..117 fg=#2b3442 bg=#fbfcfe
+  22:58..59 fg=#c6c9cf bg=#c6c9cf
+  22:59..60 fg=#2b3442 bg=#f2f4f7
+  22:60..61 fg=#c2c6cc bg=#fbfcfe
+  22:61..117 fg=#2b3442 bg=#fbfcfe
   22:117..118 fg=#c2c6cc bg=#fbfcfe
   22:118..119 fg=#c6c9cf bg=#c6c9cf
   22:119..120 fg=#2b3442 bg=#f2f4f7
@@ -465,12 +486,13 @@ styles:
   23:16..17 fg=#c6c9cf bg=#c6c9cf
   23:17..18 fg=#2b3442 bg=#f2f4f7
   23:18..19 fg=#c2c6cc bg=#fbfcfe
-  23:19..54 fg=#fbfcfe bg=#fbfcfe
-  23:54..55 fg=#c2c6cc bg=#fbfcfe
-  23:55..56 fg=#c6c9cf bg=#c6c9cf
-  23:56..57 fg=#2b3442 bg=#f2f4f7
+  23:19..56 fg=#fbfcfe bg=#fbfcfe
+  23:56..57 fg=#55617a bg=#fbfcfe
   23:57..58 fg=#c2c6cc bg=#fbfcfe
-  23:58..117 fg=#2b3442 bg=#fbfcfe
+  23:58..59 fg=#c6c9cf bg=#c6c9cf
+  23:59..60 fg=#2b3442 bg=#f2f4f7
+  23:60..61 fg=#c2c6cc bg=#fbfcfe
+  23:61..117 fg=#2b3442 bg=#fbfcfe
   23:117..118 fg=#c2c6cc bg=#fbfcfe
   23:118..119 fg=#c6c9cf bg=#c6c9cf
   23:119..120 fg=#2b3442 bg=#f2f4f7
@@ -481,12 +503,13 @@ styles:
   24:16..17 fg=#c6c9cf bg=#c6c9cf
   24:17..18 fg=#2b3442 bg=#f2f4f7
   24:18..19 fg=#c2c6cc bg=#fbfcfe
-  24:19..54 fg=#fbfcfe bg=#fbfcfe
-  24:54..55 fg=#c2c6cc bg=#fbfcfe
-  24:55..56 fg=#c6c9cf bg=#c6c9cf
-  24:56..57 fg=#2b3442 bg=#f2f4f7
+  24:19..56 fg=#fbfcfe bg=#fbfcfe
+  24:56..57 fg=#55617a bg=#fbfcfe
   24:57..58 fg=#c2c6cc bg=#fbfcfe
-  24:58..117 fg=#2b3442 bg=#fbfcfe
+  24:58..59 fg=#c6c9cf bg=#c6c9cf
+  24:59..60 fg=#2b3442 bg=#f2f4f7
+  24:60..61 fg=#c2c6cc bg=#fbfcfe
+  24:61..117 fg=#2b3442 bg=#fbfcfe
   24:117..118 fg=#c2c6cc bg=#fbfcfe
   24:118..119 fg=#c6c9cf bg=#c6c9cf
   24:119..120 fg=#2b3442 bg=#f2f4f7
@@ -497,16 +520,13 @@ styles:
   25:16..17 fg=#c6c9cf bg=#c6c9cf
   25:17..18 fg=#2b3442 bg=#f2f4f7
   25:18..19 fg=#c2c6cc bg=#fbfcfe
-  25:19..20 fg=#fbfcfe bg=#fbfcfe
-  25:20..25 fg=#7c8699 bg=#fbfcfe
-  25:25..32 fg=#2f7fa8 bg=#fbfcfe
-  25:32..53 fg=#2b3442 bg=#fbfcfe
-  25:53..54 fg=#fbfcfe bg=#fbfcfe
-  25:54..55 fg=#c2c6cc bg=#fbfcfe
-  25:55..56 fg=#c6c9cf bg=#c6c9cf
-  25:56..57 fg=#2b3442 bg=#f2f4f7
+  25:19..56 fg=#fbfcfe bg=#fbfcfe
+  25:56..57 fg=#55617a bg=#fbfcfe
   25:57..58 fg=#c2c6cc bg=#fbfcfe
-  25:58..117 fg=#2b3442 bg=#fbfcfe
+  25:58..59 fg=#c6c9cf bg=#c6c9cf
+  25:59..60 fg=#2b3442 bg=#f2f4f7
+  25:60..61 fg=#c2c6cc bg=#fbfcfe
+  25:61..117 fg=#2b3442 bg=#fbfcfe
   25:117..118 fg=#c2c6cc bg=#fbfcfe
   25:118..119 fg=#c6c9cf bg=#c6c9cf
   25:119..120 fg=#2b3442 bg=#f2f4f7
@@ -517,16 +537,13 @@ styles:
   26:16..17 fg=#c6c9cf bg=#c6c9cf
   26:17..18 fg=#2b3442 bg=#f2f4f7
   26:18..19 fg=#c2c6cc bg=#fbfcfe
-  26:19..20 fg=#fbfcfe bg=#fbfcfe
-  26:20..25 fg=#7c8699 bg=#fbfcfe
-  26:25..32 fg=#3d8a4e bg=#fbfcfe
-  26:32..53 fg=#2b3442 bg=#fbfcfe
-  26:53..54 fg=#fbfcfe bg=#fbfcfe
-  26:54..55 fg=#c2c6cc bg=#fbfcfe
-  26:55..56 fg=#c6c9cf bg=#c6c9cf
-  26:56..57 fg=#2b3442 bg=#f2f4f7
+  26:19..56 fg=#fbfcfe bg=#fbfcfe
+  26:56..57 fg=#55617a bg=#fbfcfe
   26:57..58 fg=#c2c6cc bg=#fbfcfe
-  26:58..117 fg=#2b3442 bg=#fbfcfe
+  26:58..59 fg=#c6c9cf bg=#c6c9cf
+  26:59..60 fg=#2b3442 bg=#f2f4f7
+  26:60..61 fg=#c2c6cc bg=#fbfcfe
+  26:61..117 fg=#2b3442 bg=#fbfcfe
   26:117..118 fg=#c2c6cc bg=#fbfcfe
   26:118..119 fg=#c6c9cf bg=#c6c9cf
   26:119..120 fg=#2b3442 bg=#f2f4f7
@@ -537,16 +554,13 @@ styles:
   27:16..17 fg=#c6c9cf bg=#c6c9cf
   27:17..18 fg=#2b3442 bg=#f2f4f7
   27:18..19 fg=#c2c6cc bg=#fbfcfe
-  27:19..20 fg=#fbfcfe bg=#fbfcfe
-  27:20..25 fg=#7c8699 bg=#fbfcfe
-  27:25..32 fg=#3d8a4e bg=#fbfcfe
-  27:32..47 fg=#2b3442 bg=#fbfcfe
-  27:47..54 fg=#fbfcfe bg=#fbfcfe
-  27:54..55 fg=#c2c6cc bg=#fbfcfe
-  27:55..56 fg=#c6c9cf bg=#c6c9cf
-  27:56..57 fg=#2b3442 bg=#f2f4f7
+  27:19..56 fg=#fbfcfe bg=#fbfcfe
+  27:56..57 fg=#55617a bg=#fbfcfe
   27:57..58 fg=#c2c6cc bg=#fbfcfe
-  27:58..117 fg=#2b3442 bg=#fbfcfe
+  27:58..59 fg=#c6c9cf bg=#c6c9cf
+  27:59..60 fg=#2b3442 bg=#f2f4f7
+  27:60..61 fg=#c2c6cc bg=#fbfcfe
+  27:61..117 fg=#2b3442 bg=#fbfcfe
   27:117..118 fg=#c2c6cc bg=#fbfcfe
   27:118..119 fg=#c6c9cf bg=#c6c9cf
   27:119..120 fg=#2b3442 bg=#f2f4f7
@@ -557,16 +571,13 @@ styles:
   28:16..17 fg=#c6c9cf bg=#c6c9cf
   28:17..18 fg=#2b3442 bg=#f2f4f7
   28:18..19 fg=#c2c6cc bg=#fbfcfe
-  28:19..20 fg=#fbfcfe bg=#fbfcfe
-  28:20..25 fg=#7c8699 bg=#fbfcfe
-  28:25..32 fg=#2f7fa8 bg=#fbfcfe
-  28:32..53 fg=#2b3442 bg=#fbfcfe
-  28:53..54 fg=#fbfcfe bg=#fbfcfe
-  28:54..55 fg=#c2c6cc bg=#fbfcfe
-  28:55..56 fg=#c6c9cf bg=#c6c9cf
-  28:56..57 fg=#2b3442 bg=#f2f4f7
+  28:19..56 fg=#fbfcfe bg=#fbfcfe
+  28:56..57 fg=#55617a bg=#fbfcfe
   28:57..58 fg=#c2c6cc bg=#fbfcfe
-  28:58..117 fg=#2b3442 bg=#fbfcfe
+  28:58..59 fg=#c6c9cf bg=#c6c9cf
+  28:59..60 fg=#2b3442 bg=#f2f4f7
+  28:60..61 fg=#c2c6cc bg=#fbfcfe
+  28:61..117 fg=#2b3442 bg=#fbfcfe
   28:117..118 fg=#c2c6cc bg=#fbfcfe
   28:118..119 fg=#c6c9cf bg=#c6c9cf
   28:119..120 fg=#2b3442 bg=#f2f4f7
@@ -577,16 +588,13 @@ styles:
   29:16..17 fg=#c6c9cf bg=#c6c9cf
   29:17..18 fg=#2b3442 bg=#f2f4f7
   29:18..19 fg=#c2c6cc bg=#fbfcfe
-  29:19..20 fg=#fbfcfe bg=#fbfcfe
-  29:20..25 fg=#7c8699 bg=#fbfcfe
-  29:25..32 fg=#2f7fa8 bg=#fbfcfe
-  29:32..53 fg=#2b3442 bg=#fbfcfe
-  29:53..54 fg=#fbfcfe bg=#fbfcfe
-  29:54..55 fg=#c2c6cc bg=#fbfcfe
-  29:55..56 fg=#c6c9cf bg=#c6c9cf
-  29:56..57 fg=#2b3442 bg=#f2f4f7
+  29:19..56 fg=#fbfcfe bg=#fbfcfe
+  29:56..57 fg=#55617a bg=#fbfcfe
   29:57..58 fg=#c2c6cc bg=#fbfcfe
-  29:58..117 fg=#2b3442 bg=#fbfcfe
+  29:58..59 fg=#c6c9cf bg=#c6c9cf
+  29:59..60 fg=#2b3442 bg=#f2f4f7
+  29:60..61 fg=#c2c6cc bg=#fbfcfe
+  29:61..117 fg=#2b3442 bg=#fbfcfe
   29:117..118 fg=#c2c6cc bg=#fbfcfe
   29:118..119 fg=#c6c9cf bg=#c6c9cf
   29:119..120 fg=#2b3442 bg=#f2f4f7
@@ -597,16 +605,13 @@ styles:
   30:16..17 fg=#c6c9cf bg=#c6c9cf
   30:17..18 fg=#2b3442 bg=#f2f4f7
   30:18..19 fg=#c2c6cc bg=#fbfcfe
-  30:19..20 fg=#fbfcfe bg=#fbfcfe
-  30:20..25 fg=#7c8699 bg=#fbfcfe
-  30:25..32 fg=#a06b12 bg=#fbfcfe
-  30:32..53 fg=#2b3442 bg=#fbfcfe
-  30:53..54 fg=#fbfcfe bg=#fbfcfe
-  30:54..55 fg=#c2c6cc bg=#fbfcfe
-  30:55..56 fg=#c6c9cf bg=#c6c9cf
-  30:56..57 fg=#2b3442 bg=#f2f4f7
+  30:19..56 fg=#fbfcfe bg=#fbfcfe
+  30:56..57 fg=#55617a bg=#fbfcfe
   30:57..58 fg=#c2c6cc bg=#fbfcfe
-  30:58..117 fg=#2b3442 bg=#fbfcfe
+  30:58..59 fg=#c6c9cf bg=#c6c9cf
+  30:59..60 fg=#2b3442 bg=#f2f4f7
+  30:60..61 fg=#c2c6cc bg=#fbfcfe
+  30:61..117 fg=#2b3442 bg=#fbfcfe
   30:117..118 fg=#c2c6cc bg=#fbfcfe
   30:118..119 fg=#c6c9cf bg=#c6c9cf
   30:119..120 fg=#2b3442 bg=#f2f4f7
@@ -617,16 +622,13 @@ styles:
   31:16..17 fg=#c6c9cf bg=#c6c9cf
   31:17..18 fg=#2b3442 bg=#f2f4f7
   31:18..19 fg=#c2c6cc bg=#fbfcfe
-  31:19..20 fg=#fbfcfe bg=#fbfcfe
-  31:20..25 fg=#7c8699 bg=#fbfcfe
-  31:25..32 fg=#3d8a4e bg=#fbfcfe
-  31:32..49 fg=#2b3442 bg=#fbfcfe
-  31:49..54 fg=#fbfcfe bg=#fbfcfe
-  31:54..55 fg=#c2c6cc bg=#fbfcfe
-  31:55..56 fg=#c6c9cf bg=#c6c9cf
-  31:56..57 fg=#2b3442 bg=#f2f4f7
+  31:19..56 fg=#fbfcfe bg=#fbfcfe
+  31:56..57 fg=#55617a bg=#fbfcfe
   31:57..58 fg=#c2c6cc bg=#fbfcfe
-  31:58..117 fg=#2b3442 bg=#fbfcfe
+  31:58..59 fg=#c6c9cf bg=#c6c9cf
+  31:59..60 fg=#2b3442 bg=#f2f4f7
+  31:60..61 fg=#c2c6cc bg=#fbfcfe
+  31:61..117 fg=#2b3442 bg=#fbfcfe
   31:117..118 fg=#c2c6cc bg=#fbfcfe
   31:118..119 fg=#c6c9cf bg=#c6c9cf
   31:119..120 fg=#2b3442 bg=#f2f4f7
@@ -634,18 +636,18 @@ styles:
   32:1..16 fg=#c2c6cc bg=#fbfcfe
   32:16..17 fg=#c6c9cf bg=#c6c9cf
   32:17..18 fg=#2b3442 bg=#f2f4f7
-  32:18..55 fg=#c2c6cc bg=#fbfcfe
-  32:55..56 fg=#c6c9cf bg=#c6c9cf
-  32:56..57 fg=#2b3442 bg=#f2f4f7
-  32:57..118 fg=#c2c6cc bg=#fbfcfe
+  32:18..58 fg=#c2c6cc bg=#fbfcfe
+  32:58..59 fg=#c6c9cf bg=#c6c9cf
+  32:59..60 fg=#2b3442 bg=#f2f4f7
+  32:60..118 fg=#c2c6cc bg=#fbfcfe
   32:118..119 fg=#c6c9cf bg=#c6c9cf
   32:119..120 fg=#2b3442 bg=#f2f4f7
   33:0..2 fg=#2b3442 bg=#f2f4f7
   33:2..17 fg=#c6c9cf bg=#c6c9cf
   33:17..19 fg=#2b3442 bg=#f2f4f7
-  33:19..56 fg=#c6c9cf bg=#c6c9cf
-  33:56..58 fg=#2b3442 bg=#f2f4f7
-  33:58..119 fg=#c6c9cf bg=#c6c9cf
+  33:19..59 fg=#c6c9cf bg=#c6c9cf
+  33:59..61 fg=#2b3442 bg=#f2f4f7
+  33:61..119 fg=#c6c9cf bg=#c6c9cf
   33:119..120 fg=#2b3442 bg=#f2f4f7
   34:0..1 fg=#2b3442 bg=#f2f4f7
   34:1..4 fg=#4a72c4 bg=#f2f4f7

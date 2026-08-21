@@ -37,7 +37,7 @@ use crate::layout::{Dimension, Style as LayoutStyle};
 use crate::reactive::{Scope, Signal};
 use crate::render::Style;
 use crate::theme::TokenSet;
-use crate::ui::{dyn_view, Element, EventCtx, Key, Phase, UiEvent};
+use crate::ui::{dyn_view, Element, EventCtx, Key, MouseKind, Phase, UiEvent};
 use crate::widgets::input::{
     notify, run_paste_hook, BoxedTextFn, PasteAction, PasteHook, PasteHookFn, TextCallback,
 };
@@ -339,6 +339,20 @@ impl TextArea {
                     UiEvent::Key(k) => {
                         handle_key(&state, k.key, k.mods, width, min_rows, max_rows, policy)
                     }
+                    // The wheel scrolls the window WITHOUT moving the
+                    // caret — a reader looking back over a long draft
+                    // has not changed where they are typing. A text
+                    // area that only answered the keyboard was the odd
+                    // one out among the engine's scrolling surfaces.
+                    UiEvent::Mouse(m)
+                        if matches!(m.kind, MouseKind::ScrollUp | MouseKind::ScrollDown) =>
+                    {
+                        let delta = if m.kind == MouseKind::ScrollUp { -3 } else { 3 };
+                        (
+                            scroll_window(&state, delta, width, min_rows, max_rows),
+                            Owed::Nothing,
+                        )
+                    }
                     UiEvent::Paste(s) => {
                         // Paste intercept (0273): the hook sees the RAW
                         // text before any insertion and decides.
@@ -595,9 +609,40 @@ fn normalize_newlines(s: &str) -> String {
     s.replace("\r\n", "\n").replace('\r', "\n")
 }
 
+/// Move the visible window by `delta` rows, caret untouched. Returns
+/// whether anything moved — a wheel event at the end of the document
+/// must not be swallowed, so an outer scroll pane can take it.
+fn scroll_window(
+    state: &TextAreaState,
+    delta: i32,
+    width: i32,
+    min_rows: i32,
+    max_rows: i32,
+) -> bool {
+    let text = state.inner.value.get_untracked();
+    let rows = RowMap::build(&text, width);
+    let visible = (rows.len() as i32).clamp(min_rows, max_rows);
+    let max_top = (rows.len() as i32 - visible).max(0);
+    let mut c = state.inner.caret.get_untracked();
+    let want = (c.top + delta).clamp(0, max_top);
+    if want == c.top {
+        return false;
+    }
+    c.top = want;
+    // Detach: redraws recompute the window from the caret, which would
+    // snap this gesture straight back.
+    c.detached = true;
+    state.inner.caret.set(c);
+    true
+}
+
 /// Post-edit bookkeeping shared by every mutating path: clamp the
 /// scroll window so the caret row stays visible.
 fn finish_edit(state: &TextAreaState, c: &mut Caret, width: i32, min_rows: i32, max_rows: i32) {
+    // An edit always brings the view back to the caret — this is the
+    // one choke point every mutating path goes through, so no path can
+    // leave a detached window behind.
+    c.detached = false;
     let text = state.inner.value.get_untracked();
     let rows = RowMap::build(&text, width);
     let (crow, _) = rows.visual(&text, c.byte, c.sticky);
@@ -644,6 +689,9 @@ fn handle_key(
 ) -> (bool, Owed) {
     let value = state.inner.value;
     let mut c = state.inner.caret.get_untracked();
+    // Any key re-attaches the view to the caret: a keystroke means the
+    // user is back at their cursor, wherever they had scrolled to.
+    c.detached = false;
     let mut text = value.get_untracked();
     let outcome = model::apply_key(&mut text, &mut c, key, mods, width, policy);
     match outcome {

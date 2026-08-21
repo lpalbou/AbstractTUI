@@ -7,6 +7,246 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-08-21
+
+### Added
+
+- ui: **`StyledCanvas::register_link`** — a draw closure can mint a
+  hyperlink id for `Style::link`, which previously only the render
+  layer could do. Defaulted to `0` (no link), so every existing canvas
+  compiles unchanged and text printed with a `0` link is ordinary text.
+- widgets: **`FenceBlock`** — a seam that lets a fenced code block
+  render as something other than code, INSIDE the document.
+  `MarkdownView::fence_block(...)` installs a claimant; it measures the
+  fences it recognizes and paints their rows, so a diagram lives in the
+  document's own scroll surface, outline, and search index instead of
+  forcing the app to split the document into interleaved widgets.
+  Fences the claimant declines render as code, unchanged. The engine
+  ships no diagram languages — this is how a sibling crate brings one.
+- mermaid: **`MermaidFence`** — the claimant for ```mermaid fences.
+  `MarkdownView::new(doc).fence_block(Rc::new(MermaidFence::new()))` is
+  the whole integration. Renders once per (source, width, theme) and
+  serves rows from that, so scrolling a long document does not
+  re-render its diagrams.
+- mermaid: the flowchart subset widened to what people actually write —
+  **edge chaining** (`A --> B --> C`), **infix labels**
+  (`-- text -->`, `-. text .->`, `== text ==>`), **`&` groups**
+  (`A & B --> C & D`, a cross product), the **full arrow vocabulary**
+  (any body length, `x`/`o` heads, `<-->`), five more **node shapes**
+  (`((circle))`, `[[subroutine]]`, `[(cylinder)]`, `{{hexagon}}`,
+  `>flag]`), and `click`/`linkStyle`/`class`/`direction` joining the
+  recognized-and-dropped row instead of aborting a whole diagram.
+- mermaid: **sequence control-flow blocks and activations**. `alt` +
+  `else`, `opt`, `loop`, and `par` + `and` render as labeled frames
+  with dashed branch dividers, nested to any depth; `activate` /
+  `deactivate` and the `->>+` / `-->>-` message suffixes draw a bar on
+  the lifeline, stepping right when one participant is active twice.
+  Diagrams using these — the shape most real protocol and auth
+  sequences take — used to fall back whole.
+  In the IR a block is a TREE (`Block` holding `Branch`es), not a
+  start/else/end token stream: the parser balances it once and names
+  any mismatch (`alt` never closed, a stray `end`, `else` inside a
+  `par`), so every consumer recurses over something that cannot be
+  malformed. The `+`/`-` suffixes expand to the same
+  `SeqItem::Activate`/`Deactivate` the keywords produce, so one
+  concept reaches layout rather than two spellings of it.
+  Nesting is capped at 64 and deeper input falls back BY NAME: layout,
+  rendering and `Drop` all recurse over the tree, and a stack overflow
+  aborts the host process — which a crate that renders mermaid out of
+  someone else's markdown must never do.
+- mermaid: **`subgraph` blocks flatten** instead of falling back —
+  members render, the group box does not, and the loss is a notice.
+  Nesting, `subgraph id [Title]`, and an edge naming a group are all
+  handled. Group boxes need cluster support in the layout engine, which
+  is a separate piece of work.
+- render: **PNG screenshots** — `Screenshot::to_png()`, `to_png_with(PngOpts)`,
+  `to_bitmap()`, and `write_png()`. Unlike the SVG exporter, which names a
+  font family and hopes the viewer resolves one whose advance matches the
+  grid, every pixel here is decided by the engine: text comes from an
+  embedded 8x16 bitmap, and the ranges that must TILE — box drawing, block
+  elements, braille, sextants — are drawn GEOMETRICALLY, so strokes meet
+  exactly at every cell boundary on every machine. Output is deterministic
+  (integer math, no floats, no map iteration) and round-trips through the
+  engine's own PNG decoder. Bold, dim, reverse, underline, strike, wide
+  glyphs, and veiled pixel-protocol regions are all carried; a character
+  outside the table and the geometric ranges draws a hollow placeholder,
+  never a wrong glyph. The capture tool now writes a `.png` beside each
+  `.txt`/`.styled.txt`/`.svg`. The font generator REFUSES a `.notdef`
+  substitution rather than embedding it: a hollow box that claims to be
+  a glyph is indistinguishable from the honest placeholder, and hides
+  the fact that the terminal will show tofu too.
+- gfx: **animated GIF and APNG decoding**, plus a playback lane.
+  `gfx::decode_animation(bytes)` decodes either into an `Animation` —
+  frames, per-frame delays, loop count — and a still decodes as a
+  one-frame animation, so one code path shows any picture.
+  `widgets::AnimatedImage` plays one in the cell grid, with
+  `.playing(signal)` to pause and `.repeat(bool)` to override the
+  file's own loop declaration. Each frame arms exactly one timer for
+  its own delay: nothing wakes between frames, and a paused, finished,
+  or single-frame source arms nothing at all.
+- gfx: **GIF stills**. `decode_image` and `probe_dimensions` accept GIF
+  (first frame / logical screen descriptor), so markdown image blocks
+  and `Image::from_path` take a `.gif` without knowing about animation.
+- gfx: **video files are recognized and refused by name.** `.mp4`,
+  `.mov`, `.avi`, `.webm`, and `.mpg` no longer report a hex dump of
+  their magic bytes; they name the container and carry the command that
+  converts them into an animation the engine can play
+  (`ffmpeg -i IN -vf 'fps=12,scale=480:-1' OUT.gif`).
+- examples: the family's four examples (`mermaid`, `mermaid_doc`,
+  `workflow`, `network`) moved into the root crate, so
+  `cargo run --example <name>` finds them and `cargo run --example`
+  lists them. They compose the sibling crates through the root's
+  existing dev-dependencies; nothing about the published extension
+  crates changes.
+- examples: `mermaid_doc` — a markdown page
+  whose ```mermaid fences render as diagrams in place, with a `rust`
+  fence left as code and an out-of-subset diagram falling back where it
+  stands, so the whole contract is visible on one screen. The `mermaid`
+  example's samples now cover chaining, infix labels, `&` groups, the
+  shape vocabulary, and a flattened `subgraph` with its notice.
+- mermaid: a diagram carries ONE flattening notice listing its groups,
+  not one line per group, and a group-local `direction` no longer adds
+  a second line — a reader cannot act on it, and the flattening notice
+  already says the box is gone.
+- examples: `animation.rs` — play a clip, pause it, cycle the mosaic
+  family under it, and see a refused video file as a first-class state.
+- tools: `make_anim_fixtures.py` regenerates the embedded animation
+  fixtures byte-for-byte.
+
+- examples: `scrollbar.rs` — four panes over the same rows (`Scroll` at
+  two gutter widths, `List`, `Table`) to grab, drag, and compare the one
+  strip they share, with live offsets underneath.
+- widgets: **`Scroll::scrollbar_width(cells)`** — the scrollbar's
+  reserved gutter is now a parameter (default 1, max 4) for apps with
+  room for a comfortable mouse target. The cells come out of the
+  content, as the 1-cell gutter always has.
+
+### Changed
+
+- widgets: **the scrollbar reads as a scrollbar.** The thumb is drawn
+  with a full block (`█`) and the track with a thin rail (`▏`), instead
+  of the box-drawing hairlines (`┃`/`│`) that made a 1-cell bar almost
+  invisible on a dense screen. Block elements are also the safest glyph
+  family on degraded terminals. Tests or snapshots matching the old
+  glyphs should update. The `sweep_unicode_table_23` golden is re-minted
+  for the new bar; `docs/captures` stills carry it too.
+- widgets: **the scrollbar drags the way a scrollbar drags.** A press on
+  the thumb takes hold and moves nothing; the drag that follows tracks
+  the pointer row for row and keeps steering after the pointer leaves
+  the strip; a press on bare track teleports the thumb under the
+  pointer. The thumb also takes accent ink while the pointer is over the
+  strip or a drag is live — the affordance that says it is grabbable.
+  `Scroll`, `List`, `Table` and `FilePicker` all answer the pointer the
+  same way; `Table` and `FilePicker` had no hover state at all before.
+- widgets: **`Table` and `FilePicker` rows take hover ink**, the rule
+  `List` rows have always followed (theme §3.2: a row is a borderless
+  actionable, so the hovered one shifts its ink to `accent` with the
+  background untouched). Selection outranks hover — the audited
+  selection pair stays and BOLD marks the hot row, because the hover
+  inks are not contrast-audited against `selection_bg`. A `FilePicker`
+  directory row already wears `accent`, so hover carries BOLD there too.
+  Hover motion still reports only where the app opts in
+  (`RunConfig::hover_ink`).
+- widgets: `List`'s scrollbar column is no longer inert. It grabs and
+  drags like every other bar; presses there still never touch selection.
+- gfx: the unrecognized-format message now reads `PNG, JPEG, and GIF
+  decode, WebP/AVIF/TIFF do not`. Callers that display it verbatim need
+  no change; callers matching its exact text should update.
+
+### Fixed
+
+- widgets: **grabbing the scrollbar thumb no longer jumps the content.**
+  `Scroll` mapped a press onto an offset over a travel range that did
+  not match the one the thumb was drawn on, so the press that grabbed
+  the thumb displaced the view first — by up to 307 rows on a 3000-row
+  transcript — and slid the thumb out from under the cursor. Placement
+  and its inverse are now one seam with a property test over every
+  reachable offset.
+- widgets: `Table` and `FilePicker` resolved a row from the press row
+  alone, so a press on the scrollbar column selected the row beside it —
+  and, under the click-on-selected-activates rule, a second press could
+  open a directory or commit a pick. The bar claims its own column now.
+- widgets: a `Drag` arriving with no press of the bar's own (the driver
+  drops a tree's capture when a press becomes a screen-text selection,
+  and terminals emit motion-with-button after a lost release) no longer
+  teleports the offset.
+- widgets: **`TextArea` answers the wheel.** A long transcript in a
+  read-only `TextArea` could only be scrolled from the keyboard, which
+  is not how anyone reads a wall of text. The wheel now moves the
+  window without moving the caret (the caret goes back to being
+  followed the moment a key edits or navigates), and an event with
+  nowhere left to go is left unconsumed so an outer `Scroll` still
+  gets it. `MarkdownView`, `CodeView` and `RichTextView` are unchanged
+  by design — they draw all their rows and are meant to be wrapped in
+  a `Scroll`, which is what gives a document its wheel; the docs now
+  say so on all three instead of leaving it to be discovered.
+- mermaid: **the fallback's live link is reachable again.** The
+  mermaid.live URL carries the whole diagram in its fragment, so on one
+  row it truncated into dead text — too long to read, impossible to
+  copy whole, clickable nowhere. It is now an OSC-8 hyperlink where the
+  terminal has one, and WRAPS across rows where it does not, so a mouse
+  selection can always take all of it.
+- mermaid: five diagrams that rendered but rendered WRONG — the class
+  that is worse than an honest fallback, because nothing tells the
+  reader. Edge labels vanished in horizontal flowcharts (`LR`/`RL`
+  dropped them while `TD` kept them); `"quoted labels"` kept their
+  quote marks; `<br/>` reached the screen literally instead of
+  breaking the line; a node declared twice took its FIRST label where
+  mermaid takes the last; and an empty diagram drew a blank rectangle
+  rather than saying it was empty.
+- mermaid: sequence layout defects found by an adversarial pass, each
+  now pinned by a test: an activation bar opened three rows below the
+  arrow that started it; nested frames shared or escaped their
+  parent's border; a long note or self-message label burst the frame
+  it sat in; `activate` on an unknown participant invented one and
+  reordered the columns; a divider label was truncated to nothing at
+  narrow widths; `end note` was silently accepted as a block close;
+  and layout was quadratic in block count (51 ms at 1600 blocks), now
+  linear via bottom-up extents.
+
+### Documentation
+
+- api: new "Focus — who receives keys" section in the `ui` chapter — key
+  and paste routing (focused node, root fallback), the four ways a node
+  takes focus, the `.element(cx, &t).autofocus()` recipe for a field that
+  should own the caret at startup, the initial focus modal overlays
+  establish for themselves, and the per-key resolution order (handlers →
+  element shortcuts → Tab traversal → global `Actions`), including why a
+  bare-letter global shortcut is a trap in an app with a text field.
+  Cross-linked from `TextArea`, README, getting-started, FAQ, and a new
+  troubleshooting entry ("Typing does nothing until I click or Tab into
+  the input").
+- getting-started: the interactivity walkthrough now shows how to start
+  with the caret in the field.
+- llms: `llms.txt` and `llms-full.txt` regenerated for the focus material
+  and this release's version facts.
+- extensions: `abstracttui-graph` and `abstracttui-mermaid` release
+  **0.3.0** with this engine — the mermaid subset, sequence blocks and
+  the fence claimant land there, and mermaid's dependency on graph moves
+  to `0.3`. Both crates carry their own CHANGELOG entries; version pins
+  in `docs/graphs-and-diagrams.md` and the llms files follow.
+- api: the "Diagrams" material gained the `FenceBlock` seam, the
+  `MermaidFence` one-liner, the `TextArea` wheel line, the
+  wrap-in-`Scroll` rule for the three document views, and the PNG
+  exporter beside the SVG one — with the reason the PNG is the faithful
+  artifact and the SVG the embeddable one.
+- examples: the list is 31, with `mermaid`, `mermaid_doc`, `workflow`,
+  `network`, `animation` and `scrollbar` joining it; counts refreshed
+  across `docs/README.md`, getting-started and the llms files.
+
+### Scope note — no video decoding
+
+The engine decodes **no video codecs** and does not plan to. H.264,
+H.265, VP9, AV1, and MPEG-1/2/4 are patent-pooled, and a correct
+real-time decoder for any one of them is larger than this entire crate;
+linking `libavcodec` (LGPL, and GPL as commonly built) would also put an
+obligation question on every downstream user of an MIT engine. A video
+file is therefore named and refused, never half-decoded. To play video,
+decode it outside the engine — `ffmpeg -i clip.mp4 -f rawvideo -pix_fmt
+rgba -` into a `reactive::bounded_source`, one `Bitmap` per frame — a
+pattern documented in `docs/graphics-and-3d.md`. That dependency is the
+caller's; this crate's own dependency list is unchanged.
+
 ## [0.3.7] - 2026-08-20
 
 ### Added
@@ -45,6 +285,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- widgets: `TextArea` scrolls with the WHEEL. It owns its own window
+  (it grows to `max_rows`, then scrolls internally) but answered only
+  the keyboard, which made it the odd one out among the engine's
+  scrolling surfaces. The wheel moves the window without moving the
+  caret; any keystroke or edit re-attaches the view to the caret, and a
+  wheel event with nowhere left to go is NOT consumed, so an outer
+  `Scroll` still gets it.
+- mermaid: the fallback's mermaid.live link is usable. The URL carries
+  the whole diagram in its fragment, so on one row it was truncated to
+  dead text — too long to read, impossible to copy, clickable nowhere.
+  Where the terminal supports OSC 8 it is now one short hyperlinked
+  row; where it does not, the URL wraps across rows so a mouse
+  selection can take all of it.
+- mermaid: the cylinder and hexagon badge sigils moved to `⌸` and `◈`.
+  The obvious picks (`⛁`, `⬡`) are absent from DejaVu Sans Mono, and a
+  glyph a complete monospace font lacks is a glyph the terminal will
+  draw as tofu.
+- mermaid: five defects where a diagram RENDERED but rendered wrong —
+  worse than falling back, because nothing said so:
+  - horizontal (`LR`/`RL`) flowcharts silently dropped edge labels: the
+    label run was left-anchored from the midpoint, so it collided with
+    the downstream card and was suppressed. Measured on the crate's own
+    example, one of three labels survived. Labels are centred in the
+    rank corridor now, nudged along the edge before giving up, and the
+    corridor is sized from the widest label the diagram carries.
+  - quoted labels kept their quotes: `-->|"yes, always"|` rendered with
+    the quote characters, in edge labels, state transitions, participant
+    aliases, and message text. People quote precisely when a label has
+    a comma.
+  - `<br/>` reached the screen as literal text inside a one-line card;
+    it flattens to a word break, with a notice.
+  - a node declared twice used the FIRST declaration; mermaid uses the
+    last, so the engine drew a different diagram than the source
+    described.
+  - a header with no statements drew an empty rectangle,
+    indistinguishable from a broken renderer; it says what it is.
 - widgets: images draw at the terminal's own mosaic density.
   `widgets::Image` and markdown image blocks pinned half blocks (1x2
   subpixels per cell) regardless of what the terminal proved — the
@@ -2114,7 +2390,9 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
-[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.3.8...HEAD
+[0.3.8]: https://github.com/lpalbou/abstracttui/compare/v0.3.7...v0.3.8
+[0.3.7]: https://github.com/lpalbou/abstracttui/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/lpalbou/abstracttui/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/lpalbou/abstracttui/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/lpalbou/abstracttui/compare/v0.3.3...v0.3.4

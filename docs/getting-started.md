@@ -61,7 +61,8 @@ Line by line:
   signals.
 - **Defaults you did not write** — Tab/Shift+Tab move focus, Enter and Space
   activate the focused widget, Ctrl+C quits. Override any of them by consuming
-  the event in a handler or shortcut.
+  the event in a handler or shortcut. Nothing is focused until the first Tab or
+  click; the next section shows how to start with the caret already in a field.
 
 ## Adding interactivity
 
@@ -98,6 +99,28 @@ Run it with `App::simple(form)`. Tab moves between the input and the button;
 the input handles cursor movement, selection (Shift+arrows), word jumps
 (Alt+arrows), and paste for you. Mouse clicks focus and activate the same
 widgets — no extra code.
+
+**Start with the caret in the field.** A root tree focuses nothing at boot, so
+the form above waits for a Tab or a click before it accepts typing. Ask for
+focus at mount with `.autofocus()`, available on the element form of the
+focusable widgets:
+
+```rust
+let t = use_theme(cx).get().tokens;
+
+TextInput::new()
+    .placeholder("your name")
+    .value(name)
+    .element(cx, &t)   // Element, not View
+    .autofocus()       // focused from frame one
+    .build()
+```
+
+Mark exactly one widget per screen — the one that should own the keyboard.
+Modal overlays need no such marking: they establish their own initial focus
+when they open. The [API guide](api.md#focus--who-receives-keys) has the full
+rule, including why a bare-letter global shortcut such as `q`-to-quit is a trap
+in an app with a text field.
 
 The same one-import surface covers the rest of a form or chat screen:
 `Select`/`Combobox`/`MultiSelect` for choices (a one-row trigger opening an
@@ -224,6 +247,9 @@ in any terminal — and picks the best mosaic mode for the terminal's detected
 glyph and color support (`.mode(MosaicMode::Sextant)` pins the densest family
 when you know the font carries it — see
 [graphics-and-3d.md](graphics-and-3d.md#getting-more-resolution-out-of-a-picture)).
+Animations work the same way: `AnimatedImage::from_path("loading.gif")`
+plays an animated GIF or an APNG. Video files are refused by name — the
+engine decodes no video codecs.
 For pixel-perfect output over the kitty, iTerm2, or sixel
 protocols, `gfx::ImageSession` manages placement at the app level; the
 `images` example (`cargo run --example images`) shows both paths side by side,
@@ -339,7 +365,7 @@ the headless-test recipe.
   the honest mermaid subset (`abstracttui-mermaid`), installed only
   when you need them.
 - [FAQ](faq.md) and [Troubleshooting](troubleshooting.md).
-- [Examples catalog](../examples/README.md) — twenty-six runnable programs
+- [Examples catalog](../examples/README.md) — 31 runnable programs
   (three of them in the extension crates) ordered as a learning path, from
   the 53-line `hello` to the full `dashboard`, with the keys each answers to. For content-heavy apps start
   with `transcript` (streaming markdown chat), `reader` (tables, images,

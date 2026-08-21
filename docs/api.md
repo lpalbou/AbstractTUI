@@ -143,6 +143,72 @@ the endorsed pattern is a store struct of signals provided as context —
 Signals are `Copy` handles, so cloning the store shares state: no prop
 drilling, no reducer framework.
 
+### Focus — who receives keys
+
+Every key and paste goes to the **focused** node, falling back to the
+tree root when nothing is focused. A root tree starts with **nothing
+focused**: focus arrives when a node asks for it (`.autofocus()`), when
+the user Tabs (Tab/Shift+Tab walk the focusables in visual order), when
+a click lands on one (the nearest focusable ancestor-or-self of the hit
+target — clicking empty space keeps the keyboard where it is), or when
+the app sets it (`app.tree().focus_first()` after `mount`, or
+`set_focus`; programmatic focus crosses focus traps, which constrain
+Tab cycling only).
+
+**An app whose first screen has a text field should say so.** Without
+`.autofocus()`, the first keystrokes reach the root instead of the
+field, and the user has to Tab or click into it before typing lands.
+Widget builders expose the element form for exactly this — `.view(cx)`
+is the one-call shape, `.element(cx, &t)` the same widget as an
+`Element` you can still decorate:
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::widgets::{TextArea, TextAreaState};
+
+fn composer(cx: Scope) -> View {
+    let t = use_theme(cx).get().tokens;
+    let state = TextAreaState::new(cx);
+    TextArea::new()
+        .state(&state)
+        .placeholder("Message — Enter sends")
+        .rows(1, 4)
+        .element(cx, &t)   // Element, not View
+        .autofocus()       // focused from frame one
+        .build()
+}
+```
+
+The same `.element(cx, &t).autofocus()` route works for `TextInput`,
+`List`, and the other focusable widgets. The last `.autofocus()` mounted
+wins, so a screen that mounts several marks only the one that should
+own the caret. An autofocused field paints no placeholder by default —
+see [TextArea](#textarea--the-multiline-composer) for
+`.placeholder_while_focused(true)`.
+
+**Modal trees do this for you.** Overlays that own input —
+[`Modal`](#app--the-runtime), a modal
+[`Drawer`](#appdrawer--edge-anchored-overlay-panels),
+[`ChoicePrompt`](#appchoiceprompt--the-modal-decision-gate) — establish
+initial focus when they open: an `.autofocus()` node wins, otherwise
+the first focusable, otherwise the panel's content element. A modal
+answers keys from frame one with no ritual; the root tree is the one
+that needs the opt-in.
+
+**Resolution order for one key**, first to consume it wins:
+
+1. element handlers along capture → target → bubble;
+2. `KeyChord` shortcuts registered on the root → focus path;
+3. the built-in Tab traversal;
+4. the global [`Actions`](#app--the-runtime) registry.
+
+Focused widgets therefore always beat global bindings — a focused
+editor consumes ordinary characters, so a bare-letter shortcut such as
+`q`-to-quit fires only while focus is elsewhere, **including at boot
+while nothing is focused**. In an app that has a text field anywhere,
+give global verbs a modified chord (`Ctrl+Q`, `Ctrl+C`) and let
+autofocus put the caret in the field.
+
 ### Double-click
 
 Terminals report only raw press/release — the engine synthesizes
@@ -268,16 +334,16 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Block** — the bordered panel primitive: title, fill, focus ring, `BorderKind`, and an opt-in close affordance (`on_close` — a mouse-only ✕ on the title row; see the Block section below).
 - **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
-- **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
+- **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, wheel scrolling (the window moves, the caret stays; any edit re-attaches), and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
 - **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`, bindable `selection`/`offset_y`, hover ink. Removable rows in one call (`on_remove`), or the general trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), and timed double-click on the body (`on_row_double_click`). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
 - **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful.
-- **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
+- **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, hover ink, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
 - **PageHost** — the page-level tab host: N FULL pages behind one themed tab bar, exactly one mounted (see [its own section](#widgetspagehost--the-page-level-tab-host) below).
 - **DrawerDock** — the right-edge drawer rail: always-visible vertical tabs, each fronting a docked side panel — at most one open, fully collapsed to the bare rail otherwise, with reactive badge dots (see [its own section](#widgetsdrawerdock--the-right-edge-drawer-rail) below).
 - **Disclosure** — the fold/unfold card: a one-row title header (glyph + truncating title + muted detail slot) that expands a body in place. Click or Enter/Space toggles; `max_body_rows` caps the body behind a scrollbar; state is widget-internal (`initially_folded`) or app-owned (`folded(Signal<bool>)`).
 - **FilePicker** — directory browser for modals and attach flows: breadcrumb header, type-to-filter input, entry rows with kind glyphs and an optional size column, opt-in multi-select, `on_pick(Vec<String>)`; entries come from the pluggable `FileSource` seam (see [the file-attachments section](#file-attachments--paste-intercept-drop-classifier-filepicker) below).
-- **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override) and can be read back through `extent_signal`; `follow_tail` binds the pinned-to-bottom idiom; `scrollbar_auto_hide` hides the bar while content fits.
+- **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override) and can be read back through `extent_signal`; `follow_tail` binds the pinned-to-bottom idiom; `scrollbar_auto_hide` hides the bar while content fits, and `scrollbar_width` widens its reserved gutter.
 - **Checkbox** — `[x] label` bound to a `Signal<bool>`.
 - **RadioGroup** — one-of-N bound to a `Signal<usize>`; one tab stop, Up/Down move the selection.
 - **Progress** — bar with sub-cell precision; optional ok→warn→error ramp.
@@ -290,7 +356,8 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Grid** — container widget over `Display::Grid`; spans ride each child's own style.
 - **Image** — bitmap display through the mosaic pipeline (`ImageFit`; `Bitmap` re-exported beside it). Measures as its native cell footprint, so it holds real space in `Auto`-sized rows/panels.
 - **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals. Grows into its region by default (a draw widget has no intrinsic size to grow from, so the default layout claims the available space).
-- **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables with the crush-honesty ladder, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code (C-like, diff, json/yaml lexers). Both content views carry an intrinsic measure (wave 13): `Scroll::new(view)` scrolls the true extent out of the box, and content-sized panels hug the document instead of collapsing it to zero.
+- **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables with the crush-honesty ladder, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code (C-like, diff, json/yaml lexers). Both content views carry an intrinsic measure (wave 13): `Scroll::new(view)` scrolls the true extent out of the box, and content-sized panels hug the document instead of collapsing it to zero. Wrapping in `Scroll` is also what gives a document the WHEEL, PgUp/PgDn and a draggable thumb — the `scroll_offset(rows)` setter is for apps that genuinely own the offset, and gets keyboard scrolling only.
+- **`widgets::FenceBlock`** — a fenced code block rendered as something other than code, INSIDE the document. `MarkdownView::fence_block(claimant)` installs it; the claimant measures the fences it recognizes and paints their rows, so a diagram lives in the document's own scroll surface, outline and search index instead of forcing the app to splice widgets between document fragments. Fences it declines render as code, unchanged. The engine ships no diagram languages — `abstracttui-mermaid`'s `MermaidFence` is the reference claimant (see [graphs-and-diagrams.md](graphs-and-diagrams.md)).
 - **Meter / AudioScope** — live level rendering: dB meter with real ballistics (instant attack, timed decay, peak hold) and a rolling braille waveform — see the live-levels section below.
 - **Logo** — the AbstractTUI wordmark for headers, about screens, empty states.
 
@@ -459,8 +526,9 @@ are the general form — a trailing column holding a badge, an unread
 count, or a per-row action. The engine owns body/accessory/scrollbar
 column widths. The accessory column is one click target edge to edge on
 the row that draws it; rows whose `row_accessory` returns `None` leave
-that column as ordinary body. Accessory clicks never change selection,
-and scrollbar-column clicks are inert. Styled body labels ride
+that column as ordinary body. Accessory clicks never change selection;
+scrollbar-column presses belong to the bar (see
+[The scrollbar](#the-scrollbar), which every scrolling widget shares). Styled body labels ride
 [`List::rich_items`](crate::widgets::List::rich_items) (same length as
 `items`; accessories stay plain text).
 
@@ -945,6 +1013,40 @@ copies the text it highlights (see
 [app::selection](#appselection--screen-text-selection-and-clipboard-copy));
 apps can drive it for their own freezes.
 
+### The scrollbar
+
+Every widget that scrolls a viewport — `Scroll`, `List`, `Table`,
+`FilePicker`, and the folds built on them — paints the same strip in
+its rightmost column and answers the same gestures:
+
+| gesture | result |
+|---|---|
+| press on the thumb | takes hold; **nothing moves** |
+| drag after that press | the thumb tracks the pointer row for row, and keeps steering after the pointer leaves the strip (pointer capture) |
+| press on bare track | teleports: the thumb centers on the pressed row |
+| release | commits where it stands — no snap-back |
+
+The thumb's length is proportional to the visible fraction with a floor
+of 3 rows (the exact proportion of a long transcript rounds to zero),
+and it never fills a track that still has travel: a thumb parked on the
+last cell means the offset really is at its maximum. The strip is a
+RESERVED gutter, so content never re-wraps when the bar appears or
+hides.
+
+`Scroll::scrollbar_width(cells)` (default 1, max 4) widens the strip for
+apps with room for a comfortable mouse target — the cells come out of
+the content, so a pane that measures its own text against the viewport
+width must widen with it. `Scroll::scrollbar_auto_hide(true)` hides the
+bar while the content fits; the column stays reserved and the invisible
+strip steers nothing.
+
+The thumb takes accent ink while the pointer is over the strip or a drag
+is live, in every widget that draws one — and so does the row under the
+pointer (`List`, `Table`, `FilePicker`): hover shifts INK to `accent`
+with the background untouched, while a selected row keeps its audited
+pair and takes BOLD instead. Hover motion only reports where the app opted in
+([`RunConfig::hover_ink`](#app--the-runtime)); a drag always does.
+
 ### Modal content that can overflow
 
 Put the overflow inside a `Scroll` and keep the fixed rows fixed — the
@@ -1005,6 +1107,12 @@ fn composer(cx: Scope) -> View {
         .view(cx)
 }
 ```
+
+**Focus it at startup.** `.view(cx)` builds the widget unfocused, and a
+root tree focuses nothing on its own — so a composer that should own the
+keyboard from frame one is built through the element form,
+`.element(cx, &t).autofocus().build()`. See
+[Focus — who receives keys](#focus--who-receives-keys).
 
 **Placeholder while focused.** By default the
 placeholder paints only while the field is empty AND unfocused — the
@@ -1189,7 +1297,7 @@ the right edge, each fronting a docked side panel. At most one drawer
 is open; while none is, the panel column vanishes entirely and the
 content takes every cell up to the rail. The panel DOCKS in layout —
 content reflows around it. (The transient, sliding, scrimmed cousin is
-[`app::drawer`](#appdrawer); reach for the dock when the drawers are
+[`app::drawer`](#appdrawer--edge-anchored-overlay-panels); reach for the dock when the drawers are
 permanent chrome, for the drawer when they are an occasional overlay.)
 
 ```rust
@@ -2323,6 +2431,17 @@ assert_eq!(cells.len(), 8 * 4);
   `MosaicMode::Sextant` is the denser opt-in where the font carries the
   Unicode 13 block sextants. See
   [graphics-and-3d.md](graphics-and-3d.md#getting-more-resolution-out-of-a-picture).
+- `gfx::decode_animation(bytes)` decodes an **animated GIF** or an
+  **APNG** into an `Animation` (frames, per-frame delays, loop count). A
+  still decodes as a one-frame animation, so one path shows any picture.
+  `widgets::AnimatedImage` plays one: `.playing(signal)` pauses,
+  `.repeat(bool)` overrides the file's own loop declaration, and each
+  frame arms exactly one timer for its own delay (a paused or finished
+  clip arms none). VIDEO IS NOT DECODED: `.mp4`, `.mov`, `.avi`,
+  `.webm`, and `.mpg` are recognized, named, and refused with an
+  `ffmpeg` conversion line. See
+  [graphics-and-3d.md](graphics-and-3d.md#animated-pictures-and-why-video-is-not-one-of-them)
+  for the external-decoder pattern that plays video.
 - `gfx::ImageSession` manages the pixel protocols (kitty, iTerm2, sixel):
   slots keyed by the caller, content versions, minimal traffic per channel —
   kitty transmits once and re-places on move; iTerm2 and sixel honestly
@@ -2532,7 +2651,16 @@ captures carry no regions (the rig consumes protocol payloads as
 counted, unmodeled frames). Hyperlink targets are not captured (a visual
 capture has no click surface — the styled debug dumps show them);
 `blink` exports as static; `undercurl` draws as a straight underline in
-SVG. Capture is on-demand only: nothing here runs per-frame, and an
+both PNG and SVG.
+
+`Screenshot::to_png()` / `to_png_with(PngOpts)` / `to_bitmap()` /
+`write_png()` render the capture as pixels the engine decides itself:
+text from an embedded 8x16 bitmap, and the ranges that must TILE — box
+drawing, block elements, braille, sextants — drawn geometrically, so
+strokes meet exactly at every cell boundary on any machine. Output is
+deterministic. `to_svg` remains the EMBEDDABLE artifact (GitHub renders
+it inline in a README) at the cost of depending on the viewer's
+monospace font; the PNG is the faithful one. Capture is on-demand only: nothing here runs per-frame, and an
 idle app still costs zero.
 
 ## Stability and limits
@@ -2544,6 +2672,19 @@ Plain statements of current behavior:
   and 4:2:0. Arithmetic-coded, lossless, hierarchical, 12-bit, and CMYK
   variants reject by name. Chroma upsampling is nearest-neighbour. **PNG**
   supports 8-bit depths without interlacing (Adam7 rejects by name).
+- **Animation** decodes for animated GIF and APNG. **Video does not
+  decode at all**: `.mp4`, `.mov`, `.avi`, `.webm`, and `.mpg` reject by
+  name with a conversion command — their codecs are patent-pooled and
+  out of scope for an in-tree decoder. A decoded sequence is held in
+  memory (64 Mpx budget across its frames).
+- **Screenshots** export as text, ANSI, PNG, and SVG. The **PNG is the
+  faithful one** — the engine draws every pixel, so box-drawing strokes
+  meet and glyph metrics cannot drift; its coverage is ASCII plus the
+  geometric ranges plus ~60 symbols, and anything else (CJK, emoji)
+  draws a labeled placeholder. The **SVG is the embeddable one** —
+  GitHub renders it inline in a README, at the cost of depending on the
+  viewer's monospace font, which can stretch glyphs and break stroke
+  joins.
 - **Sixel** uses one palette per emission: multiple live sixel images
   recolor each other — prefer one per screen. iTerm2 and sixel have no
   placement model (moves re-emit the payload); only kitty gets placement

@@ -200,7 +200,7 @@ fn capped_body_shows_a_scrollbar_and_the_wheel_scrolls_it() {
         .filter_map(|y| term.screen().cell(bar_col, y).map(|c| c.ch()))
         .collect();
     assert!(
-        bar.contains('┃'),
+        bar.contains('█'),
         "scrollbar thumb visible on overflow: {bar:?}\n{lines:#?}"
     );
 

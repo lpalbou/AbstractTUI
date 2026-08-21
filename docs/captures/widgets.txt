@@ -11,20 +11,20 @@
 
   hello, stranger!
 
+  ╭ pane 1 — cli  ✕ ╮ ╭ pane 2 ────── ✕ ╮ ╭ pane 3 ────── ✕ ╮
+  │survivors re-flex│ │survivors re-flex│ │survivors re-flex│
+  │                 │ │                 │ │                 │
+  ╰─────────────────╯ ╰─────────────────╯ ╰─────────────────╯
+
   ┌ list — arrows move, wheel scrolls ─────────────────────────────────────────────────────────────────────┐
-  │abstract-dark                                                                                           │
-  │observer-night                                                                                          │
-  │catppuccin-mocha                                                                                        │
-  │rose-pine                                                                                               │
-  │tokyo-night                                                                                             │
-  │nord                                                                                                    │
-  │one-dark                                                                                                │
-  │dracula                                                                                                 │
-  │monokai                                                                                                 │
-  │gruvbox                                                                                                 │
-  │                                                                                                        │
-  │                                                                                                        │
-  │                                                                                                        │
+  │abstract-dark                                                                                          █│
+  │observer-night                                                                                         █│
+  │catppuccin-mocha                                                                                       █│
+  │rose-pine                                                                                              █│
+  │tokyo-night                                                                                            █│
+  │nord                                                                                                   █│
+  │one-dark                                                                                               ▏│
+  │dracula                                                                                                ▏│
   └────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 
 

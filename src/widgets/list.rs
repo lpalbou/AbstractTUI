@@ -22,7 +22,10 @@
 //! Row accessories (field-agora 0810): optional trailing column via
 //! [`List::row_accessory`] + [`List::on_accessory_click`]. The engine
 //! owns body/accessory/scrollbar column widths — no app-side X math.
-//! Accessory clicks do not change selection. Rich labels ride
+//! Accessory clicks do not change selection; the scrollbar column is the
+//! bar's (grab the thumb, or press bare track to teleport — the shared
+//! gesture in `widgets::scrollbar`), never the row
+//! beside it. Rich labels ride
 //! [`List::rich_items`] (styled spans on the body column only).
 //!
 //! Disposal-safety law (ruling clause 4): the List completes ALL of its
@@ -70,7 +73,7 @@
 //!
 //! OWNER: REACT.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::base::Point;
@@ -81,6 +84,7 @@ use crate::render::{Attrs, Style};
 use crate::theme::TokenSet;
 use crate::ui::{dyn_view, Element, EventCtx, Key, MouseButton, MouseKind, Phase, UiEvent};
 use crate::widgets::richtext::draw_rich_lines;
+use crate::widgets::scrollbar;
 
 type HeightFn = Box<dyn Fn(usize, &str) -> i32>;
 type KeyFn = Box<dyn Fn(usize, &str) -> String>;
@@ -622,6 +626,11 @@ impl List {
         }
 
         let prefix_for_handler = prefix.clone();
+        // Scrollbar grab (rows below the thumb's top edge): a plain cell,
+        // because a pointer gesture is not app state. `None` = no drag of
+        // ours is live, and a bare `Drag` that arrives without one
+        // belongs to somebody else's gesture.
+        let bar_grab: Rc<Cell<Option<i32>>> = Rc::new(Cell::new(None));
         let activate = on_activate;
         let accessory_click = on_accessory_click;
         let row_double_click = on_row_double_click;
@@ -696,12 +705,45 @@ impl List {
                             ctx.stop_propagation();
                         }
                     }
+                    MouseKind::Up(MouseButton::Left) => {
+                        bar_grab.set(None);
+                    }
+                    MouseKind::Drag(MouseButton::Left) => {
+                        // Only OUR grab scrolls: a drag that arrives
+                        // with none is another widget's gesture passing
+                        // through, never a teleport of this offset.
+                        let Some(dy) = bar_grab.get() else { return };
+                        let bar = scrollbar::metrics(rect, 1, offset.get_untracked(), total_rows);
+                        if bar.overflows() {
+                            offset.set_if_changed(scrollbar::offset_at(&bar, m.pos.y, dy));
+                            hover_handler.set_if_changed(hit_at(m.pos));
+                            ctx.stop_propagation();
+                        }
+                    }
                     MouseKind::Down(MouseButton::Left) => {
                         match hit_at(m.pos) {
-                            // The strip is inert, but it is ours: a click
-                            // that lands on it must not fall through to
-                            // whatever sits behind the list.
-                            Some(ListHit::Scrollbar) | None => {}
+                            // The strip is ours: it takes hold of the
+                            // thumb (a press ON it moves nothing) or
+                            // teleports from bare track, and either way
+                            // never falls through to what sits behind.
+                            Some(ListHit::Scrollbar) => {
+                                let bar =
+                                    scrollbar::metrics(rect, 1, offset.get_untracked(), total_rows);
+                                if let Some(zone) = scrollbar::hit(&bar, m.pos) {
+                                    if bar.overflows() {
+                                        let dy = scrollbar::grab_for(&bar, zone);
+                                        bar_grab.set(Some(dy));
+                                        if matches!(zone, scrollbar::Zone::Track) {
+                                            offset.set_if_changed(scrollbar::offset_at(
+                                                &bar, m.pos.y, dy,
+                                            ));
+                                            hover_handler.set_if_changed(hit_at(m.pos));
+                                        }
+                                    }
+                                }
+                                ctx.stop_propagation();
+                            }
+                            None => {}
                             Some(ListHit::Row(idx, ListHitZone::Accessory)) => {
                                 if let Some(f) = accessory_click.borrow_mut().as_mut() {
                                     f(idx);
@@ -906,13 +948,14 @@ impl List {
                             idx += 1;
                         }
                         if show_bar {
-                            draw_scrollbar(
+                            let bar = scrollbar::metrics(rect, cols.bar_w, first_row, total);
+                            scrollbar::draw(
                                 canvas,
-                                rect,
-                                first_row,
-                                total,
+                                &bar,
+                                bar_hot,
                                 track,
-                                if bar_hot { accent_draw } else { thumb },
+                                thumb,
+                                accent_draw,
                                 ground,
                             );
                         }
@@ -920,44 +963,6 @@ impl List {
                     .build()
             },
         ))
-    }
-}
-
-/// Token-styled vertical scrollbar in the rightmost column. `first` and
-/// `total` are content ROWS (shared by List/Table; Table passes item
-/// counts, which are rows there).
-pub(crate) fn draw_scrollbar(
-    canvas: &mut dyn crate::ui::StyledCanvas,
-    rect: crate::base::Rect,
-    first: i32,
-    total: i32,
-    track: crate::base::Rgba,
-    thumb: crate::base::Rgba,
-    ground: crate::base::Rgba,
-) {
-    let x = rect.right() - 1;
-    let h = rect.h.max(1);
-    let track_style = Style::new().fg(track).bg(ground);
-    for y in rect.y..rect.bottom() {
-        canvas.print_styled(crate::base::Point::new(x, y), "│", &track_style);
-    }
-    // Thumb LENGTH is proportional, with a floor: the exact proportion
-    // of a long transcript rounds to zero (a 3000-row buffer in a 30-row
-    // pane asks for 900/3000 = 0 cells), and the old `clamp(1, h)` then
-    // drew a single `┃` — a dot the eye cannot find, cannot read a
-    // position from, and cannot follow while scrolling. Floor it at
-    // MIN_THUMB cells, but never let the floor fill the track: a thumb
-    // with no room to travel reports no position at all, so it yields to
-    // `h - 1` on very short bars (and to `h` itself when the content
-    // fits, where a full-length thumb IS the honest answer).
-    const MIN_THUMB: i32 = 3;
-    let floor = MIN_THUMB.min(h - 1).max(1);
-    let thumb_h = ((h * h) / total.max(1)).clamp(floor, h);
-    let denom = (total - h).max(1);
-    let thumb_y = rect.y + ((first.min(denom) * (h - thumb_h)) / denom).max(0);
-    let thumb_style = Style::new().fg(thumb).bg(ground);
-    for y in thumb_y..(thumb_y + thumb_h).min(rect.bottom()) {
-        canvas.print_styled(crate::base::Point::new(x, y), "┃", &thumb_style);
     }
 }
 

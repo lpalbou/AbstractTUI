@@ -173,3 +173,14 @@ capture or no capture.
 - App seats on the engine (abstractcode-tui class) get the
   test-artifact recipe: drive `Driver` + `CaptureTerm`, capture either
   surface, `write_svg` into the report directory.
+
+## Follow-on: 0490 (2026-08-21)
+
+The operator looked at the SVG captures and did not believe them —
+correctly. `to_svg` names a font family and hopes the viewer resolves
+one whose advance matches the grid; when it does not, glyph stretching
+breaks box-drawing joins. That is structural, not a bug in this item:
+an SVG of a terminal cannot be faithful, because the writer does not
+control the font. `Screenshot::to_png` (0490) is the faithful export —
+every pixel decided here — and `to_svg` stays for what it is genuinely
+good at (GitHub renders it inline, and its text is selectable).

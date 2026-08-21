@@ -43,7 +43,7 @@ graph BT
     subgraph content["content layer"]
         canvas["canvas<br/>sub-cell dot grids, vector strokes"]
         widgets["widgets<br/>built-in library"]
-        gfx["gfx<br/>bitmaps, mosaic, pixel protocols"]
+        gfx["gfx<br/>bitmaps, animation, mosaic, pixel protocols"]
         three["three<br/>GLB loading, 3D rasterizer"]
     end
 

@@ -158,6 +158,207 @@ fn scrollbar_drag_jumps_the_offset() {
     );
 }
 
+/// The field report, as an assertion: "I am unsure the scrollbar is
+/// clickable/draggable at all". Grabbing the thumb must move NOTHING —
+/// the gesture takes hold, and only the drag that follows scrolls. The
+/// pre-seam handler mapped the press row straight onto an offset with a
+/// travel range that did not match the thumb's, so the content jumped
+/// (up to 300 rows on a long transcript) and the thumb slid out from
+/// under the cursor before the drag began.
+#[test]
+fn a_press_on_the_thumb_moves_nothing() {
+    let t = &default_theme().tokens;
+    let size = Size::new(12, 10);
+    let (content, _) = tall_content();
+    let (_root, mut tree, off) = mount_bar(size, content, t, None);
+    off.set(45);
+    let canvas = render(&mut tree, size);
+    let bar_x = (size.w - 1) as usize;
+    let thumb_top = (0..size.h)
+        .find(|&y| canvas.row_text(y).chars().nth(bar_x) == Some('█'))
+        .expect("thumb drawn");
+    mouse(
+        &mut tree,
+        MouseKind::Down(MouseButton::Left),
+        bar_x as i32,
+        thumb_top,
+    );
+    assert_eq!(
+        off.get_untracked(),
+        45,
+        "a press ON the thumb is a grab, not a jump"
+    );
+    let canvas = render(&mut tree, size);
+    assert_eq!(
+        (0..size.h).find(|&y| canvas.row_text(y).chars().nth(bar_x) == Some('█')),
+        Some(thumb_top),
+        "and the thumb stays exactly where the eye left it"
+    );
+}
+
+/// The drag itself: the thumb travels with the pointer, row for row,
+/// instead of somewhere proportional-but-elsewhere.
+#[test]
+fn a_thumb_drag_keeps_the_thumb_under_the_pointer() {
+    let t = &default_theme().tokens;
+    let size = Size::new(12, 10);
+    let (content, _) = tall_content();
+    let (_root, mut tree, off) = mount_bar(size, content, t, None);
+    off.set(45);
+    let canvas = render(&mut tree, size);
+    let bar_x = (size.w - 1) as usize;
+    let thumb_top = (0..size.h)
+        .find(|&y| canvas.row_text(y).chars().nth(bar_x) == Some('█'))
+        .expect("thumb drawn");
+    mouse(
+        &mut tree,
+        MouseKind::Down(MouseButton::Left),
+        bar_x as i32,
+        thumb_top,
+    );
+    mouse(
+        &mut tree,
+        MouseKind::Drag(MouseButton::Left),
+        bar_x as i32,
+        thumb_top + 2,
+    );
+    assert!(off.get_untracked() > 45, "the drag scrolled forward");
+    let canvas = render(&mut tree, size);
+    assert_eq!(
+        (0..size.h).find(|&y| canvas.row_text(y).chars().nth(bar_x) == Some('█')),
+        Some(thumb_top + 2),
+        "the thumb followed the pointer exactly two rows"
+    );
+    // The drag survives the pointer leaving the strip (pointer capture).
+    mouse(&mut tree, MouseKind::Drag(MouseButton::Left), 0, size.h - 1);
+    assert_eq!(
+        off.get_untracked(),
+        90,
+        "off-strip drag still steers, clamped"
+    );
+    mouse(&mut tree, MouseKind::Up(MouseButton::Left), 0, size.h - 1);
+    assert_eq!(off.get_untracked(), 90, "release commits, never snaps back");
+}
+
+/// A press on bare TRACK teleports (the macOS convention) and lands the
+/// thumb UNDER the pointer, so the drag that follows starts where the
+/// eye already is.
+#[test]
+fn a_track_press_lands_the_thumb_under_the_pointer() {
+    let t = &default_theme().tokens;
+    let size = Size::new(12, 10);
+    let (content, _) = tall_content();
+    let (_root, mut tree, off) = mount_bar(size, content, t, None);
+    let bar_x = (size.w - 1) as usize;
+    mouse(
+        &mut tree,
+        MouseKind::Down(MouseButton::Left),
+        bar_x as i32,
+        8,
+    );
+    assert!(off.get_untracked() > 0, "the track press moved the content");
+    let canvas = render(&mut tree, size);
+    assert_eq!(
+        canvas.row_text(8).chars().nth(bar_x),
+        Some('█'),
+        "row 8 was pressed, row 8 wears the thumb"
+    );
+}
+
+/// A `Drag` that arrives with no grab of ours belongs to somebody
+/// else's gesture — the driver drops a tree's capture when a press
+/// becomes a screen-text selection, and terminals emit motion-with-button
+/// after a lost `Up`. It must never teleport the offset.
+#[test]
+fn a_bare_drag_without_a_press_never_steers() {
+    let t = &default_theme().tokens;
+    let size = Size::new(12, 10);
+    let (content, _) = tall_content();
+    let (_root, mut tree, off) = mount_bar(size, content, t, None);
+    off.set(45);
+    let bar_x = size.w - 1;
+    mouse(&mut tree, MouseKind::Drag(MouseButton::Left), bar_x, 2);
+    assert_eq!(off.get_untracked(), 45, "no grab, no steering");
+    mouse(&mut tree, MouseKind::Drag(MouseButton::Left), bar_x, 9);
+    assert_eq!(off.get_untracked(), 45);
+}
+
+/// `scrollbar_width` widens the gutter for apps with room for a
+/// comfortable mouse target. The strip is RESERVED, so the cells come
+/// out of the content — and the whole strip is grabbable.
+#[test]
+fn scrollbar_width_widens_the_gutter_and_stays_grabbable() {
+    let t = &default_theme().tokens;
+    let size = Size::new(12, 10);
+    let (content, _) = tall_content();
+    let (_root, mut tree, off) = mount_bar(size, content, t, Some(2));
+    let canvas = render(&mut tree, size);
+    let row0 = canvas.row_text(0);
+    assert_eq!(row0.chars().nth(10), Some('█'), "{row0:?}");
+    assert_eq!(row0.chars().nth(11), Some('█'), "the thumb spans the strip");
+    // The LEFT column of the widened strip is a live target too.
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), 10, 8);
+    assert!(off.get_untracked() > 0, "the widened column steers");
+}
+
+/// The affordance: the thumb takes accent ink while the pointer is on
+/// the strip, and keeps it for the whole drag (the pointer leaves the
+/// strip constantly mid-drag). Without it the one bar you CAN grab was
+/// the one that never answered the pointer — the "is this even
+/// clickable?" half of the field report.
+#[test]
+fn the_thumb_lights_under_the_pointer_and_stays_lit_while_dragging() {
+    let t = &default_theme().tokens;
+    let size = Size::new(12, 10);
+    let (content, _) = tall_content();
+    let (_root, mut tree, _off) = mount_bar(size, content, t, None);
+    let bar_x = size.w - 1;
+    let ink_at = |tree: &mut UiTree, y: i32| {
+        render(tree, size)
+            .cell(crate::base::Point::new(bar_x, y))
+            .map(|(_, fg, _)| fg)
+    };
+    let cold = ink_at(&mut tree, 0).expect("thumb cell");
+    mouse(&mut tree, MouseKind::Move, bar_x, 0);
+    let hot = ink_at(&mut tree, 0).expect("thumb cell");
+    assert_ne!(cold, hot, "the strip answers the pointer");
+    // A drag whose pointer wanders off the strip keeps the ink.
+    mouse(&mut tree, MouseKind::Down(MouseButton::Left), bar_x, 0);
+    mouse(&mut tree, MouseKind::Drag(MouseButton::Left), 0, 3);
+    let dragging = ink_at(&mut tree, 3).expect("thumb cell");
+    assert_eq!(dragging, hot, "still lit mid-drag, off-strip");
+    mouse(&mut tree, MouseKind::Up(MouseButton::Left), 0, 3);
+    assert_eq!(
+        ink_at(&mut tree, 3),
+        Some(cold),
+        "and cools when the gesture ends away from the strip"
+    );
+}
+
+/// Mount a `Scroll` with a bound offset over 100 hinted rows: a 10-row
+/// viewport, a 3-row thumb, 7 rows of travel — coarse enough to expose a
+/// mapping that is off by a cell, which the 4-row rigs above cannot see.
+fn mount_bar(
+    size: Size,
+    content: View,
+    t: &crate::theme::TokenSet,
+    width: Option<i32>,
+) -> (crate::reactive::RootScope, UiTree, Signal<i32>) {
+    let cell: Rc<RefCell<Option<Signal<i32>>>> = Rc::new(RefCell::new(None));
+    let out = cell.clone();
+    let (root, tree) = mount_widget(size, |cx| {
+        let off = cx.signal(0i32);
+        *out.borrow_mut() = Some(off);
+        let mut s = Scroll::new(content).content_size(10, 100).offset_y(off);
+        if let Some(w) = width {
+            s = s.scrollbar_width(w);
+        }
+        s.element(cx, t).build()
+    });
+    let off = cell.borrow().expect("offset bound at mount");
+    (root, tree, off)
+}
+
 // ---------------------------------------------------------------------------
 // 0130: measured extent (no hint) + hint-wins.
 // ---------------------------------------------------------------------------
@@ -611,7 +812,7 @@ fn follow_tail_repins_across_resize() {
 
 /// The thumb has a usable FLOOR (first-app/1320). The exact proportion
 /// of a long transcript rounds to zero — the old `clamp(1, h)` then drew
-/// a single `┃`, a dot the eye cannot find or follow. Field report
+/// a single glyph, a dot the eye cannot find or follow. Field report
 /// (abstractcode-tui, 2026-08-19): "the scrollbar is too small".
 #[test]
 fn scrollbar_thumb_never_shrinks_to_a_dot() {
@@ -626,7 +827,7 @@ fn scrollbar_thumb_never_shrinks_to_a_dot() {
     let canvas = settle(&mut tree, size);
     let bar_x = (size.w - 1) as usize;
     let thumb_rows = (0..size.h)
-        .filter(|&y| canvas.row_text(y).chars().nth(bar_x) == Some('┃'))
+        .filter(|&y| canvas.row_text(y).chars().nth(bar_x) == Some('█'))
         .count();
     assert!(
         thumb_rows >= 3,
@@ -654,7 +855,7 @@ fn scrollbar_thumb_floor_yields_to_short_tracks() {
     let canvas = settle(&mut tree, size);
     let bar_x = (size.w - 1) as usize;
     let thumb_rows = (0..size.h)
-        .filter(|&y| canvas.row_text(y).chars().nth(bar_x) == Some('┃'))
+        .filter(|&y| canvas.row_text(y).chars().nth(bar_x) == Some('█'))
         .count();
     assert!(
         (1..size.h as usize).contains(&thumb_rows),

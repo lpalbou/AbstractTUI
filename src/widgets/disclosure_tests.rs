@@ -271,7 +271,7 @@ fn max_body_rows_caps_the_region_and_the_body_scrolls_with_a_bar() {
     let bar: String = (1..5)
         .filter_map(|y| canvas.cell(Point::new(bar_col, y)).map(|c| c.0))
         .collect();
-    assert!(bar.contains('┃'), "thumb visible on overflow: {bar:?}");
+    assert!(bar.contains('█'), "thumb visible on overflow: {bar:?}");
 
     // The wheel scrolls the BODY (nearest scroll container), +3 rows.
     mouse(&mut tree, crate::ui::MouseKind::ScrollDown, 4, 2);
@@ -318,7 +318,7 @@ fn short_body_takes_its_natural_height_and_hides_the_bar() {
         "capped region shrinks to the 2-row content (limited-to, not padded-to): {rows:#?}"
     );
     assert!(
-        !rows.iter().any(|r| r.contains('┃') || r.contains('│')),
+        !rows.iter().any(|r| r.contains('█') || r.contains('│')),
         "no scrollbar while the body fits: {rows:#?}"
     );
     root.dispose();
@@ -354,7 +354,7 @@ fn max_body_rows_zero_means_unbounded_natural_height() {
     );
     assert!(rows[13].contains("BELOW"), "{rows:#?}");
     assert!(
-        !rows.iter().any(|r| r.contains('┃')),
+        !rows.iter().any(|r| r.contains('█')),
         "no scroll chrome when uncapped: {rows:#?}"
     );
     root.dispose();

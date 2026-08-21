@@ -10,7 +10,7 @@
 //! node, then arrows move the selection, Enter presses it · Escape
 //! deselects · hover a card for its tooltip · q quits.
 //!
-//! Try: `cargo run -p abstracttui-graph --example workflow`
+//! Try: `cargo run --example workflow`
 //!
 //! Docs: docs/graphs-and-diagrams.md.
 

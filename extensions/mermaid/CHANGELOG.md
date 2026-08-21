@@ -5,6 +5,72 @@ own their changelogs; core's CHANGELOG covers the engine). The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 SemVer.
 
+## [0.3.0] - 2026-08-21
+
+Requires `abstracttui-graph` 0.3.
+
+### Added
+
+- **Sequence control flow**: `alt` + `else`, `opt`, `loop`, and `par` +
+  `and` render as labeled frames with dashed branch dividers, nested to
+  any depth. Activations — `activate` / `deactivate` and the `->>+` /
+  `-->>-` message suffixes — draw a bar on the lifeline that opens on
+  its own arrow and steps right when one participant is active twice.
+  In the IR a block is a TREE (`Block` holding `Branch`es): the parser
+  balances it once and names any mismatch, so consumers recurse over
+  something that cannot be malformed. Nesting is capped at 64 —
+  layout, rendering and `Drop` all recurse, and a stack overflow aborts
+  the host process.
+- **Flowchart subset widened** to what people write: edge chaining
+  (`A --> B --> C`), infix labels (`-- text -->`, `-. text .->`,
+  `== text ==>`), `&` groups as a cross product, any arrow body length,
+  the `x` / `o` heads and `<-->`, and five more node shapes
+  (`((circle))`, `[[subroutine]]`, `[(cylinder)]`, `{hexagon}`,
+  `>flag]`). The statement scanner is quote- and bracket-aware, so an
+  arrow inside a label is text on either side of the link.
+- **`subgraph` blocks flatten** instead of falling back: members
+  render, the group box does not, and the loss is one notice per
+  diagram naming the groups.
+- **`MermaidFence`** — the claimant for the core's `widgets::FenceBlock`
+  seam, so a ```` ```mermaid ```` fence in a `MarkdownView` renders as a
+  diagram in place, in the document's own scroll surface. Renders once
+  per (source, width, theme).
+- `click`, `linkStyle`, `class` and a group-local `direction` joined
+  the recognized-and-dropped row instead of aborting a whole diagram.
+
+### Fixed
+
+- Quoted labels kept their quotes (`-->|"yes, always"|` rendered the
+  quote characters) in node text, edge labels, state transitions,
+  participant aliases and message text.
+- `<br/>` reached the screen as literal text inside a one-line card; it
+  flattens to a word break, with a notice.
+- A node declared twice used the FIRST declaration; mermaid uses the
+  last, so the engine drew a different diagram than the source
+  described.
+- A header with no statements drew a blank rectangle, indistinguishable
+  from a broken renderer; both diagram kinds now say so.
+- The fallback's mermaid.live link was truncated to dead text — too
+  long to read, impossible to copy, clickable nowhere. It is a
+  hyperlink where the terminal does OSC 8, and wraps across rows where
+  it does not.
+- Sequence frame sizing measured only lifeline centres, so notes (which
+  are filled boxes) and self-message labels erased the frame border;
+  nested frames could share a border with their parent or run past it;
+  divider labels truncated because the frame was sized from the opening
+  label alone; and layout was quadratic in nesting depth.
+- `activate` registered participants, inventing a lifeline for a typo
+  and reordering columns when it preceded a participant's first
+  message.
+
+### Changed
+
+- The cylinder and hexagon badge sigils are `⌸` and `◈`: the obvious
+  picks (`⛁`, `⬡`) are absent from complete monospace fonts, which
+  means a terminal draws tofu.
+- `Block::branches` is `first` + `rest` rather than one `Vec`, so
+  "never empty" is unrepresentable rather than documented.
+
 ## [0.1.0] - 2026-07-24
 
 First release, published alongside `abstracttui` 0.2.13 and

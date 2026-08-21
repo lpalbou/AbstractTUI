@@ -9,7 +9,7 @@
 //! arrows then walk nodes spatially, Escape returns to pan · hover a
 //! card for its tooltip · q quits.
 //!
-//! Try: `cargo run -p abstracttui-graph --example network`
+//! Try: `cargo run --example network`
 //!
 //! Docs: docs/graphs-and-diagrams.md.
 

@@ -90,6 +90,59 @@ fit (weighted least squares):
 non-UTF-8 locales get HalfBlock (U+2580 survives most legacy codepages),
 monochrome terminals get Braille, color terminals get Quadrant.
 
+### Animated pictures (and why video is not one of them)
+
+The engine plays a frame sequence in the cell grid. Two formats decode
+in-tree: **animated GIF** and **APNG**. Both are permissively licensed,
+free of patent pools, need no dependency the crate does not already
+have, and are small enough to review.
+
+```rust
+use abstracttui::prelude::*;
+use abstracttui::widgets::{AnimatedImage, ImageFit};
+
+# fn build(cx: Scope) -> View {
+AnimatedImage::from_path("loading.gif")
+    .fit(ImageFit::Contain)
+    .view(cx)
+# }
+```
+
+`gfx::decode_animation(bytes)` is the decoder behind it, magic-routed
+like `decode_image`, and a still decodes to a one-frame animation — so
+one code path shows any picture, moving or not. `Animation::frame_at`
+answers "which frame shows now" for a caller driving its own clock.
+
+**Video does not decode here.** `.mp4`, `.mov`, `.avi`, `.webm` and
+`.mpg` carry H.264, H.265, VP9, or MPEG-4. Those are patent-pooled, and
+a correct real-time decoder for any one of them is larger than this
+entire crate, so the engine does not pretend: the container is
+recognized, named, and refused with the line that converts it into
+something that does play.
+
+```text
+mp4/mov: video is not decoded (animated GIF and APNG are).
+Convert with: ffmpeg -i IN -vf 'fps=12,scale=480:-1' OUT.gif
+```
+
+**To play video as it is**, decode it OUTSIDE the engine and feed frames
+in — the same shape a terminal app uses for audio. Spawn
+`ffmpeg -i clip.mp4 -f rawvideo -pix_fmt rgba -`, read frames on a
+thread into a `reactive::bounded_source`, build a `gfx::Bitmap` per
+frame, and show each one with `Image::from_bitmap`. Kill the child in
+the scope's `on_cleanup`: an orphaned decoder holds the file and the
+CPU. That dependency is the CALLER's, deliberately — the engine ships no
+bindings to ffmpeg, claims no video support, and works without it.
+
+**What playback costs.** A moving picture is the one thing here that
+cannot be idle, so the cost is stated rather than hidden: each frame
+arms ONE timer for that frame's own delay, so a playing clip costs one
+wakeup per frame, nothing between frames, and nothing at all once it is
+paused or finished. Bytes are the channel's business — a mosaic repaint
+is a cell diff (only what changed), which makes the universal path the
+cheapest one for motion, while kitty, iTerm2, and sixel each re-send a
+full payload per frame.
+
 ### Getting more resolution out of a picture
 
 A mosaic cell carries one glyph and two colors, so a picture's resolution
@@ -317,6 +370,12 @@ pure-cell 2D path with its own particle field (everywhere else). Try both:
   Scan component selectors are validated against the frame header;
   malformed scans reject rather than decode wrong.
 - **PNG**: 8-bit depths, no interlacing (Adam7 rejects by name).
+- **Animation**: animated GIF and APNG decode in-tree. **Video does
+  not** — `.mp4`, `.mov`, `.avi`, `.webm`, `.mpg` are recognized, named,
+  and refused with a conversion command, because their codecs are
+  patent-pooled and far larger than this crate. Frames are held decoded
+  in memory (budget: 64 Mpx across a sequence), so a long clip belongs
+  on the external-decoder path rather than in a `Vec`.
 - **Sixel**: one palette per emission — multiple live sixel images recolor
   each other. Prefer one sixel image per screen.
 - **iTerm2/sixel** have no placement model: any move or resize re-emits
