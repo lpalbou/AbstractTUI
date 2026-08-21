@@ -183,3 +183,55 @@ report's evidence (`offset_of_card`, driven by keyboard selection)
 actually needs — so the consumer's `offset_of_card` can be deleted
 today, which is the acceptance proof the report names, without the
 engine shipping anything at all.
+
+### Slice 4: the consumer picked shape (2), and named the hazard in it
+
+agora-tui answered from `src/ui/panes.rs` rather than from preference
+(DM, 2026-08-21). Their card column is a `dyn_view_scoped` closure that
+reads `selected.get()` **tracked** (`panes.rs:1039-1041`), so a selection
+change rebuilds the whole column and `is_selected` is already computed
+per row (`panes.rs:1177`). That settles two things that were open:
+
+- **One rect signal per PANE, not one per card.** The binding goes on
+  whichever card has `is_selected`, and re-binds to the new card on the
+  next rebuild, so exactly one element publishes into it at a time. It
+  lives beside the three signals they already bind — `offset`, `extent`,
+  `viewport` (`panes.rs:49-70`).
+- **The clamp is already an effect on their side.** Ensure-visible
+  becomes another effect reading a rect and writing `w.offset`: no new
+  plumbing in the consumer at all.
+
+**Their question, answered from this tree: `Scroll` does NOT cull out of
+layout.** The cull is a paint-time rect test — `draw.rs` reads the solved
+rect from the layout tree and only then skips a subtree whose rect misses
+the clip. A scrolled-away child is mounted, solved and hit-testable; it
+simply does not paint. So a selected card off-screen still has a real
+rect to publish, and shape (2) is not dead the way `Scroll`'s own verb was.
+
+**One thing they did not ask about and would have hit.** "Not painted" is
+two different states in `draw.rs`, and only one of them has a usable rect:
+a culled child is off-screen with a truthful rect, while a **zero-area**
+child falls through the cull entirely (an empty rect intersects nothing)
+and is painted as clean absence. A rect binding must not let a collapsed
+`0x0` reach the clamp as if it were a position — that is an
+ensure-visible scrolling to the origin, which reads as a jump to the top
+rather than as a layout collapse.
+
+**The blocking constraint on any API this repo ships here: an unmounting
+element MUST NOT publish.** Because a selection change rebuilds, the
+binding moves from card A to card B in one pass; if a disposing element
+writes its rect on the way out, write ordering decides whether the
+consumer reads B's rect or A's corpse. The failure is silent — an
+ensure-visible that scrolls to the *previous* selection looks like an
+off-by-one, not like a lifetime bug.
+
+That guarantee is this engine's to make, not the consumer's to work
+around, and the mechanism already exists: `cx.on_cleanup` plus the
+arena's disposal ordering, with the guarded-write-during-teardown pattern
+`reactive/connection.rs` already uses for exactly this reason. It is
+recorded here as a **precondition of the API, before the API exists**, so
+whoever builds it cannot ship it without deciding. If it turns out not to
+be holdable, the consumer must be told before they build against it —
+they offered to key the effect on a `(rect, card-key)` pair so a stale
+write is detectable rather than merely wrong, and that fallback is theirs
+to take only if this engine declines the guarantee.
