@@ -129,3 +129,57 @@ without exposing (2). Slice 2's answer to (i) suggests it can: a
 caller-supplied key on the child, resolved to a `ViewId` at mount and
 read through the already-public `rect_of`, is a strictly smaller
 surface than a per-child offset seam.
+
+### Slice 3 — the focus-driven case needs NO new engine API
+
+`src/widgets/scroll_ensure_visible_tests.rs`. Slice 2 said naming has to
+be caller-supplied. FOCUS is the loophole, and it happens to be exactly
+the case this report describes: if keyboard selection moves focus, then
+`UiTree::focused()` hands back the selected child's `ViewId` for free,
+and `rect_of` answers correctly for it even unpainted.
+
+`keyboard_selection_can_ensure_visible_today_with_no_new_engine_api`
+builds the entire verb from public API — `focus_first`/`focus_next`,
+`focused`, `rect_of`, a bound `offset_y` — over a column of MIXED-height
+children (every third card 3 rows, the rest 1: the report's
+folded/expanded shape). Selection walks from the top to a child far
+below the fold, clamping after each step, and the selected child is
+fully visible at every step. No `Element` key, no per-child offset seam,
+no new primitive.
+
+`focus_alone_does_not_scroll_the_selected_child_into_view` is why the
+item stays open: the engine does not apply the clamp. Focus moves past
+the fold and the bound offset never moves.
+
+Three falsifications, all verified:
+
+- Neuter the app-side clamp: the walk test goes red on the
+  fully-visible assertion, the second test stays green.
+- **Swap the layout readback for the hand-rolled uniform `index * 1`
+  model — the exact thing this report is filed about — and the test
+  goes red.** That is the drift hazard demonstrated rather than
+  asserted, and it is the strongest evidence in the item.
+- A content control asserts the true content offset of the target child
+  differs from the uniform guess, so the mixed heights are load-bearing
+  rather than incidental.
+
+### Answer to (iii), and the honest remaining scope
+
+Shape (1) does not need shape (2) underneath it, and for the
+focus-driven case it needs no identity primitive either. A `Scroll`
+verb here would be **sugar over a five-line clamp the app can already
+write** — worth having for ergonomics and for single-sourcing the
+clamp (the reason `List::ensure_visible` is shared between its
+selection and `scroll_to` paths), but it is not the missing-primitive
+item the report describes.
+
+What is genuinely unanswered, and all that is left of 0910:
+
+- selection that deliberately does NOT move focus;
+- locating a child nobody has selected.
+
+Both still need caller-supplied naming per slice 2. Neither is what the
+report's evidence (`offset_of_card`, driven by keyboard selection)
+actually needs — so the consumer's `offset_of_card` can be deleted
+today, which is the acceptance proof the report names, without the
+engine shipping anything at all.

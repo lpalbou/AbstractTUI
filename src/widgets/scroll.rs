@@ -853,3 +853,10 @@ mod child_probe_tests;
 #[cfg(test)]
 #[path = "scroll_child_identity_tests.rs"]
 mod child_identity_tests;
+
+// field-agora 0910, slice 3: the focus-driven case needs NO new engine
+// API — and the engine does not apply the clamp for you, which is the
+// gap that keeps the item open.
+#[cfg(test)]
+#[path = "scroll_ensure_visible_tests.rs"]
+mod ensure_visible_tests;
