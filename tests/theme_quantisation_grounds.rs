@@ -1182,3 +1182,118 @@ fn an_assignment_never_erases_text_it_collides_with() {
          invisible: the pair guarantee must outrank the ground preference"
     );
 }
+
+// ---------------------------------------------------------------------
+// Characterizing an OPEN DEFECT, not a contract.
+// claim:tui-separator-invents-distinctions-the-author-did-not-draw
+//
+// `quantize_set_256` gives every ground its own palette entry. For
+// grounds the theme AUTHOR made indistinguishable, that manufactures an
+// edge nobody drew, and the 256 rendering ends up MORE separated than
+// truecolor. The module's own docstring already forbids this — "inventing
+// a distinction the author did not draw would be a worse defect than the
+// one this fixes" — but implements the test as `rgb_eq`, byte-identity,
+// which cannot see a 1.018 contrast pair.
+//
+// These two tests pin the SIZE of the defect so it cannot grow unnoticed
+// and cannot be quietly declared fixed. They pass on today's defective
+// behaviour BY DESIGN. When the fix lands they go red; that is the
+// signal to update them to the invariant (`inversions == 0`), not to
+// loosen them.
+// ---------------------------------------------------------------------
+
+/// Ground pairs where the 256 output separates MORE than truecolor does.
+fn ground_inversions() -> Vec<(String, String, String, f32, f32)> {
+    use abstracttui::base::palette::XTERM_256;
+    use abstracttui::render::color::quantize_set_256;
+    use abstracttui::theme::contrast::contrast_ratio;
+    let mut out = vec![];
+    for t in abstracttui::theme::themes() {
+        let g = t.tokens.grounds();
+        let a = quantize_set_256([g[0].1, g[1].1, g[2].1, g[3].1, g[4].1]);
+        for i in 0..5 {
+            for j in (i + 1)..5 {
+                let true_c = contrast_ratio(g[i].1, g[j].1);
+                let q_c = contrast_ratio(XTERM_256[a[i] as usize], XTERM_256[a[j] as usize]);
+                if true_c < 1.05 && q_c > true_c * 1.05 {
+                    out.push((
+                        t.id.to_string(),
+                        g[i].0.name().to_string(),
+                        g[j].0.name().to_string(),
+                        true_c,
+                        q_c,
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn the_separator_invents_edges_in_exactly_seven_known_pairs() {
+    let found = ground_inversions();
+    let names: Vec<String> = found
+        .iter()
+        .map(|f| format!("{} {}/{}", f.0, f.1, f.2))
+        .collect();
+    assert_eq!(
+        found.len(),
+        7,
+        "the invented-edge set CHANGED. Fewer means the fix landed — update \
+         this to `assert!(found.is_empty())` and close the row. More means a \
+         new theme or a separator change widened a KNOWN defect. Found: {names:?}"
+    );
+    // The worst instance, named so a regression cannot hide behind the count.
+    let worst = found
+        .iter()
+        .find(|f| f.0 == "solarized-dark")
+        .expect("solarized-dark surface_raised/selection_bg is the headline case");
+    assert!(
+        worst.3 < 1.05 && worst.4 > 1.4,
+        "solarized-dark: authored at {:.3} (one colour to any eye), rendered \
+         at 256 as {:.3} (a visible edge)",
+        worst.3,
+        worst.4
+    );
+}
+
+/// Why the obvious fix does not work, pinned so nobody re-derives it.
+///
+/// Swapping `rgb_eq` for a colour-distance floor cannot work: the pairs
+/// that MUST merge and the pairs that MUST stay apart overlap in
+/// `sq_dist`. Any single distance threshold either re-breaks the
+/// 15-of-26 elevation defect or leaves the invented edges in place.
+#[test]
+fn no_single_colour_distance_threshold_can_separate_the_two_populations() {
+    use abstracttui::base::Rgba;
+    use abstracttui::theme::contrast::contrast_ratio;
+    fn sq(a: Rgba, b: Rgba) -> i32 {
+        let (dr, dg, db) = (
+            a.r as i32 - b.r as i32,
+            a.g as i32 - b.g as i32,
+            a.b as i32 - b.b as i32,
+        );
+        dr * dr + dg * dg + db * db
+    }
+    let (mut merge_max, mut keep_min) = (0i32, i32::MAX);
+    for t in abstracttui::theme::themes() {
+        let g = t.tokens.grounds();
+        for i in 0..g.len() {
+            for j in (i + 1)..g.len() {
+                let (c, d) = (contrast_ratio(g[i].1, g[j].1), sq(g[i].1, g[j].1));
+                if c < 1.05 {
+                    merge_max = merge_max.max(d);
+                } else if c >= 1.15 {
+                    keep_min = keep_min.min(d);
+                }
+            }
+        }
+    }
+    assert!(
+        merge_max > keep_min,
+        "the populations SEPARATED (merge_max={merge_max} <= keep_min={keep_min}). \
+         A single sq_dist threshold is now viable and this test is obsolete — \
+         re-open the row and take the simple fix."
+    );
+}
