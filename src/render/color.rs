@@ -26,6 +26,13 @@
 //! light/dark ordering relative to the background. Luma ordering uses the
 //! integer luma proxy above — deterministic, no float gamma in the
 //! emission path.
+//!
+//! Set quantization (`quantize_set_256`): the pair policy sees the two
+//! colors inside ONE cell, so it cannot protect two GROUNDS that meet
+//! across a cell boundary — a panel fill collapsing into the field behind
+//! it. That pair is resolvable once per theme and depth instead, upstream
+//! of emit; `quantize_set_256` is that policy, and it is the same metrics
+//! (`sq_dist`, `luma`) applied to a set rather than a pair.
 
 use crate::base::palette::{SYSTEM_16, XTERM_256};
 use crate::base::Rgba;
@@ -73,7 +80,7 @@ pub fn nearest_xterm256(c: Rgba) -> u8 {
 
 /// Nearest ANSI-16 index (0..=15) against the shared xterm default table.
 pub fn nearest_ansi16(c: Rgba) -> u8 {
-    nearest_in(&SYSTEM_16, 0, c, None, None).0
+    nearest_in(&SYSTEM_16, 0, c, &[], None).0
 }
 
 /// Joint fg/bg quantization to xterm-256 with contrast preservation.
@@ -85,7 +92,13 @@ pub fn quantize_pair_256(fg: Rgba, bg: Rgba) -> (u8, u8) {
     }
     // Collision on originally-distinct colors: re-pick fg among 16..=255
     // (same "never emit system colors" rule as the nearest lookup).
-    let (nudged, _) = nearest_in(&XTERM_256[16..], 16, fg, Some(qbg), Some(ordering(fg, bg)));
+    let (nudged, _) = nearest_in(
+        &XTERM_256[16..],
+        16,
+        fg,
+        &[qbg],
+        Some((qbg, ordering(fg, bg))),
+    );
     (nudged, qbg)
 }
 
@@ -96,8 +109,106 @@ pub fn quantize_pair_16(fg: Rgba, bg: Rgba) -> (u8, u8) {
     if qfg != qbg || rgb_eq(fg, bg) {
         return (qfg, qbg);
     }
-    let (nudged, _) = nearest_in(&SYSTEM_16, 0, fg, Some(qbg), Some(ordering(fg, bg)));
+    let (nudged, _) = nearest_in(&SYSTEM_16, 0, fg, &[qbg], Some((qbg, ordering(fg, bg))));
     (nudged, qbg)
+}
+
+/// The number of xterm-256 entries this module will ever emit: 16..=255.
+/// The system registers 0..=15 are user-themable, so no build-time
+/// decision can know what they render as.
+const ASSIGNABLE_256: usize = 240;
+
+/// Joint quantization of a SET of colors to xterm-256, giving each
+/// originally-distinct color its own palette entry.
+///
+/// [`quantize_pair_256`] protects the two colors *inside one cell* — a
+/// foreground and the background it sits on. It cannot protect two
+/// GROUNDS (a panel fill and the field behind it) because those are never
+/// handed to it together: they live in different cells, so the emitter
+/// never sees the pair. Elevation drawn by fill therefore disappears at
+/// 256 colors even though every cell's own fg/bg survives. Fifteen of the
+/// twenty-six built-in themes lose a ground distinction that way,
+/// `abstract-dark` — the default — among them
+/// (`tests/theme_quantisation_grounds.rs` pins the set).
+///
+/// The pair is resolvable UPSTREAM, once per theme and depth, and that is
+/// what this is for: hand it the grounds, get back one distinct index per
+/// ground, and let the emitter look a color up instead of computing
+/// `nearest`. Truecolor is untouched and no authored color moves; only
+/// the palette entry a ground is drawn with changes, and only on a
+/// terminal that could not tell the two apart anyway.
+///
+/// Guarantees, in the order they are applied:
+///
+/// - **Byte-identical colors share an index.** A theme whose `surface`
+///   equals its `bg` said those are one surface; inventing a distinction
+///   the author did not draw would be a worse defect than the one this
+///   fixes.
+/// - **The most exactly-represented color claims its entry first.** Where
+///   two colors want one entry, the one the palette already renders
+///   *perfectly* keeps it and the approximated one moves. Applying this as
+///   the traversal order rather than as a special case is what stops
+///   argument order from deciding (the defect
+///   `quantize_pair_256` has by design: for fg/bg, always moving the
+///   foreground IS correct — never move a background out from under the
+///   other cells sharing it).
+/// - **A displaced color keeps its light/dark ordering** against the color
+///   that displaced it, so authored elevation direction survives.
+/// - **A displaced color also avoids the natural entry of any color not
+///   yet placed**, or the collision merely moves along. (`observer-night`
+///   costs two displacements instead of one without this: `surface`
+///   displaced from 233 lands on 234, which is where `surface_raised`
+///   naturally lives.)
+///
+/// Ties pick the lower index — deterministic bytes.
+///
+/// `N` above `ASSIGNABLE_256 / 2` is not rejected but is not guaranteed
+/// either: a color that finds every candidate spoken for keeps its
+/// nearest entry, exactly as today. Five grounds are the intended scale.
+pub fn quantize_set_256<const N: usize>(colors: [Rgba; N]) -> [u8; N] {
+    let natural: [u8; N] = core::array::from_fn(|i| nearest_xterm256(colors[i]));
+
+    // Most-exactly-represented first: they get first claim on their own
+    // entry. `sq_dist` is the same metric the nearest lookup uses, so
+    // "exactly represented" here means the same thing it means there.
+    let mut order: [usize; N] = core::array::from_fn(|i| i);
+    order.sort_by_key(|&k| (sq_dist(XTERM_256[natural[k] as usize], colors[k]), k));
+
+    let mut assigned: [Option<u8>; N] = [None; N];
+    for &k in order.iter() {
+        if let Some(same) = (0..N).find(|&j| assigned[j].is_some() && rgb_eq(colors[j], colors[k]))
+        {
+            assigned[k] = assigned[same];
+            continue;
+        }
+        let Some(blocker) = (0..N).find(|&j| assigned[j] == Some(natural[k])) else {
+            assigned[k] = Some(natural[k]);
+            continue;
+        };
+        // Every entry already spoken for: the ones handed out, plus the
+        // natural entry of every color still to be placed.
+        let mut blocked: Vec<u8> = (0..N).filter_map(|j| assigned[j]).collect();
+        blocked.extend(
+            (0..N)
+                .filter(|&j| j != k && assigned[j].is_none())
+                .map(|j| natural[j]),
+        );
+        if blocked.len() >= ASSIGNABLE_256 {
+            assigned[k] = Some(natural[k]);
+            continue;
+        }
+        let anchor = assigned[blocker].expect("the blocker holds an index by construction");
+        let lighter = luma(colors[k]) >= luma(colors[blocker]);
+        let (idx, _) = nearest_in(
+            &XTERM_256[16..],
+            16,
+            colors[k],
+            &blocked,
+            Some((anchor, lighter)),
+        );
+        assigned[k] = Some(idx);
+    }
+    core::array::from_fn(|i| assigned[i].expect("every color is placed exactly once"))
 }
 
 fn rgb_eq(a: Rgba, b: Rgba) -> bool {
@@ -110,31 +221,38 @@ fn ordering(fg: Rgba, bg: Rgba) -> bool {
     luma(fg) >= luma(bg)
 }
 
-/// Nearest entry of `table` (indices offset by `base`) to `c`, optionally
-/// excluding one index and constraining the light/dark ordering against
-/// the excluded entry. Falls back to nearest-distinct when the ordering
-/// constraint admits nothing (the background sits at the palette's
-/// extreme). Ties pick the lower index — deterministic bytes.
+/// Nearest entry of `table` (indices offset by `base`) to `c`, excluding
+/// every index in `blocked` and optionally constraining the light/dark
+/// ordering against an anchor entry (`Some((anchor, c_not_darker))`).
+/// Falls back to nearest-unblocked when the ordering constraint admits
+/// nothing (the anchor sits at the palette's extreme). Ties pick the
+/// lower index — deterministic bytes.
+///
+/// `blocked` is a slice rather than a single index because the set
+/// assignment ([`quantize_set_256`]) has to exclude every entry already
+/// spoken for; the pair path passes the one background index and scans a
+/// one-element slice.
 fn nearest_in(
     table: &[Rgba],
     base: u8,
     c: Rgba,
-    exclude: Option<u8>,
-    fg_not_darker: Option<bool>,
+    blocked: &[u8],
+    ordered_against: Option<(u8, bool)>,
 ) -> (u8, u32) {
-    let anchor_luma = exclude.map(|i| luma(XTERM_256[i as usize]));
+    let anchor_luma = ordered_against.map(|(i, _)| luma(XTERM_256[i as usize]));
+    let c_not_darker = ordered_against.map(|(_, o)| o);
     let mut best: Option<(u8, u32)> = None;
     let mut best_unordered: Option<(u8, u32)> = None;
     for (i, &entry) in table.iter().enumerate() {
         let idx = base + i as u8;
-        if exclude == Some(idx) {
+        if blocked.contains(&idx) {
             continue;
         }
         let d = sq_dist(c, entry);
         if best_unordered.is_none_or(|(_, bd)| d < bd) {
             best_unordered = Some((idx, d));
         }
-        if let (Some(lighter), Some(anchor)) = (fg_not_darker, anchor_luma) {
+        if let (Some(lighter), Some(anchor)) = (c_not_darker, anchor_luma) {
             let ok = if lighter {
                 luma(entry) >= anchor
             } else {
@@ -237,6 +355,83 @@ mod tests {
         let c = Rgba::rgb(30, 30, 40);
         let (qfg, qbg) = quantize_pair_256(c, c);
         assert_eq!(qfg, qbg, "genuinely identical colors may collapse");
+    }
+
+    /// The guard the pair path has (`pair_identical_colors_stay_identical`)
+    /// carried over to the set: a theme that gives two grounds the same
+    /// hex said they are ONE surface. Separating them would invent an
+    /// elevation nobody authored, which is a worse defect than the
+    /// collapse this whole policy exists to fix. No built-in theme does
+    /// this, so this is the only place it is covered.
+    #[test]
+    fn set_identical_colors_share_one_index() {
+        let a = Rgba::rgb(30, 30, 40);
+        let far = Rgba::rgb(200, 30, 30);
+        let out = quantize_set_256([a, a, far]);
+        assert_eq!(out[0], out[1], "identical colors may share an entry");
+        assert_eq!(out[0], nearest_xterm256(a), "and it is the natural one");
+        assert_ne!(out[2], out[0]);
+    }
+
+    /// Nothing colliding, nothing moved — the property that keeps this
+    /// safe to apply to every theme rather than only the broken ones.
+    #[test]
+    fn set_without_collision_is_plain_nearest() {
+        let colors = [
+            Rgba::rgb(255, 0, 0),
+            Rgba::rgb(0, 0, 0),
+            Rgba::rgb(255, 255, 255),
+        ];
+        assert_eq!(quantize_set_256(colors), [196, 16, 231]);
+    }
+
+    /// Three grounds landing on one entry: all three come out distinct,
+    /// in the authored light/dark order. This is the case
+    /// `quantize_pair_256` cannot express at all — it separates two and
+    /// has nowhere to put the third.
+    #[test]
+    fn set_separates_a_three_way_pileup_keeping_order() {
+        let dark = Rgba::rgb(26, 27, 38);
+        let mid = Rgba::rgb(28, 29, 36);
+        let light = Rgba::rgb(30, 30, 40);
+        let n = nearest_xterm256(dark);
+        assert!(
+            nearest_xterm256(mid) == n && nearest_xterm256(light) == n,
+            "premise: all three collide on {n}"
+        );
+        let [qd, qm, ql] = quantize_set_256([dark, mid, light]);
+        assert!(qd != qm && qm != ql && qd != ql, "{qd} {qm} {ql}");
+        let l = |i: u8| luma(XTERM_256[i as usize]);
+        assert!(l(qd) <= l(qm) && l(qm) <= l(ql), "{qd} {qm} {ql}");
+    }
+
+    /// The ownership rule, on the case that motivated it: pure white is
+    /// represented EXACTLY (entry 231), an off-white next to it is not, so
+    /// the off-white is the one that moves.
+    #[test]
+    fn set_never_moves_an_exactly_representable_color() {
+        let white = Rgba::rgb(255, 255, 255);
+        let off = Rgba::rgb(250, 250, 250);
+        assert_eq!(
+            nearest_xterm256(white),
+            nearest_xterm256(off),
+            "premise: collision"
+        );
+        let [qw, qo] = quantize_set_256([white, off]);
+        assert_eq!(qw, 231, "the exact one keeps its entry");
+        assert_ne!(qo, 231);
+        // Argument order must not decide it: swapped, same outcome.
+        let [qo2, qw2] = quantize_set_256([off, white]);
+        assert_eq!((qw2, qo2), (qw, qo));
+    }
+
+    /// A one-element set is the nearest lookup, and an empty one is not a
+    /// panic — both are reachable from a caller that maps over a token
+    /// list.
+    #[test]
+    fn set_degenerate_sizes_are_total() {
+        assert_eq!(quantize_set_256([Rgba::rgb(255, 0, 0)]), [196]);
+        assert_eq!(quantize_set_256::<0>([]), [0u8; 0]);
     }
 
     #[test]

@@ -45,7 +45,9 @@
 
 use abstracttui::base::palette::XTERM_256;
 use abstracttui::base::Rgba;
-use abstracttui::render::color::{nearest_ansi16, nearest_xterm256, quantize_pair_256};
+use abstracttui::render::color::{
+    nearest_ansi16, nearest_xterm256, quantize_pair_256, quantize_set_256,
+};
 use abstracttui::theme::{themes, TokenSet};
 
 /// The OPAQUE grounds — every token a widget can paint a region with, and
@@ -762,6 +764,227 @@ fn a_distinct_index_per_ground_is_constructible_for_every_theme() {
             );
         }
     }
+}
+
+/// **The port.** `render::color::quantize_set_256` is the prototype above
+/// shipped, and this is the diff that keeps them one thing.
+///
+/// It is not a redundant test. The prototype computes in CIE76 Lab and
+/// float relative luminance; the shipped function computes in the
+/// module's own integer metrics — `sq_dist` for "how exactly is this
+/// represented" and the integer `luma` proxy for light/dark ordering —
+/// because `color.rs` deliberately keeps float gamma out of the emission
+/// path. Those are different metrics that happen to agree here, and this
+/// asserts the agreement across all 26 themes rather than assuming it. If
+/// a future theme lands where they disagree, this fails and says which
+/// metric is doing the deciding, instead of the two drifting quietly.
+///
+/// The shipped function adds ONE rule the prototype has not got:
+/// byte-identical grounds share an index. A theme whose `surface` equals
+/// its `bg` said those are one surface, and separating them would invent
+/// an elevation the author did not draw — `quantize_pair_256` has the same
+/// `rgb_eq` guard for the same reason. No built-in theme exercises it, so
+/// it is unit-tested in `color.rs` instead.
+///
+/// **They disagree on exactly one theme, and the disagreement taught
+/// something.** In `tokyo-night` neither colliding ground is remotely
+/// exact — `surface_raised` and `selection_bg` are blues forced onto the
+/// grey ramp at ΔE 20.6 and 21.5 — so the ownership sort is ranking two
+/// bad approximations, and the two metrics rank them opposite ways.
+/// Measuring what each choice COSTS settles it without appeal to which
+/// metric is nicer:
+///
+/// | move | ΔE before → after | sq before → after |
+/// |---|---|---|
+/// | shipped: `surface_raised` 238→239 | 20.559 → **20.509** | 1321 → **881** |
+/// | prototype: `selection_bg` 238→237 | 21.490 → 21.997 | 1258 → 1958 |
+///
+/// The shipped assignment moves the ground *toward* its true colour; the
+/// prototype moves one away from it. Both separate by the same amount
+/// (ΔE 4.32 vs 4.43 between the resulting entries). So the shipped choice
+/// is better **in the prototype's own metric**, not merely in its own.
+///
+/// The finding underneath is that "least exactly represented moves" is a
+/// proxy for "cheapest move", and the two come apart when neither ground
+/// is exact: which ground is worse-represented does not say which one has
+/// somewhere cheap to go, because the direction it must move to preserve
+/// the authored elevation order may point away from it. The proxy is
+/// still what ships — it is what makes the exactly-represented case
+/// (`#ffffff` in the light themes) unconditional — but it is a proxy, and
+/// this is where that is visible.
+const SET_QUANTISER_DIFFERS_FROM_PROTOTYPE_FOR: &[&str] = &["tokyo-night"];
+
+#[test]
+fn the_shipped_set_quantiser_matches_the_reference_prototype() {
+    let differ: Vec<&str> = themes()
+        .iter()
+        .filter(|th| {
+            let shipped = quantize_set_256(grounds(&th.tokens).map(|(_, c)| c));
+            shipped != assign_ground_indices(&th.tokens).map(|(_, i)| i)
+        })
+        .map(|th| th.id)
+        .collect();
+    assert_eq!(
+        differ, SET_QUANTISER_DIFFERS_FROM_PROTOTYPE_FOR,
+        "the set of themes where the shipped set quantiser and the \
+         reference prototype disagree changed.\n\
+         GREW: a theme landed where sq_dist/integer-luma and \
+         CIE76/relative-luminance part company. Measure what each choice \
+         COSTS the moved ground (see the table above) before picking a \
+         side — do not assume the shipped one is right because it ships.\n\
+         SHRANK: the two metrics converged; say so on \
+         claim:tui-audit-does-not-survive-quantisation."
+    );
+}
+
+/// The two properties the prototype was built to prove, re-asserted
+/// against the SHIPPED function — because a fix is only real in the
+/// artifact that ships. Distinct entries for every theme's grounds, at one
+/// displacement per collision, and not one of the eleven healthy themes
+/// perturbed.
+#[test]
+fn the_shipped_set_quantiser_separates_every_theme_without_perturbing_the_healthy() {
+    for th in themes() {
+        let g = grounds(&th.tokens);
+        let before: Vec<u8> = g.iter().map(|(_, c)| nearest_xterm256(*c)).collect();
+        let after = quantize_set_256(g.map(|(_, c)| c));
+
+        let mut distinct = after.to_vec();
+        distinct.sort_unstable();
+        distinct.dedup();
+        assert_eq!(
+            distinct.len(),
+            5,
+            "{}: shipped assignment left two grounds on one entry",
+            th.id
+        );
+
+        let moved: Vec<&str> = g
+            .iter()
+            .zip(before.iter().zip(after.iter()))
+            .filter(|(_, (was, now))| was != now)
+            .map(|((n, _), _)| *n)
+            .collect();
+        let collided = before
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            < 5;
+        assert_eq!(
+            moved.len(),
+            usize::from(collided),
+            "{}: expected {} moved ground(s), got {:?}",
+            th.id,
+            usize::from(collided),
+            moved
+        );
+    }
+}
+
+/// Every theme in `KNOWN_256_COLLAPSES` is separated by the shipped
+/// function, and separated to the entry option (b)'s optimal seed edit
+/// would have reached. That equivalence is the whole argument for fixing
+/// this at quantisation time instead of by editing 15 themes' authored
+/// hexes; it was measured against `quantize_pair_256` in
+/// `the_existing_repick_lands_where_the_ideal_seed_edit_lands`, and it has
+/// to survive the move to a set assignment or the argument does not
+/// transfer.
+///
+/// It does not transfer unchanged, and the exceptions are the finding.
+/// Two adjustments and one genuine break:
+///
+/// - Which member moves is not fixed. `nearest_separating` was measured on
+///   the pair's second member because that is the one `quantize_pair_256`
+///   nudges; the set assignment moves whichever member the ownership rule
+///   says, so the ideal is recomputed for the ground that actually moved.
+/// - `nearest_separating` is PAIRWISE-BLIND, and so was the costing of
+///   option (b) built on it. It finds the smallest seed edit that
+///   separates one ground from ONE other, with no idea that the entry it
+///   lands on may belong to a third ground. The set assignment cannot use
+///   that entry, so it lands elsewhere and this comparison fails — not
+///   because the assignment is wrong but because the pairwise ideal was
+///   never achievable.
+///
+/// **That is five of the fifteen collapsed pairs — a third of them — and
+/// it is the largest correction this row has had to option (b)'s
+/// costing.** `every_collapsed_ground_separates_for_a_sub_jnd_move`
+/// reports that fourteen of fifteen separate for a sub-JND edit and only
+/// `solarized-dark` is expensive. For these five that number is not the
+/// real cost: the entry the cheap edit reaches belongs to a third ground,
+/// so an author taking it would separate the reported pair and collapse
+/// another. The true edit is a further one, unmeasured, and the
+/// sub-JND figure understates it.
+///
+/// `observer-night` is the worked case, and it is the theme the cascade
+/// guard already exists for: `surface` displaced from 233 has 234 as its
+/// ideal, which is where `surface_raised` naturally lives, so the
+/// assignment takes 235 instead. Option (b) hits the identical wall by
+/// hand. So this list is evidence AGAINST (b) — it costs more than it was
+/// costed at — and not a divergence of (c) from it.
+///
+/// It also strengthens what the set assignment buys over a pairwise one:
+/// a third of the broken themes need the whole-set view to be fixed
+/// correctly, which a per-pair re-pick cannot have by construction.
+const IDEAL_SEED_EDIT_IS_UNREACHABLE_FOR: &[(&str, &str)] = &[
+    ("observer-night", "bg vs surface"),
+    ("catppuccin-macchiato", "surface vs shadow_ground"),
+    ("rose-pine", "bg vs surface"),
+    ("everforest-light", "surface_raised vs shadow_ground"),
+    ("abstract-midnight", "bg vs shadow_ground"),
+];
+
+#[test]
+fn the_shipped_assignment_lands_where_the_ideal_seed_edit_lands() {
+    let mut unreachable = Vec::new();
+    for (id, pair, anchor, mover) in collapsed_grounds() {
+        let t = abstracttui::theme::get(id).expect("known-set theme");
+        let g = grounds(&t.tokens);
+        let after = quantize_set_256(g.map(|(_, c)| c));
+        let index_of = |c: Rgba| {
+            g.iter()
+                .position(|(_, x)| *x == c)
+                .map(|k| after[k])
+                .expect("collapsed pair members are grounds")
+        };
+        let (q_anchor, q_mover) = (index_of(anchor), index_of(mover));
+        assert_ne!(q_anchor, q_mover, "{id} ({pair}): still collapsed");
+
+        // Whichever member the assignment actually moved is the one whose
+        // ideal edit we compare against.
+        let (moved_now, stayed, landed) = if q_mover != nearest_xterm256(mover) {
+            (mover, anchor, q_mover)
+        } else {
+            (anchor, mover, q_anchor)
+        };
+        let (ideal, _) = nearest_separating(moved_now, stayed)
+            .unwrap_or_else(|| panic!("{id} ({pair}): no separating edit for the moved ground"));
+        let ideal = nearest_xterm256(ideal);
+        if landed == ideal {
+            continue;
+        }
+        // Only a third ground standing on the ideal entry excuses the
+        // miss. Anything else is the equivalence genuinely breaking.
+        let taken_by_a_third_ground = g
+            .iter()
+            .any(|(_, c)| *c != moved_now && *c != stayed && nearest_xterm256(*c) == ideal);
+        assert!(
+            taken_by_a_third_ground,
+            "{id} ({pair}): the set assignment landed on {landed} where the \
+             optimal seed edit reaches {ideal}, and no other ground holds \
+             {ideal}. Options (b) and (c) stop being equivalent for this \
+             theme and the choice between them has to be re-argued on \
+             claim:tui-audit-does-not-survive-quantisation."
+        );
+        unreachable.push((id, pair));
+    }
+    assert_eq!(
+        unreachable, IDEAL_SEED_EDIT_IS_UNREACHABLE_FOR,
+        "the set of themes whose pairwise-ideal entry is occupied by a \
+         third ground changed. Each entry here is a theme where option \
+         (b)'s costing was pairwise-blind and understated the edit it \
+         would really need, so the list is evidence about (b), not a \
+         waiver for (c)."
+    );
 }
 
 /// The assignment must obey the ownership rule, not argument order: an

@@ -173,6 +173,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ground the palette represents exactly — that last by making the
   ownership rule the traversal order rather than a special case.
 
+- `render::color::quantize_set_256` — the prototype above, shipped. The
+  set analogue of `quantize_pair_256`: hand it N colours, get back N
+  distinct xterm-256 indices, moving as few as possible. It is not yet
+  wired into emit (that is the rest of the claim); this is the policy
+  landing where the pair policy lives, with the pair path refactored onto
+  the same primitive — `nearest_in` now excludes a SET of indices rather
+  than a single one, because a set assignment has to avoid every entry
+  already spoken for.
+
+  Two things changed in the port, both because the shipped function
+  computes in the module's own integer metrics (`sq_dist`, the integer
+  `luma` proxy) rather than the prototype's CIE76 and float relative
+  luminance — `color.rs` keeps float gamma out of the emission path
+  deliberately, and the entry a colour lands on should be defended in the
+  metric that picked it.
+
+  Those metrics disagree on **one** theme, and measuring the disagreement
+  was worth more than the agreement. In `tokyo-night` neither colliding
+  ground is close to exact (ΔE 20.6 and 21.5 — blues forced onto the grey
+  ramp), so the ownership sort is ranking two bad approximations and the
+  two metrics rank them opposite ways. The shipped choice moves
+  `surface_raised` 238→239, which takes it *closer* to its true colour
+  (ΔE 20.559→20.509, squared distance 1321→881); the prototype moves
+  `selection_bg` 238→237, away from it (21.490→21.997, 1258→1958). Equal
+  separation either way. So the shipped choice is better in the
+  prototype's own metric, and the disagreement is pinned with the numbers
+  rather than settled by preference. The finding underneath: "least
+  exactly represented moves" is a *proxy* for "cheapest move", and they
+  come apart when neither colour is exact, because the direction a colour
+  must move to preserve the authored elevation order may point away from
+  it. The proxy still ships — it is what makes the exactly-represented
+  case unconditional — but it is now visibly a proxy.
+
+  The port also adds a rule the prototype has not got: byte-identical
+  colours share an index. A theme whose `surface` equals its `bg` said
+  those are one surface, and separating them would invent an elevation
+  nobody authored — the same `rgb_eq` guard `quantize_pair_256` has, for
+  the same reason. No built-in theme exercises it, so it is unit-tested.
+
+  And it corrected this row's costing of option (b) again, harder than
+  before. Checking the shipped assignment against the "optimal seed edit"
+  it was supposed to match finds **5 of the 15 collapsed pairs** where
+  that edit is unreachable: the entry it lands on belongs to a THIRD
+  ground (observer-night, catppuccin-macchiato, rose-pine,
+  everforest-light, abstract-midnight). `nearest_separating` is
+  pairwise-blind, so the sub-JND figure that made (b) look free
+  understates a third of the set — an author taking that edit would
+  separate the reported pair and collapse another. That is evidence
+  against (b), and it is the clearest thing yet in favour of a whole-set
+  assignment: a per-pair re-pick cannot see the third ground by
+  construction.
+
 - tests: `perf_budgets` no longer reports a pass when it asserted
   nothing. The whole file is `#[ignore]`d and release-only, correctly —
   a debug build cannot judge a timing budget. What it did about that was

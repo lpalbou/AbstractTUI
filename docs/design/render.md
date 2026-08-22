@@ -323,6 +323,19 @@ Deterministic byte emission; REDTEAM snapshots exact bytes.
     ordering against the bg (falling back to nearest-distinct when the bg
     sits at the palette extreme). Genuinely identical colors still
     collapse.
+  - **Set contrast preservation** (`quantize_set_256`): the pair policy
+    sees the two colors inside ONE cell, so it cannot protect two GROUNDS
+    that meet across a cell boundary — a panel fill collapsing into the
+    field behind it, which happens in 15 of the 26 built-in themes
+    (`tests/theme_quantisation_grounds.rs`). That pair is resolvable
+    upstream instead, once per theme and depth: `quantize_set_256` hands
+    each color of a set its own palette entry. Byte-identical colors
+    share one (the same `rgb_eq` rule as the pair path); where two want
+    the same entry, the one the palette represents most exactly keeps it,
+    the other takes the nearest entry that is unclaimed, keeps the
+    authored light/dark ordering, and is not the natural entry of a color
+    still to be placed. Not yet wired into emit — see
+    `claim:tui-audit-does-not-survive-quantisation`.
 - **Underline color** [C2, DESIGN req 2]: SGR 58 in ISO-8613 colon form —
   `58:2::r:g:b` truecolor, `58:5:n` on 256-color — and `59` for the reset
   to default; emitted only when `caps.underline_color` AND the cell has an
