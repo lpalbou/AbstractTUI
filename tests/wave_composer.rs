@@ -15,7 +15,9 @@
 //!   bytes, and closing repaints the vacated region from below;
 //! - damage containment: with the panel open, a highlight move emits
 //!   bytes bounded to the panel region — static chrome rows stay
-//!   byte-identical (measured numbers printed);
+//!   byte-identical (measured numbers printed) — AND the frame is
+//!   checked to carry the repaint, since a frame that painted nothing
+//!   is bounded by every region;
 //! - every emitted byte is modeled (`unknown_seq_count == 0`).
 
 use std::cell::RefCell;
@@ -239,12 +241,28 @@ fn completion_dropdown_full_round_trip_with_damage_containment() {
     // Damage containment: a highlight move repaints the PANEL region
     // only — chrome/status/composer rows stay byte-identical, and the
     // emitted bytes stay far below a full-frame repaint.
+    // The panel region is named by the CANDIDATE LABELS, not by "the row
+    // holds a '/'". That looser rule scored the COMPOSER row as panel —
+    // the draft is "/" — so the row this assertion most needs to protect
+    // (adjacent to the panel, holding the caret) was the one row exempt
+    // from it, while the comment above promised it stayed identical.
+    // Measured: loose [6, 7, 8, 9, 10] against strict [6, 7, 8, 9], with
+    // the composer on row 10.
     let panel_rows: Vec<usize> = with_panel
         .iter()
         .enumerate()
-        .filter(|(_, l)| l.contains('/'))
+        .filter(|(_, l)| {
+            ["/help", "/theme", "/clear", "/quit"]
+                .iter()
+                .any(|c| l.contains(c))
+        })
         .map(|(i, _)| i)
         .collect();
+    assert!(
+        !panel_rows.contains(&composer_row),
+        "the composer row must be INSIDE the checked set, never exempt \
+         from it: {panel_rows:?} with the composer on {composer_row}"
+    );
     term.push_input(b"\x1b[B"); // Down: highlight row 1
     let turn = driver.turn(&mut app, &mut term).expect("turn");
     assert!(turn.rendered);
@@ -256,10 +274,28 @@ fn completion_dropdown_full_round_trip_with_damage_containment() {
             assert_eq!(before, after, "row {i} outside the panel changed");
         }
     }
+    // The row loop is only informative if it CAN report a difference on
+    // the composer row: it does, on the panel-open transition, over the
+    // same rows through the same comparison. Its silence during the
+    // highlight move is then a fact about the frame, not about the check.
+    assert_ne!(
+        before_open[composer_row], with_panel[composer_row],
+        "control: opening the panel does change the composer row"
+    );
     let nav_text = String::from_utf8_lossy(&nav_bytes);
     assert!(
         !nav_text.contains("chrome") && !nav_text.contains("status"),
         "static chrome must not re-emit: {nav_text:?}"
+    );
+    // Containment has two sides, and only one of them was checked. A
+    // frame that repainted NOTHING satisfies every assertion above — no
+    // row changed, no chrome re-emitted, fewer bytes than the open — so
+    // deleting the repaint left this test green. The frame must also
+    // carry the work: it addresses exactly the two rows whose highlight
+    // moved (measured: CUP to rows 7 and 8, 1-based).
+    assert!(
+        nav_text.contains("/help") && nav_text.contains("/theme"),
+        "the highlight move must repaint the two rows it changed: {nav_text:?}"
     );
     assert!(
         nav_bytes.len() < open_bytes,
@@ -664,6 +700,122 @@ fn navigation_chords_match_codex_defaults() {
         settle(&mut driver, &mut app, &mut term);
         assert_eq!(state.text(), "alpha  gamma", "delete_forward_word {label}");
     }
+    driver.finish(&mut term).expect("leave");
+    assert_eq!(term.screen().unknown_seq_count(), 0, "all bytes modeled");
+}
+
+/// A composer hosted INSIDE an overlay layer at a non-zero screen
+/// origin, mounted focused on a draft whose caret already sits in a
+/// trigger token — so its panel opens with NO event ever routed through
+/// the completion wrapper.
+///
+/// That is the whole point of the case. `caret_cell` is LAYER-LOCAL by
+/// contract, so the dropdown's screen anchor is the caret translated by
+/// the layer's origin; the wrapper learned that origin from its
+/// capture-phase handler and from nowhere else, so a composer nobody
+/// has typed into yet anchored as though its layer were at (0, 0).
+/// Opening the layer from a ROOT shortcut is what keeps the composer
+/// eventless: the 'd' key is consumed by the root tree.
+fn layered_composer_app(app: &mut App, bounds: Rect) {
+    let overlays = app.overlays();
+    app.mount(move |cx| {
+        let overlays = overlays.clone();
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(text("root world"))
+            .shortcut(KeyChord::plain(Key::Char('d')), move |_| {
+                let lcx = cx.child();
+                let t = use_theme(lcx).get().tokens;
+                let state = TextAreaState::new(lcx);
+                // The draft is already a live trigger token: the
+                // controller opens on the layer's first solve.
+                state.set_text("/he");
+                let composer = TextArea::new()
+                    .state(&state)
+                    .rows(1, 1)
+                    .element(lcx, &t)
+                    .autofocus()
+                    .build();
+                let wrapped = Completion::new()
+                    .trigger('/', |q| {
+                        ["help", "theme", "clear", "quit"]
+                            .iter()
+                            .filter(|c| c.starts_with(q))
+                            .map(|c| CompletionCandidate::new(format!("/{c}"), format!("/{c} ")))
+                            .collect()
+                    })
+                    .max_visible(4)
+                    .attach(lcx, &overlays, &state, composer);
+                overlays.layer_tree(
+                    1000,
+                    bounds,
+                    true,
+                    lcx,
+                    Element::new()
+                        .style(LayoutStyle::column())
+                        .child(text("drawer chrome"))
+                        .child(
+                            Element::new()
+                                .style(LayoutStyle::column().grow(1.0))
+                                .build(),
+                        )
+                        .child(wrapped)
+                        .build(),
+                );
+            })
+            .build()
+    })
+    .expect("mount");
+}
+
+#[test]
+fn a_composer_inside_a_layer_anchors_its_panel_in_screen_space() {
+    // Layer origin (12, 2): both axes non-zero, and both misses are
+    // observable in this pose (checked, not assumed — the first version
+    // of this test asserted a vertical bound that the DEFECT satisfied
+    // too, which is a check that cannot fail).
+    let bounds = Rect::new(12, 2, 28, 7);
+    let mut app = App::new(Size::new(W, H));
+    layered_composer_app(&mut app, bounds);
+    let mut term = CaptureTerm::new(Size::new(W, H));
+    let mut driver = Driver::new(&mut app, &mut term, config()).expect("driver");
+    settle(&mut driver, &mut app, &mut term);
+
+    term.push_input(b"d"); // root shortcut opens the layer
+    settle(&mut driver, &mut app, &mut term);
+
+    let lines = screen_lines(&term);
+    let (row, line) = lines
+        .iter()
+        .enumerate()
+        .find(|(_, l)| l.contains("/help"))
+        .map(|(i, l)| (i as i32, l.clone()))
+        .unwrap_or_else(|| panic!("dropdown never opened: {lines:?}"));
+    let col = line.find("/help").expect("found above") as i32;
+
+    let composer_row = lines
+        .iter()
+        .position(|l| l.contains('▐'))
+        .expect("composer frame on screen") as i32;
+
+    // BOTH axes are checked because both were wrong, and each one alone
+    // is satisfiable by a half-fix. Measured: layer-local placement puts
+    // the panel at (row 7, col 5); screen placement at (row 9, col 17),
+    // with the composer's own frame on row 8.
+    assert_eq!(
+        row,
+        composer_row + 1,
+        "the panel belongs on the row under the composer ({composer_row}), \
+         not where the untranslated caret row put it: {lines:?}"
+    );
+    assert!(
+        col >= bounds.x,
+        "panel opened at column {col}, left of its layer's own edge {} — \
+         the caret was anchored in layer-local space: {lines:?}",
+        bounds.x
+    );
+    println!("measured: panel at row {row}, column {col}; layer at {bounds:?}");
+
     driver.finish(&mut term).expect("leave");
     assert_eq!(term.screen().unknown_seq_count(), 0, "all bytes modeled");
 }

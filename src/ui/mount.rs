@@ -323,6 +323,24 @@ pub(super) fn remove_subtree(core: &Rc<RefCell<TreeCore>>, root: ViewId) {
                 // policy is a widgets-layer concern.)
                 c.focus = None;
             }
+            // A memory container dying takes its memory with it
+            // (app-widgets 0155). Without this the map keeps one entry
+            // per REBUILD for the life of the tree: a `Dyn` region
+            // holding a `focus_memory` container re-mounts a fresh
+            // container each generation, and the previous key is never
+            // reachable again. Nothing was unsound — the arena is
+            // generational, so a stale key simply never matches — which
+            // is exactly why it grew unnoticed.
+            //
+            // The VALUE side is deliberately NOT swept. A remembered
+            // descendant can die while its container lives, and
+            // `restore_memory_target` already re-validates on read
+            // (alive + still focusable + still inside the container),
+            // so a stale value costs a fall-through and nothing else.
+            // Sweeping it would mean a full-map scan per removed
+            // instance to fix a set bounded by container count, and no
+            // test could tell the sweep from its absence.
+            c.focus_memory.remove(&id);
         }
     }
     c.damage_rect(root_rect);

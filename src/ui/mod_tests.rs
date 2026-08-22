@@ -897,17 +897,19 @@ fn handlers_can_request_focus() {
 /// `Dyn` region that rebuilds a `focus_memory` subtree leaks one dead
 /// entry per rebuild — for the life of the tree.
 ///
-/// IGNORED because it fails: this asserts the behaviour the map should
-/// have, not the behaviour it has. Measured 2026-08-21 — 20 rebuilds
-/// leave **20 entries, 0 of them live**. Filed as app-widgets 0155.
+/// Measured 2026-08-21, before the fix: 20 rebuilds left **20 entries,
+/// 0 of them live**. Filed as app-widgets 0155 and closed by pruning
+/// the key in `remove_subtree`'s drain loop; this test is what says the
+/// prune is still there.
 ///
-/// `remove_subtree` (`ui::mount`) clears `core.focus` when the focused
-/// node dies but walks past `core.focus_memory` entirely, and nothing
-/// else prunes it. Nothing is UNSOUND — the arena is generational, so
+/// `remove_subtree` (`ui::mount`) cleared `core.focus` when the focused
+/// node died but walked past `core.focus_memory` entirely, and nothing
+/// else pruned it. Nothing was UNSOUND — the arena is generational, so
 /// `restore_memory_target` reads a dead entry as `None` and falls
-/// through to `entering`. It is unbounded growth, not a dangling
-/// handle, and a long-lived app with a rebuilding pane pays for every
-/// rebuild it ever did.
+/// through to `entering`. It was unbounded growth, not a dangling
+/// handle, and a long-lived app with a rebuilding pane paid for every
+/// rebuild it ever did. That is also why it went unnoticed: no symptom
+/// until the memory does.
 ///
 /// Found while designing field-agora 0910, which needs its own
 /// `ViewId`-valued map in `TreeCore`: the question was "who removes an
@@ -917,7 +919,6 @@ fn handlers_can_request_focus() {
 /// same key and overwrites in place, so its size is bounded by the
 /// number of distinct keys instead of by the number of rebuilds.
 #[test]
-#[ignore = "known defect (app-widgets 0155): focus_memory grows one dead entry per Dyn rebuild"]
 fn focus_memory_sheds_containers_that_unmount() {
     let trigger: Rc<RefCell<Option<Signal<i32>>>> = Rc::new(RefCell::new(None));
     let t2 = trigger.clone();

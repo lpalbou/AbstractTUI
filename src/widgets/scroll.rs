@@ -230,14 +230,20 @@ impl Scroll {
     /// writing it yourself desynchronizes clamps and the thumb.
     ///
     /// One caveat the warm start does NOT cover, so chrome reading this
-    /// signal is not surprised by it: content whose height depends on a
-    /// width discovered in draw (`Feed`, `MarkdownView`) solves in TWO
-    /// steps, and the FIRST is a placeholder — `(w, 1)` — which
-    /// overwrites the warm value for one turn before the real count
-    /// lands. Bound offsets are protected from that (field-agora/0895);
-    /// a reader rendering "N more rows" straight off this signal will
-    /// still see one frame of nonsense on mount. Debounce it, or drive
-    /// that chrome off a settled copy.
+    /// signal is not surprised by it: content that sizes itself from a
+    /// LATER pass rather than from the solve publishes twice, and the
+    /// first value is a placeholder that overwrites the warm one for a
+    /// turn. `Disclosure` does this by construction — it sizes its body
+    /// region from a nested `Scroll`'s own extent, which lands a turn
+    /// after the solve — and any app widget that publishes its height
+    /// from a draw closure joins the same class. The engine's content
+    /// widgets do not: `Feed`, `MarkdownView` and `CodeView` all answer
+    /// an intrinsic measure during the solve.
+    ///
+    /// Bound offsets are protected from a placeholder (field-agora/0895
+    /// for the clamp, and the follow-tail pin carries the same guard); a
+    /// reader rendering "N more rows" straight off this signal is not.
+    /// Debounce it, or drive that chrome off a settled copy.
     pub fn extent_signal(mut self, sig: Signal<(i32, i32)>) -> Scroll {
         self.extent_out = Some(sig);
         self
@@ -462,6 +468,29 @@ impl Scroll {
         // cycle — and only GESTURES write `follow` from geometry, so a
         // programmatic offset write never disengages the user.
         if let Some(f) = follow {
+            // The SAME provisional exemption the offset repair below
+            // carries (field-agora/0895), and for the same reason: the
+            // pin must not act on a first arrival that turns out to be a
+            // placeholder.
+            //
+            // Content that publishes its height from a pass LATER than
+            // the solve arrives twice, and the first arrival looks real —
+            // cross axis already correct, scroll axis a stand-in. A pin
+            // that trusted it computed `(placeholder - view_h).max(0)`,
+            // drove a following reader to the TOP, and snapped back when
+            // the truth landed a turn later.
+            //
+            // The engine's own content widgets measure during the solve
+            // and never enter this state. `Disclosure` does, and so does
+            // any app widget that sizes itself from a draw closure
+            // through `extent_signal` — a public API, so this guard
+            // protects a CLASS and not one widget. Keep it even when no
+            // in-tree widget exercises it.
+            // Whatever the extent signal held when this Scroll was built:
+            // the `(0, 0)` sentinel on a fresh mount, or the WARM value a
+            // remounting caller carried over through `extent_signal`.
+            let warm = extent.get_untracked();
+            let pin_swallowed_placeholder = Cell::new(false);
             cx.effect(move || {
                 if !f.get() {
                     return; // extent/view re-track when re-armed
@@ -476,6 +505,29 @@ impl Scroll {
                 }
                 let content_h = extent.get().1;
                 let view_h = view_box.get().1;
+                // The placeholder swallow. Narrower than the repair's
+                // exemption by design: the repair only CLAMPS, so it can
+                // afford to sit out every first measurement, while the
+                // pin ACTS and sitting out a fresh mount's first real
+                // extent would simply lose the initial pin.
+                //
+                // So swallow exactly once, and only where the evidence
+                // says placeholder: we started from a WARM extent (a
+                // remount — a fresh mount holds the `(0,0)` sentinel and
+                // has no reader position to protect) and the arrival is
+                // SHORTER than it. Two-step content publishes `(w, 1)`
+                // before its real row count, and pinning to that drove a
+                // following scroller to the top for a frame, then snapped
+                // it back when the truth landed. Returning here leaves
+                // `oy` where the app had it — the 0895 protection keeps
+                // it honest — so the reader simply does not move.
+                if hint.is_none()
+                    && warm.1 > 0
+                    && content_h < warm.1
+                    && !pin_swallowed_placeholder.replace(true)
+                {
+                    return;
+                }
                 if view_h > 0 {
                     let pinned = (content_h - view_h).max(0);
                     if oy.try_get_untracked() != Some(pinned) {
@@ -524,19 +576,22 @@ impl Scroll {
             }
             if !measured_once.replace(true) {
                 // field-agora/0895: (0,0) is not the only untrustworthy
-                // extent. A widget whose height depends on a width it
-                // only learns inside DRAW publishes its size in two
-                // steps — a one-row placeholder first, the real count on
-                // the next turn. `Feed` does exactly this, deliberately:
-                // typesetting needs the width, and RT1-2 forbids writing
-                // the reactive height from a paint closure, so the
-                // correction rides an `after(0)` fixup (feed.rs). The
-                // placeholder is a REAL-LOOKING measurement — (w, 1),
-                // cross axis already correct — so the clamp below
-                // computed max_off = 0 and wrote the app's bound offset
-                // to zero. Remounting a bound `Scroll` over a `Feed`
-                // therefore rewound the reader to the top and destroyed
-                // the app's own state, every time.
+                // extent. Content that publishes its height from a pass
+                // LATER than the solve arrives twice, and the first
+                // arrival is a stand-in that looks real — cross axis
+                // already correct, scroll axis a placeholder — so the
+                // clamp below computed max_off = 0 and wrote the app's
+                // bound offset to zero. A remounted reader was rewound
+                // to the top and its state destroyed, every time.
+                //
+                // `Feed` was the widget that exposed this: it typeset
+                // from a width it only learned inside DRAW. It now
+                // measures during the solve and publishes once, so the
+                // remaining members of the class are `Disclosure` (which
+                // sizes from a nested extent) and app widgets that
+                // publish from a draw closure through the public
+                // `extent_signal`. The guard stays: it protects the
+                // class, not the widget that revealed it.
                 //
                 // So the first measurement only establishes that we HAVE
                 // one; it never clamps. Every later change is trusted,

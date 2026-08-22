@@ -961,6 +961,124 @@ fn any_highlight(term: &CaptureTerm, size: Size) -> bool {
     })
 }
 
+/// Settle the deferred geometry loop: the content extent publishes
+/// through an `after(0)` (the `size_probe` seam), and the strip is inert
+/// until it lands.
+fn settle_driver(driver: &mut Driver, app: &mut App, term: &mut CaptureTerm) {
+    for _ in 0..8 {
+        if driver.turn(app, term).unwrap().idle {
+            return;
+        }
+    }
+}
+
+/// THE 1335 REVIEW BUG (repro A), and the one an ordinary user hits
+/// FIRST: a pointer reaches a thumb by MOVING onto the strip and then
+/// pressing — and a terminal delivers both in one input burst, with no
+/// frame between them.
+///
+/// The Move lights the hover ink, which rebuilds the bar's `dyn_view`.
+/// The new instance has an unsolved zero rect until the next layout, so
+/// the anchor probe walked straight past its drag zone, reported no
+/// owner, armed a selection on the thumb, and the first Drag claimed the
+/// gesture — cancelling the grab the strip had taken microseconds
+/// earlier. The original 1335 fix was blind to this because every one of
+/// its tests settled a frame before pressing.
+///
+/// The driver now lays out before the probe (`layout_for_anchor`).
+#[test]
+fn hover_then_press_in_one_burst_still_scrolls() {
+    let size = Size::new(30, 10);
+    let (mut app, wire) = scrolled_column(size, 30);
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
+    selection().set_enabled(true);
+    settle_driver(&mut driver, &mut app, &mut term);
+    let oy = wire.borrow().expect("offset wire");
+
+    // ONE burst, no turn between: motion onto the strip (35 = motion
+    // with no button), then the press, then the drag.
+    term.push_input(b"\x1b[<35;30;3M");
+    term.push_input(b"\x1b[<0;30;1M");
+    term.push_input(b"\x1b[<32;30;6M");
+    driver.turn(&mut app, &mut term).unwrap();
+
+    assert!(
+        oy.get_untracked() > 0,
+        "hover rebuilt the strip; the press must still find its drag zone \
+         (offset stayed {})",
+        oy.get_untracked()
+    );
+    assert!(!selection().is_active(), "a thumb drag is not a selection");
+    assert!(!any_highlight(&term, size), "no selection ink");
+}
+
+/// Repro B: the same staleness reached through the OTHER tracked read
+/// in the bar's region — a wheel writes `oy`, rebuilding the strip, and
+/// the press lands in the same burst.
+#[test]
+fn wheel_then_press_in_one_burst_still_scrolls() {
+    let size = Size::new(30, 10);
+    let (mut app, wire) = scrolled_column(size, 30);
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
+    selection().set_enabled(true);
+    settle_driver(&mut driver, &mut app, &mut term);
+    let oy = wire.borrow().expect("offset wire");
+
+    term.push_input(b"\x1b[<65;10;5M"); // wheel down over the content
+    term.push_input(b"\x1b[<0;30;3M"); // press the strip, same burst
+    term.push_input(b"\x1b[<32;30;8M"); // drag down
+    driver.turn(&mut app, &mut term).unwrap();
+    let after = oy.get_untracked();
+
+    assert!(!selection().is_active(), "a thumb drag is not a selection");
+    assert!(!any_highlight(&term, size), "no selection ink");
+    assert!(
+        after > 3,
+        "the thumb drag steered past the wheel's 3 rows: {after}"
+    );
+}
+
+/// Repro C: a gesture whose Up never arrived (released outside the
+/// terminal, or `mouse_capture().suspend()` spanning the release) leaves
+/// an armed anchor behind. It used to self-heal because every Down
+/// re-armed unconditionally — the 1335 early returns skipped that, so a
+/// stale arm survived and turned the NEXT widget's drag into a claim,
+/// cancelling the very capture 1335 protects.
+#[test]
+fn a_lost_release_cannot_strand_an_anchor_onto_the_next_drag() {
+    let size = Size::new(30, 10);
+    let (mut app, wire) = scrolled_column(size, 30);
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
+    selection().set_enabled(true);
+    settle_driver(&mut driver, &mut app, &mut term);
+    let oy = wire.borrow().expect("offset wire");
+
+    // A selection drag in the content that never releases.
+    term.push_input(b"\x1b[<0;2;2M");
+    term.push_input(b"\x1b[<32;6;4M");
+    driver.turn(&mut app, &mut term).unwrap();
+    assert!(selection().is_active(), "precondition: a live region");
+
+    // Now grab the thumb. The stale arm must not follow the gesture.
+    term.push_input(b"\x1b[<0;30;1M");
+    driver.turn(&mut app, &mut term).unwrap();
+    term.push_input(b"\x1b[<32;30;6M");
+    driver.turn(&mut app, &mut term).unwrap();
+
+    assert!(
+        oy.get_untracked() > 0,
+        "the thumb drag must scroll (offset stayed {})",
+        oy.get_untracked()
+    );
+    assert!(
+        !selection().is_active(),
+        "the stale arm must not resurrect a region on the strip"
+    );
+}
+
 /// THE BUG: with select mode on, a press on the scrollbar thumb used to
 /// become a text selection — the layer claimed the gesture at the first
 /// cross-cell drag and the driver cancelled the strip's pointer capture

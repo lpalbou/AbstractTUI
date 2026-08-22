@@ -1,7 +1,7 @@
 # AbstractTUI backlog — overview
 
 Planning memory for AbstractTUI (the Rust terminal-UI engine, published as
-`abstracttui` — 0.4.0 as of 2026-08-21). The engine itself is complete and
+`abstracttui` — 0.4.1 as of 2026-08-22). The engine itself is complete and
 shipped — content widgets (Feed/TextArea/MarkdownView + the doc vocabulary),
 app-shell chrome (PageHost, Drawer, ChoicePrompt, ThemeSwitcher), the
 live-data lane with connection lifecycle, key-state/PTT, attachments, the

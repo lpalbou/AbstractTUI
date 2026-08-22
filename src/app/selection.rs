@@ -344,6 +344,18 @@ impl Selection {
                 }
                 match (m.kind, m.button) {
                     (MouseKind::Down, MouseButton::Left) => {
+                        // A fresh press REPLACES any armed gesture, always.
+                        // This used to fall out of the unconditional
+                        // `st.drag = Some(..)` below; the drag-owner and
+                        // no-pane early returns (first-app/1335) skip that
+                        // assignment, so a stale arm would survive them.
+                        // An arm outlives its gesture whenever the Up is
+                        // lost — released outside the terminal, or
+                        // `mouse_capture().suspend()` spanning the release
+                        // — and a stale arm with `press_routed` set turns
+                        // the NEXT widget's drag into a claim, cancelling
+                        // the very capture 1335 exists to protect.
+                        st.drag = None;
                         let dismissed = st.region.take().is_some();
                         if dismissed {
                             st.dirty = true;
@@ -655,6 +667,43 @@ pub(crate) fn extract_text(frame: &Surface, region: &Region) -> String {
 /// tree answers, else the viewport. Always clipped to the viewport;
 /// degenerate (empty) panes fall back to the viewport rather than
 /// producing an unselectable region.
+/// Solve every tree the anchor probe may walk, so
+/// [`selection_anchor`] reads rects that exist.
+///
+/// `UiTree::press_probe_at` is a pure read of solved geometry — it
+/// cannot lay out, because the probe runs inside a closure that
+/// `Selection::on_input` calls while holding its state borrow, and
+/// `layout()` delivers pending autofocus (user handlers, which may
+/// re-enter the selection layer). So the driver establishes the
+/// precondition instead, exactly as `UiTree::dispatch` does for its own
+/// hit test.
+///
+/// Cheap by construction: `layout()` returns immediately unless the tree
+/// is dirty, and the driver calls this only on a left Down.
+pub(super) fn layout_for_anchor(app: &mut super::App, overlays: &super::overlays::Overlays) {
+    use super::overlays::{OverlayContent, ROOT_LAYER_ID};
+    app.tree().layout();
+    // Handles are collected BEFORE any solve: `layout()` runs user code,
+    // which may open or close a layer, and the store must not be
+    // borrowed across that.
+    let mut trees: Vec<crate::ui::UiTree> = {
+        let store = overlays.store().borrow();
+        store
+            .meta
+            .iter()
+            .zip(&store.layers)
+            .filter(|(m, l)| m.id != ROOT_LAYER_ID && l.visible())
+            .filter_map(|(m, _)| match &m.content {
+                OverlayContent::Tree { tree, .. } => Some(tree.handle()),
+                _ => None,
+            })
+            .collect()
+    };
+    for tree in &mut trees {
+        tree.layout();
+    }
+}
+
 pub(super) fn selection_anchor(
     app: &mut super::App,
     overlays: &super::overlays::Overlays,

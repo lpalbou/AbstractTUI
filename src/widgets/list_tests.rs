@@ -1065,6 +1065,22 @@ fn only_the_strip_column_owns_drags() {
         !short.press_probe_at(Point::new(bar_x, 1)).drag_owner,
         "no bar, no zone"
     );
+
+    // ZERO TRAVEL is not ownership (1335 review): a one-row viewport
+    // draws a full-height thumb the gesture refuses to steer, so the
+    // cell must stay selectable rather than going dead in both
+    // directions — the contract `Element::drag_zone` states.
+    let (_root3, mut flat) = mount_widget(Size::new(20, 1), |cx| {
+        List::of((0..5).map(|i| format!("item {i}")))
+            .element(cx, &t)
+            .build()
+    });
+    settle(&mut flat, Size::new(20, 1));
+    assert!(
+        !flat.press_probe_at(Point::new(19, 0)).drag_owner,
+        "a strip with zero travel cannot be dragged, so it must not \
+         swallow the selection"
+    );
 }
 
 /// The strip used to be inert by design: `List` painted a scrollbar it

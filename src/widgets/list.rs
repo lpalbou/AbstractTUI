@@ -795,17 +795,26 @@ impl List {
             // The internal bar column owns left drags (first-app/1335):
             // screen select mode stands down over the STRIP only, so the
             // thumb keeps its gesture while every row stays selectable.
-            // Same condition the handler uses for the bar's existence.
+            //
+            // Gated on `overflows()`, not merely on the bar being drawn:
+            // a one-row viewport draws a full-height thumb with ZERO
+            // travel, which the gesture refuses to steer. A cell nothing
+            // can drag must not swallow a selection either — that is the
+            // contract `Element::drag_zone` states.
             .drag_zone(move |rect| {
                 let cols = list_columns(rect.w, total_rows > rect.h, accessory_w);
-                (cols.bar_w > 0).then(|| {
-                    Rect::new(
-                        rect.x + cols.body_w + cols.accessory_w,
-                        rect.y,
-                        cols.bar_w,
-                        rect.h,
-                    )
-                })
+                if cols.bar_w == 0 {
+                    return None;
+                }
+                let strip = Rect::new(
+                    rect.x + cols.body_w + cols.accessory_w,
+                    rect.y,
+                    cols.bar_w,
+                    rect.h,
+                );
+                scrollbar::metrics(strip, cols.bar_w, 0, total_rows)
+                    .overflows()
+                    .then_some(strip)
             })
             .focusable();
         if let Some(focused) = self.focused {

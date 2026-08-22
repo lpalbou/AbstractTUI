@@ -92,7 +92,11 @@ impl UiTree {
     /// gutter, so borders never count as selectable pane content.
     /// Read-only; screen coordinates; same descent as [`Self::hit_test`].
     pub fn pane_rect_at(&self, p: Point) -> Option<Rect> {
-        self.press_probe_at(p).pane
+        // `want_zones: false` keeps this accessor what its name and its
+        // doc promise: a pure geometry read. Delegating to the full
+        // probe would run every drag-zone closure on the hit path, and
+        // those are consumer code that may do real work.
+        self.probe_at(p, false).pane
     }
 
     /// Everything the selection layer needs to know about a left press at
@@ -101,8 +105,24 @@ impl UiTree {
     /// belongs to a widget that owns drags
     /// ([`Element::drag_zone`](super::super::Element::drag_zone)).
     ///
+    /// Reads SOLVED geometry — it never lays out. A caller reaching for
+    /// it after mutating the tree (an event dispatched with no frame in
+    /// between) must call [`UiTree::layout`] first, exactly as
+    /// [`Self::dispatch`] does before its own hit test; otherwise a
+    /// freshly remounted region answers from a zero rect and its drag
+    /// zone goes unseen. `app::selection` has the driver do this on
+    /// every left Down (`selection::layout_for_anchor`).
+    ///
     /// Read-only; screen coordinates; same descent as [`Self::hit_test`].
     pub fn press_probe_at(&self, p: Point) -> PressProbe {
+        self.probe_at(p, true)
+    }
+
+    /// The shared descent behind [`Self::pane_rect_at`] and
+    /// [`Self::press_probe_at`]. `want_zones` decides whether the walk
+    /// collects drag-zone closures — the pane-only caller must not pay
+    /// for consumer code it does not consult.
+    fn probe_at(&self, p: Point, want_zones: bool) -> PressProbe {
         // Drag-zone closures are user code: collect the handles during
         // the walk and call them AFTER the core borrow is released (the
         // held-borrow contract — a zone that touched the tree would
@@ -123,8 +143,10 @@ impl UiTree {
             let mut pane: Option<Rect> = None;
             let mut current = root;
             while let Some(inst) = core.insts.get(current.0) {
-                if let Some(zone) = &inst.drag_zone {
-                    zones.push((zone.clone(), core.layout.rect(inst.layout)));
+                if want_zones {
+                    if let Some(zone) = &inst.drag_zone {
+                        zones.push((zone.clone(), core.layout.rect(inst.layout)));
+                    }
                 }
                 if let Some(style) = core.layout.style(inst.layout) {
                     if style.clips_children() || style.padding != crate::layout::Edges::ZERO {

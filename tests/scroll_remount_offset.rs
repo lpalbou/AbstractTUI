@@ -321,3 +321,87 @@ fn a_publish_scheduled_before_disposal_does_not_land_after_it() {
         "a publish scheduled by an element that is now gone landed anyway"
     );
 }
+
+/// THE FOLLOW-PIN HALF of the same defect, and the one that reaches the
+/// eye rather than just the signal.
+///
+/// 0895 gave the OFFSET REPAIR a provisional exemption: it refuses to
+/// clamp against the first measurement to arrive after a mount, because
+/// two-step content (`Feed`) publishes a real-looking `(w, 1)`
+/// placeholder before its true row count. Its twin twenty lines above —
+/// the follow-tail PIN — never got that exemption. So a remounted
+/// FOLLOWING scroller computed `pinned = (1 - view_h).max(0) == 0`,
+/// drove the reader to the top, and snapped back to the tail a turn
+/// later when the real extent landed. Blank, jump, snap.
+///
+/// The repair could not cover this: it only ever clamps DOWN and never
+/// moves a reader who is in range, so the write came from the pin.
+#[test]
+fn a_following_feed_does_not_rewind_to_the_top_on_remount() {
+    let size = Size::new(44, 14);
+    let mut app = App::new(size);
+    type Wires = Rc<RefCell<Option<(Signal<i32>, Signal<bool>, Signal<bool>)>>>;
+    let wires: Wires = Rc::new(RefCell::new(None));
+    let w = wires.clone();
+    app.mount(move |cx| {
+        let oy = cx.signal(0i32);
+        let show = cx.signal(true);
+        let follow = cx.signal(true);
+        let ext = cx.signal((0i32, 0i32));
+        *w.borrow_mut() = Some((oy, show, follow));
+        dyn_view_scoped(LayoutStyle::column(), move |gcx| {
+            if show.get() {
+                Scroll::new(feed(gcx))
+                    .offset_y(oy)
+                    .follow_tail(follow)
+                    .extent_signal(ext)
+                    .view(gcx)
+            } else {
+                text("HIDDEN")
+            }
+        })
+    })
+    .expect("mount");
+
+    let mut term = CaptureTerm::new(size);
+    let mut driver = Driver::new(&mut app, &mut term, config()).expect("driver");
+    let settle = |driver: &mut Driver, app: &mut App, term: &mut CaptureTerm| {
+        for _ in 0..16 {
+            if driver.turn(app, term).expect("turn").idle {
+                return;
+            }
+        }
+        panic!("loop failed to settle within 16 turns");
+    };
+    settle(&mut driver, &mut app, &mut term);
+    let (oy, show, _follow) = wires.borrow().expect("wires");
+    let tail = oy.get_untracked();
+    assert!(
+        tail > 0,
+        "precondition: a following feed of {ROWS} rows parks at its tail, not {tail}"
+    );
+
+    // Remount, then watch EVERY turn: the offset must never visit the
+    // top on its way back. One frame at 0 is the whole visible defect.
+    show.set(false);
+    settle(&mut driver, &mut app, &mut term);
+    show.set(true);
+    let mut seen = Vec::new();
+    for _ in 0..16 {
+        let idle = driver.turn(&mut app, &mut term).expect("turn").idle;
+        seen.push(oy.get_untracked());
+        if idle {
+            break;
+        }
+    }
+    assert!(
+        !seen.contains(&0),
+        "the follow pin rewound a following reader to the top mid-remount \
+         (offsets per turn: {seen:?}, tail was {tail})"
+    );
+    assert_eq!(
+        oy.get_untracked(),
+        tail,
+        "and it settles back on the tail: {seen:?}"
+    );
+}
