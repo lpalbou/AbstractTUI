@@ -37,6 +37,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the whole workspace — 105 test binaries, and the defect had no pin in
   any of them.
 
+- tests: the allocation budgets now state budgets that can be exceeded.
+  `alloc_budget` carried a diff/present ratchet asserting `<= 8_000` and
+  `<= 2_000` allocs, left over from the pre-fix numbers; the real budget
+  landed as the `(0, 0)` acceptance test beside it and the ratchet was
+  never removed. Measuring the SAME function, it could not fail unless
+  the stricter test already had — 8,000x and 2,000x above the value it
+  guarded. Deleted; its per-stage attribution print, the only part still
+  doing work, moved to the test that supersedes it. The VT feed budget
+  was stated per CELL at 100x the measured cost, wide enough for the
+  exact regression its comment feared — a `String` per printed cell — to
+  pass with room to spare; it is now stated per ROW, the unit the model
+  actually allocates in, with 2x headroom over the measured 240. The
+  hostile-JPEG corpus budget goes from 334x slack to ~10x. Each new
+  threshold was shown to FAIL when set one notch below the measured
+  value, rather than assumed to bind. The dimension-bomb budget keeps
+  its 1,170x slack deliberately, and now says why: its only failure mode
+  is ~17 GB, so any bound from kilobytes to megabytes catches it
+  identically and tightening buys detection of nothing.
+
 - tests: the random-tree layout properties gain a **grid** population,
   completing the set — column, row, wrap, grid. A grid child negotiates
   with neither the container nor its siblings but with its CELL, whose

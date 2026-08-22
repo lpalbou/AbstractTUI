@@ -136,10 +136,24 @@ fn styled_frame(size: Size, tick: u8) -> Surface {
 /// diff+present measured 3,643 allocs/frame at first filing; RENDER's
 /// same-cycle rework brought it to zero. This is now the permanent
 /// acceptance test — a regression re-opens the finding.
+///
+/// It also carries the per-stage attribution print, which used to live on
+/// a second test asserting `diff <= 8_000` and `present <= 2_000`. Those
+/// were the pre-fix numbers, kept as a ratchet "until the real budget
+/// lands". The real budget landed here, in this test, and nobody removed
+/// the ratchet: measuring the SAME `measure_stages()`, it could not fail
+/// unless this stricter assertion had already failed. Measured before
+/// deleting rather than argued: both stages report 0, so the ratchet's
+/// thresholds sat 8,000x and 2,000x above the value they guarded. The
+/// print was the only part still doing work, so it moved here.
 #[test]
 fn diff_present_steady_state_allocates_nothing() {
     let _serial = serial();
     let (d, p) = measure_stages();
+    eprintln!(
+        "alloc attribution: diff = {} allocs/{} reallocs/{} B; present = {} allocs/{} reallocs/{} B",
+        d.0, d.1, d.2, p.0, p.1, p.2
+    );
     assert_eq!(
         (d.0, d.1),
         (0, 0),
@@ -156,24 +170,6 @@ fn diff_present_steady_state_allocates_nothing() {
         p.1,
         p.2
     );
-}
-
-/// Always-on attribution twin: prints the per-stage allocation profile
-/// (the RT2-R2 evidence) and pins only that the numbers never GROW past
-/// the observed baseline — a ratchet until the real budget lands.
-#[test]
-fn diff_present_allocation_attribution_ratchet() {
-    let _serial = serial();
-    let (d, p) = measure_stages();
-    eprintln!(
-        "alloc attribution: diff = {} allocs/{} reallocs/{} B; present = {} allocs/{} reallocs/{} B",
-        d.0, d.1, d.2, p.0, p.1, p.2
-    );
-    // Observed at filing time (2026-07-20): diff ~3600 allocs (one per
-    // Run pushed? one per row interval?), present ~tens. Ratchet with
-    // headroom; shrinking these to zero closes RT2-R2.
-    assert!(d.0 <= 8_000, "diff allocation REGRESSED: {} allocs", d.0);
-    assert!(p.0 <= 2_000, "present allocation REGRESSED: {} allocs", p.0);
 }
 
 fn measure_stages() -> ((u64, u64, u64), (u64, u64, u64)) {
@@ -257,13 +253,22 @@ fn vt_model_feed_allocation_is_bounded() {
     let (allocs, _, bytes) = alloc_delta(|| {
         screen.feed(&frame_bytes);
     });
-    // The model is allowed to allocate (String per printed cell today),
-    // but a full 200x60 frame re-feed must stay under ~2 allocations per
-    // cell — a regression here would make property tests dominate CI.
+    // The model is allowed to allocate, but the budget has to be stated
+    // in the unit the model actually allocates in. "2 per CELL" was the
+    // original wording and it is 100x looser than the truth: a re-feed of
+    // 12,000 cells measures 240 allocs — 4 per ROW, not per cell. At the
+    // per-cell budget the very regression the comment feared, a String
+    // per printed cell, would have passed with 50% to spare.
+    //
+    // So: per row, with 2x headroom over the measured 240. A regression
+    // to per-cell allocation overshoots this by 25x.
     let cells = 200 * 60;
+    let rows = 60;
     assert!(
-        allocs <= 2 * cells,
-        "VT model allocation blew up: {allocs} allocs / {bytes} bytes for {cells} cells"
+        allocs <= 8 * rows,
+        "VT model allocation blew up: {allocs} allocs / {bytes} bytes for \
+         {cells} cells in {rows} rows (budget {} = 8/row)",
+        8 * rows
     );
 }
 
@@ -301,6 +306,16 @@ fn jpeg_dimension_bomb_allocates_within_budget() {
     // The rejection path parses a couple of small segments and formats an
     // error string; a few KB at most. Anything in the megabytes means the
     // guard fired AFTER a plane allocation.
+    //
+    // Measured: 56 bytes, against a 64 KiB budget — 1,170x slack, and
+    // left alone deliberately. Unlike a performance ratchet this is a
+    // SAFETY bound with only one failure mode: the guard firing after a
+    // plane is sized from the claimed 65535x65535, which is ~17 GB. Any
+    // bound between a few KB and a few MB catches that identically, so
+    // tightening buys no detection and only invites a flake on a platform
+    // whose error formatting allocates differently. Loose is not the same
+    // as vacuous; the question is whether a REALISTIC regression fits in
+    // the slack, and here none does.
     assert!(
         alloc_bytes < 64 * 1024,
         "dimension-bomb rejection allocated {alloc_bytes} bytes in {allocs} allocs — guard fired too late"
@@ -675,9 +690,14 @@ fn jpeg_hostile_corpus_allocation_is_bounded() {
         }
     });
     // ~ base.len()/3 decode attempts, each parsing a 16x16 frame at most.
+    // The budget was 128 KiB per attempt against a measured 20,394 bytes
+    // for all 52 attempts together — 334x slack, enough for a tenfold
+    // amplification bug to pass as healthy. 4 KiB per attempt keeps ~10x
+    // headroom over the measured total and still fails long before any
+    // allocation sized from a mutated count or table could matter.
     let attempts = (base.len() - 2).div_ceil(3);
     assert!(
-        alloc_bytes < attempts as u64 * 128 * 1024,
+        alloc_bytes < attempts as u64 * 4 * 1024,
         "hostile-corpus decode allocated {alloc_bytes} bytes over {attempts} attempts ({allocs} allocs)"
     );
 }
