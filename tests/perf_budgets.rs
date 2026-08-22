@@ -4,9 +4,49 @@
 //! cargo test --release --test perf_budgets -- --ignored --nocapture
 //! ```
 //!
-//! Budgets are the charter numbers with named slack; debug builds print
-//! but refuse to assert. Measured numbers are recorded per cycle in the
-//! REDTEAM report.
+//! Budgets are the charter numbers with named slack; debug builds
+//! REFUSE (see `assert_budget`). Measured numbers are recorded per
+//! cycle in the REDTEAM report.
+//!
+//! ## What these budgets are, and what they are not
+//!
+//! They are ACCEPTANCE CEILINGS — "is this still fast enough to ship",
+//! against charter numbers like the 16 ms frame. They are NOT regression
+//! detectors, and reading them as one leads to the wrong conclusion.
+//! Measured 2026-08-22 on a quiet dev host (median of the run above):
+//!
+//! ```text
+//!   grid solve 12x480            45 µs  /  3 ms      66x
+//!   keystroke -> frame           55 µs  /  3 ms      55x
+//!   markdown parse 1000 lines   429 µs  / 20 ms      47x
+//!   splash 2D fallback           72 µs  /  2 ms      28x
+//!   brandmark 3D                357 µs  /  8 ms      22x
+//!   parser 1 MB soup           5.87 ms  / 50 ms       8.5x
+//!   diff+present 200x60         290 µs  /  2 ms       6.9x
+//!   vt model referee            529 µs  /  3 ms       5.7x
+//!   frame + cell shader         585 µs  /  3 ms       5.1x
+//!   richtext wrap 800 paras    4.22 ms  / 20 ms       4.7x
+//! ```
+//!
+//! So a change could make layout 50x slower and every one of these would
+//! still pass. That is a real gap, and tightening these numbers is still
+//! the WRONG fix, for two reasons worth writing down before someone
+//! tries it:
+//!
+//! - The ceilings are correct AS ceilings. Layout eating 3 ms of a 16 ms
+//!   frame genuinely is unacceptable; that is the statement being made.
+//! - The ratios above are host-specific and this host is fast.
+//!   `reviews/study2/quality-perf.md` records the 1 MB parser at ~13.5 ms
+//!   where it measures 5.87 ms here — roughly 2.3x — and CI runs on
+//!   hosted runners, slower again. Budgets tightened against a dev
+//!   laptop would fail weekly on the scheduled run for no reason, which
+//!   is precisely the RT6-4 false regression that workflow's retry-once
+//!   policy exists to absorb.
+//!
+//! Catching a 10x slowdown that stays under the ceiling needs a
+//! different instrument — a ratchet normalised against a calibration
+//! workload measured in the same run, so host speed divides out. That
+//! does not exist yet and is not what this file is.
 
 use std::time::Duration;
 
@@ -17,13 +57,34 @@ use abstracttui::render::{
 };
 use abstracttui::testing::{hostile_corpus, sink, time_median, Measurement};
 
+/// Assert a timing budget, or FAIL saying no budget was asserted.
+///
+/// A debug build cannot judge these numbers, which is correct and is why
+/// the whole file is `#[ignore]`d. What was wrong is what it did about
+/// it: print a note and PASS. So `cargo test --test perf_budgets --
+/// --ignored` in a debug build reported "12 passed" having asserted not
+/// one budget — a green that means the opposite of what it looks like,
+/// and the exact shape this crate calls decoration: a check whose
+/// no-input case is a pass.
+///
+/// Now it fails and says what to run. The measurement is still printed,
+/// because wanting the numbers without the judgement is a real thing to
+/// want — you just should not get a green for it.
+///
+/// Nothing is broken by this: CI (`.github/workflows/perf.yml`) and
+/// `CONTRIBUTING.md` both invoke this file with `--release`, and
+/// `ci.yml` never invokes it at all. Checked, not assumed.
 fn assert_budget(m: &Measurement, budget: Duration) {
-    if cfg!(debug_assertions) {
-        eprintln!("[debug build, budget not asserted] {}", m.report());
-    } else {
-        eprintln!("{}", m.report());
-        m.assert_under(budget);
-    }
+    assert!(
+        !cfg!(debug_assertions),
+        "perf budgets cannot be judged in a debug build, and this test \
+         will not pass pretending otherwise.\n  run: cargo test --release \
+         --test perf_budgets -- --ignored\n  measured anyway, for \
+         reference: {}",
+        m.report()
+    );
+    eprintln!("{}", m.report());
+    m.assert_under(budget);
 }
 
 fn styled_frame(size: Size, tick: u8) -> Surface {

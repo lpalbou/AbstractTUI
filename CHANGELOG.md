@@ -62,6 +62,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the whole workspace — 105 test binaries, and the defect had no pin in
   any of them.
 
+- tests: `perf_budgets` no longer reports a pass when it asserted
+  nothing. The whole file is `#[ignore]`d and release-only, correctly —
+  a debug build cannot judge a timing budget. What it did about that was
+  print a note and PASS, so `cargo test --test perf_budgets -- --ignored`
+  in a debug build reported "12 passed" having asserted not one budget:
+  a green meaning the opposite of what it looks like. It now fails and
+  names the command to run, still printing the measurement, because
+  wanting the numbers without the judgement is reasonable and getting a
+  green for it is not. The release path is unchanged, and the two tests
+  in the file whose assertions are timing-INDEPENDENT (the pool cap and
+  the link-id refusals) still pass in debug, as they should. Verified
+  against every caller first: the scheduled perf workflow and
+  `CONTRIBUTING.md` both pass `--release`, and per-PR `ci.yml` never
+  invokes this file.
+
+  The audit behind it is recorded in the module docs: measured-vs-budget
+  for all ten timing tests, ranging from 4.7x to 66x slack. Deliberately
+  NOT tightened — these are acceptance ceilings against charter numbers,
+  not regression detectors, and the ratios are host-specific on a host
+  that is ~2.3x faster than the one in the recorded baseline. Tightening
+  them against a dev laptop would produce weekly false failures on the
+  scheduled run. Catching a slowdown that stays under the ceiling needs
+  a calibration-normalised ratchet, which is named as absent rather than
+  faked.
+
 - tests: the allocation budgets now state budgets that can be exceeded.
   `alloc_budget` carried a diff/present ratchet asserting `<= 8_000` and
   `<= 2_000` allocs, left over from the pre-fix numbers; the real budget
