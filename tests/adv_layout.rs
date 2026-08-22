@@ -8,7 +8,7 @@
 //! rounding or span-arithmetic regression hides.
 
 use abstracttui::base::{Rect, Size};
-use abstracttui::layout::{solve, Align, Dimension, Edges, LayoutId, LayoutTree, Style};
+use abstracttui::layout::{solve, Align, Dimension, Edges, LayoutId, LayoutTree, Style, Track};
 use abstracttui::testing::Rng;
 
 /// Do two rects share any interior cell?
@@ -546,6 +546,136 @@ fn content_sized_wrap_children_are_solved_big_enough_for_their_own_content() {
         "population went vacuous: only {load_bearing} wrapped leaves both \
          stretched into their line and wrapped past one row — without \
          those the line-extent negotiation is never exercised"
+    );
+}
+
+/// The GRID counterpart, and the last of the four: column, row, wrap,
+/// grid. A grid child negotiates with neither the container (like a
+/// column child) nor its siblings (like a wrap member) but with its
+/// CELL, whose width is decided by track resolution before any height
+/// is known. The same ordering cycle in a third shape.
+///
+/// Two exclusions, both deliberate and both narrower than they look:
+///
+/// - `row_span > 1` is not generated. A spanning child contributes
+///   `ceil(h / span)` to its START row only, which UNDER-sizes it at the
+///   boundary on purpose; that approximation is documented in `grid.rs`
+///   and pinned by its own unit test, so generating it here would only
+///   re-fail a known, decided behaviour.
+/// - Rows are left implicit, so every row is `Auto`. A `Cells`, `Fr` or
+///   `Percent` row is entitled to clip its child exactly as a too-short
+///   container is — this invariant is about boxes that size to content,
+///   not about overflow being impossible.
+///
+/// Columns are the opposite: every track kind is generated, because the
+/// child's width coming from `Cells`, `Percent`, `Fr` or `Auto` is the
+/// input the height has to be re-derived from.
+///
+/// Green on arrival, unlike the wrap population — `grid.rs` already
+/// re-measures each child at its resolved column width. So it earns its
+/// place against a weakening rather than a defect: replacing that pass's
+/// `avail_w` with the CONTAINER width — the stale-estimate class that
+/// shipped on the flex path and again on the wrap path — reds it on
+/// case 0:
+///
+/// ```text
+/// grid leaf of 17 chars solved to Rect { x: 1, y: 22, w: 10, h: 1 }
+///   — 10 columns wraps to 2 rows, but its cell gave it 1
+/// ```
+///
+/// Run crate-wide under that same weakening, this is the ONLY failing
+/// test in 105 test binaries: `adv_grid`, `grid_margin_box`,
+/// `grid_align_items` and `wrap_grid_margin_probe` all stay green, since
+/// every one of them uses fixed-size leaves whose height does not depend
+/// on the width they are measured at. The re-measure had no other pin.
+///
+/// The vacuity counter is measured, not guessed: the real population is
+/// 1085 leaves that both wrap past one row and sit in a cell narrower
+/// than the container, against a threshold of 200 — checked by raising
+/// the threshold until it reported the true count.
+#[test]
+fn content_sized_grid_children_are_solved_big_enough_for_their_own_content() {
+    let mut rng = Rng::new(0x0061_1D00);
+    let mut load_bearing = 0usize;
+    for case in 0..400 {
+        let ncols = 1 + rng.below(4) as usize;
+        let cols: Vec<Track> = (0..ncols)
+            .map(|_| match rng.below(4) {
+                0 => Track::Cells(2 + rng.below(12) as i32),
+                1 => Track::Percent((10 + rng.below(40)) as f32 / 100.0),
+                2 => Track::Auto,
+                _ => Track::Fr(1.0 + rng.below(3) as f32),
+            })
+            .collect();
+        let w = 12 + rng.below(60) as i32;
+        let col_gap = rng.below(3) as i32;
+        let row_gap = rng.below(3) as i32;
+        let pad = rng.below(3) as i32;
+        let align = match rng.below(4) {
+            0 => Align::Start,
+            1 => Align::Center,
+            2 => Align::End,
+            _ => Align::Stretch,
+        };
+
+        let mut tree = LayoutTree::new();
+        let root = tree.add(
+            Style::default()
+                .grid(cols, vec![])
+                .gap(col_gap)
+                .cross_gap(row_gap)
+                .padding(Edges::all(pad))
+                .align_items(align),
+        );
+        let n = 1 + rng.below(5);
+        let mut kids: Vec<(LayoutId, i32)> = Vec::new();
+        for _ in 0..n {
+            let chars = 1 + rng.below(200) as i32;
+            let pref = 4 + rng.below(30) as i32;
+            let mx = rng.below(3) as i32;
+            let my = rng.below(2) as i32;
+            let mut style = Style::default().margin(Edges::hv(mx, my));
+            if rng.below(4) == 0 {
+                style = style.col_span(2);
+            }
+            let id = para_leaf(&mut tree, style, chars, pref);
+            tree.add_child(root, id);
+            kids.push((id, chars));
+        }
+
+        let container = Rect::new(0, 0, w, 4000);
+        solve(&mut tree, root, container);
+
+        let ctx = format!(
+            "case {case}: w={w} n={n} ncols={ncols} col_gap={col_gap} \
+             row_gap={row_gap} pad={pad} align={align:?}"
+        );
+        for (id, chars) in &kids {
+            let r = tree.rect(*id);
+            let needs = wrapped_rows(*chars, r.w);
+            // Load-bearing takes both clauses, as in the row population.
+            // The child must actually wrap, and its cell must be
+            // NARROWER than the container — otherwise "measured at the
+            // cell" and "measured at the container" are the same number
+            // and the ordering cycle is never exercised.
+            if needs > 1 && r.w < w - 2 * pad {
+                load_bearing += 1;
+            }
+            assert!(
+                r.h >= needs,
+                "{ctx}: grid leaf of {chars} chars solved to {:?} — {} \
+                 columns wraps to {needs} rows, but its cell gave it {}",
+                r,
+                r.w,
+                r.h
+            );
+        }
+    }
+    assert!(
+        load_bearing >= 200,
+        "population went vacuous: only {load_bearing} grid leaves both \
+         wrapped past one row and sat in a cell narrower than the \
+         container — without those the cell width never matters"
     );
 }
 

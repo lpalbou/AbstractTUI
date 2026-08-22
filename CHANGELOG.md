@@ -37,6 +37,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the whole workspace — 105 test binaries, and the defect had no pin in
   any of them.
 
+- tests: the random-tree layout properties gain a **grid** population,
+  completing the set — column, row, wrap, grid. A grid child negotiates
+  with neither the container nor its siblings but with its CELL, whose
+  width track resolution decides before any height is known: the same
+  ordering cycle in a third shape. Unlike the wrap one this was green on
+  arrival — `grid.rs` already re-measures each child at its resolved
+  column width — so it is pinned against a weakening instead: measuring
+  that pass at the container width reds it, and crate-wide it is then
+  the ONLY failing test in 105 test binaries. The existing grid suites
+  stay green because every one of them uses fixed-size leaves, whose
+  height does not depend on the width they are measured at. Spanning
+  rows and non-`Auto` rows are excluded deliberately, both because they
+  are documented to clip rather than fit.
+
 - tests: the random-tree layout properties gain a **wrap** population.
   The two content-sized populations cover column and row parents, where
   the container is the only thing a child negotiates with; in a wrapped
