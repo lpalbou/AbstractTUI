@@ -9,6 +9,7 @@ use abstracttui::app::{App, Driver, RunConfig};
 use abstracttui::base::Size;
 use abstracttui::layout::Style as LayoutStyle;
 use abstracttui::prelude::*;
+use abstracttui::term::Capabilities;
 use abstracttui::testing::CaptureTerm;
 use abstracttui::theme::default_theme;
 use abstracttui::widgets::{List, TextInput};
@@ -18,6 +19,15 @@ const H: i32 = 10;
 
 fn config() -> RunConfig {
     RunConfig {
+        // This file was the last one in the suite leaving `caps` to
+        // `detect_env` — harmless only because it asserts text, never
+        // colour. Declared anyway: the next colour assertion added here
+        // would otherwise silently read through the developer's shell
+        // depth. See `RunConfig::caps`.
+        caps: Some(Capabilities::with(|c| {
+            c.truecolor = true;
+            c.colors_256 = true;
+        })),
         probe: false,
         ..RunConfig::default()
     }

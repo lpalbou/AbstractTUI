@@ -56,7 +56,27 @@ use super::App;
 /// ```
 pub struct RunConfig {
     /// Capabilities to assume. `None` = passive env detection at start
-    /// (tests inject a fixed set so host env never leaks into assertions).
+    /// ([`Capabilities::detect_env`]), which is right for a real app.
+    ///
+    /// **DECLARE THIS IN ANY HEADLESS HARNESS.** Nothing enforces it, and
+    /// the failure is silent: a suite on [`CaptureTerm`] has no terminal to
+    /// detect, so it inherits *the developer's shell*. With `COLORTERM`
+    /// unset that is `ColorDepth::Xterm256`, and since `CaptureTerm` reads
+    /// back the bytes the presenter actually emitted, every colour a test
+    /// asserts on has been through the 256 cube — token-vs-token
+    /// comparisons pass either way, so the suite looks green while its
+    /// verdict moves with an environment variable. Field-reported by a
+    /// consumer (`agora-tui`), whose entire colour suite was quantised
+    /// without their knowing.
+    ///
+    /// ```ignore
+    /// caps: Some(Capabilities::with(|c| {
+    ///     c.truecolor = true;
+    ///     c.colors_256 = true;
+    /// })),
+    /// ```
+    ///
+    /// [`CaptureTerm`]: crate::testing::CaptureTerm
     pub caps: Option<Capabilities>,
     /// Session options. `None` = derived from capabilities (kitty
     /// keyboard flags requested only when the terminal speaks them).
