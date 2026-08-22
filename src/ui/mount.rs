@@ -73,6 +73,27 @@ pub(super) fn mount_view(
                 attach(&mut c, parent, id);
                 (id, layout)
             };
+            // Rect readback (field-agora 0910): registered here rather
+            // than ridden on the draw closure, because the child a
+            // consumer's ensure-visible needs to locate is the one the
+            // paint cull skips. The cleanup is what makes the "an
+            // unmounting element never publishes" guarantee true for a
+            // signal the CALLER owns and outlives this element.
+            if let Some(sig) = el.rect_sig.take() {
+                let sig = *sig;
+                let alive = Rc::new(std::cell::Cell::new(true));
+                {
+                    let alive = alive.clone();
+                    cx.on_cleanup(move || alive.set(false));
+                }
+                core.borrow_mut().rect_probes.push(super::tree::RectProbe {
+                    view: id,
+                    sig,
+                    seen: Rc::new(std::cell::Cell::new(None)),
+                    pending: Rc::new(std::cell::Cell::new(false)),
+                    alive,
+                });
+            }
             // Reactive layout style: re-applied on signal change WITHOUT
             // remounting (scroll offsets, animated panes). The effect is
             // owned by the mounting scope, so it dies with the subtree;

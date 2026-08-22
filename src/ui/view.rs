@@ -127,6 +127,14 @@ pub struct Element {
     /// Draw even when culled (measurement probes) — see
     /// [`Element::probe_when_culled`].
     pub(crate) probe_when_culled: bool,
+    /// Publish this element's SOLVED rect into a caller-owned signal —
+    /// see [`Element::rect_signal`]. BOXED although the handle is 12
+    /// bytes and `Copy`: `Element` is the big arm of `ViewNode`, which
+    /// every blueprint node pays for by value, and it sat one field
+    /// short of clippy's variant-size gap. One allocation, only for the
+    /// handful of elements that bind a rect (one per pane), keeps the
+    /// node the whole tree is built out of the size it already was.
+    pub(crate) rect_sig: Option<Box<Signal<Option<Rect>>>>,
     /// PROTECTED minimum padding (per-side max), applied at mount and
     /// on every style_signal update — chrome insets (a Block's border
     /// room) that a later user `.style(..)` must NOT clobber (RT8-7).
@@ -153,6 +161,7 @@ impl Element {
             focus_memory: false,
             autofocus: false,
             probe_when_culled: false,
+            rect_sig: None,
             padding_floor: None,
             access: super::access::AccessProps::default(),
             children: Vec::new(),
@@ -191,6 +200,45 @@ impl Element {
     /// escape anyway.
     pub(crate) fn probe_when_culled(mut self) -> Element {
         self.probe_when_culled = true;
+        self
+    }
+
+    /// Publish this element's SOLVED rect into `sig` — the read seam a
+    /// caller needs to scroll one of its own children into view without
+    /// re-deriving layout arithmetic (field-agora 0910).
+    ///
+    /// The rect is the one the solver produced, in the same space as
+    /// [`UiTree::rect_of`](super::UiTree::rect_of) (layer-local, already
+    /// displaced by any scroll offset in force). It is written from the
+    /// LAYOUT phase, not from paint, and that is the whole point: the
+    /// child an ensure-visible clamp must locate is BY DEFINITION the
+    /// one outside the viewport, and `draw.rs` culls exactly those — a
+    /// paint-time probe on it never fires. Culling is a paint
+    /// optimization; the rect exists and is truthful either way.
+    ///
+    /// `None` means the element solved to ZERO AREA. That is not a
+    /// position, and it is a state a rect binding must not launder into
+    /// one: a collapsed child publishing `0x0` as a `Rect` would clamp a
+    /// consumer's viewport to the origin, which reads as "the list
+    /// jumped to the top" rather than as "that child collapsed". A
+    /// zero-area node also falls THROUGH the paint cull (an empty rect
+    /// intersects nothing) and is painted as clean absence, so it is
+    /// genuinely invisible while still being laid out.
+    ///
+    /// **An unmounting element never publishes.** The signal belongs to
+    /// the caller and outlives every element it is re-bound to — a pane
+    /// binding one signal to whichever card is selected is the
+    /// motivating case — so signal liveness cannot answer the question;
+    /// the ELEMENT's scope does. Rebinding across a rebuild therefore
+    /// cannot deliver the disposed element's rect after the new one's
+    /// (`size_probe` carries the same guarantee, and it did not always:
+    /// see `tests/scroll_remount_offset.rs`).
+    ///
+    /// One publish per changed value, deferred one tick past the solve
+    /// that produced it (the layout pass holds the tree borrow), and
+    /// coalesced: an unchanged rect schedules nothing.
+    pub fn rect_signal(mut self, sig: Signal<Option<Rect>>) -> Element {
+        self.rect_sig = Some(Box::new(sig));
         self
     }
 

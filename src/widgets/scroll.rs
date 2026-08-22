@@ -882,3 +882,9 @@ mod child_identity_tests;
 #[cfg(test)]
 #[path = "scroll_ensure_visible_tests.rs"]
 mod ensure_visible_tests;
+
+// field-agora 0910, slice 5: `Element::rect_signal` — the read seam the
+// consumer picked, published from LAYOUT so a culled child answers.
+#[cfg(test)]
+#[path = "scroll_rect_signal_tests.rs"]
+mod rect_signal_tests;

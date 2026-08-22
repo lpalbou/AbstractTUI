@@ -260,3 +260,58 @@ testing nothing about disposal.
 The consumer offered to key the effect on a `(rect, card-key)` pair so a
 stale write would be detectable. They should not have to, and now they
 do not.
+
+### Slice 5 — the surface: `Element::rect_signal`
+
+Shipped. `Element::rect_signal(Signal<Option<Rect>>)` — an element
+publishes its own solved rect into a caller-owned signal, and the
+ensure-visible clamp becomes an ordinary effect in the consumer's pane
+(`src/widgets/scroll_rect_signal_tests.rs`).
+
+**It publishes from the LAYOUT pass, not from paint**, which is the
+whole reason it answers at all: the child a clamp must locate is by
+definition the one outside the viewport, and that is exactly the one
+`draw.rs` culls. `UiTree::layout` reads every live binding against the
+solve that just finished and defers one publish per changed rect — the
+`size_probe` discipline, because the pass holds the tree borrow. A
+steady frame records nothing and arms no timer.
+
+The test does not take that on trust: the bound child carries a draw
+closure that sets a flag, and the off-screen case asserts the flag is
+still FALSE while the rect has already published — then asserts it goes
+true once the child scrolls into view, so the first assertion is a cull
+and not a dead probe.
+
+**`None` is the zero-area state, and it is load-bearing.** A collapsed
+child publishes `None` rather than `Rect::ZERO`. Falsified by removing
+the filter: the signal then carries `Rect { x: 0, y: 0, w: 12, h: 0 }`
+— the origin, which is precisely the "the list jumped to the top" jump
+this item warned the consumer about.
+
+**The unmount guarantee holds at this surface too, and it is the
+element's scope that decides**, not the signal's. Falsified by dropping
+the liveness check: the disposed element publishes
+`Rect { x: 0, y: 0, w: 12, h: 1 }` into the pane's live signal after it
+is gone. The race is constructed deliberately — one solve to arm the
+publish, disposal, and only then the timers.
+
+`a_rebuild_moves_the_binding_to_the_newly_selected_card` is the
+consumer's own topology (`panes.rs`: a `dyn_view_scoped` column reading
+`selected` tracked): the binding follows the selection to the new card
+instead of reporting the previous one's rect.
+
+Field note: `Element` is the big arm of `ViewNode`, which every
+blueprint node pays for by value, and it sat one field short of
+clippy's variant-size gap — so the 12-byte handle is boxed. One
+allocation for the one element per pane that binds a rect.
+
+**What this does NOT do.** It does not apply the clamp: the engine
+still never scrolls anything into view on its own, exactly as
+`focus_alone_does_not_scroll_the_selected_child_into_view` pins. And it
+does not name a child nobody has selected — the binding is placed by
+whoever builds the element, so "locate a child nobody selected" still
+has no answer. The consumer's `offset_of_card` deletion is now
+unblocked on the engine side and blocked only by the released version
+(their `Cargo.toml` pins `abstracttui = "0.4.0"`; this rides in the
+next release with the 0895 offset repair and the `size_probe`
+liveness fix).
