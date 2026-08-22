@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-22
+
 ### Fixed
 
 - layout: **a child with MARGINS was measured at a width it is never
@@ -104,19 +106,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the composer at its layer's column, and moves to (row 7, column 5)
   with the probe deleted.
 
-### Changed
-
-- widgets: **an empty content-sized `Feed` no longer reserves a row.**
-  It reported a height of one row even with no items, which was the
-  floor that kept an unmeasured feed from collapsing to zero. With the
-  measure answering truthfully that floor is gone, so an empty feed
-  occupies no rows and a sibling beneath it moves up one. If you relied
-  on the reserved row as spacing, add it explicitly.
-
-## [0.4.1] - 2026-08-22
-
-### Fixed
-
 - widgets: **a disposed element could still publish its solved size.**
   `scroll::size_probe` — the deferred measurement readback behind
   `Scroll::extent_signal`, `Scroll::viewport_size_signal` and `List`'s
@@ -171,6 +160,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   widget together. The ANCHOR decides: a drag that starts in content and
   crosses a strip still selects, and a bar that is hidden or has nothing
   to scroll owns nothing.
+
+### Changed
+
+- widgets: **an empty content-sized `Feed` no longer reserves a row.**
+  It reported a height of one row even with no items, which was the
+  floor that kept an unmeasured feed from collapsing to zero. With the
+  measure answering truthfully that floor is gone, so an empty feed
+  occupies no rows and a sibling beneath it moves up one. If you relied
+  on the reserved row as spacing, add it explicitly.
 
 ### Added
 
