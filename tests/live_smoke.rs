@@ -62,10 +62,29 @@ fn example_bin(name: &str) -> Option<String> {
     }
 }
 
+/// Why a case could not run. The two reasons look identical from the
+/// outside and get OPPOSITE verdicts, which is the whole point of naming
+/// them: one is covered by something else, the other is covered by
+/// nothing.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Skip {
+    /// The tree does not currently compile. Documented transient builder
+    /// state (owners edit in parallel) — a CLEAN skip, because
+    /// `cargo test --all` on a non-compiling tree fails on its own long
+    /// before it reaches here. Reddening it would fail a peer mid-edit.
+    TreeNotBuilding,
+    /// The build SUCCEEDED and the binary is still absent: this example
+    /// is no longer being built at all (renamed, dropped from
+    /// `Cargo.toml`, moved). NOTHING else in the repo notices — the
+    /// whole-suite gate stays green while this lane goes quiet. That is
+    /// the coverage hole, so it goes RED.
+    BinaryAbsent,
+}
+
 struct SmokeReport {
-    /// Set when the case could not run (tree not compiling / binary
-    /// absent). `assert_clean` treats it as a clean skip, never a failure.
-    skipped: bool,
+    /// Set when the case could not run. `assert_clean`'s verdict depends
+    /// on WHICH reason: see `Skip`.
+    skipped: Option<Skip>,
     exit_code: i32,
     bytes: usize,
     unknown: u64,
@@ -81,9 +100,9 @@ struct SmokeReport {
 }
 
 impl SmokeReport {
-    fn skipped() -> SmokeReport {
+    fn skipped(why: Skip) -> SmokeReport {
         SmokeReport {
-            skipped: true,
+            skipped: Some(why),
             exit_code: 0,
             bytes: 0,
             unknown: 0,
@@ -125,11 +144,11 @@ fn smoke_opts(
         println!(
             "[smoke] {name}: SKIPPED — examples do not currently compile (transient builder state)"
         );
-        return SmokeReport::skipped();
+        return SmokeReport::skipped(Skip::TreeNotBuilding);
     }
     let Some(bin) = example_bin(name) else {
         println!("[smoke] {name}: SKIPPED — example binary not present");
-        return SmokeReport::skipped();
+        return SmokeReport::skipped(Skip::BinaryAbsent);
     };
     let mut p = spawn_in_pty_opts(&bin, &[], COLS, ROWS, &[], ctty).expect("spawn under pty");
 
@@ -159,7 +178,7 @@ fn smoke_opts(
     vt.feed(&p.captured);
     let text = String::from_utf8_lossy(&p.captured).to_string();
     SmokeReport {
-        skipped: false,
+        skipped: None,
         exit_code,
         bytes: p.captured.len(),
         unknown: vt.unknown_seq_count(),
@@ -173,9 +192,54 @@ fn smoke_opts(
     }
 }
 
+/// Opt-out for a machine that genuinely cannot run the pty suite. A
+/// sentence a human has to type, so a green run there is a decision on
+/// the record rather than a default.
+const ALLOW_UNMEASURED: &str = "ABSTRACTTUI_ALLOW_UNMEASURED";
+
+/// Apply the skip policy. Returns `true` when the caller should stop
+/// (the case legitimately did not run); panics when the skip is a
+/// coverage hole. Every early `if r.skipped { return }` goes through
+/// here — a bare early return is the shape this policy exists to remove.
+///
+/// A `BinaryAbsent` skip used to return GREEN. That is an
+/// absent-input-passes check inside the suite whose whole job is to
+/// catch examples that never actually run — the same shape this suite
+/// found in `examples/grounds.rs`, one level up.
+///
+/// `TreeNotBuilding` stays green ON PURPOSE, and that is not the same
+/// concession: `ensure_examples_built` documents it as a transient
+/// builder state, and a tree that does not compile fails the whole-suite
+/// gate on its own. Reddening it would fail a peer who is mid-edit —
+/// valid-input-fails, which is the same defect with the polarity
+/// flipped and no better than the one being fixed.
+#[must_use]
+fn skip_is_acceptable(name: &str, r: &SmokeReport) -> bool {
+    let Some(why) = r.skipped else { return false };
+    match why {
+        Skip::TreeNotBuilding => {
+            println!("[smoke] {name}: skipped — tree not building (transient); not measured");
+            true
+        }
+        Skip::BinaryAbsent => {
+            assert!(
+                std::env::var_os(ALLOW_UNMEASURED).is_some(),
+                "{name}: the examples BUILT and this binary is still absent, so the \
+                 case is UNMEASURED and nothing else in the repo notices. This suite \
+                 is the only thing that runs an example's paint path. Reason printed \
+                 above. Set {ALLOW_UNMEASURED}=1 to accept an unmeasured run \
+                 deliberately."
+            );
+            println!(
+                "[smoke] {name}: binary absent, accepted via {ALLOW_UNMEASURED} — NOT measured"
+            );
+            true
+        }
+    }
+}
+
 fn assert_clean(name: &str, r: &SmokeReport) {
-    if r.skipped {
-        println!("[smoke] {name}: skipped (see reason above)");
+    if skip_is_acceptable(name, r) {
         return;
     }
     println!(
@@ -241,6 +305,65 @@ fn live_themes() {
         Duration::from_secs(8),
     );
     assert_clean("themes", &r);
+}
+
+/// Does `assert_clean` panic on this report?
+fn verdict_is_red(name: &str, r: &SmokeReport) -> bool {
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| assert_clean(name, r)));
+    std::panic::set_hook(hook);
+    caught.is_err()
+}
+
+/// The guard on the guard, and it has to falsify BOTH branches.
+///
+/// A skip is a coverage hole wearing a green tick — but only when
+/// nothing else covers it, and the two skip reasons differ on exactly
+/// that. Written after the first version of this guard reddened both:
+/// it was checked against an absent example name (the case in front of
+/// me) and would have failed any peer with a mid-edit tree, which is
+/// valid-input-fails dressed up as a fix for absent-input-passes.
+///
+/// Needs no pty and no build, so it runs in the ordinary suite rather
+/// than only in the `--ignored` lane: the policy is what regresses, and
+/// a policy check nobody runs is the thing being fixed here.
+#[test]
+fn skip_policy_reddens_a_dropped_example_and_spares_a_broken_tree() {
+    if std::env::var_os(ALLOW_UNMEASURED).is_some() {
+        println!("[smoke] policy test: {ALLOW_UNMEASURED} set, the guard is opted out by design");
+        return;
+    }
+    assert!(
+        verdict_is_red("dropped", &SmokeReport::skipped(Skip::BinaryAbsent)),
+        "an example that BUILT and produced no binary reported as a PASS — \
+         nothing else in the repo notices, so this lane can go quiet silently"
+    );
+    assert!(
+        !verdict_is_red("mid-edit", &SmokeReport::skipped(Skip::TreeNotBuilding)),
+        "a non-compiling tree went RED here — that fails a peer mid-edit for a \
+         state the whole-suite gate already catches"
+    );
+}
+
+/// The premise the policy test asserts against, over the real plumbing:
+/// an absent example name must reach `BinaryAbsent`, not some other
+/// skip. Separated because it needs the build and the policy test does
+/// not.
+#[test]
+#[ignore = "live: builds the examples to reach the skip path"]
+fn an_absent_example_name_is_a_binary_absent_skip() {
+    let r = smoke(
+        "definitely-not-an-example",
+        Duration::from_millis(0),
+        &[],
+        Duration::from_secs(2),
+    );
+    assert_eq!(
+        r.skipped,
+        Some(Skip::BinaryAbsent),
+        "an absent example name must classify as BinaryAbsent for the policy to bite"
+    );
 }
 
 #[test]
@@ -364,8 +487,7 @@ fn live_viewer3d() {
         &[b" ", b"2", b"3", b"q"],
         Duration::from_secs(12),
     );
-    if r.skipped {
-        println!("[smoke] viewer3d: skipped");
+    if skip_is_acceptable("viewer3d", &r) {
         return;
     }
     assert_eq!(r.exit_code, 0, "viewer3d: nonzero exit");
@@ -496,8 +618,7 @@ fn live_ctty_input_reaches_app() {
         Duration::from_secs(8),
         true,
     );
-    if r.skipped {
-        println!("[smoke] hello-ctty: skipped");
+    if skip_is_acceptable("hello-ctty", &r) {
         return;
     }
     assert_clean("hello-ctty", &r);
