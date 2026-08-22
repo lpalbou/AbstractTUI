@@ -88,6 +88,20 @@ pub struct RunConfig {
     /// [`CaptureTerm`]: crate::testing::CaptureTerm
     /// [`Terminal::is_tty`]: crate::term::Terminal::is_tty
     pub caps: Option<Capabilities>,
+    /// Grounds your app paints that the THEME does not know about — a
+    /// translucent panel fill, a custom card ground — declared once at
+    /// startup so the 256-colour separator keeps them apart from the
+    /// theme's own. Empty by default; at truecolor it costs nothing.
+    ///
+    /// The declarative twin of [`Driver::set_extra_grounds`], and the
+    /// only route on the `App::run` path, which never hands out its
+    /// Driver. Shipping the setter alone made the guarantee reachable
+    /// from a hand-driven loop and from nothing else — found while
+    /// writing `examples/grounds.rs`, which is what an example is for.
+    ///
+    /// A ground is only protected if it is HANDED IN: the separator can
+    /// keep apart exactly what it was given.
+    pub extra_grounds: Vec<crate::base::Rgba>,
     /// Session options. `None` = derived from capabilities (kitty
     /// keyboard flags requested only when the terminal speaks them).
     pub enter: Option<EnterOptions>,
@@ -122,6 +136,7 @@ impl Default for RunConfig {
     fn default() -> Self {
         RunConfig {
             caps: None,
+            extra_grounds: Vec::new(),
             enter: None,
             probe: true,
             hover_ink: false,
@@ -369,7 +384,7 @@ impl Driver {
             comp: Compositor::new(),
             diff: FrameDiff::new(),
             presenter: Presenter::new(),
-            extra_grounds: Vec::new(),
+            extra_grounds: cfg.extra_grounds.clone(),
             assignment_key: None,
             overlays,
             image_session: ImageSession::new(),

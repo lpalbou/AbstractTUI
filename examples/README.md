@@ -24,6 +24,7 @@ the previous one:
 | 2 · widgets | `components.rs` | HOW to build your own: props, children slots, typed events — plus the choice controls and `Disclosure` |
 | 2 · widgets | `gallery.rs` | the whole design system on one board; one keypress restyles it |
 | 2 · widgets | `themes.rs` | every built-in theme, applied live, with measured contrast ratios |
+| 2 · widgets | `grounds.rs` | what a theme's grounds become at 256 colours — the collapse (15 of 26 themes) beside the assignment that fixes it, plus declaring your own ground |
 | 3 · layout | `grid.rs` | track grids (`fr`/cells/percent/auto), spans, live reflow |
 | 4 · interaction | `activate.rs` | selection vs activation on `List` and `Table`; double-click, honestly |
 | 4 · interaction | `presence_board.rs` | rich list rows + trailing × accessory + timed double-click body (chat sidebar pattern) |
