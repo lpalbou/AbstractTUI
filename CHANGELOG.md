@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- tests: the random-tree layout properties now cover **content-sized**
+  children. Every existing population in `adv_layout` gives its children
+  fixed dimensions, so the intrinsic pass — the one that asks a leaf how
+  big it wants to be — had no property coverage at all, which is how two
+  margin-deduction defects shipped through it. The new population
+  generates measured text leaves under randomised margins, padding, gap,
+  wrap and alignment, and asserts that a content-sized box is solved big
+  enough for what it will actually render. Reverting either intrinsic
+  call site turns it red on a shape no hand-written fixture named, while
+  the five existing invariants stay green — the blind spot demonstrated
+  rather than asserted. The assertion is deliberately not containment:
+  flex shrink absorbs the shortfall, so an undersized child is truncated
+  while remaining inside its parent. A counter fails the test if the
+  generated population stops containing leaves that both carry margins
+  and wrap past one row, so tuning the generator cannot quietly make it
+  vacuous.
+
 ### Fixed
 
 - layout: **the 0.4.1 margin deduction did not reach WRAPPED

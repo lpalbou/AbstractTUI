@@ -8,7 +8,7 @@
 //! rounding or span-arithmetic regression hides.
 
 use abstracttui::base::{Rect, Size};
-use abstracttui::layout::{solve, Dimension, LayoutId, LayoutTree, Style};
+use abstracttui::layout::{solve, Align, Dimension, Edges, LayoutId, LayoutTree, Style};
 use abstracttui::testing::Rng;
 
 /// Do two rects share any interior cell?
@@ -219,6 +219,113 @@ fn wrap_single_line_matches_unwrapped_row() {
         build(true),
         build(false),
         "one-line wrap must match a plain row"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Measured (content-sized) children: the box is big enough for what it
+// will actually render.
+//
+// Every other population in this file uses children with FIXED dimensions,
+// so the intrinsic pass — the one that asks a leaf how big it wants to be —
+// had no property coverage at all. Two margin-deduction defects shipped
+// through that hole, one in the flex path and one in the wrap path.
+//
+// It is deliberately not a containment check. When a content-sized box is
+// solved too small, flex shrink absorbs the shortfall: the child is
+// truncated while staying perfectly inside its parent, so `assert_within`
+// stays green through exactly the failure this is looking for.
+// ---------------------------------------------------------------------------
+
+/// Rows a `chars`-long single-line string wraps to at `width`.
+fn wrapped_rows(chars: i32, width: i32) -> i32 {
+    let w = width.max(1);
+    ((chars + w - 1) / w).max(1)
+}
+
+/// A leaf that answers like wrapping text: as wide as it is offered, as
+/// tall as `chars` needs at that width.
+fn text_leaf(tree: &mut LayoutTree, style: Style, chars: i32) -> LayoutId {
+    tree.add_leaf(
+        style,
+        Box::new(move |inner: Size| Size::new(inner.w, wrapped_rows(chars, inner.w))),
+    )
+}
+
+#[test]
+fn content_sized_children_are_solved_big_enough_for_their_own_content() {
+    let mut rng = Rng::new(0x00C0_17E5);
+    // The invariant is only meaningful for leaves that BOTH carry side
+    // margins and wrap to more than one row — a population of unmargined
+    // or single-row leaves would satisfy it vacuously. Counted, and
+    // asserted at the end, so tuning the generator cannot silently turn
+    // this suite back into decoration.
+    let mut load_bearing = 0usize;
+    for case in 0..400 {
+        let n = 1 + rng.below(4);
+        let w = 8 + rng.below(60) as i32;
+        let gap = rng.below(3) as i32;
+        let pad = rng.below(3) as i32;
+        let wrap = rng.below(2) == 0;
+        let align = match rng.below(3) {
+            0 => Align::Start,
+            1 => Align::Center,
+            _ => Align::Stretch,
+        };
+
+        // COLUMN parents only. A child sharing a ROW with siblings is
+        // documented as measurable only at the full content width — its
+        // flex share is not known until the basis being asked for has
+        // been distributed — so the invariant is not claimed there.
+        let mut root_style = Style::column()
+            .gap(gap)
+            .padding(Edges::all(pad))
+            .align_items(align);
+        if wrap {
+            root_style = root_style.wrap();
+        }
+
+        let mut tree = LayoutTree::new();
+        let root = tree.add(root_style);
+        let mut kids: Vec<(LayoutId, i32, i32)> = Vec::new();
+        for _ in 0..n {
+            let chars = 1 + rng.below(200) as i32;
+            let mx = rng.below(4) as i32;
+            let my = rng.below(3) as i32;
+            let id = text_leaf(&mut tree, Style::default().margin(Edges::hv(mx, my)), chars);
+            tree.add_child(root, id);
+            kids.push((id, chars, mx));
+        }
+
+        // Generous main axis: this asserts the box is big enough when
+        // there IS room, never that overflow is impossible. A container
+        // too short to hold its content is entitled to truncate.
+        let container = Rect::new(0, 0, w, 4000);
+        solve(&mut tree, root, container);
+
+        let ctx = format!(
+            "case {case}: w={w} n={n} gap={gap} pad={pad} wrap={wrap} align={align:?}"
+        );
+        for (id, chars, mx) in &kids {
+            let r = tree.rect(*id);
+            let needs = wrapped_rows(*chars, r.w);
+            if *mx > 0 && needs > 1 {
+                load_bearing += 1;
+            }
+            assert!(
+                r.h >= needs,
+                "{ctx}: leaf of {chars} chars solved to {:?} — {} columns \
+                 wraps to {needs} rows, but it was given {}",
+                r,
+                r.w,
+                r.h
+            );
+        }
+    }
+    assert!(
+        load_bearing >= 200,
+        "population went vacuous: only {load_bearing} leaves both carried \
+         a side margin and wrapped past one row"
     );
 }
 
