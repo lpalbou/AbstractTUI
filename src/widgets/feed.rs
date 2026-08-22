@@ -381,6 +381,7 @@ pub struct Feed {
     selected: Option<Signal<Option<String>>>,
     on_item_press: Option<ItemPressFn>,
     layout: Option<LayoutStyle>,
+    rule: crate::widgets::MdRuleStyle,
 }
 
 impl Feed {
@@ -391,7 +392,26 @@ impl Feed {
             selected: None,
             on_item_press: None,
             layout: None,
+            rule: crate::widgets::MdRuleStyle::default(),
         }
+    }
+
+    /// Set the `---` policy for markdown item blocks
+    /// ([`MdRuleStyle`](crate::widgets::MdRuleStyle)) — the same door
+    /// `MarkdownView::rule_style` opens, on the same recipe, because a
+    /// rule that read differently in a feed and in a document would be
+    /// this policy's own defect repeated one widget over.
+    ///
+    /// Rows are cached, so a change re-typesets the feed exactly as a
+    /// theme change does. Defaults reproduce every earlier release.
+    ///
+    /// Scope, stated rather than implied: this governs the gaps a rule
+    /// owns INSIDE a markdown block. The feed's own rhythm between item
+    /// blocks (and around custom blocks) stays the feed's — except
+    /// immediately after a rule, where the rule's `space_after` wins.
+    pub fn rule_style(mut self, rule: crate::widgets::MdRuleStyle) -> Feed {
+        self.rule = rule;
+        self
     }
 
     /// Bind a selection-by-key signal (the 0100 item-6 gap): while
@@ -452,8 +472,9 @@ impl Feed {
             // re-parses stream sessions once — their inline styles are
             // parse-time).
             let mut inner = state.inner.borrow_mut();
-            if inner.tokens != Some(*t) {
+            if inner.tokens != Some(*t) || inner.rule != self.rule {
                 inner.tokens = Some(*t);
+                inner.rule = self.rule;
                 inner.gap = self.gap;
                 inner.retypeset_all();
             } else if inner.gap != self.gap {

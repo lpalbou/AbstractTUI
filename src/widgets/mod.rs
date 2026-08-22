@@ -69,7 +69,7 @@ pub use image::{Image, ImageAlign, ImageFit};
 pub use input::TextInput;
 pub use list::List;
 pub use logo::Logo;
-pub use markdown::{FenceBlock, MarkdownView};
+pub use markdown::{FenceBlock, MarkdownView, MdRuleInk, MdRuleStyle, MdRuleWidth};
 pub use progress::Progress;
 pub use radio::RadioGroup;
 pub use richtext::RichTextView;

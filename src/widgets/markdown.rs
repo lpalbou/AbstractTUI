@@ -52,6 +52,143 @@ pub(crate) mod imageflow;
 pub(crate) mod search;
 pub use search::MdSearchMatch;
 
+/// Which ink a horizontal rule is drawn in.
+///
+/// `Token` resolves against the live theme at every typeset, so a rule
+/// keeps following theme swaps; `Fixed` opts out of that deliberately
+/// and is the caller's to maintain across themes.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MdRuleInk {
+    Token(crate::theme::TokenId),
+    Fixed(Rgba),
+}
+
+/// How wide a horizontal rule runs.
+///
+/// The measure box is the width the block was TYPESET at — not the
+/// width of its text (a rule has none) and not necessarily the rect it
+/// is drawn into, which a consumer may make wider.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MdRuleWidth {
+    /// Edge to edge of the drawn rect. The default, and what every
+    /// release before this policy existed did unconditionally.
+    FullBleed,
+    /// The measure box.
+    Measure,
+    /// The measure box inset by `cells` on each side.
+    Inset(i32),
+}
+
+/// The three axes a horizontal rule (`---`) spends: ink, width, and
+/// vertical space. All three are the caller's, all three at once —
+/// a policy that opened one of them would let a consumer ship half an
+/// ordinal and believe it was finished (`decision:thread-shape-in-a-terminal`
+/// clause 3, and agora-wui's acceptance condition on it).
+///
+/// [`MdRuleStyle::default()`] is byte-identical to the hardwired
+/// behaviour that preceded it: `border` ink, full bleed, one blank row
+/// on each side. Nothing moves until a caller asks it to.
+///
+/// The values — one row or three, full bleed or inset, which ink — stay
+/// the caller's taste; this type is only the door to them
+/// (`decision:panel-ground-ownership` clause 1).
+///
+/// ```ignore
+/// // The console's ordinal in a terminal: the in-body rule quiet and
+/// // inset, so the boundary between two authors can be the louder line.
+/// let quiet = MdRuleStyle::default()
+///     .ink(MdRuleInk::Token(TokenId::TextFaint))
+///     .width(MdRuleWidth::Inset(2))
+///     .space(0, 0);
+/// MarkdownView::new(src).rule_style(quiet)
+/// ```
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct MdRuleStyle {
+    pub ink: MdRuleInk,
+    pub width: MdRuleWidth,
+    /// Blank rows before the rule. Suppressed when the rule opens the
+    /// document (nothing to separate from) — as before this policy.
+    pub space_before: i32,
+    /// Blank rows after the rule. The rule owns BOTH sides of its own
+    /// gap: the block that follows contributes none of its usual
+    /// separator, so this number is the whole story. `1`/`1` is the
+    /// historical three-row rule, `0`/`0` a one-row one.
+    ///
+    /// Trailing space is emitted by the next block, not by the rule, so
+    /// a document ENDING in a rule still ends at the rule — as before.
+    pub space_after: i32,
+}
+
+impl Default for MdRuleStyle {
+    fn default() -> MdRuleStyle {
+        MdRuleStyle {
+            ink: MdRuleInk::Token(crate::theme::TokenId::Border),
+            width: MdRuleWidth::FullBleed,
+            space_before: 1,
+            space_after: 1,
+        }
+    }
+}
+
+impl MdRuleStyle {
+    pub fn ink(mut self, ink: MdRuleInk) -> MdRuleStyle {
+        self.ink = ink;
+        self
+    }
+
+    pub fn width(mut self, width: MdRuleWidth) -> MdRuleStyle {
+        self.width = width;
+        self
+    }
+
+    /// Blank rows before and after. Negative counts clamp to zero.
+    pub fn space(mut self, before: i32, after: i32) -> MdRuleStyle {
+        self.space_before = before.max(0);
+        self.space_after = after.max(0);
+        self
+    }
+
+    /// Resolve this style against a theme and a measure into the row
+    /// chrome the painter reads.
+    fn resolve(&self, t: &TokenSet, measure: i32) -> RuleRow {
+        let ink = match self.ink {
+            MdRuleInk::Token(id) => t.get(id),
+            MdRuleInk::Fixed(c) => c,
+        };
+        let (indent, extent) = match self.width {
+            MdRuleWidth::FullBleed => (0, None),
+            MdRuleWidth::Measure => (0, Some(measure.max(1))),
+            // A rule inset past its own measure would paint NOTHING,
+            // which is the silent no-op `decision:panel-ground-ownership`
+            // clause 4 names — the renderer will not manufacture one, so
+            // the extent floors at a single cell.
+            MdRuleWidth::Inset(cells) => {
+                let cells = cells.clamp(0, (measure - 1).max(0) / 2);
+                (cells, Some((measure - 2 * cells).max(1)))
+            }
+        };
+        RuleRow {
+            ink,
+            indent,
+            extent,
+            gap_after: self.space_after.max(0),
+        }
+    }
+}
+
+/// A rule row's resolved chrome: what `draw_rows` paints, and how much
+/// space the NEXT block leaves in front of itself.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(crate) struct RuleRow {
+    pub(crate) ink: Rgba,
+    /// Left inset from the drawn rect, in cells.
+    pub(crate) indent: i32,
+    /// Cells of ink; `None` runs to the right edge of the drawn rect.
+    pub(crate) extent: Option<i32>,
+    /// Blank rows the FOLLOWING block emits instead of its usual one.
+    pub(crate) gap_after: i32,
+}
+
 /// One typeset row: a rich line plus its chrome. Crate-shared: the Feed
 /// widget caches these per item/block (backlog 0100) — ONE row recipe,
 /// so a feed item and a MarkdownView can never typeset differently.
@@ -62,8 +199,9 @@ pub(crate) struct Row {
     pub(crate) ground: Option<Rgba>,
     /// Leading quote bar.
     pub(crate) quote: bool,
-    /// Full-width rule row (`---` and the level-1 underline).
-    pub(crate) rule: bool,
+    /// A rule row (`---` and the level-1 underline) and its resolved
+    /// ink, width and trailing gap. `None` = not a rule row.
+    pub(crate) rule: Option<RuleRow>,
     /// One mosaic slice of an in-flow image (0144): when set, the row
     /// paints image cells instead of `line` (which stays empty).
     pub(crate) image: Option<imageflow::MdImageSlice>,
@@ -84,7 +222,7 @@ impl Row {
             indent: 0,
             ground: None,
             quote: false,
-            rule: false,
+            rule: None,
             image: None,
             fence: None,
         }
@@ -126,6 +264,7 @@ pub struct MarkdownView {
     /// over the typeset rows. Empty = zero extra work at draw.
     highlights: Vec<MdSearchMatch>,
     current_match: Option<usize>,
+    rule: MdRuleStyle,
 }
 
 impl MarkdownView {
@@ -137,7 +276,21 @@ impl MarkdownView {
             layout: None,
             highlights: Vec::new(),
             current_match: None,
+            rule: MdRuleStyle::default(),
         }
+    }
+
+    /// Set the `---` policy: its ink, its width and what it costs in
+    /// rows ([`MdRuleStyle`]). Defaults reproduce every earlier release
+    /// exactly, so this changes nothing until you set it.
+    ///
+    /// Row positions move with it. Pair it with
+    /// [`MarkdownView::rows_ruled`] and friends rather than the
+    /// default-fold statics, or a scroll clamp and a TOC jump will
+    /// drift from what is painted.
+    pub fn rule_style(mut self, rule: MdRuleStyle) -> MarkdownView {
+        self.rule = rule;
+        self
     }
 
     /// Let `block` claim fenced code blocks it recognizes — a mermaid
@@ -186,7 +339,15 @@ impl MarkdownView {
     /// Typeset row count at `width` — the scroll clamp (same fold as the
     /// renderer, so the clamp can never drift from the pixels).
     pub fn rows(source: &str, t: &TokenSet, width: i32) -> usize {
-        doc::layout_doc(source, t, width).rows.len()
+        Self::rows_ruled(source, t, width, MdRuleStyle::default())
+    }
+
+    /// [`MarkdownView::rows`] for a view built with
+    /// [`MarkdownView::rule_style`] — a `---` policy changes the row
+    /// count, so the clamp has to be taken through the SAME policy the
+    /// view renders under.
+    pub fn rows_ruled(source: &str, t: &TokenSet, width: i32, rule: MdRuleStyle) -> usize {
+        doc::layout_doc_ruled(source, t, width, rule).rows.len()
     }
 
     /// Heading outline `(level, text)` — table-of-contents material.
@@ -209,15 +370,36 @@ impl MarkdownView {
     /// ([`md::outline`]); rows come from the SAME fold the renderer
     /// draws, so a jump can never drift from the pixels.
     pub fn outline_rows(source: &str, t: &TokenSet, width: i32) -> Vec<OutlineEntry> {
-        doc::outline_rows(source, t, width)
+        Self::outline_rows_ruled(source, t, width, MdRuleStyle::default())
+    }
+
+    /// [`MarkdownView::outline_rows`] under a `---` policy.
+    pub fn outline_rows_ruled(
+        source: &str,
+        t: &TokenSet,
+        width: i32,
+        rule: MdRuleStyle,
+    ) -> Vec<OutlineEntry> {
+        doc::outline_rows_ruled(source, t, width, rule)
     }
 
     /// Resolve an intra-document anchor (`#getting-started`, leading
     /// `#` optional) to the typeset row of its heading at `width` —
     /// `[text](#anchor)` link targets against [`md::outline`] ids.
     pub fn resolve_anchor(source: &str, t: &TokenSet, width: i32, anchor: &str) -> Option<usize> {
+        Self::resolve_anchor_ruled(source, t, width, anchor, MdRuleStyle::default())
+    }
+
+    /// [`MarkdownView::resolve_anchor`] under a `---` policy.
+    pub fn resolve_anchor_ruled(
+        source: &str,
+        t: &TokenSet,
+        width: i32,
+        anchor: &str,
+        rule: MdRuleStyle,
+    ) -> Option<usize> {
         let want = anchor.strip_prefix('#').unwrap_or(anchor);
-        doc::outline_rows(source, t, width)
+        doc::outline_rows_ruled(source, t, width, rule)
             .into_iter()
             .find(|e| e.heading.anchor_id == want)
             .map(|e| e.row)
@@ -236,8 +418,28 @@ impl MarkdownView {
         query: &str,
         case_insensitive: bool,
     ) -> Vec<MdSearchMatch> {
+        Self::find_ruled(
+            source,
+            t,
+            width,
+            query,
+            case_insensitive,
+            MdRuleStyle::default(),
+        )
+    }
+
+    /// [`MarkdownView::find`] under a `---` policy: matches carry ROW
+    /// positions, which the policy moves.
+    pub fn find_ruled(
+        source: &str,
+        t: &TokenSet,
+        width: i32,
+        query: &str,
+        case_insensitive: bool,
+        rule: MdRuleStyle,
+    ) -> Vec<MdSearchMatch> {
         search::find_in_rows(
-            &doc::layout_doc(source, t, width).rows,
+            &doc::layout_doc_ruled(source, t, width, rule).rows,
             query,
             case_insensitive,
         )
@@ -277,6 +479,7 @@ impl MarkdownView {
         let measure_source = source.clone();
         let draw_fence = self.fence.clone();
         let measure_fence = draw_fence.clone();
+        let rule = self.rule;
         Element::new()
             .style(layout)
             // The measure seam (wave 13, the "doesn't scroll" fix): an
@@ -296,11 +499,12 @@ impl MarkdownView {
                 let rows = match &mut *slot {
                     Some((w, rows)) if *w == avail.w => rows,
                     slot => {
-                        let rows = doc::layout_doc_with(
+                        let rows = doc::layout_doc_all(
                             &measure_source,
                             &tokens,
                             avail.w,
                             measure_fence.clone(),
+                            rule,
                         )
                         .rows;
                         &mut slot.insert((avail.w, rows)).1
@@ -322,7 +526,8 @@ impl MarkdownView {
                     Some((w, rows)) if *w == rect.w => rows,
                     slot => {
                         let rows =
-                            doc::layout_doc_with(&source, &tokens, rect.w, draw_fence.clone()).rows;
+                            doc::layout_doc_all(&source, &tokens, rect.w, draw_fence.clone(), rule)
+                                .rows;
                         &mut slot.insert((rect.w, rows)).1
                     }
                 };
@@ -450,6 +655,10 @@ pub(crate) struct BlockTypesetter {
     yaml: YamlLexer,
     code_base: Style,
     t: TokenSet,
+    /// The `---` policy (`MarkdownView::rule_style` / `FeedState::rule_style`).
+    /// Lives HERE rather than on either widget so both consumers of
+    /// this recipe get the same rule or neither does.
+    rule: MdRuleStyle,
 }
 
 impl BlockTypesetter {
@@ -463,7 +672,40 @@ impl BlockTypesetter {
             yaml: YamlLexer::new(),
             code_base: Style::new().fg(t.text),
             t: *t,
+            rule: MdRuleStyle::default(),
         }
+    }
+
+    /// Install the `---` policy.
+    pub(crate) fn with_rule_style(mut self, rule: MdRuleStyle) -> BlockTypesetter {
+        self.rule = rule;
+        self
+    }
+
+    /// The `---` policy in force (the stream/segment boundaries in the
+    /// Feed spend a rule's leading space themselves — `push_block`
+    /// cannot see across a segment).
+    pub(crate) fn rule_style(&self) -> MdRuleStyle {
+        self.rule
+    }
+
+    /// How many blank rows the next block's separator emits after
+    /// `out`. THE definition — `push_block` spends it and the doc fold
+    /// reads it to locate a heading's text row, so the two cannot
+    /// disagree. They used to agree only by a comment, which a rule's
+    /// `space_after` would have quietly falsified.
+    pub(crate) fn separator_rows(&self, out: &[Row], separate: bool) -> usize {
+        if !separate || out.is_empty() {
+            return 0;
+        }
+        // A rule owns both sides of its own gap: after one, the
+        // separator is ITS `space_after`, not this block's usual single
+        // row. Spending it HERE rather than from the rule is what keeps
+        // a document that ENDS in a rule ending at the rule, exactly as
+        // it did before the policy existed.
+        out.last()
+            .and_then(|r| r.rule)
+            .map_or(1, |r| r.gap_after.max(0) as usize)
     }
 
     /// Install the fenced-block claimant.
@@ -484,7 +726,7 @@ impl BlockTypesetter {
     pub(crate) fn push_block(&self, out: &mut Vec<Row>, block: &Block, width: i32, separate: bool) {
         let t = &self.t;
         let blank = |rows: &mut Vec<Row>| {
-            if separate && !rows.is_empty() {
+            for _ in 0..self.separator_rows(rows, separate) {
                 rows.push(Row::plain(RichLine::new()));
             }
         };
@@ -513,12 +755,18 @@ impl BlockTypesetter {
                 }
                 out.push(Row::plain(line));
                 if *level == 1 {
+                    // The heading underline is a DIFFERENT block kind
+                    // that happens to paint the same chrome, so it
+                    // keeps the default style rather than the caller's
+                    // `---` policy: one setter must not silently
+                    // restyle two block kinds (pinned by
+                    // `rule_policy_leaves_the_h1_underline_alone`).
                     out.push(Row {
                         line: RichLine::new(),
                         indent: 0,
                         ground: None,
                         quote: false,
-                        rule: true,
+                        rule: Some(MdRuleStyle::default().resolve(t, width)),
                         image: None,
                         fence: None,
                     });
@@ -552,7 +800,7 @@ impl BlockTypesetter {
                         indent: indent + if i > 0 { 2 } else { 0 },
                         ground: None,
                         quote: false,
-                        rule: false,
+                        rule: None,
                         image: None,
                         fence: None,
                     });
@@ -577,7 +825,7 @@ impl BlockTypesetter {
                         indent: 2,
                         ground: None,
                         quote: true,
-                        rule: false,
+                        rule: None,
                         image: None,
                         fence: None,
                     });
@@ -598,7 +846,7 @@ impl BlockTypesetter {
                                 indent: 0,
                                 ground: None,
                                 quote: false,
-                                rule: false,
+                                rule: None,
                                 image: None,
                                 fence: Some(FenceSlice {
                                     block: Rc::clone(fence),
@@ -642,20 +890,28 @@ impl BlockTypesetter {
                         indent: 1,
                         ground: Some(t.surface_raised),
                         quote: false,
-                        rule: false,
+                        rule: None,
                         image: None,
                         fence: None,
                     });
                 }
             }
             Block::Rule => {
-                blank(out);
+                // The rule's own leading space, not the document's:
+                // `space_before` replaces the generic separator so the
+                // spacing axis is reachable from the same policy as ink
+                // and width.
+                if separate && !out.is_empty() {
+                    for _ in 0..self.rule.space_before.max(0) {
+                        out.push(Row::plain(RichLine::new()));
+                    }
+                }
                 out.push(Row {
                     line: RichLine::new(),
                     indent: 0,
                     ground: None,
                     quote: false,
-                    rule: true,
+                    rule: Some(self.rule.resolve(t, width)),
                     image: None,
                     fence: None,
                 });
@@ -681,9 +937,17 @@ pub(crate) fn draw_rows(
         if y >= rect.bottom() {
             break;
         }
-        if row.rule {
-            for x in rect.x..rect.right() {
-                canvas.put(Point::new(x, y), '─', t.border, Rgba::TRANSPARENT);
+        if let Some(rule) = row.rule {
+            // Ink and extent travel ON the row, resolved at typeset
+            // against the live theme and the measure the block was set
+            // at — the painter has neither, and a rect is not a measure.
+            let start = rect.x + rule.indent.clamp(0, rect.w.max(0));
+            let end = match rule.extent {
+                Some(cells) => (start + cells).min(rect.right()),
+                None => rect.right(),
+            };
+            for x in start..end {
+                canvas.put(Point::new(x, y), '─', rule.ink, Rgba::TRANSPARENT);
             }
             continue;
         }

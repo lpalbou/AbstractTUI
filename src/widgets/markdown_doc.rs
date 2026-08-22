@@ -41,27 +41,65 @@ pub(crate) struct DocLayout {
 }
 
 /// Parse + typeset at `width`. Pure over (source, tokens, width).
+/// Test-only since the rule policy landed: every production fold goes
+/// through `layout_doc_all` so the caller's `---` style cannot be lost
+/// on the way in.
+#[cfg(test)]
 pub(crate) fn layout_doc(source: &str, t: &TokenSet, width: i32) -> DocLayout {
     layout_doc_with(source, t, width, None)
 }
 
-/// [`layout_doc`] with a fenced-block claimant installed.
+/// [`layout_doc`] under a `---` policy — the fold a styled view
+/// renders, so a row position taken from here cannot drift from the
+/// pixels the way one taken from the default fold would.
+pub(crate) fn layout_doc_ruled(
+    source: &str,
+    t: &TokenSet,
+    width: i32,
+    rule: crate::widgets::MdRuleStyle,
+) -> DocLayout {
+    layout_doc_all(source, t, width, None, rule)
+}
+
+/// [`layout_doc`] with a fenced-block claimant installed (test-only,
+/// as above).
+#[cfg(test)]
 pub(crate) fn layout_doc_with(
     source: &str,
     t: &TokenSet,
     width: i32,
     fence: Option<std::rc::Rc<dyn crate::widgets::FenceBlock>>,
 ) -> DocLayout {
-    let ts = BlockTypesetter::new(t).with_fence_block(fence);
+    layout_doc_all(
+        source,
+        t,
+        width,
+        fence,
+        crate::widgets::MdRuleStyle::default(),
+    )
+}
+
+/// The one fold: claimant and rule policy both installed.
+pub(crate) fn layout_doc_all(
+    source: &str,
+    t: &TokenSet,
+    width: i32,
+    fence: Option<std::rc::Rc<dyn crate::widgets::FenceBlock>>,
+    rule: crate::widgets::MdRuleStyle,
+) -> DocLayout {
+    let ts = BlockTypesetter::new(t)
+        .with_fence_block(fence)
+        .with_rule_style(rule);
     let mut rows: Vec<Row> = Vec::new();
     let mut heading_rows = Vec::new();
     for block in md::parse_doc(source, ts.styles()) {
         let start = rows.len();
-        // Mirror push_block's spacing policy to locate the heading's
-        // text row: one blank separator before non-list blocks when
-        // rows exist (the property test re-pins this against the
-        // rendered rows across widths).
-        let sep = usize::from(!rows.is_empty());
+        // ASK the typesetter what its separator costs rather than
+        // mirroring it here: under a `---` policy the gap after a rule
+        // is that rule's `space_after`, so a mirrored `1` would put
+        // every heading following a rule on the wrong row (silently —
+        // a TOC jump landing one row off looks like taste).
+        let sep = ts.separator_rows(&rows, true);
         ts.push_doc_block(&mut rows, &block, width, true);
         if matches!(block, DocBlock::Core(md::Block::Heading { .. })) {
             heading_rows.push(start + sep);
@@ -71,9 +109,14 @@ pub(crate) fn layout_doc_with(
 }
 
 /// The width-resolved outline (0146): [`md::outline`] zipped with the
-/// fold's heading rows.
-pub(crate) fn outline_rows(source: &str, t: &TokenSet, width: i32) -> Vec<OutlineEntry> {
-    let fold = layout_doc(source, t, width);
+/// fold's heading rows, under a `---` policy.
+pub(crate) fn outline_rows_ruled(
+    source: &str,
+    t: &TokenSet,
+    width: i32,
+    rule: crate::widgets::MdRuleStyle,
+) -> Vec<OutlineEntry> {
+    let fold = layout_doc_ruled(source, t, width, rule);
     let outline = md::outline(source);
     debug_assert_eq!(
         outline.len(),
@@ -278,7 +321,7 @@ impl BlockTypesetter {
                 indent: indent + if i > 0 { 2 } else { 0 },
                 ground: None,
                 quote: false,
-                rule: false,
+                rule: None,
                 image: None,
                 fence: None,
             });

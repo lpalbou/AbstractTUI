@@ -81,6 +81,9 @@ pub(super) struct FeedInner {
     /// Blank rows between items.
     pub(super) gap: i32,
     pub(super) tokens: Option<TokenSet>,
+    /// The `---` policy (`Feed::rule_style`). Held here because rows
+    /// are CACHED: a change re-typesets, exactly like a theme change.
+    pub(super) rule: crate::widgets::MdRuleStyle,
     /// One pending after(0) geometry sync at a time.
     pub(super) fixup_scheduled: bool,
     /// Diagnostics: blocks typeset since creation (cost pins — closed
@@ -103,6 +106,7 @@ impl FeedInner {
             prefix: Vec::new(),
             gap: 1,
             tokens: None,
+            rule: crate::widgets::MdRuleStyle::default(),
             fixup_scheduled: false,
             blocks_typeset: 0,
             mutations: 0,
@@ -139,7 +143,7 @@ impl FeedInner {
         if width <= 0 {
             return;
         }
-        let ts = BlockTypesetter::new(&tokens);
+        let ts = BlockTypesetter::new(&tokens).with_rule_style(self.rule);
         let entry = &mut self.entries[i];
         match &mut entry.kind {
             EntryKind::Static(blocks) => {
@@ -179,21 +183,33 @@ impl FeedInner {
                     stream.closed_seen = closed.len();
                 }
                 // Re-typeset the open tail into segment 1.
-                let closed_rows = match &entry.segments[0] {
-                    Segment::Rows(rows) => rows.len(),
-                    _ => 0,
+                // The gap the boundary owes: `separator_rows` over the
+                // FROZEN rows, so a closed block ending in a rule hands
+                // over that rule's `space_after` rather than a hardwired
+                // one. 0 when there is nothing to separate from.
+                let (closed_rows, closed_gap) = match &entry.segments[0] {
+                    Segment::Rows(rows) => (rows.len(), ts.separator_rows(rows, true)),
+                    _ => (0, 0),
                 };
                 let open = stream.session.open_blocks();
                 let mut rows: Vec<Row> = Vec::new();
                 for (bi, b) in open.iter().enumerate() {
                     self.blocks_typeset += 1;
-                    // The blank separator between the frozen rows and
-                    // the first open block mirrors push_doc_block's
-                    // policy (out non-empty), which cannot see across
-                    // the segment boundary: list/task items stack
-                    // tight, everything else gets one blank row.
+                    // The separator between the frozen rows and the
+                    // first open block: `push_doc_block` cannot see
+                    // across the segment boundary, so it is spent here.
+                    // List/task items stack tight; a RULE spends its own
+                    // `space_before`; everything else takes whatever the
+                    // frozen tail hands over.
                     if bi == 0 && closed_rows > 0 && doc_block_separates(b) {
-                        rows.push(Row::plain(RichLine::new()));
+                        let n = if matches!(b, DocBlock::Core(Block::Rule)) {
+                            ts.rule_style().space_before.max(0) as usize
+                        } else {
+                            closed_gap
+                        };
+                        for _ in 0..n {
+                            rows.push(Row::plain(RichLine::new()));
+                        }
                     }
                     ts.push_doc_block(&mut rows, b, width, bi > 0);
                 }
@@ -301,8 +317,17 @@ fn typeset_static(
                     segments.push(Segment::Rows(std::mem::take(&mut current)));
                 }
                 if any_content {
-                    // Same one-blank-row rhythm before a custom block.
-                    segments.push(Segment::Rows(vec![Row::plain(RichLine::new())]));
+                    // Same rhythm before a custom block — but a
+                    // markdown block ending in a rule owns the gap after
+                    // it, so ask the policy rather than assume one row.
+                    let n = match segments.last() {
+                        Some(Segment::Rows(rows)) => ts.separator_rows(rows, true),
+                        _ => 1,
+                    };
+                    if n > 0 {
+                        let gap = (0..n).map(|_| Row::plain(RichLine::new())).collect();
+                        segments.push(Segment::Rows(gap));
+                    }
                 }
                 segments.push(Segment::Custom {
                     draw: c.draw.clone(),

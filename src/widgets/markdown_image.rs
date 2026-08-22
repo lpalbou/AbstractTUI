@@ -111,7 +111,7 @@ pub(crate) fn push_image_rows(out: &mut Vec<Row>, image: &ImageBlock, width: i32
                     indent: 0,
                     ground: None,
                     quote: false,
-                    rule: false,
+                    rule: None,
                     image: Some(MdImageSlice {
                         handle: handle.clone(),
                         row,

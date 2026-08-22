@@ -2300,6 +2300,27 @@ anchor_id }` with GitHub-compatible, deduplicated slugs
 with the typeset ROW its text starts at (the TOC jump target), and
 `MarkdownView::resolve_anchor(...)` answers `[text](#anchor)` links.
 
+**The `---` policy.** A horizontal rule spends three things — ink,
+width and vertical space — and all three are the caller's:
+`MdRuleStyle { ink, width, space_before, space_after }`, installed with
+`MarkdownView::rule_style(...)` or `Feed::rule_style(...)`. `ink` is a
+`TokenId` (resolved against the LIVE theme every typeset, so the rule
+follows a theme switch) or a fixed `Rgba`; `width` is `FullBleed`,
+`Measure` (the box the block was typeset at) or `Inset(cells)`; the two
+space counts are the rule's own gap, which the following block does not
+add to — `1`/`1` is the historical three-row rule, `0`/`0` a one-row
+one. Defaults reproduce every earlier release byte for byte.
+
+All three open together on purpose: a policy exposing one axis lets a
+consumer ship half an ordinal and believe it is finished. Two things it
+deliberately does NOT do — restyle the level-1 heading underline (a
+different block that paints the same chrome), and produce an invisible
+rule (an inset past the measure floors at one cell rather than paint
+nothing). Row positions move with it, so a styled view takes its scroll
+clamp, outline and search rows from the `_ruled` twins
+(`rows_ruled`, `outline_rows_ruled`, `resolve_anchor_ruled`,
+`find_ruled`) rather than the default-fold statics.
+
 `MarkdownView` AND `Feed` markdown items render the full doc
 vocabulary (one shared typeset recipe — a feed item and a reader pane
 can never typeset the same source differently): tables typeset
