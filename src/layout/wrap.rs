@@ -72,7 +72,17 @@ pub(super) fn layout_wrapped(
         let basis = resolve_dim(cstyle.basis, content_main)
             .or_else(|| resolve_dim(main_dim, content_main))
             .unwrap_or_else(|| {
-                let est = intrinsic_size(tree, child, content.size());
+                // Same rule as the single-line path: a child is measured
+                // inside the box it will actually be SOLVED to, which is
+                // the content box less its OWN margins. The basis becomes
+                // the child's main size directly and is never re-derived,
+                // so measuring at the full extent here leaves a wrapping
+                // leaf one row short of its own text for good.
+                let avail = Size::new(
+                    (content.w - cstyle.margin.horizontal()).max(0),
+                    (content.h - cstyle.margin.vertical()).max(0),
+                );
+                let est = intrinsic_size(tree, child, avail);
                 match dir {
                     Direction::Row => est.w,
                     Direction::Column => est.h,

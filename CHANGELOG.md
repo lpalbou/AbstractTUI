@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- layout: **the 0.4.1 margin deduction did not reach WRAPPED
+  containers.** `intrinsic_size` is called from the single-line flex
+  path, the wrap path and the grid path; 0.4.1 deducted the child's own
+  margins on the flex path only. So the same defect it fixed survived
+  verbatim behind `Style::wrap()`: the line-breaking basis measured a
+  content-sized child at the full content extent, and because that basis
+  becomes the child's main size and is never re-derived, a wrapping leaf
+  with side margins in a wrapped column was solved a row short of its
+  own text. Measured: 120 columns with `margin: 3` in a 40-wide wrapped
+  column is solved to width 34 — which needs 4 rows — and was given 3.
+  The wrap path now deducts the child's margins like the flex path.
+  Wrapped ROWS were never affected: there the main size is corrected
+  before the cross measure reads it.
+  GRID is deliberately unchanged: a grid child's box is its cell and
+  grid never reduces it by the child's margins, so measuring at the full
+  cell is self-consistent and the truncation cannot arise. Whether grid
+  should honour margins at all is a separate question, left open.
+
+### Added
+
+- tests: `margin_intrinsic_probe` pins the 0.4.1 margin deduction, which
+  shipped with a suite that was byte-identical before and after it —
+  each of the two intrinsic call sites now turns exactly one test red
+  when reverted. `wrap_grid_margin_probe` covers the same invariant
+  across the flex, wrap and grid paths, with the flex case as a control
+  so a failure names the path rather than the fixture.
+  Both express the invariant as *a content-sized box is tall enough for
+  its own wrap at the width it was solved to*, deliberately not as a
+  containment check: when the estimate is short, flex shrink absorbs the
+  difference, so the child is silently truncated while staying inside
+  its parent. The random-tree invariants in `adv_layout` assert
+  containment and are structurally unable to see this class.
+
 ## [0.4.1] - 2026-08-22
 
 ### Fixed
