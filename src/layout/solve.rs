@@ -69,6 +69,15 @@ pub fn measure(tree: &LayoutTree, id: LayoutId, avail: Size) -> Size {
 /// Recursive over tree depth; fine for realistic UI nesting. Percent
 /// resolves against `avail` (the parent content estimate) — good enough
 /// for intrinsic purposes and documented as an approximation.
+///
+/// A child is measured inside the box it will actually be SOLVED to:
+/// its own margins come off `avail` first, matching what the placement
+/// pass does with `cross_avail`. Without that a wrapping leaf answers
+/// the row count for a line length it is never drawn at. What this
+/// CANNOT do is anticipate a flex share: a child sitting in a row
+/// beside a fixed sibling is measured at the full content width,
+/// because its share is not known until the basis it is being asked
+/// for has been distributed.
 pub(super) fn intrinsic_size(tree: &LayoutTree, id: LayoutId, avail: Size) -> Size {
     let Some(node) = tree.nodes.get(id.0) else {
         return Size::ZERO;
@@ -104,7 +113,17 @@ pub(super) fn intrinsic_size(tree: &LayoutTree, id: LayoutId, avail: Size) -> Si
             if cnode.style.position == Position::Absolute {
                 continue; // out of flow: contributes nothing to content size
             }
-            let cs = intrinsic_size(tree, child, inner_avail);
+            // The child's OWN margins are not space it can use: the
+            // placement pass subtracts them from its cross extent
+            // (`cross_avail`), so measuring at the full inner width
+            // hands a content-sized child a width it will never be
+            // solved to — and a text leaf then answers the row count
+            // for the wrong wrap.
+            let child_avail = Size::new(
+                (inner_avail.w - cnode.style.margin.horizontal()).max(0),
+                (inner_avail.h - cnode.style.margin.vertical()).max(0),
+            );
+            let cs = intrinsic_size(tree, child, child_avail);
             let (cm, cc) = match style.direction {
                 Direction::Row => (
                     cs.w + cnode.style.margin.horizontal(),
@@ -265,7 +284,14 @@ fn layout_children_of(tree: &mut LayoutTree, id: LayoutId) {
         let basis = resolve_dim(cstyle.basis, content_main)
             .or_else(|| resolve_dim(main_dim, content_main))
             .unwrap_or_else(|| {
-                let est = intrinsic_size(tree, child, content.size());
+                // Same rule as the aggregation above: a child is
+                // measured inside the box it will actually be SOLVED
+                // to, which is the content box less its own margins.
+                let avail = Size::new(
+                    (content.w - cstyle.margin.horizontal()).max(0),
+                    (content.h - cstyle.margin.vertical()).max(0),
+                );
+                let est = intrinsic_size(tree, child, avail);
                 axes.main(est)
             });
         items.push(FlexItem {

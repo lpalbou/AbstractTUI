@@ -510,3 +510,141 @@ fn appends_at_known_width_sync_the_extent_immediately() {
     assert_eq!(after, before + 2, "gap + one row, synchronously");
     root.dispose();
 }
+
+// ---------------------------------------------------------------------------
+// Intrinsic measure: a content-sized feed is never one row tall
+// ---------------------------------------------------------------------------
+
+/// A content-sized feed with a MARKER row directly beneath it. Where the
+/// marker lands is the feed's solved height, observed the way a user
+/// observes it — a sibling that moves is the whole visible defect.
+fn mount_feed_with_marker(size: Size) -> (crate::reactive::RootScope, UiTree, FeedState) {
+    let holder: Rc<RefCell<Option<FeedState>>> = Rc::new(RefCell::new(None));
+    let h = holder.clone();
+    let (root, tree) = mount_widget(size, move |cx| {
+        let feed = FeedState::new(cx);
+        *h.borrow_mut() = Some(feed.clone());
+        crate::ui::Element::new()
+            .style(LayoutStyle::column().width(Dimension::Percent(1.0)))
+            .child(Feed::new(&feed).gap(0).view(cx))
+            .child(crate::ui::text("MARKER"))
+            .build()
+    });
+    let feed = holder.borrow().clone().expect("state captured");
+    (root, tree, feed)
+}
+
+fn marker_row(canvas: &BufferCanvas, h: i32) -> Option<i32> {
+    (0..h).find(|&y| canvas.row_text(y).contains("MARKER"))
+}
+
+/// A content-sized `Feed` sized itself from a signal that only PAINT
+/// could fill, so its first solve reported ONE row — a real-looking
+/// placeholder the whole frame was laid out against, with the true
+/// height arriving a turn later. Every consumer of the extent inherited
+/// that for a frame: content squashed to a row per item, an offset
+/// clamped against one-row content, a follow-tail pin driven to the top.
+///
+/// The solver offers the width during the solve, so the feed typesets
+/// there and answers truthfully the FIRST time it is asked.
+#[test]
+fn a_content_sized_feed_answers_its_height_on_the_first_frame() {
+    let size = Size::new(30, 12);
+    let (root, mut tree, feed) = mount_feed_with_marker(size);
+    for i in 0..5 {
+        feed.push(format!("k{i}"), FeedItem::text(format!("line {i}")));
+    }
+
+    // ONE layout, ONE paint. Deliberately no timers and no second
+    // layout: reaching the truth used to require both.
+    flush_effects();
+    tree.layout();
+    let canvas = render(&mut tree, size);
+    assert_eq!(
+        marker_row(&canvas, size.h),
+        Some(5),
+        "five rows of feed must push the marker to row 5 on the first \
+         frame, not one placeholder row:\n{}",
+        (0..6)
+            .map(|y| canvas.row_text(y))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+
+    // And the settle that used to be the correction changes nothing.
+    let canvas = settle(&mut tree, size);
+    assert_eq!(marker_row(&canvas, size.h), Some(5), "no correction pass");
+    assert_eq!(
+        feed.total_rows().get_untracked(),
+        5,
+        "the public extent agrees with the layout"
+    );
+    root.dispose();
+}
+
+/// The extent reaches the app WITHOUT a paint. `FeedState::total_rows`
+/// is public API (chrome reads it for "N more rows"), and a measure that
+/// silently stopped publishing it would look like a win — one fewer
+/// signal write — while leaving every reader on zero forever. The
+/// callback may not write a signal itself (that flushes effects while
+/// the tree is borrowed for the solve), so it enqueues the same deferred
+/// publish that paint used to.
+#[test]
+fn the_public_extent_is_published_without_a_draw() {
+    let size = Size::new(30, 12);
+    let (root, mut tree, feed) = mount_feed_with_marker(size);
+    for i in 0..4 {
+        feed.push(format!("k{i}"), FeedItem::text(format!("row {i}")));
+    }
+    flush_effects();
+    tree.layout(); // solve only — no render anywhere in this test
+    run_due_timers(std::time::Instant::now());
+    flush_effects();
+    assert_eq!(
+        feed.total_rows().get_untracked(),
+        4,
+        "the deferred publish must fire from the SOLVE, not only from paint"
+    );
+    root.dispose();
+}
+
+/// An empty content-sized feed occupies no rows.
+///
+/// The old `.max(1)` floor existed to stop an UNMEASURED feed reporting
+/// zero; it also gave a genuinely empty feed a phantom row that nothing
+/// ever drew. With the measure answering truthfully the floor has no
+/// remaining job, and keeping it would preserve the accident — a widget
+/// reserving a row it will not paint is the same class of untruth this
+/// change removes.
+#[test]
+fn an_empty_content_sized_feed_reserves_no_row() {
+    let size = Size::new(30, 12);
+    let (root, mut tree, feed) = mount_feed_with_marker(size);
+    let canvas = settle(&mut tree, size);
+    assert_eq!(marker_row(&canvas, size.h), Some(0), "no items, no rows");
+    assert_eq!(feed.total_rows().get_untracked(), 0);
+
+    // And it grows the moment it has content.
+    feed.push("k", FeedItem::text("first"));
+    let canvas = settle(&mut tree, size);
+    assert_eq!(marker_row(&canvas, size.h), Some(1));
+    root.dispose();
+}
+
+/// The measure and the draw must refuse the SAME widths. `draw_feed`
+/// typesets only when `rect.w > 1`; a measure that accepted width 1
+/// would fill the cache at a width the paint never uses, and the two
+/// would then describe different documents.
+#[test]
+fn measure_and_draw_refuse_the_same_narrow_widths() {
+    let size = Size::new(1, 6);
+    let (root, mut tree, feed) = mount_feed_with_marker(size);
+    feed.push("k", FeedItem::text("wrapped content here"));
+    let _ = settle(&mut tree, size);
+    assert_eq!(
+        feed.total_rows().get_untracked(),
+        0,
+        "a width the draw refuses must measure as nothing, not as content"
+    );
+    root.dispose();
+}

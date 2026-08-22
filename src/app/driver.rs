@@ -39,7 +39,7 @@ use crate::ui::SurfaceCanvas;
 
 use super::events::{convert_event, is_default_quit};
 use super::overlays::{Overlays, ROOT_LAYER_ID};
-use super::selection::{selection_pane, MouseCapture, Selection, SelectionAct};
+use super::selection::{selection_anchor, MouseCapture, Selection, SelectionAct};
 use super::theme::current_theme;
 use super::App;
 
@@ -630,16 +630,40 @@ impl Driver {
         // move terminal-held placements out from under the session's
         // bookkeeping. While such images are live, take the plain diff —
         // correct pixels over the byte win.
+        //
+        // SYNC GUARD (the flicker review): the scroll path is the ONE
+        // place this engine puts an ERASE on the wire ahead of the
+        // content that replaces it. `SU`/`SD` BCE-clear up to `n`
+        // full-width rows to the terminal's DEFAULT background, and the
+        // residual repaint lands hundreds of bytes later in the same
+        // stream. Inside a DEC 2026 bracket that intermediate is never
+        // presentable; outside one it is — measured at 16 bytes to blank
+        // 62% of a pane against 2145 to restore it, in the terminal's
+        // ground rather than the theme's, so it reads as a black flash
+        // in exactly the band that changed (`detect_shift` trims to the
+        // changed rows, which is why one pane flickers and its siblings
+        // do not).
+        //
+        // Declining the optimization costs only bytes, and only on
+        // terminals that cannot hide the artifact: docs/design/render.md
+        // states the path is "a bandwidth optimization (ssh links), not
+        // a correctness or latency one" whose win "caps at the full-frame
+        // byte budget (which DEC 2026 already makes tear-free)". So it is
+        // worth having on precisely the terminals that advertise 2026.
+        // Self-healing: the probe's caps upgrade flips this on
+        // mid-session the moment the terminal proves the mode.
         self.out.clear();
-        let runs = if self.image_session.live_byte_slots() > 0 {
+        let scroll_ok =
+            self.image_session.live_byte_slots() == 0 && self.present_caps.sync_output_2026;
+        let runs = if scroll_ok {
+            self.diff
+                .compute_scrolled(&self.prev, &self.frame, &self.scratch_damage)
+        } else {
             crate::render::ScrolledRuns::plain(self.diff.compute(
                 &self.prev,
                 &self.frame,
                 &self.scratch_damage,
             ))
-        } else {
-            self.diff
-                .compute_scrolled(&self.prev, &self.frame, &self.scratch_damage)
         };
         self.presenter
             .emit_scrolled(runs, &self.frame, &self.present_caps, &mut self.out);
@@ -789,11 +813,38 @@ impl Driver {
                 // Deliberately ahead of overlay routing: select mode is
                 // an explicit user mode and may copy from modal content
                 // too (the pane clamp resolves overlay tree panes).
+                // The anchor probe is HIT TESTING, and hit testing needs
+                // fresh rects — the same precondition `UiTree::dispatch`
+                // satisfies with its own `layout()` call. It cannot be
+                // satisfied inside the probe closure: `Selection::on_input`
+                // holds a `borrow_mut` on the selection state across it,
+                // and `layout()` delivers pending autofocus, which runs
+                // user handlers that may touch `app::selection`.
+                //
+                // Staleness is REAL here, not theoretical (first-app/1335
+                // review): an input burst dispatches with no frame between
+                // events, and `Scroll` declares its drag zone inside the
+                // bar's `dyn_view`. A MouseEnter that lights the hover ink
+                // — the ordinary way a pointer reaches a thumb — rebuilds
+                // that region, so the press that follows in the same burst
+                // would probe an unsolved zero rect, miss the zone, and
+                // hand the thumb's gesture to the selection layer.
+                //
+                // Left Down only: that is the one event the probe runs on,
+                // and `layout()` is a no-op on a clean tree anyway.
+                if matches!(
+                    &other,
+                    Event::Mouse(m)
+                        if m.kind == crate::input::MouseKind::Down
+                            && m.button == crate::input::MouseButton::Left
+                ) {
+                    super::selection::layout_for_anchor(app, &self.overlays);
+                }
                 let overlays = &self.overlays;
                 let size = self.size;
                 match self
                     .selection
-                    .on_input(&other, &mut |p| selection_pane(app, overlays, size, p))
+                    .on_input(&other, &mut |p| selection_anchor(app, overlays, size, p))
                 {
                     SelectionAct::Pass => {}
                     SelectionAct::Consumed => return,

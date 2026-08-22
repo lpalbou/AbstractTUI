@@ -336,7 +336,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
 - **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, wheel scrolling (the window moves, the caret stays; any edit re-attaches), and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
 - **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`, bindable `selection`/`offset_y`, hover ink. Removable rows in one call (`on_remove`), or the general trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), and timed double-click on the body (`on_row_double_click`). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
-- **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful.
+- **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful. A content-sized feed carries an intrinsic measure, so `Scroll::new(Feed::new(&state).view(cx))` scrolls the true extent from the first frame.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, hover ink, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
 - **PageHost** — the page-level tab host: N FULL pages behind one themed tab bar, exactly one mounted (see [its own section](#widgetspagehost--the-page-level-tab-host) below).
@@ -356,7 +356,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Grid** — container widget over `Display::Grid`; spans ride each child's own style.
 - **Image** — bitmap display through the mosaic pipeline (`ImageFit`; `Bitmap` re-exported beside it). Measures as its native cell footprint, so it holds real space in `Auto`-sized rows/panels.
 - **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals. Grows into its region by default (a draw widget has no intrinsic size to grow from, so the default layout claims the available space).
-- **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables with the crush-honesty ladder, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code (C-like, diff, json/yaml lexers). Both content views carry an intrinsic measure (wave 13): `Scroll::new(view)` scrolls the true extent out of the box, and content-sized panels hug the document instead of collapsing it to zero. Wrapping in `Scroll` is also what gives a document the WHEEL, PgUp/PgDn and a draggable thumb — the `scroll_offset(rows)` setter is for apps that genuinely own the offset, and gets keyboard scrolling only.
+- **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables with the crush-honesty ladder, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code (C-like, diff, json/yaml lexers). Both content views carry an intrinsic measure: `Scroll::new(view)` scrolls the true extent out of the box, and content-sized panels hug the document instead of collapsing it to zero. `Feed` answers the same way, so every content widget reports its real height during the layout solve rather than after the first paint. Wrapping in `Scroll` is also what gives a document the WHEEL, PgUp/PgDn and a draggable thumb — the `scroll_offset(rows)` setter is for apps that genuinely own the offset, and gets keyboard scrolling only.
 - **`widgets::FenceBlock`** — a fenced code block rendered as something other than code, INSIDE the document. `MarkdownView::fence_block(claimant)` installs it; the claimant measures the fences it recognizes and paints their rows, so a diagram lives in the document's own scroll surface, outline and search index instead of forcing the app to splice widgets between document fragments. Fences it declines render as code, unchanged. The engine ships no diagram languages — `abstracttui-mermaid`'s `MermaidFence` is the reference claimant (see [graphs-and-diagrams.md](graphs-and-diagrams.md)).
 - **Meter / AudioScope** — live level rendering: dB meter with real ballistics (instant attack, timed decay, peak hold) and a rolling braille waveform — see the live-levels section below.
 - **Logo** — the AbstractTUI wordmark for headers, about screens, empty states.
@@ -667,8 +667,16 @@ renders as a TABLE live (the whole in-flight table is the open region
 until its first non-pipe line seals it), task lists wear checkboxes,
 `~~strikethrough~~` strikes, and `![alt](path)` images typeset from a
 header-only probe (decode happens lazily when an image row first
-draws — items measure and window without decoding). `total_rows()` is
-the reactive content extent, and `clear()` rebuilds bounded windows:
+draws — items measure and window without decoding). `clear()` rebuilds
+bounded windows.
+
+A content-sized feed (one you give no explicit `layout`) typesets at the
+width the layout solver offers, so it reports its real height on the
+first frame and a surrounding `Scroll` measures the true extent
+immediately. An empty feed occupies no rows. `total_rows()` is the
+reactive content extent for chrome such as "N more rows"; it is
+published one turn after the solve, so drive layout from the widget and
+read this signal for display:
 
 ```rust
 use abstracttui::prelude::*;
@@ -1025,6 +1033,7 @@ its rightmost column and answers the same gestures:
 | drag after that press | the thumb tracks the pointer row for row, and keeps steering after the pointer leaves the strip (pointer capture) |
 | press on bare track | teleports: the thumb centers on the pressed row |
 | release | commits where it stands — no snap-back |
+| any of the above with SELECT MODE on | still the bar's: the strip is a drag zone, so the screen-text layer stands down over it |
 
 The thumb's length is proportional to the visible fraction with a floor
 of 3 rows (the exact proportion of a long transcript rounds to zero),
@@ -2057,6 +2066,19 @@ rules, stated plainly:
 - **Left Down while a region is VISIBLE**: the click DISMISSES the
   selection — clear + consume, both halves of the click (Esc parity:
   the user was clearing a highlight, not aiming at the widget beneath).
+- **Left Down inside a widget's DRAG ZONE**: the layer stands down —
+  no anchor arms, and the whole gesture (Down, Drag, Up) belongs to the
+  widget. Click-through is not enough for a widget that owns drags
+  rather than clicks: a scrollbar thumb takes hold on the Down, and the
+  claim one drag later would cancel that press. Every engine drag
+  surface declares its zone — both `Scroll` bars, the `List` / `Table` /
+  `FilePicker` internal bars, and an orbiting `Viewport3D` — so with
+  select mode on the thumb still scrolls and the camera still orbits.
+  Your own drag widgets declare one with
+  [`Element::drag_zone`](#ui--elements-views-composition); an invisible or
+  non-overflowing bar returns `None` and owns nothing. The **anchor**
+  decides: a drag that starts in content and crosses a strip keeps
+  selecting.
 
 **Every copy ends the gesture**: the region clears with the copy,
 so the app's next keystrokes — including Enter and `c` — route normally

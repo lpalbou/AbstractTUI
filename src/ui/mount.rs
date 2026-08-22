@@ -56,6 +56,7 @@ pub(super) fn mount_view(
                     focus_trap: el.focus_trap,
                     focus_memory: el.focus_memory,
                     probe_when_culled: el.probe_when_culled,
+                    drag_zone: el.drag_zone.take(),
                     access: el.access.clone(),
                     payload: InstPayload::Element {
                         draw: el.draw.map(|d| Rc::new(RefCell::new(d))),
@@ -72,6 +73,27 @@ pub(super) fn mount_view(
                 attach(&mut c, parent, id);
                 (id, layout)
             };
+            // Rect readback (field-agora 0910): registered here rather
+            // than ridden on the draw closure, because the child a
+            // consumer's ensure-visible needs to locate is the one the
+            // paint cull skips. The cleanup is what makes the "an
+            // unmounting element never publishes" guarantee true for a
+            // signal the CALLER owns and outlives this element.
+            if let Some(sig) = el.rect_sig.take() {
+                let sig = *sig;
+                let alive = Rc::new(std::cell::Cell::new(true));
+                {
+                    let alive = alive.clone();
+                    cx.on_cleanup(move || alive.set(false));
+                }
+                core.borrow_mut().rect_probes.push(super::tree::RectProbe {
+                    view: id,
+                    sig,
+                    seen: Rc::new(std::cell::Cell::new(None)),
+                    pending: Rc::new(std::cell::Cell::new(false)),
+                    alive,
+                });
+            }
             // Reactive layout style: re-applied on signal change WITHOUT
             // remounting (scroll offsets, animated panes). The effect is
             // owned by the mounting scope, so it dies with the subtree;
@@ -131,6 +153,7 @@ pub(super) fn mount_view(
                 focus_trap: false,
                 focus_memory: false,
                 probe_when_culled: false,
+                drag_zone: None,
                 access: Default::default(),
                 payload: InstPayload::Text { content },
             }));
@@ -149,6 +172,7 @@ pub(super) fn mount_view(
                     focus_trap: false,
                     focus_memory: false,
                     probe_when_culled: false,
+                    drag_zone: None,
                     access: Default::default(),
                     payload: InstPayload::Dyn,
                 }));
@@ -299,6 +323,24 @@ pub(super) fn remove_subtree(core: &Rc<RefCell<TreeCore>>, root: ViewId) {
                 // policy is a widgets-layer concern.)
                 c.focus = None;
             }
+            // A memory container dying takes its memory with it
+            // (app-widgets 0155). Without this the map keeps one entry
+            // per REBUILD for the life of the tree: a `Dyn` region
+            // holding a `focus_memory` container re-mounts a fresh
+            // container each generation, and the previous key is never
+            // reachable again. Nothing was unsound — the arena is
+            // generational, so a stale key simply never matches — which
+            // is exactly why it grew unnoticed.
+            //
+            // The VALUE side is deliberately NOT swept. A remembered
+            // descendant can die while its container lives, and
+            // `restore_memory_target` already re-validates on read
+            // (alive + still focusable + still inside the container),
+            // so a stale value costs a fall-through and nothing else.
+            // Sweeping it would mean a full-map scan per removed
+            // instance to fix a set bounded by container count, and no
+            // test could tell the sweep from its absence.
+            c.focus_memory.remove(&id);
         }
     }
     c.damage_rect(root_rect);

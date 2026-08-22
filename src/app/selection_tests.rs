@@ -25,8 +25,21 @@ fn mouse(kind: MouseKind, button: MouseButton, x: i32, y: i32) -> Event {
     Event::Mouse(MouseEvent::new(kind, button, Point::new(x, y), Mods::NONE))
 }
 
-fn viewport_clamp() -> Box<dyn FnMut(Point) -> Rect> {
-    Box::new(|_| Rect::new(0, 0, 80, 24))
+fn viewport_clamp() -> Box<dyn FnMut(Point) -> PressProbe> {
+    Box::new(|_| PressProbe {
+        pane: Some(Rect::new(0, 0, 80, 24)),
+        drag_owner: false,
+    })
+}
+
+/// A press resolver whose `zone` columns belong to a widget that owns
+/// drags — the shape `UiTree::press_probe_at` reports over a scrollbar
+/// strip (first-app/1335).
+fn clamp_with_drag_zone(zone: Rect) -> Box<dyn FnMut(Point) -> PressProbe> {
+    Box::new(move |p| PressProbe {
+        pane: Some(Rect::new(0, 0, 80, 24)),
+        drag_owner: zone.contains(p),
+    })
 }
 
 // ---------------------------------------------------------------- spans
@@ -117,6 +130,44 @@ fn extract_mid_glyph_endpoints_cover_the_pair_symmetrically() {
 }
 
 // ------------------------------------------------------------- intercept
+
+/// first-app/1335: a press inside a widget's drag zone arms NO anchor,
+/// so the whole gesture passes to the tree — no claim, and therefore no
+/// cancelled pointer capture. Without this the layer claimed the drag
+/// one event later and the scrollbar thumb it had just grabbed went
+/// dead.
+#[test]
+fn a_press_in_a_drag_zone_never_arms_the_selection() {
+    let sel = selection();
+    sel.set_enabled(true);
+    // The strip: the last column of an 80-wide viewport.
+    let mut clamp = clamp_with_drag_zone(Rect::new(79, 0, 1, 24));
+
+    let down = mouse(MouseKind::Down, MouseButton::Left, 79, 2);
+    assert_eq!(sel.on_input(&down, &mut clamp), SelectionAct::Pass);
+    let drag = mouse(MouseKind::Drag, MouseButton::Left, 79, 8);
+    assert_eq!(
+        sel.on_input(&drag, &mut clamp),
+        SelectionAct::Pass,
+        "no anchor was armed, so the drag is not ours to claim"
+    );
+    assert!(!sel.is_active(), "a thumb drag paints no region");
+    let up = mouse(MouseKind::Up, MouseButton::Left, 79, 8);
+    assert_eq!(
+        sel.on_input(&up, &mut clamp),
+        SelectionAct::Pass,
+        "the release belongs to the widget too — nothing to copy"
+    );
+
+    // The ANCHOR decides, not the pointer: a drag that STARTS in the
+    // content and wanders onto the strip keeps selecting.
+    let down = mouse(MouseKind::Down, MouseButton::Left, 4, 2);
+    assert_eq!(sel.on_input(&down, &mut clamp), SelectionAct::Pass);
+    let drag = mouse(MouseKind::Drag, MouseButton::Left, 79, 2);
+    assert_eq!(sel.on_input(&drag, &mut clamp), SelectionAct::Claim);
+    assert!(sel.is_active(), "the anchor was in the content");
+    sel.clear();
+}
 
 #[test]
 fn selection_claims_left_drag_only_wheel_and_buttons_pass() {
@@ -302,7 +353,7 @@ fn copy_keys_are_one_shot_and_exist_only_while_a_region_is_visible() {
 
     // Mid-drag each copy key copies ONCE and ends the gesture (0290):
     // the very next key routes to the app again.
-    let arm = |sel: &Selection, clamp: &mut Box<dyn FnMut(Point) -> Rect>| {
+    let arm = |sel: &Selection, clamp: &mut Box<dyn FnMut(Point) -> PressProbe>| {
         sel.on_input(&mouse(MouseKind::Down, MouseButton::Left, 1, 1), clamp);
         sel.on_input(&mouse(MouseKind::Drag, MouseButton::Left, 5, 1), clamp);
         assert!(sel.is_active());
@@ -339,7 +390,10 @@ fn drag_clamps_to_the_pane_resolved_at_anchor() {
     sel.set_enabled(true);
     // The pane under the anchor is a 6x2 box; drags outside clamp in.
     let pane = Rect::new(2, 1, 6, 2);
-    let mut clamp: Box<dyn FnMut(Point) -> Rect> = Box::new(move |_| pane);
+    let mut clamp: Box<dyn FnMut(Point) -> PressProbe> = Box::new(move |_| PressProbe {
+        pane: Some(pane),
+        drag_owner: false,
+    });
     sel.on_input(&mouse(MouseKind::Down, MouseButton::Left, 3, 1), &mut clamp);
     sel.on_input(
         &mouse(MouseKind::Drag, MouseButton::Left, 50, 20),

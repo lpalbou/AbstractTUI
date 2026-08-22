@@ -35,6 +35,9 @@ pub(crate) use flex_math::distribute;
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
     use super::*;
     use crate::base::{Rect, Size};
 
@@ -583,6 +586,50 @@ mod tests {
             (r.w, r.h),
             (40, 2),
             "row width stretches, height from measure"
+        );
+    }
+
+    #[test]
+    fn a_margined_child_is_measured_inside_the_box_it_will_be_solved_to() {
+        // A content-sized child is SOLVED to the content box less its
+        // own margins, so that is the width its measure callback must
+        // be asked at. Asking at the full width makes a wrapping leaf
+        // answer for a line length it will never be drawn at, and it
+        // is drawn a row short — the placement pass and the intrinsic
+        // pass disagreeing about the same box.
+        let asked: Rc<RefCell<Vec<i32>>> = Rc::new(RefCell::new(Vec::new()));
+        let log = Rc::clone(&asked);
+        // 70 columns of text: 2 rows at width 40, 3 rows at width 34.
+        let wrap70 = move |avail: Size| {
+            log.borrow_mut().push(avail.w);
+            let w = avail.w.max(1);
+            Size::new(w, (70 + w - 1) / w)
+        };
+
+        let mut tree = LayoutTree::new();
+        let root = tree.add(Style::column());
+        let leaf = tree.add_leaf(Style::default().margin(Edges::all(3)), Box::new(wrap70));
+        tree.add_child(root, leaf);
+        solve(&mut tree, root, Rect::new(0, 0, 40, 20));
+
+        let widths = asked.borrow().clone();
+        // The check must be able to fail for the right reason: a leaf
+        // that was never measured would satisfy every assertion below
+        // about what it was measured AT.
+        assert!(
+            !widths.is_empty(),
+            "the measure callback must be consulted at all"
+        );
+        let r = tree.rect(leaf);
+        assert_eq!((r.x, r.w), (3, 34), "solved inside its own margins: {r:?}");
+        assert!(
+            widths.iter().all(|&w| w == r.w),
+            "measured at {widths:?} but solved to {} — the leaf answers for a width it is never drawn at",
+            r.w
+        );
+        assert_eq!(
+            r.h, 3,
+            "70 columns wrap to 3 rows at width 34 (2 at 40): {r:?}"
         );
     }
 

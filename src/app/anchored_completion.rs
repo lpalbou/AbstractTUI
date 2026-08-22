@@ -234,14 +234,38 @@ impl Completion {
         // publishes LAYER-LOCAL (the textarea's own `current_rect`),
         // while the panel places in viewport space — inside a Modal or
         // Drawer the dropdown used to open displaced by the layer's
-        // origin. Refreshed from BOTH capture points: the wrapper's
-        // capture-phase handler (every event routed to the composer,
-        // which is when carets publish) and a draw-time probe (the
-        // ambient origin, for turns that repaint without an event).
-        // Honest edge: a draft whose caret already sits in a trigger
-        // token when the layer FIRST opens anchors at ZERO until the
-        // first event/paint refresh — the next interaction corrects.
-        let composer_origin: Rc<Cell<Point>> = Rc::new(Cell::new(Point::ZERO));
+        // origin. Refreshed from TWO points, and it needs both: the
+        // wrapper's capture-phase handler below, which is same-turn
+        // fresh while the user types, and a DRAW probe on the wrapper,
+        // which is the only source that exists when nobody has typed.
+        //
+        // This comment used to promise that draw probe while the code
+        // had none — which is how the resulting hole read as a
+        // documented edge for a whole cycle. It is real now, and it is
+        // the same probe `Select`, `Combobox` and `MultiSelect` have
+        // always carried (`app::select` and siblings): the ambient
+        // `ui::layer_origin()` is published by the draw pass, so a draw
+        // closure is where a layer-local widget can learn where its
+        // world sits. This was the family member missing it.
+        //
+        // A SIGNAL, not the `Cell` the siblings use, because those
+        // popups open on an EVENT (which always follows a draw) while
+        // this one opens from an effect. The controller below reads it
+        // tracked, so a panel already open when the origin first
+        // arrives — a composer that mounts FOCUSED on a draft and never
+        // receives an event at all — repositions instead of staying
+        // where the unknown origin put it.
+        //
+        // Which costs a discipline the `Cell` did not need: the draw
+        // probe DEFERS its write by a tick (`reactive::after(ZERO)`,
+        // the same shape `UiTree`'s rect publishes and `scroll`'s
+        // size_probe use). A signal write flushes effects synchronously
+        // unless batched, and this controller's effect opens and closes
+        // overlay layers — doing that from inside the draw pass would
+        // mutate the layer store the pass is walking. `seen` is what
+        // makes a steady frame arm nothing at all.
+        let composer_origin: Signal<Point> = cx.signal(Point::ZERO);
+        let seen_origin: Rc<Cell<Point>> = Rc::new(Cell::new(Point::ZERO));
 
         // Accept: replace the token (trigger included) with the pick.
         let accept: Rc<dyn Fn(usize)> = Rc::new({
@@ -373,7 +397,6 @@ impl Completion {
             let triggers = triggers.clone();
             let overlays = overlays.clone();
             let build = build.clone();
-            let composer_origin = composer_origin.clone();
             cx.effect_labeled("completion-controller", move || {
                 let text = state.value().get();
                 let caret = state.caret_byte();
@@ -416,6 +439,9 @@ impl Completion {
                 // Local caret cell -> SCREEN anchor (the PanelAnchor
                 // contract): translate by the composer tree's origin.
                 let cell = cell.expect("checked above");
+                // TRACKED on purpose: when the draw probe below learns
+                // the layer origin after this panel is already open,
+                // this effect re-runs and the open panel moves.
                 let origin = composer_origin.get();
                 let anchor = PanelAnchor::cell(Point::new(cell.x + origin.x, cell.y + origin.y));
                 let mut s = session.borrow_mut();
@@ -475,13 +501,12 @@ impl Completion {
         let handler = {
             let session = session.clone();
             let accept = accept.clone();
-            let composer_origin = composer_origin.clone();
             move |ctx: &mut EventCtx, ev: &UiEvent| {
                 // Refresh the composer's screen origin on EVERY event
                 // routed through the wrapper (capture phase runs
                 // before the textarea publishes its caret, so the
                 // effect's translation below is same-turn fresh).
-                composer_origin.set(ctx.layer_origin());
+                composer_origin.set_if_changed(ctx.layer_origin());
                 let UiEvent::Key(k) = ev else { return };
                 if k.mods != Mods::NONE {
                     return;
@@ -518,6 +543,24 @@ impl Completion {
                     .shrink(0.0),
             )
             .on(Phase::Capture, handler)
+            // The eventless source. Paints nothing: the draw pass is
+            // simply the one place the ambient layer origin is live
+            // (src/ui/draw.rs publishes it), so this is how a composer
+            // that has never been typed into learns which layer it is
+            // on. Unchanged origin = no timer, no write, no effect run.
+            .draw(move |_canvas, _rect| {
+                let o = crate::ui::layer_origin();
+                if seen_origin.get() == o {
+                    return;
+                }
+                seen_origin.set(o);
+                crate::reactive::after(std::time::Duration::ZERO, move || {
+                    // The composer may be gone by the time this lands.
+                    if composer_origin.try_get_untracked().is_some() {
+                        composer_origin.set_if_changed(o);
+                    }
+                });
+            })
             .child(composer)
             .build()
     }

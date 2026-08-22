@@ -7,6 +7,198 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- layout: **a child with MARGINS was measured at a width it is never
+  drawn at.** The placement pass takes a child's own margins out of its
+  cross extent (`cross_avail = content_cross_extent - m_cross_total`);
+  the intrinsic pass did not, so a content-sized leaf was asked for its
+  size at the full content width and then solved narrower. A wrapping
+  leaf therefore answered the row count for the wrong line length —
+  measured: 70 columns of text with `margin: 3` in a 40-wide column is
+  solved to width 34 but reported 2 rows instead of 3, and was drawn a
+  row short. Both intrinsic call sites (children aggregation and the
+  flex basis) now deduct the child's margins first. What this does NOT
+  fix, and cannot: a child sharing a ROW with a fixed sibling is still
+  measured at the full content width, because its flex share is not
+  known until the basis being asked for has been distributed.
+- widgets: **a content-sized `Feed` reports its true height on the
+  first frame.** `Feed` now answers an intrinsic measure during the
+  layout solve, typesetting at the width the solver offers — the same
+  door `MarkdownView` and `CodeView` use. Previously it could only
+  learn its width in paint, so its first solve reported a single-row
+  placeholder and the real height arrived a frame later. Anything
+  sizing itself from that feed saw the placeholder for one frame:
+  `Scroll::new(Feed::new(&state).view(cx))` squashed to a row per item
+  before expanding, a bound `offset_y` clamped against one-row content,
+  and a `follow_tail` pin jumped to the top and back. Apps that worked
+  around the settle — deferring chrome, debouncing the extent, or
+  re-pinning after a rebuild — can drop those workarounds.
+  `FeedState::total_rows` is still published one turn after the solve,
+  so chrome reading it is unchanged.
+- app: **select mode keeps a scrollbar drag when the press follows a
+  pointer move in the same input burst.** With `app::selection`
+  enabled, moving onto a scrollbar strip and pressing without an
+  intervening frame handed the gesture to the text-selection layer
+  instead of the thumb. Affects every drag surface that declares a
+  drag zone inside a reactive region.
+- app: **a mouse release the app never receives no longer strands a
+  selection anchor onto the next drag.** When a release is lost — the
+  pointer released outside the terminal, or `mouse_capture().suspend()`
+  spanning it — the next press now starts a clean gesture instead of
+  the stale one claiming a widget's drag.
+- widgets: **a scrollbar strip with no travel stays selectable.**
+  `List`, `Table` and `FilePicker` claimed the strip as a drag zone
+  whenever a bar was drawn, including viewports too short for the thumb
+  to move. Such a cell could be neither dragged nor selected. All three
+  now claim the strip only when the content actually overflows, as
+  `Scroll` already did.
+- widgets: **`Scroll::follow_tail` keeps a following reader at the tail
+  across a remount.** Content that publishes its height after the solve
+  could drive the pin to the top for a frame before it snapped back.
+  The pin now ignores a single short first arrival when a warm extent
+  was carried in through `extent_signal`.
+- render: **the terminal-scroll optimization requires synchronized
+  output.** `DECSTBM`+`SU` erases rows to the terminal's default
+  background before the repaint lands, which a terminal without DEC 2026
+  can present as a visible flash in the band that changed. The engine
+  now uses the optimization only where a sync bracket can hide it, and
+  emits an ordinary diff elsewhere. The cost is bytes alone — both paths
+  paint the same cells — and the capability probe enables it mid-session
+  on terminals that prove support.
+
+- widgets: **a `TextArea` focused by the turn that mounts it anchored
+  its completion dropdown at the screen origin.** `caret_cell` — the
+  anchor an owner's completion panel places against — was published
+  only from inside event handlers, whose one geometry source is
+  `EventCtx::current_rect`. At mount-time focus (`.autofocus()`, or a
+  composer that mounts already focused) the solver has not run when
+  `FocusIn` arrives, so that rect is `Rect::ZERO`, the anchor read
+  (1, 0), and `AbovePreferred` did exactly the right thing with a false
+  input: the panel opened at the top-left corner of the screen, up to a
+  full viewport away from the composer. Nothing corrected it, because
+  the character that opened the panel is typically consumed by a global
+  action ABOVE the widget, so no consumed key ever republished — and a
+  resize dismisses the panel rather than moving it. The widget now also
+  publishes from its own solved rect (`Element::rect_signal`, 0.4.1), so
+  the first layout pass after mount republishes the anchor and the panel
+  takes `AnchoredPanel`'s pure-move path. Reported from the field
+  against 0.4.0 with a deterministic repro (agora-tui's composer).
+  Resizes are corrected by the same path.
+- app: **a composer inside a `Modal` or `Drawer` anchored its
+  completion dropdown as though its layer sat at (0, 0).** The other
+  half of the entry above, and the half a green suite hid: `caret_cell`
+  is LAYER-LOCAL by contract, so `app::anchored`'s completion controller
+  translates it by the composer's screen origin — which it learned from
+  its capture-phase event handler and from nowhere else. A composer that
+  mounts FOCUSED on a draft already holding a trigger token opens its
+  panel without any event ever reaching the wrapper, so the translation
+  used `Point::ZERO` and the dropdown landed at the layer's offset from
+  the screen, staying there until the user typed. The source claimed a
+  draw-time probe covered this; there was none, and the claim is what
+  made the hole read as a documented edge. There is one now — the same
+  ambient-`layer_origin()` probe `Select`, `Combobox` and `MultiSelect`
+  have always carried, deferred by a tick so the write never lands
+  inside the draw pass, and gated so an unchanged origin costs nothing.
+  Measured through the real frame loop: the panel lands on the row under
+  the composer at its layer's column, and moves to (row 7, column 5)
+  with the probe deleted.
+
+### Changed
+
+- widgets: **an empty content-sized `Feed` no longer reserves a row.**
+  It reported a height of one row even with no items, which was the
+  floor that kept an unmeasured feed from collapsing to zero. With the
+  measure answering truthfully that floor is gone, so an empty feed
+  occupies no rows and a sibling beneath it moves up one. If you relied
+  on the reserved row as spacing, add it explicitly.
+
+## [0.4.1] - 2026-08-22
+
+### Fixed
+
+- widgets: **a disposed element could still publish its solved size.**
+  `scroll::size_probe` — the deferred measurement readback behind
+  `Scroll::extent_signal`, `Scroll::viewport_size_signal` and `List`'s
+  viewport probe — guarded its write by asking whether the SIGNAL was
+  still alive. That is the wrong question whenever the signal OUTLIVES
+  the element, which is the normal shape for a caller-supplied signal
+  re-bound across a rebuild: a pane owns the signal, a child records its
+  size and is disposed before the deferred publish fires, and the dead
+  child's measurement lands on top of the live one's. The reader sees an
+  off-by-one; the cause is a lifetime. The probe now takes the mounting
+  `Scope` and goes inert on its cleanup, so the ELEMENT's liveness
+  decides whether a pending publish happens at all.
+
+- widgets: **remounting a `Scroll` no longer destroys a bound
+  `offset_y`.** A `Scroll` bound to an offset signal over content that
+  measures in two frames (`Feed`, and anything whose height needs a
+  width only `draw` discovers) rewound to the top on remount *and*
+  overwrote the caller's own signal with 0 — reported as a drawer bug,
+  and neither a `Drawer` nor a `PageHost` defect. The first solve
+  publishes a `(w, 1)` placeholder with the cross axis already correct,
+  which is exactly what made it dangerous: the offset repair treated
+  anything that was not the `(0, 0)` sentinel as a real measurement and
+  clamped against a height of 1. The repair now treats the first
+  measurement after the sentinel as provisional and never clamps against
+  it, and the wrapper inset is clamped at RENDER time against the
+  current extent — which is what makes skipping the clamp safe, because
+  a culled child never draws, never discovers its width, and so can
+  never correct the extent it was culled for. A genuine shrink still
+  reclamps and still writes the bound signal.
+- widgets: **`Scroll::extent_signal`'s warm start now actually protects
+  a bound offset.** Its rustdoc promised that a supplied signal's
+  current value is kept until the first solve, so a remounting caller
+  warm-starts from its last measurement; with a caller-bound extent
+  signal it delivered the opposite. There is no `(0, 0)` sentinel in
+  that case, so the warm value itself spent the "first measurement is
+  provisional" exemption and the placeholder solve arrived TRUSTED,
+  clamping the bound offset to 0. A warm value is a remembered
+  measurement, not one this mount took: the repair now captures what the
+  signal held at build time and treats any observation still equal to it
+  as "nothing has arrived yet". Fresh mounts and hint mode are
+  unchanged.
+- app: **select mode no longer steals a widget's drag.** With
+  `app::selection` enabled, pressing a scrollbar thumb and dragging
+  painted a text selection instead of scrolling: the layer claimed the
+  gesture at the first cross-cell drag, and the claim cancels the
+  pressed widget's pointer capture — so the thumb it had just grabbed
+  went dead. Every drag surface in the engine had it: both `Scroll`
+  bars, the `List` / `Table` / `FilePicker` internal bars, and
+  `Viewport3D`'s orbit (a whole interaction mode lost while select mode
+  was on). A press that lands on a drag-owning surface now arms no
+  selection anchor at all, so the Down, the Drag and the Up reach the
+  widget together. The ANCHOR decides: a drag that starts in content and
+  crosses a strip still selects, and a bar that is hidden or has nothing
+  to scroll owns nothing.
+
+### Added
+
+- ui: **`Element::drag_zone`** — declare the sub-rect of an element that
+  owns pointer drags, and the screen-text selection layer stands down
+  over it. A sub-rect rather than a flag because `List`/`Table`/
+  `FilePicker` handle their bar on the same element as their rows: only
+  the strip stands down, every row stays selectable. Return `None` when
+  nothing is grabbable right now — an invisible target must not swallow
+  a selection either. This is what a third-party slider, splitter, or
+  canvas drag needs to survive select mode.
+- ui: **`UiTree::press_probe_at`** → `PressProbe` — the pane that would
+  clamp a selection from a point plus whether a drag zone owns it,
+  resolved in one descent. `pane_rect_at` is now a thin wrapper over it.
+- ui: **`Element::rect_signal`** — an element publishes its own SOLVED
+  rect into a caller-supplied `Signal<Option<Rect>>`, so an app can
+  scroll one of its own children into view without re-deriving the
+  engine's layout arithmetic. The clamp stays in the app (five lines
+  over the rect and the viewport); what was missing was a way to learn
+  where a child landed. Published from the LAYOUT pass, not from paint,
+  and that is the whole point: the child an ensure-visible clamp must
+  locate is by definition the one outside the viewport, which is exactly
+  the one the paint cull skips. `None` means the element solved to ZERO
+  AREA — clean absence rather than a position at the origin, which a
+  clamp would read as "jump to the top". An unmounting element never
+  publishes, so a signal re-bound from one child to another across a
+  rebuild cannot receive the disposed child's rect afterwards.
+
 ## [0.4.0] - 2026-08-21
 
 This release was prepared as `0.3.8` and is published as **0.4.0**: the
@@ -2426,7 +2618,8 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
-[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/lpalbou/abstracttui/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/lpalbou/abstracttui/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/lpalbou/abstracttui/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/lpalbou/abstracttui/compare/v0.3.5...v0.3.6

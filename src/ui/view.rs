@@ -6,6 +6,8 @@
 //! subtree) when the signals it reads change — that is the fine-grained
 //! re-render unit this engine bets on.
 
+use std::rc::Rc;
+
 use crate::base::Rect;
 use crate::layout::Style;
 use crate::reactive::Signal;
@@ -20,6 +22,13 @@ use super::event::{EventCtx, KeyChord, Phase, UiEvent};
 /// Receives the styled canvas so widgets can emphasize (bold, reverse,
 /// links); plain `Canvas` methods remain available through the supertrait.
 pub type DrawFn = Box<dyn FnMut(&mut dyn StyledCanvas, Rect)>;
+
+/// Drag-zone callback: given the element's solved rect, the sub-rect
+/// that owns pointer drags (see [`Element::drag_zone`]). `Rc` + `Fn`
+/// rather than the boxed `FnMut` the draw path uses: the hit test clones
+/// the handle OUT of the tree borrow before calling it, so user code
+/// never runs while the core is borrowed.
+pub type DragZoneFn = Rc<dyn Fn(Rect) -> Option<Rect>>;
 
 /// Event handler attached to an element for a given phase.
 pub type HandlerFn = Box<dyn FnMut(&mut EventCtx, &UiEvent)>;
@@ -101,6 +110,8 @@ pub struct Element {
     /// widgets): consulted when an `Auto` axis needs a content size,
     /// exactly like a text leaf's measurement. See [`Element::measure`].
     pub(crate) measure: Option<crate::layout::MeasureFn>,
+    /// Sub-rect that owns pointer drags — see [`Element::drag_zone`].
+    pub(crate) drag_zone: Option<DragZoneFn>,
     pub(crate) draw: Option<DrawFn>,
     pub(crate) handlers: Vec<Handler>,
     pub(crate) shortcuts: Vec<Shortcut>,
@@ -116,6 +127,14 @@ pub struct Element {
     /// Draw even when culled (measurement probes) — see
     /// [`Element::probe_when_culled`].
     pub(crate) probe_when_culled: bool,
+    /// Publish this element's SOLVED rect into a caller-owned signal —
+    /// see [`Element::rect_signal`]. BOXED although the handle is 12
+    /// bytes and `Copy`: `Element` is the big arm of `ViewNode`, which
+    /// every blueprint node pays for by value, and it sat one field
+    /// short of clippy's variant-size gap. One allocation, only for the
+    /// handful of elements that bind a rect (one per pane), keeps the
+    /// node the whole tree is built out of the size it already was.
+    pub(crate) rect_sig: Option<Box<Signal<Option<Rect>>>>,
     /// PROTECTED minimum padding (per-side max), applied at mount and
     /// on every style_signal update — chrome insets (a Block's border
     /// room) that a later user `.style(..)` must NOT clobber (RT8-7).
@@ -133,6 +152,7 @@ impl Element {
             style: Style::default(),
             style_fn: None,
             measure: None,
+            drag_zone: None,
             draw: None,
             handlers: Vec::new(),
             shortcuts: Vec::new(),
@@ -141,6 +161,7 @@ impl Element {
             focus_memory: false,
             autofocus: false,
             probe_when_culled: false,
+            rect_sig: None,
             padding_floor: None,
             access: super::access::AccessProps::default(),
             children: Vec::new(),
@@ -182,6 +203,45 @@ impl Element {
         self
     }
 
+    /// Publish this element's SOLVED rect into `sig` — the read seam a
+    /// caller needs to scroll one of its own children into view without
+    /// re-deriving layout arithmetic (field-agora 0910).
+    ///
+    /// The rect is the one the solver produced, in the same space as
+    /// [`UiTree::rect_of`](super::UiTree::rect_of) (layer-local, already
+    /// displaced by any scroll offset in force). It is written from the
+    /// LAYOUT phase, not from paint, and that is the whole point: the
+    /// child an ensure-visible clamp must locate is BY DEFINITION the
+    /// one outside the viewport, and `draw.rs` culls exactly those — a
+    /// paint-time probe on it never fires. Culling is a paint
+    /// optimization; the rect exists and is truthful either way.
+    ///
+    /// `None` means the element solved to ZERO AREA. That is not a
+    /// position, and it is a state a rect binding must not launder into
+    /// one: a collapsed child publishing `0x0` as a `Rect` would clamp a
+    /// consumer's viewport to the origin, which reads as "the list
+    /// jumped to the top" rather than as "that child collapsed". A
+    /// zero-area node also falls THROUGH the paint cull (an empty rect
+    /// intersects nothing) and is painted as clean absence, so it is
+    /// genuinely invisible while still being laid out.
+    ///
+    /// **An unmounting element never publishes.** The signal belongs to
+    /// the caller and outlives every element it is re-bound to — a pane
+    /// binding one signal to whichever card is selected is the
+    /// motivating case — so signal liveness cannot answer the question;
+    /// the ELEMENT's scope does. Rebinding across a rebuild therefore
+    /// cannot deliver the disposed element's rect after the new one's
+    /// (`size_probe` carries the same guarantee, and it did not always:
+    /// see `tests/scroll_remount_offset.rs`).
+    ///
+    /// One publish per changed value, deferred one tick past the solve
+    /// that produced it (the layout pass holds the tree borrow), and
+    /// coalesced: an unchanged rect schedules nothing.
+    pub fn rect_signal(mut self, sig: Signal<Option<Rect>>) -> Element {
+        self.rect_sig = Some(Box::new(sig));
+        self
+    }
+
     /// Intrinsic content size for `Auto`-sized axes: given the available
     /// box, report the desired size — the same contract text leaves
     /// fulfil through `text::measure`. Must be pure (called repeatedly
@@ -198,6 +258,36 @@ impl Element {
         f: impl Fn(crate::base::Size) -> crate::base::Size + 'static,
     ) -> Element {
         self.measure = Some(Box::new(f));
+        self
+    }
+
+    /// The sub-rect of this element's solved rect that OWNS pointer
+    /// drags — a scrollbar strip, a splitter, a 3D orbit surface.
+    ///
+    /// The screen-text selection layer (`app::selection`) stands down
+    /// over it: a press that lands inside the zone arms no selection
+    /// anchor, so the whole gesture stays with the widget instead of
+    /// becoming a highlight. Without this the layer claims every drag
+    /// it sees, and claiming cancels the pressed widget's pointer
+    /// capture — which is exactly how a thumb drag turned into a text
+    /// selection with select mode on.
+    ///
+    /// A SUB-rect, not the whole element, because widgets that draw
+    /// their own scrollbar (`List`, `Table`, `FilePicker`) handle it on
+    /// the same element as their rows: only the strip may stand down,
+    /// or the rows would stop being selectable.
+    ///
+    /// Return `None` when nothing is grabbable at this moment — a bar
+    /// with no overflow, an auto-hidden strip. An invisible target must
+    /// not steer the offset (widgets already refuse), and it must not
+    /// swallow a selection either.
+    ///
+    /// `f` is called with the element's solved rect, at most once per
+    /// press, and must be pure over that geometry (the same contract
+    /// [`Element::measure`] carries). Reads of reactive state inside it
+    /// should be untracked: this is a hit test, not a render.
+    pub fn drag_zone(mut self, f: impl Fn(Rect) -> Option<Rect> + 'static) -> Element {
+        self.drag_zone = Some(Rc::new(f));
         self
     }
 

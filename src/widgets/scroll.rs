@@ -228,6 +228,22 @@ impl Scroll {
     /// read it for "N more rows" chrome or height-capped wrappers
     /// (`Disclosure::max_body_rows` sizes its body region from it);
     /// writing it yourself desynchronizes clamps and the thumb.
+    ///
+    /// One caveat the warm start does NOT cover, so chrome reading this
+    /// signal is not surprised by it: content that sizes itself from a
+    /// LATER pass rather than from the solve publishes twice, and the
+    /// first value is a placeholder that overwrites the warm one for a
+    /// turn. `Disclosure` does this by construction — it sizes its body
+    /// region from a nested `Scroll`'s own extent, which lands a turn
+    /// after the solve — and any app widget that publishes its height
+    /// from a draw closure joins the same class. The engine's content
+    /// widgets do not: `Feed`, `MarkdownView` and `CodeView` all answer
+    /// an intrinsic measure during the solve.
+    ///
+    /// Bound offsets are protected from a placeholder (field-agora/0895
+    /// for the clamp, and the follow-tail pin carries the same guard); a
+    /// reader rendering "N more rows" straight off this signal is not.
+    /// Debounce it, or drive that chrome off a settled copy.
     pub fn extent_signal(mut self, sig: Signal<(i32, i32)>) -> Scroll {
         self.extent_out = Some(sig);
         self
@@ -363,17 +379,41 @@ impl Scroll {
                 && follow.map(|f| f.get()).unwrap_or(false)
                 && oy.get() > 0
                 && !follow_frozen_signal().get();
+            // RENDER-side clamp (field-agora/0895). The repair effect
+            // below owns the app's signal and is deliberately slow to
+            // write it; this owns where the content is DRAWN and is
+            // always immediate. They are not redundant: an offset past
+            // the end must never park the content outside the clip,
+            // because a culled child never draws, a `Feed` that never
+            // draws never discovers its width, and a width it never
+            // discovers is an extent it never corrects. The pane would
+            // stay void forever waiting for a measurement that can only
+            // happen if it is visible. Clamping the inset breaks that
+            // deadlock without touching the caller's signal.
+            let (content_w, content_h) = extent.get();
+            let (view_w, view_h) = view_box.get();
+            // The unmeasured sentinel is exempt: a restored offset must
+            // not flash at the top for one frame before the first solve.
+            let unmeasured = hint.is_none() && content_w == 0 && content_h == 0;
+            let draw_at = |off: i32, content: i32, view: i32, on: bool| {
+                if unmeasured || !on || view <= 0 {
+                    off
+                } else {
+                    off.clamp(0, (content - view).max(0))
+                }
+            };
+            let left = -draw_at(ox.get(), content_w, view_w, horizontal);
             let inset = if tail_pinned {
                 Inset {
-                    left: Some(-ox.get()),
+                    left: Some(left),
                     top: None,
                     right: None,
                     bottom: Some(0),
                 }
             } else {
                 Inset {
-                    left: Some(-ox.get()),
-                    top: Some(-oy.get()),
+                    left: Some(left),
+                    top: Some(-draw_at(oy.get(), content_h, view_h, vertical)),
                     right: None,
                     bottom: None,
                 }
@@ -396,7 +436,7 @@ impl Scroll {
             // above the viewport, where a culled probe would starve —
             // the extent would freeze at the pre-shrink value and the
             // offset repair below could never see the shrink.
-            wrapper = wrapper.draw(size_probe(extent)).probe_when_culled();
+            wrapper = wrapper.draw(size_probe(cx, extent)).probe_when_culled();
         }
         let wrapper = wrapper.child(self.content);
 
@@ -414,7 +454,7 @@ impl Scroll {
             // The viewport box feeds the follow pin AND the offset
             // repair (0281), so the probe is unconditional now. Steady
             // frames record an unchanged size and schedule nothing.
-            .draw(size_probe(view_box));
+            .draw(size_probe(cx, view_box));
 
         if let Some(out) = viewport_out {
             cx.effect(move || {
@@ -428,6 +468,29 @@ impl Scroll {
         // cycle — and only GESTURES write `follow` from geometry, so a
         // programmatic offset write never disengages the user.
         if let Some(f) = follow {
+            // The SAME provisional exemption the offset repair below
+            // carries (field-agora/0895), and for the same reason: the
+            // pin must not act on a first arrival that turns out to be a
+            // placeholder.
+            //
+            // Content that publishes its height from a pass LATER than
+            // the solve arrives twice, and the first arrival looks real —
+            // cross axis already correct, scroll axis a stand-in. A pin
+            // that trusted it computed `(placeholder - view_h).max(0)`,
+            // drove a following reader to the TOP, and snapped back when
+            // the truth landed a turn later.
+            //
+            // The engine's own content widgets measure during the solve
+            // and never enter this state. `Disclosure` does, and so does
+            // any app widget that sizes itself from a draw closure
+            // through `extent_signal` — a public API, so this guard
+            // protects a CLASS and not one widget. Keep it even when no
+            // in-tree widget exercises it.
+            // Whatever the extent signal held when this Scroll was built:
+            // the `(0, 0)` sentinel on a fresh mount, or the WARM value a
+            // remounting caller carried over through `extent_signal`.
+            let warm = extent.get_untracked();
+            let pin_swallowed_placeholder = Cell::new(false);
             cx.effect(move || {
                 if !f.get() {
                     return; // extent/view re-track when re-armed
@@ -442,6 +505,29 @@ impl Scroll {
                 }
                 let content_h = extent.get().1;
                 let view_h = view_box.get().1;
+                // The placeholder swallow. Narrower than the repair's
+                // exemption by design: the repair only CLAMPS, so it can
+                // afford to sit out every first measurement, while the
+                // pin ACTS and sitting out a fresh mount's first real
+                // extent would simply lose the initial pin.
+                //
+                // So swallow exactly once, and only where the evidence
+                // says placeholder: we started from a WARM extent (a
+                // remount — a fresh mount holds the `(0,0)` sentinel and
+                // has no reader position to protect) and the arrival is
+                // SHORTER than it. Two-step content publishes `(w, 1)`
+                // before its real row count, and pinning to that drove a
+                // following scroller to the top for a frame, then snapped
+                // it back when the truth landed. Returning here leaves
+                // `oy` where the app had it — the 0895 protection keeps
+                // it honest — so the reader simply does not move.
+                if hint.is_none()
+                    && warm.1 > 0
+                    && content_h < warm.1
+                    && !pin_swallowed_placeholder.replace(true)
+                {
+                    return;
+                }
                 if view_h > 0 {
                     let pinned = (content_h - view_h).max(0);
                     if oy.try_get_untracked() != Some(pinned) {
@@ -462,14 +548,60 @@ impl Scroll {
         // a gesture, so it neither disengages nor arms the follow —
         // and while following, the pin above computes the same value,
         // so the two effects can never fight.
+        // The FIRST measurement to ARRIVE after mount is provisional
+        // (field-agora/0895) — see the effect below. Hint mode has no
+        // measurement at all, so it is trusted from the first run.
+        //
+        // `at_build` is whatever the extent signal already held when
+        // this Scroll was constructed. On a fresh mount that is the
+        // (0,0) sentinel; with a caller-bound `extent_signal` it is the
+        // WARM value carried over from the previous mount. Neither is a
+        // measurement THIS mount took, so observing one must not spend
+        // the provisional exemption below — a warm extent doing exactly
+        // that is the whole of the warm-start bug.
+        let at_build = extent.get_untracked();
+        let measured_once = Cell::new(hint.is_some());
         cx.effect(move || {
             let (content_w, content_h) = extent.get();
             let (view_w, view_h) = view_box.get();
-            if hint.is_none() && content_w == 0 && content_h == 0 {
-                // Measured mode before the first measurement: (0,0) is
-                // the unmeasured sentinel (a real solve gives the
-                // cross axis the viewport's extent). Clamping against
-                // it would destroy a restored offset at startup.
+            if hint.is_none() && (content_w, content_h) == at_build {
+                // Nothing has arrived yet this mount. The fresh-mount
+                // spelling is the (0,0) unmeasured sentinel (a real
+                // solve gives the cross axis the viewport's extent);
+                // the warm spelling is a remembered extent a remounting
+                // caller supplied through `extent_signal`. Clamping
+                // against either would destroy a restored or
+                // carried-over offset before one solve has run.
+                return;
+            }
+            if !measured_once.replace(true) {
+                // field-agora/0895: (0,0) is not the only untrustworthy
+                // extent. Content that publishes its height from a pass
+                // LATER than the solve arrives twice, and the first
+                // arrival is a stand-in that looks real — cross axis
+                // already correct, scroll axis a placeholder — so the
+                // clamp below computed max_off = 0 and wrote the app's
+                // bound offset to zero. A remounted reader was rewound
+                // to the top and its state destroyed, every time.
+                //
+                // `Feed` was the widget that exposed this: it typeset
+                // from a width it only learned inside DRAW. It now
+                // measures during the solve and publishes once, so the
+                // remaining members of the class are `Disclosure` (which
+                // sizes from a nested extent) and app widgets that
+                // publish from a draw closure through the public
+                // `extent_signal`. The guard stays: it protects the
+                // class, not the widget that revealed it.
+                //
+                // So the first measurement only establishes that we HAVE
+                // one; it never clamps. Every later change is trusted,
+                // which is where a genuine shrink (0281) lands. The
+                // narrow, deliberate gap: an offset restored beyond a
+                // content extent that never changes again stays out of
+                // range until the next extent or viewport change. That
+                // is strictly better than destroying a valid offset on
+                // every remount, and unlike a deferred re-check it costs
+                // no frame and cannot race the publisher's own fixup.
                 return;
             }
             if vertical && view_h > 0 {
@@ -580,10 +712,13 @@ impl Scroll {
         // The gesture is stateful on purpose: `Down` REMEMBERS where
         // inside the thumb the pointer grabbed and moves nothing; only
         // `Drag` scrolls, and only while that grab is live. A bare
-        // `Drag` with no grab (the driver drops a tree's capture when a
-        // press becomes a screen-text selection, and terminals emit
-        // motion-with-button after a lost `Up`) is somebody else's
-        // gesture and must never teleport the offset.
+        // `Drag` with no grab (terminals emit motion-with-button after a
+        // lost `Up`) is somebody else's gesture and must never teleport
+        // the offset. Screen select mode used to produce that state
+        // here too — the layer claimed the drag and the driver dropped
+        // this tree's capture with it — until the strip declared itself
+        // a `drag_zone` below (first-app/1335) and the layer learned to
+        // stand down over one.
         //
         // Under `scrollbar_auto_hide`, a fitting content hides the bar:
         // the strip paints bare ground (deterministic pixels — skipping
@@ -680,6 +815,20 @@ impl Scroll {
                             _ => {}
                         }
                     })
+                    // The strip owns left drags (first-app/1335): screen
+                    // select mode stands down here, so the thumb keeps the
+                    // gesture instead of losing its capture to a
+                    // highlight. Exactly the conditions the handler above
+                    // uses to decide it is inert — an invisible or
+                    // non-overflowing bar claims nothing.
+                    .drag_zone(move |rect| {
+                        if rect.is_empty() || (auto_hide && content_h <= rect.h) {
+                            return None;
+                        }
+                        scrollbar::metrics(rect, rect.w, offset, content_h)
+                            .overflows()
+                            .then_some(rect)
+                    })
                     .draw(move |canvas, rect| {
                         if rect.is_empty() {
                             return;
@@ -714,9 +863,19 @@ impl Scroll {
 /// next turn — paint itself never writes signals (the Feed width-fixup
 /// pattern). Steady frames record an unchanged size and schedule
 /// nothing, so an idle scroll costs zero timers.
-pub(crate) fn size_probe(sig: Signal<(i32, i32)>) -> impl FnMut(&mut dyn StyledCanvas, Rect) {
+pub(crate) fn size_probe(
+    cx: Scope,
+    sig: Signal<(i32, i32)>,
+) -> impl FnMut(&mut dyn StyledCanvas, Rect) {
     let seen: Rc<Cell<(i32, i32)>> = Rc::new(Cell::new((-1, -1)));
     let pending: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+    // Liveness of the ELEMENT, which is not what signal liveness answers.
+    // See the note on the deferred publish below (field-agora 0910).
+    let alive: Rc<Cell<bool>> = Rc::new(Cell::new(true));
+    {
+        let alive = alive.clone();
+        cx.on_cleanup(move || alive.set(false));
+    }
     move |_canvas, rect| {
         let size = (rect.w, rect.h);
         if seen.get() == size {
@@ -726,12 +885,24 @@ pub(crate) fn size_probe(sig: Signal<(i32, i32)>) -> impl FnMut(&mut dyn StyledC
         if pending.replace(true) {
             return; // one deferred publish at a time; it reads `seen` late
         }
-        let (seen, pending) = (seen.clone(), pending.clone());
+        let (seen, pending, alive) = (seen.clone(), pending.clone(), alive.clone());
         crate::reactive::after(std::time::Duration::ZERO, move || {
             pending.set(false);
-            // A disposed UI scope leaves the signal dead: stay inert
-            // (an outliving timer must never panic the app).
-            if sig.try_get_untracked().is_some() {
+            // TWO liveness questions, and they are not the same one.
+            //
+            // `sig` alive keeps an outliving timer from panicking. But the
+            // signal is routinely owned by a scope that OUTLIVES this element
+            // — a pane binding one signal and re-binding it to whichever child
+            // is selected is the motivating case (field-agora 0910). There the
+            // signal is alive, this element is gone, and publishing writes a
+            // corpse's rect over the live child's. The reader sees an
+            // off-by-one; the cause is a lifetime.
+            //
+            // So: the ELEMENT's scope decides whether to publish at all.
+            // Measured, not assumed — `a_publish_scheduled_before_disposal_
+            // does_not_land_after_it` in tests/scroll_remount_offset.rs fails
+            // without this line.
+            if alive.get() && sig.try_get_untracked().is_some() {
                 sig.set_if_changed(seen.get());
             }
         });
@@ -747,3 +918,28 @@ mod tests;
 #[cfg(test)]
 #[path = "scroll_extent_tests.rs"]
 mod extent_tests;
+
+// field-agora 0910: why a child-offset readback cannot be built
+// app-side (the cull) and can be built engine-side (the exemption).
+#[cfg(test)]
+#[path = "scroll_child_probe_tests.rs"]
+mod child_probe_tests;
+
+// field-agora 0910, slice 2: the rect readback is already public
+// (`UiTree::rect_of`, cull-immune); child IDENTITY is what is missing.
+#[cfg(test)]
+#[path = "scroll_child_identity_tests.rs"]
+mod child_identity_tests;
+
+// field-agora 0910, slice 3: the focus-driven case needs NO new engine
+// API — and the engine does not apply the clamp for you, which is the
+// gap that keeps the item open.
+#[cfg(test)]
+#[path = "scroll_ensure_visible_tests.rs"]
+mod ensure_visible_tests;
+
+// field-agora 0910, slice 5: `Element::rect_signal` — the read seam the
+// consumer picked, published from LAYOUT so a culled child answers.
+#[cfg(test)]
+#[path = "scroll_rect_signal_tests.rs"]
+mod rect_signal_tests;

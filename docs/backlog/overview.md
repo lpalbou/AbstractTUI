@@ -1,7 +1,7 @@
 # AbstractTUI backlog — overview
 
 Planning memory for AbstractTUI (the Rust terminal-UI engine, published as
-`abstracttui` — 0.4.0 as of 2026-08-21). The engine itself is complete and
+`abstracttui` — 0.4.1 as of 2026-08-22). The engine itself is complete and
 shipped — content widgets (Feed/TextArea/MarkdownView + the doc vocabulary),
 app-shell chrome (PageHost, Drawer, ChoicePrompt, ThemeSwitcher), the
 live-data lane with connection lifecycle, key-state/PTT, attachments, the
@@ -34,7 +34,7 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | --- | --- |
 | Planned | 5 |
 | Proposed | 84 |
-| Completed | 74 |
+| Completed | 75 |
 | Deprecated | 0 |
 | Recurrent | 0 |
 
@@ -45,6 +45,10 @@ continues at 1250, see the bands note below.)
 (Count reconciliation 2026-08-20, during the layout-honesty wave: the
 table had drifted from the directory across several waves and now
 matches a file count again. The directory is the truth.)
+
+(2026-08-21, drag-ownership wave: +1 completed — first-app/1335, filed
+directly in completed/ per the same-wave precedent. The first-app
+continuation band is now 1300/1310/1320/1330/1331/1335.)
 
 Counting rule: `NNNN_*.md` files on disk under each lifecycle directory
 (topic subfolders included). The completed ledger below additionally
@@ -90,14 +94,14 @@ field-gateway continues at 1000–1050, field-core owns 1100–1190,
 | live-data | `planned/live-data/`, `proposed/live-data/` | Mixed | Network-driven reactivity: async-source→signal binding, bounded ingestion, reconnect, the transport decision, and the read-only watcher milestone. |
 | app-widgets | `planned/app-widgets/`, `proposed/app-widgets/` | Mixed | The content-widget layer real apps need (feed/transcript, streaming markdown, multiline composer, follow-tail scroll, lexers) + the API-stability and platform-accuracy passes — now also home to the wave-12 measure/crush findings (0135/0175/0185). |
 | ports | `planned/ports/`, `proposed/ports/` | Mixed | The application epics that consume both tracks: a coding-agent console, an a2a chat TUI, and the gateway configuration wizard (0215, planned — validator app #2). |
-| first-app | `proposed/first-app/`, `completed/first-app/` | Mixed | Bug/footgun reports from the first shipped application (`abstractcode-tui`, 2026-07-21): reproduced engine defects with field workarounds to delete. 30 completed, 4 open. Band 0220–0299 full; continues at 1300–1340. |
+| first-app | `proposed/first-app/`, `completed/first-app/` | Mixed | Bug/footgun reports from the first shipped application (`abstractcode-tui`, 2026-07-21): reproduced engine defects with field workarounds to delete. 31 completed, 4 open. Band 0220–0299 full; continues at 1300–1340. |
 | control-plane | `proposed/control-plane/`, `completed/control-plane/` | Mixed | Making running apps observable and drivable from outside their own keyboard: lifecycle events, an automation bus + opt-in JSONL control server (MCP-bridgeable), declared-keys persistence with crash-resume, headless serve with attach/detach — plus the shipped observe primitives (0370 screenshots; 0380 files the damage-visualizer knob). |
 | extensions | `proposed/extensions/`, `completed/extensions/` | Mixed | Modularity architecture (ADR-0004, executed: the `abstracttui-*` sibling family is live) and the diagram-class capability lane: canvas layer (0420) + graph view (0440) + mermaid subset (0450) SHIPPED; editor (0430), reader enablement (0460), link seam (0480) and the wave-12 polish items (0445/0455) remain. |
 | app-kits | `proposed/app-kits/`, `completed/app-kits/` | Mixed | The application-kit layer over the content widgets: anchored-popup substrate + choice controls (0500/0515 shipped), PageHost (0545), Drawer (0585), double-click (0535), theme switcher (0595), panel ✕ (0605) — form kit, wizard, tables, chips, nav, tree, split panes remain, with the field-gateway track as their live evidence. |
 | media-av | `proposed/media-av/`, `completed/media-av/` | Mixed | Voice/AV UI plumbing (PTT contract, meters/scope, speaking highlight, external-process pattern) + image-path follow-ups from the study-2 truth audit. |
 | games | `proposed/games/`, `completed/games/` | Mixed | Retro-games feasibility band: key press/release state SHIPPED (0700); tick/sprites/board-grid remain. |
 | field-gateway | `proposed/field-gateway/` | Proposed | Bug/footgun reports from the second-wave validator build (`abstractgateway/console-tui`, the 0215 gateway config wizard): 15 open items — the form/wizard/table field evidence for app-kits 0510/0520/0530. Band 0900–0990, overflow 1000–1050. |
-| field-agora | `proposed/field-agora/` | Mixed | Bug/footgun reports from the second-wave validator build (`agora-tui`, the 0060 read-only multi-channel hub watcher): 14 open, 1 completed (0850) — the first networked field evidence for live-data 0010/0020/0040 and the 0050 transport ADR. Band 0800–0890, overflow 0895–0910. |
+| field-agora | `proposed/field-agora/` | Mixed | Bug/footgun reports from the second-wave validator build (`agora-tui`, the 0060 read-only multi-channel hub watcher): 11 open, 4 completed (0840, 0850, 0890, 0895) — the first networked field evidence for live-data 0010/0020/0040 and the 0050 transport ADR. Band 0800–0890, overflow 0895–0910. |
 | field-core | `proposed/field-core/` | Proposed | Feedback band for the third-wave validator (`abstractcore-console`, launched 2026-07-25 on 0.2.22). Band 1100–1190. Empty at this count — findings expected as that build proceeds. |
 | wave11 | `proposed/wave11/` | Proposed | Maintenance items from the wave-11 adversarial quality audit: one item (0990 file-size budget reconciliation — 12 splits done in wave 12, 15 files still >600 lines re-counted 2026-07-25). |
 
@@ -128,6 +132,7 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0110 | `md::StreamSession` (open-block-only re-parse, equivalence-pinned) | completed/app-widgets/ |
 | 0270 | Text selection + clipboard copy (all three tiers: bypass docs, mouse-capture suspend verb, screen-text selection + OSC 52) — completed 2026-07-22 | completed/first-app/ |
 | 0290 | UX footgun fixed: every selection copy ENDS the gesture (release-copy and mid-drag Enter/`c`/Ctrl+C clear the region with the copy) — post-copy keys reach the app immediately — completed 2026-07-22 | completed/first-app/ |
+| 1335 | Select mode steals the drag from every widget that owns one — a press on a scrollbar thumb became a text selection (the selection layer's claim cancels the pressed widget's pointer capture); all five engine drag surfaces affected, including `Viewport3D`'s orbit. New declarative seam `Element::drag_zone` + `UiTree::press_probe_at`: a press inside a declared zone arms no anchor, so the gesture reaches the widget whole — completed 2026-08-21 | completed/first-app/ |
 | 0452 | Mermaid: the subset people actually write — edge chaining, infix labels, `&` cross products, the arrow vocabulary, ten node shapes, `subgraph` flattened with a named notice, and sequence control flow (`alt`/`else`/`opt`/`loop`/`par` frames + activation bars, depth-capped); plus ```mermaid fences rendered INSIDE markdown documents through the new core `widgets::FenceBlock` seam — completed 2026-08-21 | completed/extensions/ |
 | 0480 | Core seam `StyledCanvas::register_link` — a draw closure can mint the hyperlink id `Style::link` takes; defaults to `0`, so every existing canvas compiles unchanged — completed 2026-08-21 | completed/extensions/ |
 | 0455 | mermaid fallback live-link: an OSC-8 hyperlink where the terminal has one, a wrapped (never mid-URL ellipsis) URL where it does not — completed 2026-08-21 | completed/extensions/ |
@@ -183,6 +188,8 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0271 | ChoicePrompt approval-gate adoption gaps: `body_width`, `dismiss_label`, `handle.retire()` — completed 2026-07-23 | completed/first-app/ |
 | 0260 | Disclosure card widget — fold/unfold title row, capped body with scrollbar (`widgets::Disclosure`) — completed 2026-07-24 | completed/first-app/ |
 | 0850 | Feed message-card enablers — `Feed::on_item_press` + `item_at_row`, `Scroll::extent_signal`/`scrollbar_auto_hide`, the documented card recipe — completed 2026-07-24 | completed/field-agora/ |
+| 0895 | Bound `Scroll::offset_y(Signal)` ignored inside Drawer pages — the cause was `Feed` × `Scroll` across a REMOUNT, not the Drawer: the provisional first measurement was trusted and clamped the restored offset to 0 (`335aea1`), plus the caller-bound `extent_signal` warm start that the same one-shot exemption defeated (`862525c`) — completed 2026-08-21 | completed/field-agora/ |
+| 0890 | Disclosure capped body under-measures rich feed items — does NOT reproduce on 0.4.0; closed by evidence and pinned by `tests/wave_disclosure.rs` so it stays closed (`fc0e2ac`) — completed 2026-08-21 | completed/field-agora/ |
 | 0585 | Global drawer system — `app::Drawer` edge-anchored overlay panels hosting full pages + the `animate` mid-flight disposal guard — completed 2026-07-24 | completed/app-kits/ |
 | 0535 | Double-click: engine click-chain synthesis (`EventCtx::click_count()`) + `Table::on_activate` — completed 2026-07-24 | completed/app-kits/ |
 | 0370 | Screenshot capture + exporters: `render::Screenshot` (deterministic `to_text`, replayable `to_ansi`, GitHub-renderable `to_svg`); three capture surfaces (driver, `app::request_screenshot`, testing rig); labeled protocol-image veils — completed 2026-07-24 (ledger row added 2026-07-25) | completed/control-plane/ |
@@ -201,6 +208,7 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0050 | Transport story: HTTP/WebSocket/TLS dependency decision (ADR) | live-data | Decide only after the watcher's evidence (0060 — agora-tui now EXISTS and field-agora holds its findings; the ADR should fold them). 0040 shipped meanwhile — the dial-fn seam is where the transport plugs in. |
 | 0135 | Scroll over a measureless PLAIN element tree collapses to a bar-only strip — the REMAINDER after ADR-0005 fixed the content views (wave-12 §2) | app-widgets | The fix-or-document ruling (code seat accepted the lane); or the 0185 solver investigation touching the same seam. |
 | 0140 | Stateful cross-line lexers (python/js/toml) — diff lexer SHIPPED 2026-07-22; JSON/YAML lexers SHIPPED with the ADR-0005 wave; stateful seam + language presets remain | app-widgets | A consumer needing real language tinting; the stateful-seam design note in the item gates python. |
+| 0155 | `TreeCore::focus_memory` never sheds an unmounted container — one dead entry per `Dyn` rebuild, measured at 20/20 with an `#[ignore]`d test that goes green under a two-line prune | app-widgets | None needed — the fix is two lines in `remove_subtree`'s existing drain loop and the failing test is already written. Engine-core finding parked in this band because no engine-core band exists (the item names that ledger gap). |
 | 0160 | Content selection + copy — screen-level v1 SHIPPED via 0270; remaining scope = logical widget-content mapping (copy markdown source, unwrap soft-wraps) shared with 0148 | app-widgets | A consumer needing source-text copy (screen-text copy ships today). |
 | 0165 | Hyperlink/reference hit-testing through the event path | app-widgets | A dogfood app reaching its "activate a reference" phase. |
 | 0170 | 1.0-track API stability pass — PARTIALLY EXECUTED: ADRs 0001-0003 + `#[non_exhaustive]` on Capabilities/GraphicsCaps; the full 1.0 audit stays open | app-widgets | The remaining audit rides the 0.3 window (budget doc: planned/0002). |
@@ -266,8 +274,6 @@ the build / P2 cost real time, workaround holds / P3 paper cut.
 | field-agora | 0870 | FeedItem headline single-row/nowrap mode | capability gap | P3 |
 | field-agora | 0880 | FeedItem body max-measure for wide terminals | capability gap | P3 |
 | field-agora | 0885 | Disclosure title needs a rich-span slot (folded cards lose identity color) | capability gap | P2 |
-| field-agora | 0890 | Disclosure capped body under-measures rich feed items (rows clip) | bug | P2 |
-| field-agora | 0895 | Bound `Scroll::offset_y(Signal)` ignored inside Drawer pages | bug | P1 |
 | field-agora | 0900 | Completion panel occludes the row above a bottom-docked composer | API gap | P2 |
 | field-agora | 0905 | Drawer needs vertical insets so docked chrome stays visible | API gap | P3 |
 | field-agora | 0910 | Scroll of widgets: no ensure-visible / child-offset verb | API gap | P2 |
@@ -310,15 +316,16 @@ completed/.)
    the content-view half (MarkdownView/CodeView intrinsic measure) —
    the pattern to extend. Precondition on all three: failing-test pins
    first.
-2. **The two field P1s** — field-gateway 1000 (dead-keys window on
+2. **The field P1** — field-gateway 1000 (dead-keys window on
    async-mounting modals: silent, looks like a wedge, cost a night
-   hour to diagnose; the ask is a structural focus fallback) and
-   field-agora 0895 (bound `Scroll::offset_y` dead inside Drawer
-   pages: keyboard-first drawer pages — the 0.2.12 headline use case —
-   re-derive windowing by hand). Both verified still open 2026-07-25.
+   hour to diagnose; the ask is a structural focus fallback). Verified
+   still open 2026-07-25. (field-agora 0895 was the other one and is
+   CLOSED 2026-08-21 — its cause was `Feed` × `Scroll` across a
+   remount, not the Drawer.)
 3. **The P2 field cluster that feeds app-kits** — field-agora
-   0885/0890/0900/0910 (Disclosure rich titles + capped-body measure,
-   completion-panel reserved rows, ensure-visible) and field-gateway
+   0885/0900/0910 (Disclosure rich titles, completion-panel reserved
+   rows, ensure-visible; 0890's capped-body measure closed
+   2026-08-21 — does not reproduce on 0.4.0) and field-gateway
    0900/0905/0910/0930/0945/0960/0970 — these are simultaneously bug
    fixes AND the live evidence 0510/0520/0530 build on. Verified still
    open 2026-07-25 (no title_rich/margin_rows/inset/ensure-visible
@@ -357,10 +364,12 @@ completed/.)
 - **The wave-12 measure family is one investigation**: 0185 (solver
   measure/shrink) is the trunk; 0175's order-dependence half and
   0135's plain-tree half hang off the same seam — pin failing tests
-  first, fix once, re-verify all three plus field-agora 0860/0890
-  (the same class seen from the field). The ADR-0005 wave's
-  content-view fix (intrinsic measure + `basis(Cells(0))`) is the
-  established pattern.
+  first, fix once, re-verify all three plus field-agora 0860 (the same
+  class seen from the field; 0890 was in this family and closed
+  2026-08-21 — it no longer reproduces, and `tests/wave_disclosure.rs`
+  now pins the capped-rich-body case for whatever this investigation
+  changes). The ADR-0005 wave's content-view fix (intrinsic measure +
+  `basis(Cells(0))`) is the established pattern.
 - **Ports depend on both tracks**: 0200 (console) ← app-widgets +
   live-data 0010/0020/0030 (subprocess pipe, no network). 0210 (chat)
   ← both + 0040/0050; its read-only phase 1 IS the 0060 milestone.

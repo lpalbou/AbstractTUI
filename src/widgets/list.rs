@@ -76,7 +76,7 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use crate::base::Point;
+use crate::base::{Point, Rect};
 use crate::layout::{Dimension, Style as LayoutStyle};
 use crate::reactive::{Scope, Signal};
 use crate::render::rich::RichText;
@@ -791,7 +791,31 @@ impl List {
             // reaches the reactive graph without paint ever writing a
             // signal. A steady frame records an unchanged size and
             // schedules nothing.
-            .draw(super::scroll::size_probe(view_box))
+            .draw(super::scroll::size_probe(cx, view_box))
+            // The internal bar column owns left drags (first-app/1335):
+            // screen select mode stands down over the STRIP only, so the
+            // thumb keeps its gesture while every row stays selectable.
+            //
+            // Gated on `overflows()`, not merely on the bar being drawn:
+            // a one-row viewport draws a full-height thumb with ZERO
+            // travel, which the gesture refuses to steer. A cell nothing
+            // can drag must not swallow a selection either — that is the
+            // contract `Element::drag_zone` states.
+            .drag_zone(move |rect| {
+                let cols = list_columns(rect.w, total_rows > rect.h, accessory_w);
+                if cols.bar_w == 0 {
+                    return None;
+                }
+                let strip = Rect::new(
+                    rect.x + cols.body_w + cols.accessory_w,
+                    rect.y,
+                    cols.bar_w,
+                    rect.h,
+                );
+                scrollbar::metrics(strip, cols.bar_w, 0, total_rows)
+                    .overflows()
+                    .then_some(strip)
+            })
             .focusable();
         if let Some(focused) = self.focused {
             el = el.focus_signal(focused);

@@ -481,15 +481,61 @@ impl Feed {
             .role(crate::ui::Role::List)
             .access_value(move || format!("{} items", len_state.len()));
         if content_sized {
+            // INTRINSIC MEASURE, not a paint-discovered height.
+            //
+            // A content-sized feed used to size itself through
+            // `style_signal` from `rows`, which only `draw_feed` could
+            // fill: typesetting needs a width, and the width was learned
+            // in paint. So the first solve saw an unmeasured feed
+            // (`inner.width == 0`, every entry height 0, `rows` 0) and
+            // the element reported ONE row — a real-looking placeholder
+            // the whole frame was then laid out against, with the truth
+            // arriving a turn later through the deferred fixup. Every
+            // consumer of the extent inherited that lie for a frame: a
+            // reader squashed to one row per item, a bound offset
+            // clamped against a one-row content (field-agora/0895), a
+            // follow-tail pin driven to the top.
+            //
+            // The solver offers the width during the solve — the same
+            // door `MarkdownView` and `CodeView` use. Typeset there and
+            // the placeholder never exists.
+            //
+            // The height MUST be `Auto`: `intrinsic_size` consults a
+            // measure callback only for an axis that is not explicitly
+            // sized, so leaving `Cells(..)` here would leave this
+            // callback permanently uncalled.
             let base = style.clone();
-            el = el.style_signal(move || {
-                let mut s = base.clone();
-                s.height = Dimension::Cells(rows.get().max(1));
-                s
+            el = el.style(base.height(Dimension::Auto));
+            let measure_state = state.clone();
+            el = el.measure(move |avail| {
+                // Bail on exactly the width `draw_feed` refuses, so one
+                // path can never typeset a width the other skips.
+                if avail.w <= 1 {
+                    return crate::base::Size::ZERO;
+                }
+                let mut inner = measure_state.inner.borrow_mut();
+                if inner.width != avail.w {
+                    inner.width = avail.w;
+                    inner.retypeset_all();
+                }
+                let total = inner.total_rows();
+                drop(inner);
+                // `rows` is PUBLIC extent (`FeedState::total_rows`), and
+                // the solve is the one place a signal must not be
+                // written: `Signal::set` flushes effects synchronously
+                // while the tree is borrowed for layout. So publish it
+                // the way paint already does — enqueue a timer, which
+                // only queues. Layout no longer depends on the result;
+                // this keeps the app-visible extent honest.
+                if measure_state.rows.try_get_untracked() != Some(total) {
+                    measure_state.schedule_geometry_sync();
+                }
+                crate::base::Size::new(avail.w, total)
             });
         } else {
             el = el.style(style);
         }
+        let _ = rows;
 
         // Item press hit info (0850): attached ONLY when bound — an
         // unwired feed keeps zero handlers. Row math: the element rect

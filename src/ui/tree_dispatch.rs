@@ -17,6 +17,28 @@ use super::super::event::{
 use super::super::view::Shortcut;
 use super::{InstPayload, UiTree, ViewId};
 
+/// What a left press at a point resolves to, for the screen-text
+/// selection layer: see [`UiTree::press_probe_at`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct PressProbe {
+    /// The pane that would clamp a selection dragged from here; `None`
+    /// when the point misses the tree entirely.
+    pub pane: Option<Rect>,
+    /// The point lies in a widget's declared drag zone — a scrollbar
+    /// strip, a splitter, an orbit surface. The selection layer stands
+    /// down so the widget keeps its gesture.
+    pub drag_owner: bool,
+}
+
+impl PressProbe {
+    /// The point missed the tree: no pane, nothing owns it.
+    pub const MISS: PressProbe = PressProbe {
+        pane: None,
+        drag_owner: false,
+    };
+}
+
 impl UiTree {
     /// Deepest instance whose solved rect contains `p` (later siblings
     /// win at each level — mirrors paint order). Clip-aware: a node with
@@ -70,45 +92,99 @@ impl UiTree {
     /// gutter, so borders never count as selectable pane content.
     /// Read-only; screen coordinates; same descent as [`Self::hit_test`].
     pub fn pane_rect_at(&self, p: Point) -> Option<Rect> {
-        let core = self.core.borrow();
-        let root = core.root?;
-        let rinst = core.insts.get(root.0)?;
-        let root_rect = core.layout.rect(rinst.layout);
-        if !root_rect.contains(p) {
-            return None;
-        }
-        let mut pane: Option<Rect> = None;
-        let mut current = root;
-        while let Some(inst) = core.insts.get(current.0) {
-            if let Some(style) = core.layout.style(inst.layout) {
-                if style.clips_children() || style.padding != crate::layout::Edges::ZERO {
-                    let rect = core.layout.rect(inst.layout);
-                    let content = Rect::new(
-                        rect.x + style.padding.left,
-                        rect.y + style.padding.top,
-                        (rect.w - style.padding.horizontal()).max(0),
-                        (rect.h - style.padding.vertical()).max(0),
-                    );
-                    if content.contains(p) {
-                        pane = Some(content);
-                    } else if style.clips_children() {
-                        break; // gutter/clipped edge: hit_test stops here too
+        // `want_zones: false` keeps this accessor what its name and its
+        // doc promise: a pure geometry read. Delegating to the full
+        // probe would run every drag-zone closure on the hit path, and
+        // those are consumer code that may do real work.
+        self.probe_at(p, false).pane
+    }
+
+    /// Everything the selection layer needs to know about a left press at
+    /// `p`, resolved in ONE descent: the pane that would clamp a drag
+    /// from there ([`Self::pane_rect_at`]), and whether the cell already
+    /// belongs to a widget that owns drags
+    /// ([`Element::drag_zone`](super::super::Element::drag_zone)).
+    ///
+    /// Reads SOLVED geometry — it never lays out. A caller reaching for
+    /// it after mutating the tree (an event dispatched with no frame in
+    /// between) must call [`UiTree::layout`] first, exactly as
+    /// [`Self::dispatch`] does before its own hit test; otherwise a
+    /// freshly remounted region answers from a zero rect and its drag
+    /// zone goes unseen. `app::selection` has the driver do this on
+    /// every left Down (`selection::layout_for_anchor`).
+    ///
+    /// Read-only; screen coordinates; same descent as [`Self::hit_test`].
+    pub fn press_probe_at(&self, p: Point) -> PressProbe {
+        self.probe_at(p, true)
+    }
+
+    /// The shared descent behind [`Self::pane_rect_at`] and
+    /// [`Self::press_probe_at`]. `want_zones` decides whether the walk
+    /// collects drag-zone closures — the pane-only caller must not pay
+    /// for consumer code it does not consult.
+    fn probe_at(&self, p: Point, want_zones: bool) -> PressProbe {
+        // Drag-zone closures are user code: collect the handles during
+        // the walk and call them AFTER the core borrow is released (the
+        // held-borrow contract — a zone that touched the tree would
+        // otherwise panic).
+        let mut zones: Vec<(super::super::view::DragZoneFn, Rect)> = Vec::new();
+        let pane = {
+            let core = self.core.borrow();
+            let Some(root) = core.root else {
+                return PressProbe::MISS;
+            };
+            let Some(rinst) = core.insts.get(root.0) else {
+                return PressProbe::MISS;
+            };
+            let root_rect = core.layout.rect(rinst.layout);
+            if !root_rect.contains(p) {
+                return PressProbe::MISS;
+            }
+            let mut pane: Option<Rect> = None;
+            let mut current = root;
+            while let Some(inst) = core.insts.get(current.0) {
+                if want_zones {
+                    if let Some(zone) = &inst.drag_zone {
+                        zones.push((zone.clone(), core.layout.rect(inst.layout)));
                     }
                 }
+                if let Some(style) = core.layout.style(inst.layout) {
+                    if style.clips_children() || style.padding != crate::layout::Edges::ZERO {
+                        let rect = core.layout.rect(inst.layout);
+                        let content = Rect::new(
+                            rect.x + style.padding.left,
+                            rect.y + style.padding.top,
+                            (rect.w - style.padding.horizontal()).max(0),
+                            (rect.h - style.padding.vertical()).max(0),
+                        );
+                        if content.contains(p) {
+                            pane = Some(content);
+                        } else if style.clips_children() {
+                            break; // gutter/clipped edge: hit_test stops here too
+                        }
+                    }
+                }
+                // Descend to the child under `p` (later siblings win, like
+                // hit_test); a leaf ends the walk.
+                let next = inst.children.iter().rev().copied().find(|child| {
+                    core.insts
+                        .get(child.0)
+                        .is_some_and(|ci| core.layout.rect(ci.layout).contains(p))
+                });
+                match next {
+                    Some(child) => current = child,
+                    None => break,
+                }
             }
-            // Descend to the child under `p` (later siblings win, like
-            // hit_test); a leaf ends the walk.
-            let next = inst.children.iter().rev().copied().find(|child| {
-                core.insts
-                    .get(child.0)
-                    .is_some_and(|ci| core.layout.rect(ci.layout).contains(p))
-            });
-            match next {
-                Some(child) => current = child,
-                None => break,
-            }
+            pane.unwrap_or(root_rect)
+        };
+        let drag_owner = zones
+            .into_iter()
+            .any(|(zone, rect)| zone(rect).is_some_and(|z| z.contains(p)));
+        PressProbe {
+            pane: Some(pane),
+            drag_owner,
         }
-        Some(pane.unwrap_or(root_rect))
     }
 
     /// True while the pointer is anywhere inside `id`'s subtree.

@@ -892,3 +892,83 @@ fn handlers_can_request_focus() {
     assert_eq!(tree.focused(), Some(target));
     assert!(tree.is_focused(target));
 }
+
+/// `TreeCore::focus_memory` never sheds an unmounted container, so a
+/// `Dyn` region that rebuilds a `focus_memory` subtree leaks one dead
+/// entry per rebuild — for the life of the tree.
+///
+/// Measured 2026-08-21, before the fix: 20 rebuilds left **20 entries,
+/// 0 of them live**. Filed as app-widgets 0155 and closed by pruning
+/// the key in `remove_subtree`'s drain loop; this test is what says the
+/// prune is still there.
+///
+/// `remove_subtree` (`ui::mount`) cleared `core.focus` when the focused
+/// node died but walked past `core.focus_memory` entirely, and nothing
+/// else pruned it. Nothing was UNSOUND — the arena is generational, so
+/// `restore_memory_target` reads a dead entry as `None` and falls
+/// through to `entering`. It was unbounded growth, not a dangling
+/// handle, and a long-lived app with a rebuilding pane paid for every
+/// rebuild it ever did. That is also why it went unnoticed: no symptom
+/// until the memory does.
+///
+/// Found while designing field-agora 0910, which needs its own
+/// `ViewId`-valued map in `TreeCore`: the question was "who removes an
+/// entry when the subtree unmounts?", and the honest answer from the
+/// only precedent is "nobody". That is why 0910's map is keyed by the
+/// caller's STRING rather than by `ViewId` — a rebuild re-registers the
+/// same key and overwrites in place, so its size is bounded by the
+/// number of distinct keys instead of by the number of rebuilds.
+#[test]
+fn focus_memory_sheds_containers_that_unmount() {
+    let trigger: Rc<RefCell<Option<Signal<i32>>>> = Rc::new(RefCell::new(None));
+    let t2 = trigger.clone();
+    let (root, mut tree) = mounted(Size::new(20, 4), move |cx| {
+        let t = cx.signal(0);
+        *t2.borrow_mut() = Some(t);
+        Element::new()
+            .style(Style::column())
+            .child(dyn_view(Style::default(), move || {
+                let _n = t.get();
+                Element::new()
+                    .style(Style::row().height(Dimension::Cells(1)))
+                    .focus_memory()
+                    .child(focusable_box(3, 1).build())
+                    .child(focusable_box(3, 1).build())
+                    .build()
+            }))
+            .build()
+    });
+    crate::reactive::flush_effects();
+    tree.layout();
+    let t = trigger.borrow().unwrap();
+    for n in 1..=20 {
+        tree.focus_first();
+        tree.focus_next();
+        t.set(n);
+        crate::reactive::flush_effects();
+        tree.layout();
+    }
+    let (entries, dead) = {
+        let core = tree.core.borrow();
+        let dead = core
+            .focus_memory
+            .keys()
+            .filter(|k| core.insts.get(k.0).is_none())
+            .count();
+        (core.focus_memory.len(), dead)
+    };
+    drop(root);
+    // The map must not carry containers that no longer exist. Both
+    // halves matter: `dead == 0` is the property, and `entries <= 1`
+    // pins that the ONE surviving container is the live one rather
+    // than a map that happens to hold no corpses because it holds
+    // nothing at all.
+    assert_eq!(
+        dead, 0,
+        "dead containers left in focus_memory ({entries} entries)"
+    );
+    assert!(
+        entries <= 1,
+        "one live focus_memory container, {entries} entries"
+    );
+}

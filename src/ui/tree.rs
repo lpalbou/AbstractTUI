@@ -11,12 +11,12 @@
 //! `Dyn` — the routing path re-validates instance liveness (generational
 //! ids) after every handler call.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use crate::base::{Point, Rect, Rgba, Size};
 use crate::layout::{solve, LayoutId, LayoutTree};
-use crate::reactive::{request_frame, GenArena, Key as ArenaKey, Scope};
+use crate::reactive::{request_frame, GenArena, Key as ArenaKey, Scope, Signal};
 
 use super::mount::{mount_view, remove_subtree};
 use super::view::{DrawFn, Handler, Shortcut, View};
@@ -50,6 +50,11 @@ pub(super) struct Inst {
     /// [`Element::probe_when_culled`](super::Element::probe_when_culled)).
     /// Children still cull individually.
     pub(super) probe_when_culled: bool,
+    /// Sub-rect of this instance that owns pointer drags, so the
+    /// screen-text selection layer stands down over it (see
+    /// [`Element::drag_zone`](super::Element::drag_zone)). Consulted by
+    /// `UiTree::press_probe_at` at mouse-down only.
+    pub(super) drag_zone: Option<super::view::DragZoneFn>,
     pub(super) access: super::access::AccessProps,
     pub(super) payload: InstPayload,
 }
@@ -117,6 +122,99 @@ pub(super) struct TreeCore {
     /// `LayerHandle::set_offset`: modal re-clamps and drawer slides
     /// move mounted trees).
     pub(super) layer_origin: Point,
+    /// Elements publishing their own solved rect (`Element::rect_signal`,
+    /// field-agora 0910). Read at the END of every solve, which is the
+    /// only phase that knows a rect changed — paint cannot be the hook
+    /// because the interesting child is the culled one.
+    pub(super) rect_probes: Vec<RectProbe>,
+}
+
+/// A rect publish that the solve just made due, held OUTSIDE the tree
+/// borrow so the timer it arms cannot re-enter the core.
+pub(super) struct PendingRectPublish {
+    sig: Signal<Option<Rect>>,
+    seen: Rc<Cell<Option<Rect>>>,
+    pending: Rc<Cell<bool>>,
+    alive: Rc<Cell<bool>>,
+}
+
+impl PendingRectPublish {
+    /// Deferred by one tick, exactly like `scroll::size_probe`: the
+    /// value is read LATE (so a burst of solves publishes once, with the
+    /// newest rect) and the write lands outside the layout pass that
+    /// produced it.
+    fn schedule(self) {
+        let PendingRectPublish {
+            sig,
+            seen,
+            pending,
+            alive,
+        } = self;
+        crate::reactive::after(std::time::Duration::ZERO, move || {
+            pending.set(false);
+            // The ELEMENT decides whether this publishes at all. Its
+            // signal being alive proves nothing here — the caller owns
+            // it and re-binds it across rebuilds, so a disposed child
+            // would happily write its rect over the live one's and the
+            // consumer would read a corpse (field-agora 0910).
+            if !alive.get() || sig.try_get_untracked().is_none() {
+                return;
+            }
+            // A zero-area solve is CLEAN ABSENCE, not a position: it
+            // falls through the paint cull and paints nothing, and a
+            // clamp fed `0x0` scrolls to the origin. `None` says the
+            // thing that is true.
+            sig.set_if_changed(seen.get().filter(|r| !r.is_empty()));
+        });
+    }
+}
+
+/// Read every live rect binding against the solve that just finished,
+/// arming a publish for each one whose rect actually moved.
+fn collect_rect_publishes(core: &mut TreeCore) -> Vec<PendingRectPublish> {
+    if core.rect_probes.is_empty() {
+        return Vec::new();
+    }
+    core.rect_probes.retain(|p| p.alive.get());
+    let mut out = Vec::new();
+    for probe in &core.rect_probes {
+        let Some(inst) = core.insts.get(probe.view.0) else {
+            continue;
+        };
+        let rect = core.layout.rect(inst.layout);
+        if probe.seen.get() == Some(rect) {
+            continue; // steady frame: no timer, no write
+        }
+        probe.seen.set(Some(rect));
+        if probe.pending.replace(true) {
+            continue; // one in flight; it will read the newest value
+        }
+        out.push(PendingRectPublish {
+            sig: probe.sig,
+            seen: probe.seen.clone(),
+            pending: probe.pending.clone(),
+            alive: probe.alive.clone(),
+        });
+    }
+    out
+}
+
+/// One `rect_signal` binding: an element, the caller's signal, and the
+/// state a deferred publish needs after the tree borrow is released.
+pub(super) struct RectProbe {
+    pub(super) view: ViewId,
+    pub(super) sig: Signal<Option<Rect>>,
+    /// Last rect the solver produced for this element, or `None` before
+    /// the first solve. The deferred publish reads it LATE, so several
+    /// solves inside one tick collapse to the newest value.
+    pub(super) seen: Rc<Cell<Option<Rect>>>,
+    /// One publish in flight at a time.
+    pub(super) pending: Rc<Cell<bool>>,
+    /// Liveness of the ELEMENT — deliberately not of the signal. The
+    /// signal is the CALLER's and outlives every element it is re-bound
+    /// to, so "the signal is alive" is a question that says nothing
+    /// about whether this element still exists.
+    pub(super) alive: Rc<Cell<bool>>,
 }
 
 impl TreeCore {
@@ -171,6 +269,7 @@ impl UiTree {
                 pending_autofocus: None,
                 click_chain: super::click::ClickChain::new(),
                 layer_origin: Point::ZERO,
+                rect_probes: Vec::new(),
             })),
         }
     }
@@ -427,6 +526,13 @@ impl UiTree {
         for rect in core.layout.take_geometry_damage() {
             core.damage_rect(rect);
         }
+        // Rect bindings read the solve that just happened. Scheduling
+        // happens OUTSIDE the borrow: a publish runs caller effects.
+        let scheduled = collect_rect_publishes(&mut core);
+        drop(core);
+        for probe in scheduled {
+            probe.schedule();
+        }
     }
 
     /// Damage accumulated since last take (deduplicated coarsely by the
@@ -489,6 +595,8 @@ impl UiTree {
 
 #[path = "tree_dispatch.rs"]
 mod dispatch;
+
+pub use dispatch::PressProbe;
 
 // ---------------------------------------------------------------------------
 // Ambient layer origin (the event-time pattern, `ui::click`): draw

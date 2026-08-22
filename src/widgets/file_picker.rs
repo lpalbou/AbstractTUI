@@ -127,6 +127,20 @@ impl PickerState {
         (entries, filtered, sel)
     }
 
+    /// How many rows the filtered listing has — the same count
+    /// [`Self::filtered_and_sel`] would report, without materializing
+    /// the index vector. The drag-zone probe (first-app/1335) runs on
+    /// every left press and only needs to know whether a scrollbar
+    /// exists, so it must not allocate a filtered `Vec` per press.
+    fn filtered_len(&self) -> usize {
+        let entries = match self.listing.get_untracked() {
+            Ok(e) => e,
+            Err(_) => return 0,
+        };
+        self.filter
+            .with_untracked(|f| filtered_indices(&entries, f).len())
+    }
+
     /// Move the selection to `target` (index into the filtered view)
     /// and keep it visible in `view_h` rows.
     fn move_sel(&self, target: usize, view_h: i32) {
@@ -614,6 +628,35 @@ impl FilePicker {
                             .grow(1.0),
                     )
                     .on(Phase::Bubble, mouse)
+                    // The bar strip owns left drags (first-app/1335):
+                    // screen select mode stands down over the STRIP only,
+                    // so the thumb keeps its gesture while the listing
+                    // stays selectable. Same geometry as the handler, and
+                    // gated on `overflows()`: a strip with zero travel is
+                    // undraggable, and an undraggable cell must not
+                    // swallow a selection either.
+                    //
+                    // Cheap on the fast path: the row COUNT decides
+                    // whether a bar exists, and counting the filtered
+                    // listing does not need it materialized — the probe
+                    // runs on every left press, including the ones that
+                    // land nowhere near the strip.
+                    .drag_zone({
+                        let state = state.clone();
+                        move |rect| {
+                            let total = state.filtered_len() as i32;
+                            if total <= rect.h {
+                                return None;
+                            }
+                            let bar = crate::widgets::scrollbar::metrics(
+                                rect,
+                                1,
+                                state.offset.get_untracked(),
+                                total,
+                            );
+                            bar.overflows().then_some(bar.track)
+                        }
+                    })
                     .child(rows)
                     .build(),
             )

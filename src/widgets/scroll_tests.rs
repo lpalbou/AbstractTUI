@@ -4,7 +4,7 @@
 //! 0240 modal-overflow follow-up).
 
 use super::*;
-use crate::base::Size;
+use crate::base::{Point, Size};
 use crate::layout::Style as LayoutStyle;
 use crate::theme::default_theme;
 use crate::ui::{text, Element, Key, MouseButton, MouseKind, UiTree};
@@ -265,10 +265,57 @@ fn a_track_press_lands_the_thumb_under_the_pointer() {
     );
 }
 
+/// The strip declares itself a DRAG ZONE (first-app/1335), so screen
+/// select mode stands down over it and the thumb keeps its gesture.
+/// Content columns must not: a list of text stays selectable.
+#[test]
+fn the_strip_is_a_drag_zone_and_the_content_is_not() {
+    let t = &default_theme().tokens;
+    let size = Size::new(12, 10);
+    let (content, _) = tall_content();
+    let (_root, mut tree, _off) = mount_bar(size, content, t, None);
+    settle(&mut tree, size);
+    let bar_x = size.w - 1;
+    assert!(
+        tree.press_probe_at(Point::new(bar_x, 3)).drag_owner,
+        "the strip owns drags"
+    );
+    assert!(
+        !tree.press_probe_at(Point::new(1, 3)).drag_owner,
+        "content text stays selectable"
+    );
+}
+
+/// An invisible target owns nothing: with `scrollbar_auto_hide` and
+/// content that fits, the strip claims neither the offset nor the
+/// gesture — a selection starting there is still a selection.
+#[test]
+fn an_auto_hidden_strip_is_not_a_drag_zone() {
+    let t = &default_theme().tokens;
+    let size = Size::new(12, 10);
+    let mut col = Element::new().style(LayoutStyle::column());
+    for i in 0..3 {
+        col = col.child(text(format!("row {i}")));
+    }
+    let (_root, mut tree) = mount_widget(size, |cx| {
+        Scroll::new(col.build())
+            .content_size(10, 3)
+            .scrollbar_auto_hide(true)
+            .element(cx, t)
+            .build()
+    });
+    settle(&mut tree, size);
+    assert!(
+        !tree.press_probe_at(Point::new(size.w - 1, 2)).drag_owner,
+        "a hidden bar must not swallow a selection"
+    );
+}
+
 /// A `Drag` that arrives with no grab of ours belongs to somebody
-/// else's gesture — the driver drops a tree's capture when a press
-/// becomes a screen-text selection, and terminals emit motion-with-button
-/// after a lost `Up`. It must never teleport the offset.
+/// else's gesture. Two sources: terminals emit motion-with-button after
+/// a lost `Up`, and (before first-app/1335 taught the selection layer to
+/// stand down here) a claimed screen-text selection cancelled the
+/// strip's capture mid-gesture. It must never teleport the offset.
 #[test]
 fn a_bare_drag_without_a_press_never_steers() {
     let t = &default_theme().tokens;

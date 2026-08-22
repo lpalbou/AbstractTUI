@@ -78,6 +78,12 @@ Completed 2026-08-20 (layout-honesty wave):
 | --- | --- | --- |
 | 1330 | An overflowing child is silently overpainted by its next sibling. Landed: a debug notice for a COLUMN whose children need more rows than its content box has and at least one cannot shrink (the zero-collapse notice's other end), plus the docs that scope `shrink(0.0)` to one element and surface `clip()`/`scroll()`. Declined on measurement: the CSS auto-minimum (25 failures, and it does not fix the bug) and default clipping (already shipped as `Overflow`, and it does not fix the bug either). Prerequisite for the automatic fixes filed as 1331. | bug |
 
+Completed 2026-08-21 (drag-ownership wave):
+
+| ID | Title | Class |
+| --- | --- | --- |
+| 1335 | Select mode steals the drag from every widget that owns one — with `app::selection` on, a press on a scrollbar thumb became a text selection (the layer's claim cancels the pressed widget's pointer capture, killing the grab the strip had just taken). Same defect on all five engine drag surfaces: both `Scroll` bars, the `List`/`Table`/`FilePicker` internal bars, and `Viewport3D`'s orbit. Fixed with a declarative seam — `Element::drag_zone` + `UiTree::press_probe_at` — so a press inside a declared zone arms no anchor and the whole gesture reaches the widget. The anchor decides: a drag starting in content and crossing a strip still selects. | bug |
+
 Completed 2026-08-19 (usable-instruments wave):
 
 | ID | Title | Class |

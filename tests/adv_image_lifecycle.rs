@@ -358,6 +358,66 @@ fn scroll_step(
     term.take_bytes()
 }
 
+/// The scroll optimization is the ONE place this engine puts an ERASE
+/// on the wire ahead of the content that replaces it: `SU` BCE-clears
+/// whole rows to the TERMINAL's default background, and the residual
+/// repaint lands hundreds of bytes later in the same stream. Inside a
+/// DEC 2026 bracket that intermediate can never be presented; outside
+/// one it can, and it reads as a black flash in exactly the band that
+/// changed — measured at 16 bytes to blank a pane against ~2 kB to
+/// restore it.
+///
+/// So the path is gated on the capability that makes it invisible.
+/// Declining costs only bytes, on terminals that cannot hide the
+/// artifact: `docs/design/render.md` calls it "a bandwidth
+/// optimization (ssh links), not a correctness or latency one".
+#[test]
+fn the_scroll_optimization_waits_for_synchronized_output() {
+    let size = Size::new(W, H);
+    let plain = Capabilities::with(|c| {
+        c.truecolor = true;
+        c.colors_256 = true;
+        // sync_output_2026 deliberately OFF — an xterm/Alacritty/tmux
+        // session before (or without) a successful DECRQM probe.
+    });
+    let synced = Capabilities::with(|c| {
+        c.truecolor = true;
+        c.colors_256 = true;
+        c.sync_output_2026 = true;
+    });
+
+    let mut seen = Vec::new();
+    for (label, caps, want) in [("no sync", plain, false), ("sync", synced, true)] {
+        let (mut app, top) = log_app(size);
+        let mut term = CaptureTerm::new(size);
+        let mut driver = Driver::new(&mut app, &mut term, config(caps)).expect("enter");
+        settle(&mut driver, &mut app, &mut term);
+        let _ = term.take_bytes();
+        let mut bytes_per_frame = Vec::new();
+        for i in 0..6 {
+            let bytes = scroll_step(&mut driver, &mut app, &mut term, &top);
+            assert!(!bytes.is_empty(), "{label} frame {i}: the rows did change");
+            assert_eq!(
+                has_scroll_sequence(&bytes),
+                want,
+                "{label} frame {i}: the scroll path must engage only where \
+                 a sync bracket can hide its erase"
+            );
+            bytes_per_frame.push(bytes.len());
+        }
+        let mut s = bytes_per_frame.clone();
+        s.sort_unstable();
+        seen.push((label, s[s.len() / 2]));
+    }
+    // The cost of the gate, stated rather than assumed: declining the
+    // optimization is a BYTE loss and nothing else — both paths repaint
+    // the same cells.
+    eprintln!(
+        "sync gate @ {W}x{H}: {} {} B/frame (plain) | {} {} B/frame (scrolled)",
+        seen[0].0, seen[0].1, seen[1].0, seen[1].1
+    );
+}
+
 /// The scroll optimization's unforgeable signature: `emit_shift` ends
 /// with the bare DECSTBM reset `ESC [ r` — no other presenter path
 /// emits it (CUP/SGR always carry parameters before their final byte).
@@ -376,6 +436,12 @@ fn scroll_guard_scopes_to_byte_channel_images_only() {
         c.truecolor = true;
         c.colors_256 = true;
         c.kitty_graphics = true; // caps alone must not disable anything
+                                 // The scroll path is gated on DEC 2026 (the flicker review:
+                                 // its SU prelude BCE-erases rows ahead of the repaint, and
+                                 // only a sync bracket can hide that). This suite is about
+                                 // the IMAGE guard, so sync stays on in every leg and the
+                                 // image is the only variable.
+        c.sync_output_2026 = true;
     });
     let mut driver = Driver::new(&mut app, &mut term, config(caps)).expect("enter");
     settle(&mut driver, &mut app, &mut term);
@@ -398,6 +464,7 @@ fn scroll_guard_scopes_to_byte_channel_images_only() {
         c.truecolor = true;
         c.colors_256 = true;
         c.kitty_graphics = true;
+        c.sync_output_2026 = true; // isolate the image guard (see leg 1)
     });
     let mut driver = Driver::new(&mut app, &mut term, config(caps)).expect("enter");
     settle(&mut driver, &mut app, &mut term);
@@ -433,6 +500,7 @@ fn scroll_guard_scopes_to_byte_channel_images_only() {
     let caps = Capabilities::with(|c| {
         c.truecolor = true;
         c.colors_256 = true; // no protocol bits -> mosaic channel
+        c.sync_output_2026 = true; // isolate the image guard (see leg 1)
     });
     let mut driver = Driver::new(&mut app, &mut term, config(caps)).expect("enter");
     settle(&mut driver, &mut app, &mut term);
