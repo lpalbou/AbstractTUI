@@ -62,6 +62,9 @@ pub struct CaptureTerm {
     fail_next_write: Option<std::io::ErrorKind>,
     /// Completed suspend round trips (the I-2 acceptance surface).
     suspend_count: u64,
+    /// Scripted `Terminal::is_tty` (default false — a capture buffer is
+    /// not a device). See [`CaptureTerm::set_tty`].
+    tty: bool,
 }
 
 impl CaptureTerm {
@@ -78,7 +81,25 @@ impl CaptureTerm {
             idle_streak: 0,
             fail_next_write: None,
             suspend_count: 0,
+            tty: false,
         }
+    }
+
+    /// Script [`Terminal::is_tty`] — the answer the trait already
+    /// invites a scripted terminal to override, with no way to do it
+    /// until now.
+    ///
+    /// Two engine behaviours read that bit and neither was reachable
+    /// from a capture harness: the splash gate (auto-skipped headlessly)
+    /// and the undeclared-capabilities branch in `Driver::new`, which
+    /// substitutes [`Capabilities::headless`] rather than detecting the
+    /// developer's shell. Setting this to `true` puts a `CaptureTerm` on
+    /// the interactive side of both, which is how the *non*-substituted
+    /// path gets tested at all.
+    ///
+    /// [`Capabilities::headless`]: crate::term::Capabilities::headless
+    pub fn set_tty(&mut self, tty: bool) {
+        self.tty = tty;
     }
 
     // ---- scripting --------------------------------------------------------
@@ -183,6 +204,11 @@ impl Terminal for CaptureTerm {
 
     fn size(&mut self) -> Result<Size> {
         Ok(self.size)
+    }
+
+    /// False unless a test scripted otherwise ([`CaptureTerm::set_tty`]).
+    fn is_tty(&self) -> bool {
+        self.tty
     }
 
     /// Scripted, non-blocking read. The deadline is accepted (the trait

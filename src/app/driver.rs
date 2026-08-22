@@ -55,19 +55,26 @@ use super::App;
 /// let cfg = RunConfig { hover_ink: true, ..RunConfig::default() };
 /// ```
 pub struct RunConfig {
-    /// Capabilities to assume. `None` = passive env detection at start
-    /// ([`Capabilities::detect_env`]), which is right for a real app.
+    /// Capabilities to assume. `None` means the driver picks, and it
+    /// picks by asking [`Terminal::is_tty`]: over a real terminal, the
+    /// passive env pass ([`Capabilities::detect_env`]); over anything
+    /// that is not one, the fixed [`Capabilities::headless`] set.
     ///
-    /// **DECLARE THIS IN ANY HEADLESS HARNESS.** Nothing enforces it, and
-    /// the failure is silent: a suite on [`CaptureTerm`] has no terminal to
-    /// detect, so it inherits *the developer's shell*. With `COLORTERM`
-    /// unset that is `ColorDepth::Xterm256`, and since `CaptureTerm` reads
-    /// back the bytes the presenter actually emitted, every colour a test
-    /// asserts on has been through the 256 cube — token-vs-token
-    /// comparisons pass either way, so the suite looks green while its
-    /// verdict moves with an environment variable. Field-reported by a
-    /// consumer (`agora-tui`), whose entire colour suite was quantised
-    /// without their knowing.
+    /// That second branch exists because leaving `None` in a headless
+    /// harness used to fail silently. A suite on [`CaptureTerm`] has no
+    /// terminal to detect, so it inherited *the developer's shell*: with
+    /// `COLORTERM` unset that is `ColorDepth::Xterm256`, and since
+    /// `CaptureTerm` reads back the bytes the presenter actually emitted,
+    /// every colour the tests asserted on had been through the 256 cube.
+    /// Token-vs-token comparisons pass at either depth, so the suite
+    /// looked green while its verdict moved with an environment
+    /// variable. Field-reported by a consumer (`agora-tui`), whose entire
+    /// colour suite was quantised without their knowing.
+    ///
+    /// **Declaring it is still better than relying on the default**, and
+    /// required the moment your harness cares about a capability the
+    /// headless set leaves off (graphics, kitty keyboard, OSC 52) or
+    /// wants a *lower* depth on purpose:
     ///
     /// ```ignore
     /// caps: Some(Capabilities::with(|c| {
@@ -77,6 +84,7 @@ pub struct RunConfig {
     /// ```
     ///
     /// [`CaptureTerm`]: crate::testing::CaptureTerm
+    /// [`Terminal::is_tty`]: crate::term::Terminal::is_tty
     pub caps: Option<Capabilities>,
     /// Session options. `None` = derived from capabilities (kitty
     /// keyboard flags requested only when the terminal speaks them).
@@ -247,7 +255,35 @@ impl Driver {
     /// enter bytes and (optionally) the probe queries; does NOT render —
     /// the first `turn` does, from the mount-time damage.
     pub fn new(app: &mut App, term: &mut dyn Terminal, cfg: RunConfig) -> Result<Driver> {
-        let caps = cfg.caps.unwrap_or_else(Capabilities::detect_env);
+        // Where the capabilities come from, in three cases and not two.
+        // Declared wins. Undeclared over a REAL terminal is the env pass,
+        // which is what it is for. Undeclared over something that is not
+        // a terminal used to be the env pass too — and that was the
+        // silent failure `RunConfig::caps` documents: a capture harness
+        // has no environment of its own, so detection reads the
+        // DEVELOPER'S shell and every colour the suite asserts moves with
+        // `COLORTERM`. There is nothing to detect here, so we do not
+        // pretend to: a fixed set, identical on every machine.
+        //
+        // `is_tty()` defaults to FALSE on the trait, so a third-party
+        // `Terminal` that IS interactive but never overrode it lands in
+        // this branch and gets headless defaults instead of its
+        // environment. That would be the same silent-substitution bug
+        // pointed the other way, which is why the branch is never mute:
+        // it says what it did, in the same startup-notices lane the caps
+        // summary already uses, so the fix (override `is_tty`, or declare
+        // `caps`) is legible from the app's own notice bar.
+        let caps = match cfg.caps {
+            Some(declared) => declared,
+            None if !term.is_tty() => {
+                app.push_startup_notice(
+                    "caps: headless defaults (no tty to detect — declare RunConfig::caps, \
+                     or override Terminal::is_tty if this IS a terminal)",
+                );
+                Capabilities::headless()
+            }
+            None => Capabilities::detect_env(),
+        };
         let kitty_auto = cfg.enter.is_none();
         let mut enter = cfg.enter.unwrap_or_else(|| EnterOptions {
             kitty_keyboard: if caps.kitty_keyboard {
