@@ -273,10 +273,10 @@ fn content_sized_children_are_solved_big_enough_for_their_own_content() {
             _ => Align::Stretch,
         };
 
-        // COLUMN parents only. A child sharing a ROW with siblings is
-        // documented as measurable only at the full content width — its
-        // flex share is not known until the basis being asked for has
-        // been distributed — so the invariant is not claimed there.
+        // COLUMN parents. The ROW direction is a separate population
+        // below, because the two reach the invariant by different
+        // routes: a column child's width is known before the measure,
+        // a row child's is not and has to be corrected afterwards.
         let mut root_style = Style::column()
             .gap(gap)
             .padding(Edges::all(pad))
@@ -326,6 +326,100 @@ fn content_sized_children_are_solved_big_enough_for_their_own_content() {
         load_bearing >= 200,
         "population went vacuous: only {load_bearing} leaves both carried \
          a side margin and wrapped past one row"
+    );
+}
+
+/// The ROW counterpart. Kept as a separate population rather than folded
+/// into the one above, because the two directions reach the invariant by
+/// different routes and a shared test would not say which one broke.
+///
+/// A row child's WIDTH comes from flex distribution, so the intrinsic
+/// pass cannot know it: the solver documents that a child sharing a row
+/// is measured at the full content width. What saves the rendered result
+/// is that placement re-measures the child's cross axis — its height —
+/// at the width it was actually solved to. This asserts that the rescue
+/// is real, which is the part that had never been measured.
+#[test]
+fn content_sized_row_children_are_solved_big_enough_for_their_own_content() {
+    let mut rng = Rng::new(0x00B0_5EED);
+    let mut load_bearing = 0usize;
+    for case in 0..400 {
+        let n = 1 + rng.below(4);
+        let w = 8 + rng.below(80) as i32;
+        let gap = rng.below(3) as i32;
+        let pad = rng.below(3) as i32;
+
+        // NON-Stretch alignment is essential, not cosmetic. Under the
+        // default Stretch a row child's height is the container's, which
+        // satisfies this invariant for free and tests nothing — the
+        // height has to come from the child's own measure for the
+        // ordering cycle to be observable at all.
+        let align = match rng.below(3) {
+            0 => Align::Start,
+            1 => Align::Center,
+            _ => Align::End,
+        };
+        let root_style = Style::row()
+            .gap(gap)
+            .padding(Edges::all(pad))
+            .align_items(align);
+        let mut tree = LayoutTree::new();
+        let root = tree.add(root_style);
+        let mut kids: Vec<(LayoutId, i32, i32, i32)> = Vec::new();
+        for _ in 0..n {
+            let chars = 1 + rng.below(200) as i32;
+            let mx = rng.below(4) as i32;
+            let my = rng.below(3) as i32;
+            // Mixed shrink/grow so the distributed width genuinely
+            // differs from the intrinsic estimate — the whole point.
+            let mut s = Style::default().margin(Edges::hv(mx, my));
+            match rng.below(3) {
+                0 => s = s.grow(1.0),
+                1 => s = s.shrink(1.0),
+                _ => {}
+            }
+            let id = text_leaf(&mut tree, s, chars);
+            tree.add_child(root, id);
+            kids.push((id, chars, mx, my));
+        }
+
+        // Generous CROSS axis here: in a row the height is the axis the
+        // content drives, so that is the one that must have room.
+        let container = Rect::new(0, 0, w, 4000);
+        solve(&mut tree, root, container);
+
+        let ctx = format!("case {case}: w={w} n={n} gap={gap} pad={pad}");
+        let offered = w - 2 * pad; // the width the intrinsic pass sees
+        for (id, chars, mx, my) in &kids {
+            let r = tree.rect(*id);
+            let needs = wrapped_rows(*chars, r.w);
+            // Load-bearing means the ORDERING CYCLE was actually
+            // exercised, and it takes BOTH clauses. The width one: flex
+            // distribution moved the child off the width the intrinsic
+            // pass estimated at. The height one: its height is
+            // content-derived rather than stretched to the container —
+            // under Stretch the child gets the container's height, which
+            // satisfies this invariant for free and measures nothing.
+            let cross_avail = container.h - 2 * pad - 2 * my;
+            let stretched = r.h >= cross_avail;
+            if needs > 1 && r.w != (offered - 2 * *mx).max(0) && !stretched {
+                load_bearing += 1;
+            }
+            assert!(
+                r.h >= needs,
+                "{ctx}: row leaf of {chars} chars solved to {:?} — {} \
+                 columns wraps to {needs} rows, but it was given {}",
+                r,
+                r.w,
+                r.h
+            );
+        }
+    }
+    assert!(
+        load_bearing >= 400,
+        "population went vacuous: only {load_bearing} row leaves wrapped \
+         past one row AND were moved off the estimated width by flex \
+         distribution — without those the ordering cycle is never exercised"
     );
 }
 

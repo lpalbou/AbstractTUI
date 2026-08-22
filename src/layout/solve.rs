@@ -78,6 +78,16 @@ pub fn measure(tree: &LayoutTree, id: LayoutId, avail: Size) -> Size {
 /// beside a fixed sibling is measured at the full content width,
 /// because its share is not known until the basis it is being asked
 /// for has been distributed.
+///
+/// That last limitation does NOT reach the solved rects, and the reason
+/// is worth stating because it is easy to remove by accident: placement
+/// re-measures the child's CROSS axis at the main size it was actually
+/// given (see `layout_children_of`), so a row child's height is
+/// recomputed at its distributed width. The stale estimate is therefore
+/// visible through this query and through anything sizing itself from
+/// it, but not in what gets drawn. Measured over a random-tree
+/// population in `adv_layout`, which goes red if that re-measure is
+/// weakened.
 pub(super) fn intrinsic_size(tree: &LayoutTree, id: LayoutId, avail: Size) -> Size {
     let Some(node) = tree.nodes.get(id.0) else {
         return Size::ZERO;
