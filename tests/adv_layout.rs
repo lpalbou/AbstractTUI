@@ -339,6 +339,13 @@ fn content_sized_children_are_solved_big_enough_for_their_own_content() {
 /// is that placement re-measures the child's cross axis — its height —
 /// at the width it was actually solved to. This asserts that the rescue
 /// is real, which is the part that had never been measured.
+///
+/// Falsified rather than assumed: measuring the cross axis at the full
+/// content width instead of the distributed one — the stale estimate the
+/// solver docs warn about — turns this RED on case 0, while the column
+/// population above and the five older invariants all stay green. Run
+/// crate-wide, that weakening breaks this test and NOTHING ELSE out of
+/// 2371. The re-measure had no other pin, so treat it as load-bearing.
 #[test]
 fn content_sized_row_children_are_solved_big_enough_for_their_own_content() {
     let mut rng = Rng::new(0x00B0_5EED);

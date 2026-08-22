@@ -86,8 +86,10 @@ pub fn measure(tree: &LayoutTree, id: LayoutId, avail: Size) -> Size {
 /// recomputed at its distributed width. The stale estimate is therefore
 /// visible through this query and through anything sizing itself from
 /// it, but not in what gets drawn. Measured over a random-tree
-/// population in `adv_layout`, which goes red if that re-measure is
-/// weakened.
+/// population in `adv_layout`, which is the ONLY test in the crate that
+/// goes red when that re-measure is weakened — verified by weakening it
+/// and running everything. Simplifying the cross-axis re-measure away
+/// will look free from every other suite.
 pub(super) fn intrinsic_size(tree: &LayoutTree, id: LayoutId, avail: Size) -> Size {
     let Some(node) = tree.nodes.get(id.0) else {
         return Size::ZERO;
