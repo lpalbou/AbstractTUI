@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `ThemeSwitcher` is a padded chip instead of a bare glyph. It was a
+  1x1 cell drawing `☾`/`☼` on a TRANSPARENT ground with no margin: the
+  smallest possible click target, the smallest possible visual object,
+  and — mounted last in a right-aligned chrome row, which is where apps
+  put it — flush against the terminal edge. Reported from a real app as
+  "ridiculously small, invisible, always ends up in the corner", and
+  all three of those are separate causes:
+
+  - the ground is now `surface_raised` in EVERY state including idle,
+    so the control reads as pressable rather than as decoration; hover
+    and focus change the ink, not whether there is a ground;
+  - one cell of padding each side, INSIDE the button, so the hit area
+    grows with the chip (3x1, the same shape `Badge` uses for a chip);
+  - one cell of margin each side, which is what actually keeps it off
+    the screen edge — padding alone just moves the chip's own ground
+    into the corner.
+
+  The default layout is unchanged in kind: `ThemeSwitcher::layout`
+  still replaces it wholesale. A latent bug went with it — the face
+  was a hardcoded 1x1 child, so any `layout()` override wider than one
+  cell drew the glyph in the corner of an empty box and left the rest
+  blank. The face now fills its button and centres the glyph.
+
 ### Fixed
 
 - layout: a wrapped line is now tall enough for the children that

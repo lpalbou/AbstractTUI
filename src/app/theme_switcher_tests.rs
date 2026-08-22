@@ -98,6 +98,19 @@ fn menu_rows_group_by_mode_with_disabled_headers_and_current_mark() {
 
 const VP: Size = Size::new(110, 34);
 
+/// Column the glyph lands in with the default chrome: past the left
+/// margin, centred in the chip.
+///
+/// DERIVED from the widget's own constants on purpose. The tests below
+/// are about BEHAVIOUR — does the glyph ink on hover, does a click
+/// open the menu, does a commit reglyph — and hardcoding a column
+/// makes every one of them fail for the wrong reason the next time the
+/// chrome is retuned. The geometry itself is not derived: it is pinned
+/// with literal numbers by
+/// `default_chrome_is_a_padded_chip_inset_from_the_edge`, which is the
+/// one test that SHOULD fail if the padding or margin changes.
+const GLYPH_X: i32 = H_MARGIN + (BUTTON_W - 1) / 2;
+
 struct Rig {
     app: App,
     term: CaptureTerm,
@@ -187,16 +200,16 @@ impl Rig {
     fn glyph_fg(&mut self) -> Option<crate::base::Rgba> {
         self.driver
             .screenshot()
-            .cell(0, 1)
+            .cell(GLYPH_X, 1)
             .expect("glyph cell")
             .fg()
     }
 
-    /// The switcher glyph cell (row 1, column 0 in this rig).
+    /// The switcher glyph cell (row 1; see `GLYPH_X`).
     fn glyph(&mut self) -> String {
         self.driver
             .screenshot()
-            .cell(0, 1)
+            .cell(GLYPH_X, 1)
             .expect("glyph cell")
             .text()
             .to_string()
@@ -247,7 +260,7 @@ fn menu_opens_on_mouse_click_at_glyph() {
     let mut rig = menu_rig();
     rig.settle();
     assert_eq!(rig.glyph(), mode_glyph(ThemeMode::Dark));
-    rig.click(0, 1);
+    rig.click(GLYPH_X, 1);
     assert!(
         rig.popup_bounds().is_some(),
         "left click on the glyph opens the menu"
@@ -265,14 +278,107 @@ fn glyph_inks_on_hover_and_clears_on_leave() {
     rig.settle();
     let rest = rig.glyph_fg();
 
-    // SGR motion with no button held (mode 1003 reports button 35).
-    rig.input(b"\x1b[<35;1;2M");
+    // SGR motion with no button held (mode 1003 reports button 35),
+    // 1-based. Deliberately over the PADDING cell rather than the
+    // glyph: the whole chip is the control, so its own padding has to
+    // be hot. Hovering only the glyph would leave two thirds of the
+    // button dead and still pass.
+    let pad_cell_1based = H_MARGIN + 1;
+    rig.input(format!("\x1b[<35;{pad_cell_1based};2M").as_bytes());
     let hot = rig.glyph_fg();
-    assert_ne!(hot, rest, "the glyph takes hover ink under the pointer");
+    assert_ne!(
+        hot, rest,
+        "hovering the chip's padding inks the button, not just the glyph"
+    );
 
     // Moving away restores the resting ink.
     rig.input(b"\x1b[<35;20;6M");
     assert_eq!(rig.glyph_fg(), rest, "hover ink clears on leave");
+}
+
+/// THE geometry test, and the only one here written with literal
+/// numbers rather than the widget's constants. Everything else derives
+/// `GLYPH_X` so that retuning the chrome does not fail twelve
+/// behaviour tests for the wrong reason; this one is supposed to fail,
+/// because it IS the chrome contract.
+///
+/// Reported defect (dm:laurent--tui#11): a bare one-cell glyph with no
+/// padding and no margin, flush in the corner, reading as invisible
+/// rather than as a control. What that means concretely, on screen:
+///
+/// ```text
+/// col:  0      1    2    3
+///       margin pad  ☾    pad
+///       (app)  <--- chip ---->
+/// ```
+#[test]
+fn default_chrome_is_a_padded_chip_inset_from_the_edge() {
+    assert!(set_theme_by_id("abstract-dark"));
+    let mut rig = menu_rig();
+    rig.settle();
+    let shot = rig.driver.screenshot();
+    let ground = shot.cell(2, 1).expect("glyph cell").bg();
+
+    // The glyph is centred in the chip, at column 2 -- not column 0.
+    assert_eq!(
+        shot.cell(2, 1).expect("glyph cell").text(),
+        mode_glyph(ThemeMode::Dark),
+        "the glyph sits one padding cell into the chip"
+    );
+
+    // Both padding cells carry the chip's ground, so the button reads
+    // as one 3-cell object. A ground on the glyph cell alone would
+    // look like a highlighted character, not a button.
+    for x in [1, 3] {
+        let c = shot.cell(x, 1).expect("padding cell");
+        assert_eq!(c.text().trim(), "", "padding cell {x} holds no glyph");
+        assert_eq!(
+            c.bg(),
+            ground,
+            "padding cell {x} shares the chip ground -- without this the \
+             chip is one cell wide however much space it reserves"
+        );
+    }
+
+    // The margin cell is NOT the chip: this is what keeps the control
+    // off the terminal edge instead of jammed into the corner.
+    assert_ne!(
+        shot.cell(0, 1).expect("margin cell").bg(),
+        ground,
+        "column 0 is margin and must not be painted as part of the chip"
+    );
+
+    // And the ground is a real ground. The reported "invisible" state
+    // was a transparent idle background: the glyph floated on the
+    // app's own backdrop with nothing marking it as pressable.
+    assert!(
+        ground.is_some_and(|g| g.a > 0),
+        "the idle chip has an opaque ground, got {ground:?}"
+    );
+}
+
+/// The hit area is the whole chip, and stops at the margin. Padding
+/// that reserves space without accepting clicks would look fixed and
+/// still miss every press aimed at the edge of the button.
+#[test]
+fn the_padding_is_clickable_and_the_margin_is_not() {
+    assert!(set_theme_by_id("abstract-dark"));
+
+    let mut rig = menu_rig();
+    rig.settle();
+    rig.click(H_MARGIN, 1); // the chip's LEFT PADDING cell
+    assert!(
+        rig.popup_bounds().is_some(),
+        "a click on the chip's padding opens the menu"
+    );
+
+    let mut rig = menu_rig();
+    rig.settle();
+    rig.click(0, 1); // the margin cell
+    assert!(
+        rig.popup_bounds().is_none(),
+        "a click on the margin is outside the control and opens nothing"
+    );
 }
 
 #[test]
@@ -286,8 +392,9 @@ fn menu_opens_grouped_below_the_trigger() {
     let popup = rig.popup_bounds().expect("popup open");
     assert_eq!(
         (popup.x, popup.y),
-        (0, 2),
-        "below-preferred, anchored at the trigger cell; got {popup:?}"
+        (H_MARGIN, 2),
+        "below-preferred, anchored at the BUTTON's left edge — which is \
+         past the margin, not at column 0; got {popup:?}"
     );
     let screen = rig.screen();
     assert!(
@@ -441,9 +548,13 @@ fn menu_popup_inside_a_modal_anchors_at_the_screen_cell() {
     assert!(gx > 30 && gy > 10, "glyph sits inside the centered modal");
     rig.input(b"\r"); // modal focuses its first focusable: the switcher
     let popup = rig.popup_bounds().expect("popup open above the modal");
+    // The popup aligns with the BUTTON's left edge. The glyph sits
+    // H_PAD cells into the chip, so it is not the anchor -- aligning a
+    // menu to the icon instead of to its control is the kind of
+    // half-cell drift nobody notices until the padding changes again.
     assert_eq!(
         (popup.x, popup.y),
-        (gx, gy + 1),
+        (gx - H_PAD, gy + 1),
         "popup adjacent to the trigger in SCREEN space; got {popup:?}"
     );
 }
