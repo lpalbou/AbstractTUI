@@ -303,9 +303,8 @@ fn content_sized_children_are_solved_big_enough_for_their_own_content() {
         let container = Rect::new(0, 0, w, 4000);
         solve(&mut tree, root, container);
 
-        let ctx = format!(
-            "case {case}: w={w} n={n} gap={gap} pad={pad} wrap={wrap} align={align:?}"
-        );
+        let ctx =
+            format!("case {case}: w={w} n={n} gap={gap} pad={pad} wrap={wrap} align={align:?}");
         for (id, chars, mx) in &kids {
             let r = tree.rect(*id);
             let needs = wrapped_rows(*chars, r.w);
@@ -427,6 +426,126 @@ fn content_sized_row_children_are_solved_big_enough_for_their_own_content() {
         "population went vacuous: only {load_bearing} row leaves wrapped \
          past one row AND were moved off the estimated width by flex \
          distribution — without those the ordering cycle is never exercised"
+    );
+}
+
+/// A paragraph leaf: it would LIKE `pref` columns, accepts fewer when
+/// offered fewer, and is as tall as `chars` needs at the width it ends up
+/// with. `text_leaf` above always asks for everything on offer, which is
+/// why it can never share a wrap line with a sibling — and sharing a line
+/// is the only way to reach the wrap path's cross-sizing.
+fn para_leaf(tree: &mut LayoutTree, style: Style, chars: i32, pref: i32) -> LayoutId {
+    tree.add_leaf(
+        style,
+        Box::new(move |inner: Size| {
+            let w = pref.min(inner.w).max(1);
+            Size::new(w, wrapped_rows(chars, w))
+        }),
+    )
+}
+
+/// The WRAP counterpart to the two populations above, and the one that
+/// had no coverage at all: in a wrapped row a child's cross size is
+/// bounded by its LINE, not by the container, so the container being
+/// generous saves nothing. A line is sized from its members, which makes
+/// this the only one of the three where a child's own measure has to
+/// survive a negotiation with its siblings.
+///
+/// Falsified rather than assumed. Against the pre-fix `wrap.rs` — where
+/// a Stretch member contributed nothing to its line's extent — this reds
+/// on case 5:
+///
+/// ```text
+/// wrapped leaf of 28 chars solved to Rect { x: 3, y: 3, w: 27, h: 0 }
+///   — 27 columns wraps to 2 rows, but its line gave it 0
+/// ```
+///
+/// while the column and row populations above and every other invariant
+/// in this file stay green. Run crate-wide against that same pre-fix
+/// source, the only two targets that fail are this one and
+/// `wrap_stretch_line_extent` — both written for this defect, so it had
+/// no pin anywhere in 105 test binaries.
+///
+/// That is the defect it was written for: because `Stretch` is the
+/// default `align_items`, an ordinary wrapped row of text blocks beside
+/// any short fixed sibling was clipped to the short sibling's height.
+#[test]
+fn content_sized_wrap_children_are_solved_big_enough_for_their_own_content() {
+    let mut rng = Rng::new(0x00C5_1A7E);
+    let mut load_bearing = 0usize;
+    for case in 0..400 {
+        // At least two children: a lone child on a line never negotiates
+        // a line extent with anyone, which is the whole subject here.
+        let n = 2 + rng.below(5);
+        let w = 12 + rng.below(50) as i32;
+        let gap = rng.below(3) as i32;
+        let cross_gap = rng.below(3) as i32;
+        let pad = rng.below(3) as i32;
+        // Stretch INCLUDED, unlike the row population — there it makes
+        // the invariant free (the child takes the container's height),
+        // here it is the case that was broken.
+        let align = match rng.below(4) {
+            0 => Align::Start,
+            1 => Align::Center,
+            2 => Align::End,
+            _ => Align::Stretch,
+        };
+        let root_style = Style::row()
+            .wrap()
+            .gap(gap)
+            .cross_gap(cross_gap)
+            .padding(Edges::all(pad))
+            .align_items(align);
+
+        let mut tree = LayoutTree::new();
+        let root = tree.add(root_style);
+        let mut kids: Vec<(LayoutId, i32)> = Vec::new();
+        for _ in 0..n {
+            let mx = rng.below(3) as i32;
+            let my = rng.below(2) as i32;
+            let style = Style::default().margin(Edges::hv(mx, my));
+            if rng.below(3) == 0 {
+                // A short fixed "chip". Its explicit height is what used
+                // to decide the whole line's extent on its own.
+                let id = tree.add(style.w(1 + rng.below(6) as i32).h(1));
+                tree.add_child(root, id);
+            } else {
+                let chars = 1 + rng.below(200) as i32;
+                let pref = 4 + rng.below(30) as i32;
+                let id = para_leaf(&mut tree, style, chars, pref);
+                tree.add_child(root, id);
+                kids.push((id, chars));
+            }
+        }
+
+        let container = Rect::new(0, 0, w, 4000);
+        solve(&mut tree, root, container);
+
+        let ctx = format!(
+            "case {case}: w={w} n={n} gap={gap} cross_gap={cross_gap} \
+             pad={pad} align={align:?}"
+        );
+        for (id, chars) in &kids {
+            let r = tree.rect(*id);
+            let needs = wrapped_rows(*chars, r.w);
+            if needs > 1 && align == Align::Stretch {
+                load_bearing += 1;
+            }
+            assert!(
+                r.h >= needs,
+                "{ctx}: wrapped leaf of {chars} chars solved to {:?} — {} \
+                 columns wraps to {needs} rows, but its line gave it {}",
+                r,
+                r.w,
+                r.h
+            );
+        }
+    }
+    assert!(
+        load_bearing >= 200,
+        "population went vacuous: only {load_bearing} wrapped leaves both \
+         stretched into their line and wrapped past one row — without \
+         those the line-extent negotiation is never exercised"
     );
 }
 

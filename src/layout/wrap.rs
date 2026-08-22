@@ -7,9 +7,20 @@
 //! line then distributes grow/shrink independently over the SAME
 //! largest-remainder math as a non-wrapped row (a line is a row). Lines
 //! stack along the cross axis, separated by `cross_gap`; each line's
-//! cross extent is the max of its children's cross sizes, and Stretch
-//! children fill their LINE, not the container (CSS `align-items`
-//! within `align-content: start` — the only align-content mode in v1).
+//! cross extent is the max of its children's HYPOTHETICAL cross sizes —
+//! what each would be if it did not stretch — and Stretch children then
+//! fill their LINE, not the container (CSS `align-items` within
+//! `align-content: start` — the only align-content mode in v1).
+//!
+//! "Hypothetical" is load-bearing, not pedantry. A Stretch child's final
+//! cross size depends on the line, and the line depends on its children:
+//! sizing the line from the hypotheticals is how CSS breaks that cycle,
+//! and skipping Stretch children there instead — the obvious shortcut,
+//! since their size "comes from the line anyway" — leaves a line only as
+//! tall as its non-stretch members. Stretch is the DEFAULT `align_items`,
+//! so that shortcut clipped every wrapped paragraph standing beside a
+//! one-row chip. Pinned by `tests/wrap_stretch_line_extent.rs` and the
+//! wrap population in `tests/adv_layout.rs`.
 //!
 //! Purity contract as everywhere in the solver: same inputs, same
 //! rects; integer cells; nothing dropped to rounding.
@@ -157,10 +168,20 @@ pub(super) fn layout_wrapped(
                 Direction::Row => content.h,
                 Direction::Column => content.w,
             };
-            let resolved = match resolve_dim(cross_dim, content_cross) {
-                Some(c) => Some(c),
-                None if align == Align::Stretch => None, // fills the line later
-                None => {
+            // The HYPOTHETICAL cross size: what this child would be if it
+            // did not stretch. Every member has one, Stretch included —
+            // the line is sized from these and only THEN stretched into,
+            // which is how CSS breaks the same cycle. A Stretch member
+            // that contributed nothing here left the line only as tall as
+            // its shortest non-stretch sibling, and Stretch is the
+            // default `align_items`, so that was the ordinary case.
+            let explicit = resolve_dim(cross_dim, content_cross);
+            let hypothetical = clamp_axis(
+                explicit.unwrap_or_else(|| {
+                    // Measured at the main size this child was ACTUALLY
+                    // given, never at the container's: the line it lands
+                    // in is narrower than the container whenever a
+                    // sibling, a gap or its own margins took space.
                     let est = intrinsic_size(
                         tree,
                         c.id,
@@ -169,30 +190,22 @@ pub(super) fn layout_wrapped(
                             Direction::Column => Size::new(content.w, sizes[i]),
                         },
                     );
-                    Some(match dir {
+                    match dir {
                         Direction::Row => est.h,
                         Direction::Column => est.w,
-                    })
-                }
-            }
-            .map(|c| clamp_axis(c, cmin, cmax));
-            if let Some(c) = resolved {
-                line_extent = line_extent.max(c + m_cross_total);
-            }
-            cross_sizes.push(resolved);
-        }
-        if line_extent == 0 {
-            // All-stretch line: fall back to intrinsic so the line has
-            // real height (a zero-tall line would vanish).
-            for (i, c) in members.iter().enumerate() {
-                let est = intrinsic_size(tree, c.id, content.size());
-                let e = match dir {
-                    Direction::Row => est.h,
-                    Direction::Column => est.w,
-                };
-                line_extent = line_extent.max(e);
-                let _ = i;
-            }
+                    }
+                }),
+                cmin,
+                cmax,
+            );
+            line_extent = line_extent.max(hypothetical + m_cross_total);
+            // An explicit cross dimension outranks Stretch; otherwise a
+            // Stretch child fills the line it helped size.
+            cross_sizes.push(if explicit.is_none() && align == Align::Stretch {
+                None
+            } else {
+                Some(hypothetical)
+            });
         }
 
         // Second pass: place.

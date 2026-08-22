@@ -7,7 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- layout: a wrapped line is now tall enough for the children that
+  **stretch** into it. `wrap.rs` sized each line from the maximum of its
+  members' cross sizes but gave a `Align::Stretch` member no cross size
+  at all — its size "comes from the line", so it contributed nothing to
+  the line it was about to be measured against. A line was therefore only
+  as tall as its non-stretch members, and since `Stretch` is the DEFAULT
+  `align_items`, an ordinary wrapped row of text beside a one-row chip
+  was clipped to one row: a paragraph needing five rows was solved to
+  `h: 1`. Lines are now sized from every member's HYPOTHETICAL cross size
+  — what it would be if it did not stretch — which is how CSS breaks the
+  same cycle. Both axes: a column-direction wrap had the identical defect
+  in its widths.
+
+  The same change removes an all-stretch fallback that measured children
+  at the CONTAINER's main extent rather than the one they were solved to
+  — the stale-estimate class already fixed twice on the flex path, here
+  one layer down. It is no longer reachable: every member now has a
+  measured hypothetical, so a line can no longer come out zero-extent.
+
 ### Added
+
+- tests: `wrap_stretch_line_extent` pins the above, one test per
+  mechanism, with a non-stretch control that passed before the fix so a
+  failure names the solver rather than the fixture. Against the pre-fix
+  source it and the new wrap population are the ONLY failing targets in
+  the whole workspace — 105 test binaries, and the defect had no pin in
+  any of them.
+
+- tests: the random-tree layout properties gain a **wrap** population.
+  The two content-sized populations cover column and row parents, where
+  the container is the only thing a child negotiates with; in a wrapped
+  row a child's cross size is bounded by its LINE, so a generous
+  container saves nothing and the child's own measure has to survive a
+  negotiation with its siblings. That path — the one where the same class
+  of defect has now shipped twice — had no property coverage. Like its
+  two siblings it carries a vacuity counter, and unlike the row
+  population it deliberately INCLUDES `Stretch`: there Stretch makes the
+  invariant free, here it was the broken case.
 
 - tests: the random-tree layout properties now cover **content-sized**
   children. Every existing population in `adv_layout` gives its children
