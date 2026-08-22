@@ -62,6 +62,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the whole workspace — 105 test binaries, and the defect had no pin in
   any of them.
 
+- tests: `theme_quantisation_grounds` measures whether a theme's distinct
+  GROUNDS survive colour-depth quantisation, and pins a defect it found.
+  The contrast audit runs on truecolor; quantisation to `Ansi256`/`Ansi16`
+  happens downstream at emit, so the audit's guarantees are not carried
+  across a depth downgrade and nothing was checking what happens when
+  they are not. `quantize_pair_256` protects a foreground from colliding
+  with its OWN background — it cannot protect two different grounds from
+  collapsing into each other, because they are never handed to it as a
+  pair. Measured: 8 of 104 ground pairs collapse at 256 colours, every
+  one of them `surface vs bg`, and two of the eight are the house themes.
+  So on a 256-colour terminal the engine's default theme has no visible
+  panel elevation. Pinned as a known set that fails if it grows OR
+  shrinks, not as a guarantee; the fix is open on
+  `claim:tui-audit-does-not-survive-quantisation`.
+
+  Two findings came with it and are pinned as passing properties. Borders
+  never collapse, so elevation-by-border survives where elevation-by-fill
+  does not — that is the mitigation. And `selection_bg`, which is the
+  pair I predicted would fail, never collapses in any theme: the DERIVED
+  token survives quantisation better than the authored one, because
+  `tint_until_readable` pushes it far enough off the ground that the cube
+  separates them. Ansi16 is measured (36 of 104) and deliberately not
+  asserted against a floor — the 16 system registers are user-themable,
+  so no build-time check can know the rendered colour.
+
 - tests: `perf_budgets` no longer reports a pass when it asserted
   nothing. The whole file is `#[ignore]`d and release-only, correctly —
   a debug build cannot judge a timing budget. What it did about that was
