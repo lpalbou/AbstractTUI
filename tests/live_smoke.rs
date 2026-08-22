@@ -245,6 +245,22 @@ fn live_themes() {
 
 #[test]
 #[ignore = "live: spawns real example processes under a PTY"]
+fn live_grounds() {
+    // Walk two themes and toggle the declared panel ground before
+    // quitting. This example's paint path was shipped compiled-but-never
+    // -seen and @laurent reported it launching to nothing; a pty case is
+    // the only thing that runs it.
+    let r = smoke(
+        "grounds",
+        Duration::from_millis(1500),
+        &[b"\x1b[B", b"\x1b[B", b"p", b"q"],
+        Duration::from_secs(8),
+    );
+    assert_clean("grounds", &r);
+}
+
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
 fn live_widgets() {
     // Tab around, type into whatever input takes focus, then ESC + q.
     let r = smoke(

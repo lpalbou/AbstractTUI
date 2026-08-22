@@ -63,7 +63,18 @@ fn main() -> abstracttui::base::Result<()> {
             .shortcut(KeyChord::plain(Key::Down), move |_| {
                 sel.update(|s| *s = (*s + 1).min(n - 1))
             })
-            .draw(move |canvas, rect| draw(canvas, rect, sel.get(), declared.get()))
+            // The two signals are read HERE, inside the dyn_view, not
+            // inside the draw closure: a tracked read during phase D is
+            // a region that never repaints when the value changes, and
+            // the engine panics on it in debug builds (RT1-2). The draw
+            // closure below receives plain values.
+            .child(dyn_view(LayoutStyle::fill(), move || {
+                let (sel, declared) = (sel.get(), declared.get());
+                Element::new()
+                    .style(LayoutStyle::fill())
+                    .draw(move |canvas, rect| draw(canvas, rect, sel, declared))
+                    .build()
+            }))
             .build()
     })?;
     // The ONLY door to ground separation on the `App::run` path: the
