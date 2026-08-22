@@ -44,10 +44,12 @@
 //! ON a ground, not a ground, and it keeps its own test below.
 
 use abstracttui::base::palette::XTERM_256;
-use abstracttui::base::Rgba;
+use abstracttui::base::{Rgba, Size};
 use abstracttui::render::color::{
     nearest_ansi16, nearest_xterm256, quantize_pair_256, quantize_set_256,
 };
+use abstracttui::render::{Cell, ColorDepth, FrameDiff, PresentCaps, Presenter, Style, Surface};
+use abstracttui::testing::{xterm_256, VtScreen};
 use abstracttui::theme::{themes, TokenSet};
 
 /// The OPAQUE grounds — every token a widget can paint a region with, and
@@ -55,14 +57,16 @@ use abstracttui::theme::{themes, TokenSet};
 /// surface". `overlay` is excluded because it carries alpha and is
 /// composited over whatever it covers, so it has no fixed value to
 /// quantise.
+///
+/// The list itself now lives in the engine (`TokenSet::grounds`), because
+/// the downlevel path needs it too and two copies would drift: a ground
+/// added to `TokenSet` and missed here would simply stop being measured,
+/// which is the failure this whole file exists to prevent. This wrapper
+/// only re-attaches the snake_case names the pinned sets below are
+/// written in — themselves the engine's (`TokenId::name`), not new
+/// strings.
 fn grounds(t: &TokenSet) -> [(&'static str, Rgba); 5] {
-    [
-        ("bg", t.bg),
-        ("surface", t.surface),
-        ("surface_raised", t.surface_raised),
-        ("selection_bg", t.selection_bg),
-        ("shadow_ground", t.shadow_ground),
-    ]
+    t.grounds().map(|(id, c)| (id.name(), c))
 }
 
 /// Every unordered pair of grounds, named `"a vs b"` in declaration
@@ -1009,4 +1013,172 @@ fn the_assignment_never_sacrifices_an_exactly_representable_ground() {
             );
         }
     }
+}
+
+// ---------------------------------------------------------------------
+// On the wire.
+//
+// Everything above measures the POLICY: what index a colour resolves to.
+// None of it proves the emitter ever asks. These drive the real
+// presenter into the VT model and read the colours back off the screen,
+// because a fix that is correct in `color.rs` and unreached by
+// `resolve_pen` is not a fix.
+// ---------------------------------------------------------------------
+
+/// The assignment for a theme, in the form the presenter takes.
+fn assignment_for(t: &TokenSet) -> Vec<(Rgba, u8)> {
+    let g = t.grounds();
+    let idx = quantize_set_256(g.map(|(_, c)| c));
+    g.iter().map(|(_, c)| *c).zip(idx).collect()
+}
+
+/// Paint two cells with the given grounds, emit at 256 colours through a
+/// real `Presenter`, and read back what the terminal actually shows.
+fn painted_grounds(a: Rgba, b: Rgba, assignment: &[(Rgba, u8)]) -> (Option<Rgba>, Option<Rgba>) {
+    let caps = PresentCaps {
+        color: ColorDepth::Xterm256,
+        ..PresentCaps::FULL
+    };
+    let size = Size::new(4, 1);
+    let mut surface = Surface::new(size, Cell::EMPTY);
+    let ink = Rgba::rgb(200, 200, 200);
+    for (x, ground) in [(0, a), (1, b)] {
+        surface.draw_text(
+            x,
+            0,
+            "x",
+            Style {
+                fg: Some(ink),
+                bg: Some(ground),
+                ..Style::EMPTY
+            },
+        );
+    }
+    let mut presenter = Presenter::new();
+    presenter.set_palette_assignment(assignment);
+    let mut out = Vec::new();
+    presenter.emit(
+        FrameDiff::new().compute_full(&Surface::new(size, Cell::EMPTY), &surface),
+        &surface,
+        &caps,
+        &mut out,
+    );
+    let mut screen = VtScreen::new(size);
+    screen.feed(&out);
+    assert_eq!(screen.unknown_seq_count(), 0, "unmodeled bytes");
+    let paint = |x: i32| screen.cell(x, 0).expect("in bounds").paint.bg;
+    (paint(0), paint(1))
+}
+
+/// **The defect and the fix, both at the byte level, on the theme that
+/// ships by default.** Without an assignment a panel painted in `surface`
+/// over the app's `bg` reaches the terminal as ONE colour — there is no
+/// panel. With the assignment installed the same two cells arrive
+/// distinct.
+///
+/// The first half is as important as the second: it proves the emitter
+/// really does produce the collapse (the measurement tests only prove the
+/// lookup would), so if someone fixes this elsewhere and deletes the
+/// assignment, this fails rather than passing vacuously.
+#[test]
+fn the_default_themes_panel_survives_256_colours_only_with_the_assignment() {
+    let t = abstracttui::theme::get("abstract-dark")
+        .expect("house default")
+        .tokens;
+    let (bg_none, surface_none) = painted_grounds(t.bg, t.surface, &[]);
+    assert_eq!(
+        bg_none, surface_none,
+        "premise: with no assignment the default theme's panel and ground \
+         reach the terminal as one colour. If this now differs, the \
+         collapse was fixed somewhere else and KNOWN_256_COLLAPSES should \
+         have caught it first."
+    );
+
+    let assignment = assignment_for(&t);
+    let (bg_on, surface_on) = painted_grounds(t.bg, t.surface, &assignment);
+    assert_ne!(
+        bg_on, surface_on,
+        "the assignment is installed and the panel STILL renders as its \
+         own ground — resolve_pen is not consulting it"
+    );
+    // The ground that was not displaced keeps exactly the entry it had.
+    assert_eq!(bg_on, bg_none, "an unmoved ground must not shift");
+}
+
+/// A colour nobody assigned is untouched: an arbitrary `Block::fill`
+/// misses the table and quantises as it always did. This is the property
+/// that makes installing an assignment safe for scenes the theme knows
+/// nothing about.
+#[test]
+fn an_unassigned_colour_is_unaffected_by_the_assignment() {
+    let t = abstracttui::theme::get("abstract-dark")
+        .expect("house default")
+        .tokens;
+    let stranger = Rgba::rgb(180, 20, 90);
+    assert!(
+        !t.grounds().iter().any(|(_, c)| *c == stranger),
+        "premise: not a ground"
+    );
+    let (plain, _) = painted_grounds(stranger, t.bg, &[]);
+    let (mapped, _) = painted_grounds(stranger, t.bg, &assignment_for(&t));
+    assert_eq!(plain, mapped);
+    assert_eq!(plain, Some(xterm_256(nearest_xterm256(stranger))));
+}
+
+/// **Precedence: text beats elevation.** An assignment can push a ground
+/// onto the entry a foreground drawn on it wants — a collision the raw
+/// lookup did not have. When that happens the foreground still moves,
+/// because two surfaces reading as one is a defect and text reading as
+/// its own background is erased.
+///
+/// Constructed rather than found: no built-in theme currently produces
+/// the case, and waiting for one to appear is how a precedence rule goes
+/// untested until it is wrong in production.
+#[test]
+fn an_assignment_never_erases_text_it_collides_with() {
+    // Ground assigned to 238; ink whose natural entry is also 238.
+    let ground = Rgba::rgb(60, 60, 60);
+    let ink = XTERM_256[238];
+    assert_eq!(nearest_xterm256(ink), 238, "premise: ink lands on 238");
+    let assignment = [(ground, 238u8)];
+
+    let caps = PresentCaps {
+        color: ColorDepth::Xterm256,
+        ..PresentCaps::FULL
+    };
+    let size = Size::new(2, 1);
+    let mut surface = Surface::new(size, Cell::EMPTY);
+    surface.draw_text(
+        0,
+        0,
+        "x",
+        Style {
+            fg: Some(ink),
+            bg: Some(ground),
+            ..Style::EMPTY
+        },
+    );
+    let mut presenter = Presenter::new();
+    presenter.set_palette_assignment(&assignment);
+    let mut out = Vec::new();
+    presenter.emit(
+        FrameDiff::new().compute_full(&Surface::new(size, Cell::EMPTY), &surface),
+        &surface,
+        &caps,
+        &mut out,
+    );
+    let mut screen = VtScreen::new(size);
+    screen.feed(&out);
+    let paint = screen.cell(0, 0).expect("in bounds").paint;
+    assert_eq!(
+        paint.bg,
+        Some(xterm_256(238)),
+        "the ground keeps its assigned entry — the assignment is a \
+         preference the pair rule must not silently override"
+    );
+    assert_ne!(
+        paint.fg, paint.bg,
+        "the assignment collided with the ink and the text was emitted \
+         invisible: the pair guarantee must outrank the ground preference"
+    );
 }

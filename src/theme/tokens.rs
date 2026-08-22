@@ -246,6 +246,28 @@ impl TokenId {
 }
 
 impl TokenSet {
+    /// The OPAQUE grounds: every token a widget paints a REGION with, and
+    /// therefore every token a user reads as "this is a different
+    /// surface". `overlay` is not one — it carries alpha and is
+    /// composited over whatever it covers, so it has no fixed value.
+    ///
+    /// This is the authoritative list, not a convenience. Two grounds
+    /// that quantise to one palette entry render as one surface, so the
+    /// downlevel path has to be handed the whole set at once
+    /// (`render::color::quantize_set_256`) — and it can only be handed
+    /// what this returns. A ground added to `TokenSet` and forgotten here
+    /// is a surface that silently stops being separable at 256 colours,
+    /// which is exactly the defect that produced this method.
+    pub const fn grounds(&self) -> [(TokenId, Rgba); 5] {
+        [
+            (TokenId::Bg, self.bg),
+            (TokenId::Surface, self.surface),
+            (TokenId::SurfaceRaised, self.surface_raised),
+            (TokenId::SelectionBg, self.selection_bg),
+            (TokenId::ShadowGround, self.shadow_ground),
+        ]
+    }
+
     /// Resolve a token by id.
     pub fn get(&self, id: TokenId) -> Rgba {
         match id {

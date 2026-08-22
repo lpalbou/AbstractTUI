@@ -85,8 +85,48 @@ pub fn nearest_ansi16(c: Rgba) -> u8 {
 
 /// Joint fg/bg quantization to xterm-256 with contrast preservation.
 pub fn quantize_pair_256(fg: Rgba, bg: Rgba) -> (u8, u8) {
-    let qbg = nearest_xterm256(bg);
-    let qfg = nearest_xterm256(fg);
+    quantize_pair_256_assigned(fg, bg, &[])
+}
+
+/// An upstream decision about which palette entry specific colors get,
+/// as `(color, index)` pairs — what [`quantize_set_256`] produced, zipped
+/// back onto the colors it was given.
+///
+/// The emitter cannot make this decision itself: it sees one cell at a
+/// time, so two GROUNDS that collapse into each other are never in front
+/// of it together. Resolved once per theme and depth instead, it arrives
+/// here as a lookup. An empty assignment is exactly today's behavior, by
+/// construction rather than by promise — [`quantize_pair_256`] IS the
+/// empty case.
+pub type PaletteAssignment<'a> = &'a [(Rgba, u8)];
+
+/// The assigned index for `c`, or the nearest entry when it has none.
+///
+/// Matching is on RGB, ignoring alpha — the same thing the nearest lookup
+/// ignores. An arbitrary color (a `Block::fill` nobody themed) misses the
+/// table and quantises as it always did.
+pub fn nearest_xterm256_assigned(c: Rgba, assignment: PaletteAssignment) -> u8 {
+    assignment
+        .iter()
+        .find(|(a, _)| rgb_eq(*a, c))
+        .map_or_else(|| nearest_xterm256(c), |(_, i)| *i)
+}
+
+/// [`quantize_pair_256`] over an assignment: each color takes its
+/// assigned entry if it has one, and the pair guarantee is then applied
+/// ON TOP.
+///
+/// The order matters and it is a real precedence decision. An assignment
+/// can CREATE a collision the raw lookup did not have (a ground displaced
+/// onto the entry this cell's foreground naturally wants) as easily as it
+/// removes one. When that happens the foreground still moves, exactly as
+/// it does today: two grounds rendering as one surface is a defect, but a
+/// foreground rendering as its own background is erased text, and text
+/// wins. The ground assignment is a preference; the pair separation is a
+/// guarantee.
+pub fn quantize_pair_256_assigned(fg: Rgba, bg: Rgba, assignment: PaletteAssignment) -> (u8, u8) {
+    let qbg = nearest_xterm256_assigned(bg, assignment);
+    let qfg = nearest_xterm256_assigned(fg, assignment);
     if qfg != qbg || rgb_eq(fg, bg) {
         return (qfg, qbg);
     }

@@ -225,6 +225,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   assignment: a per-pair re-pick cannot see the third ground by
   construction.
 
+- The emit path can now be handed that assignment:
+  `Presenter::set_palette_assignment` installs `(color, index)` pairs and
+  `resolve_pen` consults them ahead of the nearest lookup, for cell
+  foregrounds, backgrounds and underline colours alike (one colour must
+  resolve to one index everywhere, or an underline drawn in a ground
+  colour would disagree with the ground). An empty assignment — the
+  default — is byte-for-byte the previous path: `quantize_pair_256` is
+  now literally `quantize_pair_256_assigned(fg, bg, &[])`, so the two
+  cannot drift. Nothing installs one yet; the theme/driver wiring is the
+  remaining step.
+
+  A precedence rule came with it, and it is the interesting part. An
+  assignment can CREATE a collision as easily as it removes one — a
+  displaced ground can land on the entry a foreground drawn over it
+  naturally wants. When that happens the foreground still moves. The
+  ground assignment is a *preference*; the fg/bg separation is a
+  *guarantee*: two surfaces reading as one is a defect, text reading as
+  its own background is erased. No built-in theme produces the case, so
+  it is tested on a constructed one rather than left until it is wrong in
+  production.
+
+  `TokenSet::grounds` now owns the ground list, and the quantisation
+  tests read it instead of keeping their own copy. The list had been
+  duplicated in the test file, which meant a ground added to `TokenSet`
+  would silently stop being measured — the exact failure the file exists
+  to catch. Names come from `TokenId::name`, so the pinned sets did not
+  have to change.
+
+  Proved on the wire, not just in the lookup: three tests drive a real
+  `Presenter` into the VT model at 256 colours and read the colours back
+  off the screen. Without an assignment the default theme's panel and its
+  ground arrive as ONE colour — the defect, live at the byte level, which
+  is what makes the second half meaningful; with the assignment installed
+  they arrive distinct, an unassigned colour is untouched, and the
+  constructed collision keeps its text visible.
+
 - tests: `perf_budgets` no longer reports a pass when it asserted
   nothing. The whole file is `#[ignore]`d and release-only, correctly —
   a debug build cannot judge a timing budget. What it did about that was
