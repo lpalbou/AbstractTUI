@@ -87,6 +87,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asserted against a floor — the 16 system registers are user-themable,
   so no build-time check can know the rendered colour.
 
+  The same file now costs the two candidate fixes, because the cost is
+  what chooses between them and it should not have to be re-derived by
+  hand. Moving the eight authored seeds so the cube separates them turns
+  out to be invisible: every one separates for a CIE76 ΔE below the 2.3
+  just-noticeable difference (worst case 1.30) with the contrast audit
+  still passing, so the assumption that it meant visibly restyling
+  published themes was wrong. What actually argues against it is that six
+  of the eight are third-party ports whose value is byte-fidelity to
+  upstream, and that it does nothing for a consumer palette arriving
+  through `theme::Palette`. Separating the grounds at render time needs no
+  new algorithm — handed the two grounds, the existing `quantize_pair_256`
+  re-pick separates all eight and lands on exactly the palette entry the
+  optimal seed edit reaches, in every case — so the two approaches produce
+  an identical rendered result and only one of them touches upstream hex.
+
+  Two things came out of the costing. The site first sketched for it does
+  not exist: `sgr::resolve_pen` takes ONE cell, which is precisely why the
+  fg/bg pair is available there, and two grounds are never in one cell. And
+  the re-pick has a defect of its own when applied to grounds — it always
+  nudges its first argument, which is right for fg/bg (never move a
+  background out from under other cells) and arbitrary for two grounds. In
+  both light themes it therefore sacrifices `surface`, which the palette
+  represents EXACTLY, instead of the off-white `bg` it can only
+  approximate. Pinned with the rule its fix should follow.
+
 - tests: `perf_budgets` no longer reports a pass when it asserted
   nothing. The whole file is `#[ignore]`d and release-only, correctly —
   a debug build cannot judge a timing budget. What it did about that was

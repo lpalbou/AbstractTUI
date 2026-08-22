@@ -22,7 +22,7 @@
 
 use abstracttui::base::palette::XTERM_256;
 use abstracttui::base::Rgba;
-use abstracttui::render::color::{nearest_ansi16, nearest_xterm256};
+use abstracttui::render::color::{nearest_ansi16, nearest_xterm256, quantize_pair_256};
 use abstracttui::theme::{themes, TokenSet};
 
 /// The ground pairs a user reads as "these are different surfaces".
@@ -138,6 +138,231 @@ fn ansi16_ground_collapse_is_measured_and_unknowable() {
         "expected SOME 16-colour collapse and not total collapse, got \
          {collapsed}/{total} — a 0 or a {total} means the measurement \
          stopped measuring"
+    );
+}
+
+// ---------------------------------------------------------------------
+// Costing the fix.
+//
+// The measurement above says WHAT is broken. The three tests below say
+// what the candidate fixes would cost, because that is the fact that
+// chooses between them and it should not have to be re-derived by hand
+// (or trusted from a write-up) next time someone opens this file.
+//
+//   (b) move the eight seeds so the cube separates them
+//   (c) separate the two grounds at render time, leaving the seeds alone
+//
+// One structural fact frames both, and it is not measurable so it is
+// written down here instead. (c) was first sketched as "do it at emit,
+// the way `quantize_pair_256` already does for fg/bg". That site cannot
+// work. `sgr::resolve_pen` takes ONE cell: `cell.fg` and `cell.bg` are
+// the two colours *inside* it, which is exactly why the fg/bg pair is
+// available there. Two GROUNDS are never in one cell — a panel's fill and
+// the field behind it are different cells — so the emitter does not have
+// the pair and cannot be given it without handing it the scene. The
+// policy below is right; the site has to be somewhere the two grounds are
+// still known together (the token set at caps-resolution time, or the
+// compositor), and choosing between those is the open part of the row.
+//
+// Perceptual distance here is CIE76 ΔE, with CIE76's own just-noticeable
+// difference of 2.3. Crude next to ΔE2000, and deliberately paired with
+// its own JND constant rather than a borrowed one — the two are only
+// meaningful together. It is used for small nudges of near-neutral
+// grounds, which is the region CIE76 handles least badly.
+// ---------------------------------------------------------------------
+
+/// CIE76's just-noticeable difference: below this, two colours side by
+/// side are not reliably distinguishable.
+const JND: f32 = 2.3;
+
+fn srgb_to_linear(u: u8) -> f32 {
+    let c = u as f32 / 255.0;
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn lab(c: Rgba) -> (f32, f32, f32) {
+    let (r, g, b) = (
+        srgb_to_linear(c.r),
+        srgb_to_linear(c.g),
+        srgb_to_linear(c.b),
+    );
+    // D65 white point.
+    let x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047;
+    let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    let z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
+    let f = |t: f32| {
+        if t > 0.008856 {
+            t.cbrt()
+        } else {
+            7.787 * t + 16.0 / 116.0
+        }
+    };
+    let (fx, fy, fz) = (f(x), f(y), f(z));
+    (116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz))
+}
+
+fn delta_e(a: Rgba, b: Rgba) -> f32 {
+    let (l1, a1, b1) = lab(a);
+    let (l2, a2, b2) = lab(b);
+    ((l1 - l2).powi(2) + (a1 - a2).powi(2) + (b1 - b2).powi(2)).sqrt()
+}
+
+fn relative_luminance(c: Rgba) -> f32 {
+    0.2126 * srgb_to_linear(c.r) + 0.7152 * srgb_to_linear(c.g) + 0.0722 * srgb_to_linear(c.b)
+}
+
+/// The colour closest to `orig` (CIE76) that quantises to a *different*
+/// xterm-256 entry than `other`, searched over a ±14 box and required to
+/// keep the author's elevation direction (whichever of the two grounds
+/// was the lighter stays the lighter). This is option (b) performed
+/// optimally: the smallest edit to one authored hex that buys back the
+/// distinction.
+fn nearest_separating(orig: Rgba, other: Rgba) -> Option<(Rgba, f32)> {
+    const RADIUS: i32 = 14;
+    let stays_lighter = relative_luminance(orig) >= relative_luminance(other);
+    let q_other = nearest_xterm256(other);
+    let mut best: Option<(Rgba, f32)> = None;
+    for dr in -RADIUS..=RADIUS {
+        for dg in -RADIUS..=RADIUS {
+            for db in -RADIUS..=RADIUS {
+                let (r, g, b) = (orig.r as i32 + dr, orig.g as i32 + dg, orig.b as i32 + db);
+                if !(0..=255).contains(&r) || !(0..=255).contains(&g) || !(0..=255).contains(&b) {
+                    continue;
+                }
+                let c = Rgba::rgb(r as u8, g as u8, b as u8);
+                if nearest_xterm256(c) == q_other {
+                    continue;
+                }
+                if (relative_luminance(c) >= relative_luminance(other)) != stays_lighter {
+                    continue;
+                }
+                let d = delta_e(orig, c);
+                if best.is_none_or(|(_, bd)| d < bd) {
+                    best = Some((c, d));
+                }
+            }
+        }
+    }
+    best
+}
+
+/// Every theme in the collapsed set, as `(bg, surface)`.
+fn collapsed_grounds() -> Vec<(&'static str, Rgba, Rgba)> {
+    KNOWN_256_COLLAPSES
+        .iter()
+        .map(|(id, _)| {
+            let t = abstracttui::theme::get(id).expect("known-set theme is registered");
+            (*id, t.tokens.bg, t.tokens.surface)
+        })
+        .collect()
+}
+
+/// **The cost of option (b), and it is not what I expected.** Every one
+/// of the eight separates for a move that is *below* the just-noticeable
+/// difference — provided you may choose which of the two grounds moves.
+/// Nobody would see the edit at truecolor.
+///
+/// I opened this row assuming (b) meant visibly restyling published
+/// themes and half-rejected it on that basis. It does not. Whatever
+/// argues against (b) — and something does, see the note on the
+/// following test — it is not the look.
+#[test]
+fn every_collapsed_ground_separates_for_a_sub_jnd_move() {
+    for (id, bg, surface) in collapsed_grounds() {
+        let by_surface = nearest_separating(surface, bg);
+        let by_bg = nearest_separating(bg, surface);
+        let cheapest = [by_surface, by_bg]
+            .into_iter()
+            .flatten()
+            .map(|(_, d)| d)
+            .fold(f32::INFINITY, f32::min);
+        assert!(
+            cheapest < JND,
+            "{id}: cheapest separating edit is ΔE {cheapest:.2}, at or over \
+             the {JND} JND — option (b) would be a visible restyle for this \
+             theme and the costing that rejected it on other grounds needs \
+             re-reading"
+        );
+    }
+}
+
+/// **The cost of option (c), and the reason it wins.** There is no new
+/// algorithm to write: `quantize_pair_256` already re-picks a colliding
+/// member to the nearest distinct entry preserving light/dark ordering,
+/// and handed the two grounds it separates all eight — landing on
+/// *exactly* the palette entry that option (b)'s optimal seed edit
+/// arrives at, in every case.
+///
+/// So (b) and (c) produce the identical rendered result. (b) buys it by
+/// editing eight authored hexes, six of which are third-party ports whose
+/// entire value is byte-fidelity to upstream, and buys nothing at all for
+/// a consumer palette arriving through `theme::Palette`. (c) buys it for
+/// every theme, including ones this crate has never seen.
+///
+/// What this test does NOT say is that the fix is a small one. The policy
+/// is settled; the *site* is the open problem, and it is not the emitter
+/// — see the note on `resolve_pen` above.
+#[test]
+fn the_existing_repick_lands_where_the_ideal_seed_edit_lands() {
+    for (id, bg, surface) in collapsed_grounds() {
+        let (q_surface, q_bg) = quantize_pair_256(surface, bg);
+        assert_ne!(
+            q_surface, q_bg,
+            "{id}: the existing re-pick policy failed to separate two \
+             grounds — option (c) needs a new policy after all"
+        );
+        let (ideal, _) = nearest_separating(surface, bg)
+            .unwrap_or_else(|| panic!("{id}: no separating surface edit"));
+        assert_eq!(
+            q_surface,
+            nearest_xterm256(ideal),
+            "{id}: the re-pick chose a different entry than the optimal \
+             seed edit would reach — (b) and (c) stop being equivalent and \
+             the choice between them has to be re-argued"
+        );
+    }
+}
+
+/// A DEFECT in the policy above, found by costing it, pinned so the fix
+/// cannot forget it.
+///
+/// For fg/bg the question "which member moves?" has an obvious answer:
+/// the foreground. Never move a background out from under the other cells
+/// that share it. `quantize_pair_256` therefore always nudges its first
+/// argument — and for two GROUNDS neither member is privileged, so that
+/// rule picks by argument order instead of by merit.
+///
+/// It picks wrong here. In both light themes `surface` is `#ffffff`,
+/// which the palette represents *exactly* (ΔE 0.00 — index 231 is pure
+/// white), while `bg` is an off-white the palette can only approximate.
+/// The policy sacrifices the one that was perfect. The optimal edit moves
+/// `bg` instead, for ΔE 0.69 and 1.30 respectively.
+///
+/// Whoever writes the ground-aware separator: choose the member to nudge
+/// by which is already further from its own palette entry, and delete
+/// this test.
+#[test]
+fn the_repick_sacrifices_an_exactly_representable_ground() {
+    let mut sacrificed = Vec::new();
+    for (id, bg, surface) in collapsed_grounds() {
+        let exact = delta_e(XTERM_256[nearest_xterm256(surface) as usize], surface) == 0.0;
+        let (q_surface, _) = quantize_pair_256(surface, bg);
+        if exact && q_surface != nearest_xterm256(surface) {
+            sacrificed.push(id);
+        }
+    }
+    assert_eq!(
+        sacrificed,
+        ["abstract-light", "one-light"],
+        "the set of themes whose exactly-representable ground gets moved \
+         changed. EMPTY: the ground-aware separator landed — good, delete \
+         this test. OTHERWISE: a theme joined or left the case, and the \
+         rule 'nudge whichever member is already inexact' needs re-checking \
+         against it."
     );
 }
 
