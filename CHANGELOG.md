@@ -112,6 +112,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   represents EXACTLY, instead of the off-white `bg` it can only
   approximate. Pinned with the rule its fix should follow.
 
+  The pair set is now EXHAUSTIVE, and that changed the numbers and one of
+  the conclusions. The first two passes measured four pairs picked by
+  hand, found 8 collapses all of them `surface vs bg`, and wrote up that
+  uniformity as a finding. It was an artefact of the list. Every pair of
+  the five opaque grounds — 10 per theme, 260 in all — gives **15
+  collapses across six different pairs, in 15 of the 26 themes**. The
+  hand-picked set missed `shadow_ground` entirely (4 collapses, and its
+  only job is drawing elevation, so a collapse there is a shadow that
+  renders as nothing), missed `surface_raised vs selection_bg` (2), and
+  missed `bg vs surface_raised` (1). The pair list is generated from the
+  ground list now, so a new ground in `TokenSet` cannot be forgotten.
+  Ansi16 is 98 of 260.
+
+  Two claims the narrow set had let stand were wrong. "selection never
+  collapses into its ground" was true only against `bg`: a selected row
+  inside a popover is drawn on `surface_raised`, and against that it
+  collapses in tokyo-night and solarized-dark. And "(b) is visually free"
+  holds for 14 of the 15 — the fifteenth, solarized-dark, needs a plainly
+  visible ΔE 6.99 to move `selection_bg`, while its `surface_raised`
+  cannot be separated by any small edit at all. Since `selection_bg` is
+  derived rather than authored, editing a seed does not even reach it. So
+  for one theme option (b) is not expensive but *unavailable*.
+
+  What did survive is the fact that decides where a fix belongs: no theme
+  has more than one colliding pair, so there is no three-way pileup
+  needing a joint solve. Making the ground set pairwise distinct
+  separates every adjacency at once — and that is placement-independent,
+  which matters because widgets choose a ground token unconditionally
+  (`let ground = t.surface;`) with no idea what they are drawn on, so the
+  same token really does appear over different grounds.
+
 - tests: `perf_budgets` no longer reports a pass when it asserted
   nothing. The whole file is `#[ignore]`d and release-only, correctly —
   a debug build cannot judge a timing budget. What it did about that was

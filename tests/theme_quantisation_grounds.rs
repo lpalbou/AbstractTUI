@@ -19,57 +19,164 @@
 //! because the behaviour is acceptable. `claim:tui-audit-does-not-
 //! survive-quantisation` in `#commons` holds the open question of what
 //! the fix is.
+//!
+//! ## Why the pair set is exhaustive, and what it cost to learn
+//!
+//! The first version of this file measured four pairs I picked by hand:
+//! `selection_bg`/`bg`, `surface`/`bg`, `surface_raised`/`surface`,
+//! `border`/`bg`. It found 8 collapses, all of them `surface vs bg`, and
+//! I wrote up that uniformity as if it were a finding.
+//!
+//! It was an artefact of the list. Measuring **every pair** of the five
+//! opaque grounds instead — 10 pairs per theme, 260 in all — finds 15
+//! collapses across SIX different pairs, in 15 of the 26 themes. The
+//! hand-picked set missed `shadow_ground` entirely (4 collapses, and its
+//! only job is elevation), missed `surface_raised vs selection_bg` (2),
+//! and missed `bg vs surface_raised` (1). Nearly half the affected themes
+//! were invisible to it.
+//!
+//! Choosing which pairs to measure is choosing what you are able to find.
+//! The pair set here is now generated from the ground list, so adding a
+//! ground to `TokenSet` adds its pairs automatically and cannot be
+//! forgotten.
+//!
+//! `border` is deliberately NOT in the ground list: it is a stroke drawn
+//! ON a ground, not a ground, and it keeps its own test below.
 
 use abstracttui::base::palette::XTERM_256;
 use abstracttui::base::Rgba;
 use abstracttui::render::color::{nearest_ansi16, nearest_xterm256, quantize_pair_256};
 use abstracttui::theme::{themes, TokenSet};
 
-/// The ground pairs a user reads as "these are different surfaces".
-fn ground_pairs(t: &TokenSet) -> [(&'static str, Rgba, Rgba); 4] {
+/// The OPAQUE grounds — every token a widget can paint a region with, and
+/// therefore every token a user can read as "this is a different
+/// surface". `overlay` is excluded because it carries alpha and is
+/// composited over whatever it covers, so it has no fixed value to
+/// quantise.
+fn grounds(t: &TokenSet) -> [(&'static str, Rgba); 5] {
     [
-        ("selection_bg vs bg", t.selection_bg, t.bg),
-        ("surface vs bg", t.surface, t.bg),
-        ("surface_raised vs surface", t.surface_raised, t.surface),
-        ("border vs bg", t.border, t.bg),
+        ("bg", t.bg),
+        ("surface", t.surface),
+        ("surface_raised", t.surface_raised),
+        ("selection_bg", t.selection_bg),
+        ("shadow_ground", t.shadow_ground),
     ]
 }
 
-/// Every theme+pair that currently collapses at 256 colours, measured.
-/// All eight are `surface vs bg`, and two of them are the engine's own
-/// house themes — `abstract-dark` is the default, so the out-of-the-box
-/// experience on a 256-colour terminal has no visible panel elevation.
+/// Every unordered pair of grounds, named `"a vs b"` in declaration
+/// order. Ten per theme. The second member is the one a re-pick would
+/// move (see `the_existing_repick_lands_where_the_ideal_seed_edit_lands`).
+fn ground_pairs(t: &TokenSet) -> Vec<(String, Rgba, Rgba)> {
+    let g = grounds(t);
+    let mut out = Vec::new();
+    for i in 0..g.len() {
+        for j in (i + 1)..g.len() {
+            out.push((format!("{} vs {}", g[i].0, g[j].0), g[i].1, g[j].1));
+        }
+    }
+    out
+}
+
+/// Every theme+pair that currently collapses at 256 colours, measured
+/// exhaustively. Fifteen of the twenty-six themes have one.
+///
+/// Two of them are the house themes, and `abstract-dark` is the engine
+/// default — so out of the box, on a 256-colour terminal, this library
+/// renders no visible panel elevation.
+///
+/// The four `shadow_ground` entries are the ones the hand-picked pair set
+/// could not see, and they are not a lesser case: `shadow_ground` exists
+/// solely to draw `Block::shadow` elevation strips, so a theme where it
+/// collapses into the ground it is drawn on has a shadow that renders as
+/// nothing at all.
 const KNOWN_256_COLLAPSES: &[(&str, &str)] = &[
-    ("abstract-dark", "surface vs bg"),
-    ("abstract-light", "surface vs bg"),
-    ("observer-night", "surface vs bg"),
-    ("catppuccin-mocha", "surface vs bg"),
-    ("catppuccin-frappe", "surface vs bg"),
-    ("rose-pine", "surface vs bg"),
-    ("rose-pine-moon", "surface vs bg"),
-    ("one-light", "surface vs bg"),
+    ("abstract-dark", "bg vs surface"),
+    ("abstract-light", "bg vs surface"),
+    ("observer-night", "bg vs surface"),
+    ("catppuccin-mocha", "bg vs surface"),
+    ("catppuccin-macchiato", "surface vs shadow_ground"),
+    ("catppuccin-frappe", "bg vs surface"),
+    ("rose-pine", "bg vs surface"),
+    ("rose-pine-moon", "bg vs surface"),
+    ("tokyo-night", "surface_raised vs selection_bg"),
+    ("solarized-dark", "surface_raised vs selection_bg"),
+    ("catppuccin-latte", "surface_raised vs shadow_ground"),
+    ("rose-pine-dawn", "bg vs surface_raised"),
+    ("one-light", "bg vs surface"),
+    ("everforest-light", "surface_raised vs shadow_ground"),
+    ("abstract-midnight", "bg vs shadow_ground"),
 ];
 
 #[test]
 fn ground_collapse_at_256_colours_is_exactly_the_known_set() {
-    let mut found: Vec<(String, &'static str)> = Vec::new();
+    let mut found: Vec<(String, String)> = Vec::new();
     for th in themes() {
         for (name, a, b) in ground_pairs(&th.tokens) {
-            let (qa, qb) = (nearest_xterm256(a), nearest_xterm256(b));
-            if qa == qb {
+            if nearest_xterm256(a) == nearest_xterm256(b) {
                 found.push((th.id.to_string(), name));
             }
         }
     }
-    let actual: Vec<(&str, &str)> = found.iter().map(|(t, n)| (t.as_str(), *n)).collect();
+    let actual: Vec<(&str, &str)> = found
+        .iter()
+        .map(|(t, n)| (t.as_str(), n.as_str()))
+        .collect();
     assert_eq!(
         actual, KNOWN_256_COLLAPSES,
         "the set of grounds that collapse at 256 colours changed.\n\
-         GREW: a new theme lost a surface distinction — fix it or the \
-         theme ships with invisible panels on a 256-colour terminal.\n\
+         GREW: a theme lost a surface distinction — fix it or the theme \
+         ships with two grounds that render as one on a 256-colour \
+         terminal.\n\
          SHRANK: something improved; update KNOWN_256_COLLAPSES and say \
          so on claim:tui-audit-does-not-survive-quantisation."
     );
+}
+
+/// **The fact that decides where the fix goes.** No theme has more than
+/// one colliding pair, and no theme's five grounds need more than five
+/// distinct palette entries out of the 240 available.
+///
+/// This matters because it rules out the harder shape of the problem. A
+/// three-way pileup — three grounds in one cell — would need a joint
+/// solve, and a joint solve needs to know which grounds are actually
+/// adjacent on screen, which only the compositor knows. A single pairwise
+/// collision per theme does not: making the ground set **pairwise
+/// distinct** separates every adjacency at once, whatever sits on what.
+///
+/// That is what makes a per-theme fix sufficient. Widgets choose a ground
+/// token unconditionally — `let ground = t.surface;` — with no knowledge
+/// of what they are drawn on, so the same token genuinely does appear
+/// over different grounds (a `surface_raised` table header sits on
+/// `surface`; a `surface_raised` badge sits on `bg`). Pairwise
+/// distinctness is placement-independent, so that variety stops
+/// mattering.
+#[test]
+fn no_theme_needs_a_three_way_ground_solve() {
+    for th in themes() {
+        let g = grounds(&th.tokens);
+        let collisions = ground_pairs(&th.tokens)
+            .iter()
+            .filter(|(_, a, b)| nearest_xterm256(*a) == nearest_xterm256(*b))
+            .count();
+        assert!(
+            collisions <= 1,
+            "{}: {collisions} colliding ground pairs. More than one means \
+             the pairwise re-pick may not converge on its own and the fix \
+             needs a joint solve — which needs adjacency, which only the \
+             compositor knows.",
+            th.id
+        );
+        let mut idx: Vec<u8> = g.iter().map(|(_, c)| nearest_xterm256(*c)).collect();
+        idx.sort_unstable();
+        idx.dedup();
+        assert!(
+            idx.len() >= g.len() - 1,
+            "{}: five grounds occupy only {} palette entries — more than \
+             one pair has merged",
+            th.id,
+            idx.len()
+        );
+    }
 }
 
 /// The distinction that DOES survive, and it is the mitigation worth
@@ -90,29 +197,53 @@ fn borders_survive_256_quantisation_even_where_the_fill_does_not() {
     }
 }
 
-/// `selection_bg` was the pair I expected to fail and it does not, in
-/// any theme. Recorded as a passing property rather than dropped,
-/// because the reasoning that predicted a failure was wrong in a
-/// specific way worth keeping: `tint_until_readable` pushes the
-/// selection far enough off the ground that the cube separates them,
-/// even when `surface` — which is authored, not derived — does not.
-/// The derived token survives quantisation better than the hand-picked
-/// one.
+/// `selection_bg` vs `bg` never collapses, in any theme — and the
+/// reasoning that predicted it would is worth keeping, because it holds:
+/// `tint_until_readable` pushes the selection far enough off the ground
+/// that the cube separates them, where `surface` — authored, not derived
+/// — lands a few units away and does not. The derived token survives
+/// quantisation better than the hand-picked one.
+///
+/// What was WRONG was the scope of the claim, not its content. The
+/// earlier version of this test checked `selection_bg` against `bg`
+/// alone, passed, and was written up as "selection never collapses into
+/// its ground". A selection band sits on more than one ground: select a
+/// row inside a popover and it is drawn on `surface_raised`. Against
+/// THAT ground it does collapse, in `tokyo-night` and `solarized-dark`.
+///
+/// So the property is narrower than it read, and the test now says which
+/// ground it holds against and pins the exception rather than passing by
+/// not looking.
 #[test]
-fn selection_never_collapses_into_its_ground_at_256_colours() {
+fn selection_survives_against_bg_but_not_against_every_ground() {
     for th in themes() {
-        let t = &th.tokens;
         assert_ne!(
-            nearest_xterm256(t.selection_bg),
-            nearest_xterm256(t.bg),
-            "{}: selection band is invisible at 256 colours",
+            nearest_xterm256(th.tokens.selection_bg),
+            nearest_xterm256(th.tokens.bg),
+            "{}: selection band is invisible on the app ground at 256 \
+             colours — this is the one selection property that has always \
+             held, and it just stopped",
             th.id
         );
     }
+    let on_raised: Vec<&str> = themes()
+        .iter()
+        .filter(|th| {
+            nearest_xterm256(th.tokens.selection_bg) == nearest_xterm256(th.tokens.surface_raised)
+        })
+        .map(|th| th.id)
+        .collect();
+    assert_eq!(
+        on_raised,
+        ["tokyo-night", "solarized-dark"],
+        "the set of themes whose selection vanishes on `surface_raised` \
+         changed — a selected row inside a popover is the case this \
+         covers, and it is in KNOWN_256_COLLAPSES too"
+    );
 }
 
 /// Ansi16 is measured for the record and deliberately NOT asserted
-/// against a floor: 36 of 104 ground pairs collapse there, and the
+/// against a floor: 98 of 260 ground pairs collapse there, and the
 /// number is not actionable, because the 16 system registers are
 /// user-themable. A terminal's `color4` is whatever the user set it to,
 /// so no build-time check can know the rendered colour. `color.rs` says
@@ -132,7 +263,7 @@ fn ansi16_ground_collapse_is_measured_and_unknowable() {
             }
         }
     }
-    assert_eq!(total, 104, "26 themes x 4 ground pairs");
+    assert_eq!(total, 260, "26 themes x 10 ground pairs");
     assert!(
         collapsed > 0 && collapsed < total,
         "expected SOME 16-colour collapse and not total collapse, got \
@@ -250,57 +381,111 @@ fn nearest_separating(orig: Rgba, other: Rgba) -> Option<(Rgba, f32)> {
     best
 }
 
-/// Every theme in the collapsed set, as `(bg, surface)`.
-fn collapsed_grounds() -> Vec<(&'static str, Rgba, Rgba)> {
+/// The known-set entries resolved to actual colours: `(theme, pair name,
+/// anchor, mover)`. The MOVER is the pair's second member — the one a
+/// re-pick nudges and the one an optimal seed edit is measured on first.
+fn collapsed_grounds() -> Vec<(&'static str, &'static str, Rgba, Rgba)> {
     KNOWN_256_COLLAPSES
         .iter()
-        .map(|(id, _)| {
+        .map(|(id, pair)| {
             let t = abstracttui::theme::get(id).expect("known-set theme is registered");
-            (*id, t.tokens.bg, t.tokens.surface)
+            let (anchor_name, mover_name) = pair.split_once(" vs ").expect("pair name is 'a vs b'");
+            let of = |want: &str| {
+                grounds(&t.tokens)
+                    .into_iter()
+                    .find(|(n, _)| *n == want)
+                    .unwrap_or_else(|| panic!("{id}: no ground named {want}"))
+                    .1
+            };
+            (*id, *pair, of(anchor_name), of(mover_name))
         })
         .collect()
 }
 
-/// **The cost of option (b), and it is not what I expected.** Every one
-/// of the eight separates for a move that is *below* the just-noticeable
-/// difference — provided you may choose which of the two grounds moves.
-/// Nobody would see the edit at truecolor.
+/// **The cost of option (b) — and the exhaustive pair set changed the
+/// answer.** Fourteen of the fifteen collapsed pairs separate for a move
+/// *below* the just-noticeable difference (worst 1.30), provided you may
+/// choose which of the two grounds moves. For those, nobody would see
+/// the edit at truecolor, and my assumption that (b) meant visibly
+/// restyling published themes was wrong.
 ///
-/// I opened this row assuming (b) meant visibly restyling published
-/// themes and half-rejected it on that basis. It does not. Whatever
-/// argues against (b) — and something does, see the note on the
-/// following test — it is not the look.
+/// The fifteenth is `solarized-dark`, and it is worth more than the
+/// fourteen. Its `surface_raised` and `selection_bg` are both dark teals
+/// landing in a sparse region of the cube:
+///
+/// - moving `selection_bg` costs ΔE **6.99** — plainly visible; and
+/// - moving `surface_raised` is not possible AT ALL inside the ±14 box,
+///   under the constraint that the two keep their luminance order.
+///
+/// `selection_bg` is also DERIVED, not authored, so "edit the seed" does
+/// not even reach it — you would have to retune `tint_until_readable`,
+/// which moves every theme to fix one.
+///
+/// So option (b) is not merely expensive in provenance for this case: for
+/// one theme in the set it is **unavailable**. That is the strongest
+/// argument against it and it only exists because the pair set stopped
+/// being hand-picked.
+const B_IS_NOT_FREE_FOR: &[(&str, &str)] = &[("solarized-dark", "surface_raised vs selection_bg")];
+
 #[test]
 fn every_collapsed_ground_separates_for_a_sub_jnd_move() {
-    for (id, bg, surface) in collapsed_grounds() {
-        let by_surface = nearest_separating(surface, bg);
-        let by_bg = nearest_separating(bg, surface);
-        let cheapest = [by_surface, by_bg]
-            .into_iter()
-            .flatten()
-            .map(|(_, d)| d)
-            .fold(f32::INFINITY, f32::min);
+    let mut expensive = Vec::new();
+    for (id, pair, anchor, mover) in collapsed_grounds() {
+        let cheapest = [
+            nearest_separating(mover, anchor),
+            nearest_separating(anchor, mover),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|(_, d)| d)
+        .fold(f32::INFINITY, f32::min);
         assert!(
-            cheapest < JND,
-            "{id}: cheapest separating edit is ΔE {cheapest:.2}, at or over \
-             the {JND} JND — option (b) would be a visible restyle for this \
-             theme and the costing that rejected it on other grounds needs \
-             re-reading"
+            cheapest.is_finite(),
+            "{id} ({pair}): NEITHER ground can be separated inside the ±14 \
+             box — option (b) cannot fix this theme by any small edit"
         );
+        if cheapest >= JND {
+            expensive.push((id, pair));
+        }
     }
+    assert_eq!(
+        expensive, B_IS_NOT_FREE_FOR,
+        "the set of pairs option (b) cannot fix invisibly changed.\n\
+         GREW: another theme now needs a VISIBLE edit to separate — (b) \
+         gets worse and the argument for fixing this at render time gets \
+         stronger.\n\
+         SHRANK: a theme became cheap to fix; update the list and say so \
+         on claim:tui-audit-does-not-survive-quantisation."
+    );
+}
+
+/// The half of the `solarized-dark` finding an equality check cannot
+/// carry: its `surface_raised` has NO separating colour in range, so the
+/// pair is not merely costly to fix by hand — one side of it is stuck.
+#[test]
+fn solarized_darks_raised_ground_cannot_be_moved_at_all() {
+    let t = abstracttui::theme::get("solarized-dark").expect("house port");
+    assert!(
+        nearest_separating(t.tokens.surface_raised, t.tokens.selection_bg).is_none(),
+        "solarized-dark's surface_raised can now be separated from \
+         selection_bg by a small edit. That un-sticks the one case option \
+         (b) could not reach, so the claim that (b) is UNAVAILABLE for a \
+         theme — not just expensive — no longer holds and the costing on \
+         claim:tui-audit-does-not-survive-quantisation needs updating."
+    );
 }
 
 /// **The cost of option (c), and the reason it wins.** There is no new
 /// algorithm to write: `quantize_pair_256` already re-picks a colliding
 /// member to the nearest distinct entry preserving light/dark ordering,
-/// and handed the two grounds it separates all eight — landing on
-/// *exactly* the palette entry that option (b)'s optimal seed edit
-/// arrives at, in every case.
+/// and handed the two grounds it separates every collapsed pair —
+/// landing on *exactly* the palette entry that option (b)'s optimal seed
+/// edit arrives at, in every case.
 ///
 /// So (b) and (c) produce the identical rendered result. (b) buys it by
-/// editing eight authored hexes, six of which are third-party ports whose
-/// entire value is byte-fidelity to upstream, and buys nothing at all for
-/// a consumer palette arriving through `theme::Palette`. (c) buys it for
+/// editing authored hexes, most of them third-party ports whose entire
+/// value is byte-fidelity to upstream, and buys nothing at all for a
+/// consumer palette arriving through `theme::Palette`. (c) buys it for
 /// every theme, including ones this crate has never seen.
 ///
 /// What this test does NOT say is that the fix is a small one. The policy
@@ -308,21 +493,21 @@ fn every_collapsed_ground_separates_for_a_sub_jnd_move() {
 /// — see the note on `resolve_pen` above.
 #[test]
 fn the_existing_repick_lands_where_the_ideal_seed_edit_lands() {
-    for (id, bg, surface) in collapsed_grounds() {
-        let (q_surface, q_bg) = quantize_pair_256(surface, bg);
+    for (id, pair, anchor, mover) in collapsed_grounds() {
+        let (q_mover, q_anchor) = quantize_pair_256(mover, anchor);
         assert_ne!(
-            q_surface, q_bg,
-            "{id}: the existing re-pick policy failed to separate two \
-             grounds — option (c) needs a new policy after all"
+            q_mover, q_anchor,
+            "{id} ({pair}): the existing re-pick policy failed to separate \
+             two grounds — option (c) needs a new policy after all"
         );
-        let (ideal, _) = nearest_separating(surface, bg)
-            .unwrap_or_else(|| panic!("{id}: no separating surface edit"));
+        let (ideal, _) = nearest_separating(mover, anchor)
+            .unwrap_or_else(|| panic!("{id} ({pair}): no separating edit"));
         assert_eq!(
-            q_surface,
+            q_mover,
             nearest_xterm256(ideal),
-            "{id}: the re-pick chose a different entry than the optimal \
-             seed edit would reach — (b) and (c) stop being equivalent and \
-             the choice between them has to be re-argued"
+            "{id} ({pair}): the re-pick chose a different entry than the \
+             optimal seed edit would reach — (b) and (c) stop being \
+             equivalent and the choice between them has to be re-argued"
         );
     }
 }
@@ -348,10 +533,10 @@ fn the_existing_repick_lands_where_the_ideal_seed_edit_lands() {
 #[test]
 fn the_repick_sacrifices_an_exactly_representable_ground() {
     let mut sacrificed = Vec::new();
-    for (id, bg, surface) in collapsed_grounds() {
-        let exact = delta_e(XTERM_256[nearest_xterm256(surface) as usize], surface) == 0.0;
-        let (q_surface, _) = quantize_pair_256(surface, bg);
-        if exact && q_surface != nearest_xterm256(surface) {
+    for (id, _, anchor, mover) in collapsed_grounds() {
+        let exact = delta_e(XTERM_256[nearest_xterm256(mover) as usize], mover) == 0.0;
+        let (q_mover, _) = quantize_pair_256(mover, anchor);
+        if exact && q_mover != nearest_xterm256(mover) {
             sacrificed.push(id);
         }
     }
