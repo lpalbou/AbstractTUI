@@ -21,9 +21,9 @@
 //!   sizes to content/explicit and aligns inside the cell —
 //!   `align_self` drives the VERTICAL axis, `justify_self` does not
 //!   exist yet (horizontal follows `align_self` too; a split is a
-//!   later decision, documented). NOTE that only `align_self` is read
-//!   here: unlike flex, a grid container's `align_items` does not reach
-//!   its children yet.
+//!   later decision, documented). Resolution order matches flex and
+//!   wrap: the child's `align_self` if it set one, else the container's
+//!   `align_items`.
 //! - Margins: a child's own margins come out of its CELL, as flex takes
 //!   them out of the content box — the child is inset on every edge and
 //!   sizes and aligns within the margin box. An `Auto` track fits the
@@ -265,7 +265,11 @@ pub(super) fn layout_grid(tree: &mut LayoutTree, content: Rect, style: &Style, f
             (cell.w - m.horizontal()).max(0),
             (cell.h - m.vertical()).max(0),
         );
-        let align = cstyle.align_self.unwrap_or(Align::Stretch);
+        // Same resolution order as flex and wrap: the child's own
+        // `align_self` if it set one, otherwise the container's
+        // `align_items`. Grid used to hardcode `Stretch` here, which
+        // made `align_items` on a grid container a silent no-op.
+        let align = cstyle.align_self.unwrap_or(style.align_items);
         let explicit_w = resolve_dim(cstyle.width, cell.w);
         let explicit_h = resolve_dim(cstyle.height, cell.h);
         let rect = if align == Align::Stretch && explicit_w.is_none() && explicit_h.is_none() {

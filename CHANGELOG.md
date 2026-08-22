@@ -34,6 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pass got its own case precisely because reverting it initially changed
   nothing any test could see.
 
+- tests: `grid_align_items` pins the alignment resolution order, and
+  includes a case asserting grid and flex agree on where a child's
+  alignment comes from — the property that was actually broken. Two of
+  its four tests passed before the fix: they guard the parts that must
+  NOT move (`align_self` still overrides, `Stretch` is still the
+  default), and the first of those goes red against the plausible wrong
+  fix of reading `align_items` alone.
+
 ### Fixed
 
 - layout: **the 0.4.1 margin deduction did not reach WRAPPED
@@ -68,9 +76,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   child being squeezed. Over-large margins clamp to a zero extent rather
   than inverting the rect.
   Found while establishing why grid was NOT affected by the wrap defect
-  above. Not addressed: a grid container's `align_items` still does not
-  reach its children — only a per-child `align_self` does, which is a
-  second asymmetry with flex and is now recorded in the module docs.
+  above.
+
+- layout: **`Style::align_items()` on a GRID container was a silent
+  no-op too.** Grid hardcoded the alignment fallback to `Stretch`, while
+  the crate's other three alignment sites — the flex path and both wrap
+  passes — resolve a child's alignment as its own `align_self` falling
+  back to the container's `align_items`. So a grid child was always
+  stretched no matter what its container asked for. Grid now resolves it
+  the same way the other three do. A grid that never mentions alignment
+  is bit-for-bit unchanged, since the default `align_items` is already
+  `Stretch`; only grids that explicitly set it change, and those were
+  precisely the ones being ignored. Found by a test written for the
+  margin work above that failed on the wrong expectation — the crate
+  contains 26 grid call sites and not one of them set `align_items`,
+  which is its own evidence that the option was unusable rather than
+  unwanted.
 
 ### Added
 
