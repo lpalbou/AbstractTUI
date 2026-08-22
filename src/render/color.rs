@@ -205,31 +205,57 @@ const ASSIGNABLE_256: usize = 240;
 /// `N` above `ASSIGNABLE_256 / 2` is not rejected but is not guaranteed
 /// either: a color that finds every candidate spoken for keeps its
 /// nearest entry, exactly as today. Five grounds are the intended scale.
+///
+/// Thin wrapper over [`quantize_set_256_into`], which is the single
+/// implementation — a caller whose ground count is only known at runtime
+/// (a consumer adding its own grounds to the theme's) must reach the same
+/// policy, and two copies of it would drift.
 pub fn quantize_set_256<const N: usize>(colors: [Rgba; N]) -> [u8; N] {
-    let natural: [u8; N] = core::array::from_fn(|i| nearest_xterm256(colors[i]));
+    let mut out = [0u8; N];
+    quantize_set_256_into(&colors, &mut out);
+    out
+}
+
+/// [`quantize_set_256`] for a runtime-sized set, writing into `out`.
+///
+/// Panics if `out` is shorter than `colors`; the extra entries of a
+/// longer `out` are left alone.
+///
+/// **Not for the frame path.** This allocates (small, bounded by the set
+/// size) and is meant to run once per theme and depth, with the result
+/// cached and installed on the presenter. The emitter consults that
+/// result; it never calls this.
+pub fn quantize_set_256_into(colors: &[Rgba], out: &mut [u8]) {
+    let n = colors.len();
+    assert!(
+        out.len() >= n,
+        "quantize_set_256_into: out is {} long for {n} colors",
+        out.len()
+    );
+    let natural: Vec<u8> = colors.iter().map(|c| nearest_xterm256(*c)).collect();
 
     // Most-exactly-represented first: they get first claim on their own
     // entry. `sq_dist` is the same metric the nearest lookup uses, so
     // "exactly represented" here means the same thing it means there.
-    let mut order: [usize; N] = core::array::from_fn(|i| i);
+    let mut order: Vec<usize> = (0..n).collect();
     order.sort_by_key(|&k| (sq_dist(XTERM_256[natural[k] as usize], colors[k]), k));
 
-    let mut assigned: [Option<u8>; N] = [None; N];
+    let mut assigned: Vec<Option<u8>> = vec![None; n];
     for &k in order.iter() {
-        if let Some(same) = (0..N).find(|&j| assigned[j].is_some() && rgb_eq(colors[j], colors[k]))
+        if let Some(same) = (0..n).find(|&j| assigned[j].is_some() && rgb_eq(colors[j], colors[k]))
         {
             assigned[k] = assigned[same];
             continue;
         }
-        let Some(blocker) = (0..N).find(|&j| assigned[j] == Some(natural[k])) else {
+        let Some(blocker) = (0..n).find(|&j| assigned[j] == Some(natural[k])) else {
             assigned[k] = Some(natural[k]);
             continue;
         };
         // Every entry already spoken for: the ones handed out, plus the
         // natural entry of every color still to be placed.
-        let mut blocked: Vec<u8> = (0..N).filter_map(|j| assigned[j]).collect();
+        let mut blocked: Vec<u8> = (0..n).filter_map(|j| assigned[j]).collect();
         blocked.extend(
-            (0..N)
+            (0..n)
                 .filter(|&j| j != k && assigned[j].is_none())
                 .map(|j| natural[j]),
         );
@@ -248,7 +274,9 @@ pub fn quantize_set_256<const N: usize>(colors: [Rgba; N]) -> [u8; N] {
         );
         assigned[k] = Some(idx);
     }
-    core::array::from_fn(|i| assigned[i].expect("every color is placed exactly once"))
+    for (i, slot) in assigned.into_iter().enumerate() {
+        out[i] = slot.expect("every color is placed exactly once");
+    }
 }
 
 fn rgb_eq(a: Rgba, b: Rgba) -> bool {

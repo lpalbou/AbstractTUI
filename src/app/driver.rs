@@ -30,7 +30,9 @@ use crate::input::{Event, EventReader};
 use crate::reactive::{
     self, drain_posted, flush_effects, take_frame_request, take_worker_failures,
 };
-use crate::render::{Cell, Compositor, FrameDiff, Glyph, PresentCaps, Presenter, Surface};
+use crate::render::{
+    Cell, ColorDepth, Compositor, FrameDiff, Glyph, PresentCaps, Presenter, Surface,
+};
 use crate::term::{
     ActiveProbe, Capabilities, EnterOptions, KittyFlags, MouseMode, Terminal, TerminalWaker,
 };
@@ -192,6 +194,16 @@ pub struct Driver {
     comp: Compositor,
     diff: FrameDiff,
     presenter: Presenter,
+    /// Grounds a CONSUMER mints that the theme does not know about — a
+    /// client's own panel fill, say. They join the theme's grounds in the
+    /// palette assignment, because a ground the separator is never handed
+    /// is a ground it cannot keep distinct (`set_extra_grounds`).
+    extra_grounds: Vec<crate::base::Rgba>,
+    /// What the presenter's current palette assignment was built FROM:
+    /// the colors and the depth. The assignment is a pure function of
+    /// these, so re-deriving it is only necessary when they change —
+    /// which is what keeps `quantize_set_256` out of the frame path.
+    assignment_key: Option<(Vec<crate::base::Rgba>, ColorDepth)>,
     /// All compositor layers (root at id 0 + app overlays) live in the
     /// shared overlay store; the driver borrows them per phase.
     pub(super) overlays: Overlays,
@@ -357,6 +369,8 @@ impl Driver {
             comp: Compositor::new(),
             diff: FrameDiff::new(),
             presenter: Presenter::new(),
+            extra_grounds: Vec::new(),
+            assignment_key: None,
             overlays,
             image_session: ImageSession::new(),
             pending_image_bytes: Vec::new(),
@@ -595,6 +609,10 @@ impl Driver {
         // black. A theme switch already damage_alls (contract §5), so
         // re-reading per frame keeps the ground in lockstep for free.
         self.comp.set_ground(Some(bg));
+        // Same lockstep, same reason, for the 256-color ground
+        // assignment — but this one is DERIVED rather than copied, so it
+        // is cached on its inputs. See `sync_palette_assignment`.
+        self.sync_palette_assignment(&theme.tokens);
 
         // ---- phase L: layout (folds geometry damage into the ui set) ---
         app.tree().layout();
@@ -1052,6 +1070,91 @@ impl Driver {
             drop(store);
             reactive::request_frame();
         }
+    }
+
+    /// Declare grounds the THEME does not know about, so they are kept
+    /// distinct from the theme's own when colors downlevel to 256.
+    ///
+    /// A consumer that mints a ground — a client's own panel fill, a
+    /// second fill for a folded state — gets no protection from the
+    /// separator unless the separator is handed it: `quantize_set_256`
+    /// can only keep apart what it was given. Everything else about the
+    /// mechanism is automatic; this is the one part that cannot be.
+    ///
+    /// Takes a slice rather than one color deliberately. The count is a
+    /// consumer's business and it grows the moment a second state gets
+    /// its own fill, and widening the signature later would cost every
+    /// caller what it costs nobody today.
+    ///
+    /// Idempotent, and it owns its own repaint: a changed assignment
+    /// changes the bytes a cell resolves to, and the frame diff will not
+    /// re-emit a cell that did not change.
+    pub fn set_extra_grounds(&mut self, grounds: &[crate::base::Rgba]) {
+        if self.extra_grounds == grounds {
+            return;
+        }
+        self.extra_grounds.clear();
+        self.extra_grounds.extend_from_slice(grounds);
+        self.assignment_key = None;
+        self.poison_prev();
+        let mut store = self.overlays.store().borrow_mut();
+        for layer in store.layers.iter_mut() {
+            layer.surface_mut().damage_all();
+        }
+        drop(store);
+        reactive::request_frame();
+    }
+
+    /// The consumer grounds currently declared (empty by default).
+    pub fn extra_grounds(&self) -> &[crate::base::Rgba] {
+        &self.extra_grounds
+    }
+
+    /// Keep the presenter's palette assignment in lockstep with the live
+    /// theme, the declared extra grounds, and the color depth.
+    ///
+    /// Called once per frame beside `set_ground`, and for the same
+    /// reason: a theme switch already damages everything, and the caps
+    /// upgrade branch does too, so re-reading here covers BOTH triggers
+    /// with no hook to forget. What it does not copy from `set_ground` is
+    /// the cost — that one is a field write, this one runs a separator —
+    /// so the derivation is cached on its inputs and only re-runs when
+    /// they change. The frame path then costs one slice comparison.
+    ///
+    /// Keyed on the ground COLORS rather than a theme id on purpose: a
+    /// consumer palette can change tokens without changing the id, and
+    /// the colors are what the assignment is actually a function of.
+    ///
+    /// Only `Xterm256` gets an assignment. Truecolor has no defect to
+    /// fix, and the 16 system registers are user-themable — no
+    /// build-time decision can know what index 4 renders as — so both
+    /// install the empty assignment, which is byte-for-byte the plain
+    /// nearest path.
+    fn sync_palette_assignment(&mut self, tokens: &crate::theme::TokenSet) {
+        let depth = self.present_caps.color;
+        let grounds = tokens.grounds();
+        let inputs = || {
+            grounds
+                .iter()
+                .map(|(_, c)| *c)
+                .chain(self.extra_grounds.iter().copied())
+        };
+        if let Some((cached, cached_depth)) = &self.assignment_key {
+            let cached: &[crate::base::Rgba] = cached;
+            if *cached_depth == depth && cached.iter().copied().eq(inputs()) {
+                return;
+            }
+        }
+        let colors: Vec<crate::base::Rgba> = inputs().collect();
+        let assignment: Vec<(crate::base::Rgba, u8)> = if depth == ColorDepth::Xterm256 {
+            let mut idx = vec![0u8; colors.len()];
+            crate::render::color::quantize_set_256_into(&colors, &mut idx);
+            colors.iter().copied().zip(idx).collect()
+        } else {
+            Vec::new()
+        };
+        self.presenter.set_palette_assignment(&assignment);
+        self.assignment_key = Some((colors, depth));
     }
 
     /// Tier-2 verb, immediate form — for embedders driving their own
