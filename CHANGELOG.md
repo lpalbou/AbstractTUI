@@ -143,6 +143,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`let ground = t.surface;`) with no idea what they are drawn on, so the
   same token really does appear over different grounds.
 
+  The fix is now specified and its precondition proved, though not yet
+  written. Reading the app moved it twice more. Adjusting the ground
+  TOKENS at caps-resolution — the previously stated plan — does not work:
+  `Driver::apply_caps_upgrade` recomputes `present_caps` after the probe
+  answers, so depth is not fixed at startup; `TokenSet` is `Copy` and
+  five widgets capture one by value into their state, so a live
+  adjustment would silently split the theme in two; and at truecolor
+  there is no defect to fix, so an adjusted token set would have to
+  differ by depth, moving authored colours on terminals that render them
+  exactly. So the decision stays per-theme and the application moves to
+  emit: assign each ground a distinct palette INDEX up front and let the
+  pen resolver look a cell's ground up in that map. The emitter still
+  cannot form the pair — that objection holds — but it no longer needs
+  to, because the pair was resolved upstream. Truecolor is untouched, no
+  token moves, and an arbitrary `Block::fill` colour misses the map and
+  falls back to `nearest` as today.
+
+  Building that assignment as a prototype also retracted the claim that
+  the fix needs no new algorithm. `quantize_pair_256`'s re-pick is the
+  whole policy for a PAIR, but applied over a SET it does not converge:
+  `observer-night` has `bg` and `surface` both on 233, and the re-pick
+  moves one to 234 — already held by `surface_raised`. One collapse
+  traded for another. A set assignment must exclude every index already
+  spoken for, and also every index an unplaced ground naturally wants, or
+  the collision cascades. The prototype now gives all 26 themes five
+  distinct entries at a cost of exactly one displacement per collision,
+  perturbs none of the eleven healthy themes, and never displaces a
+  ground the palette represents exactly — that last by making the
+  ownership rule the traversal order rather than a special case.
+
 - tests: `perf_budgets` no longer reports a pass when it asserted
   nothing. The whole file is `#[ignore]`d and release-only, correctly —
   a debug build cannot judge a timing budget. What it did about that was

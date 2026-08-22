@@ -569,3 +569,221 @@ fn the_reported_grey_is_the_selection_token_quantised() {
         "index 236 is the grey ramp at 8 + 10*4 — the reported colour"
     );
 }
+
+// ---------------------------------------------------------------------
+// The fix, proved constructible before it is written.
+//
+// Slice 3 settled that a PER-THEME decision is enough, because pairwise
+// distinctness is placement-independent. Reading the app then changed
+// where that decision can be APPLIED, and it is worth writing down
+// because the row had specified the wrong thing twice running.
+//
+// The row said: adjust the ground TOKENS at caps-resolution time. Two
+// facts kill that.
+//
+//   1. Depth is not fixed at startup. `Driver::apply_caps_upgrade`
+//      recomputes `present_caps` after the probe answers, and
+//      `PresentCaps::color` is exactly the depth this fix keys on. So a
+//      depth-derived token set is not set-once; it has to re-derive
+//      mid-session. (The good news is that the same branch already
+//      poisons the previous frame and damages every layer, so the
+//      repaint a re-derivation needs is already paid for.)
+//
+//   2. `TokenSet` is `Copy` and widgets CAPTURE it by value into state —
+//      `select`, `select_multi`, `select_combobox`, `reasoning`,
+//      `choice_prompt_view` all hold a `tokens: TokenSet` field. A
+//      captured copy would keep pre-adjustment grounds, so mutating the
+//      live token set silently splits the theme in two.
+//
+// And a third that is worse than either: at truecolor there is no defect
+// to fix, so an adjusted TokenSet would have to differ BY DEPTH — moving
+// authored colours on a terminal where they render exactly.
+//
+// So: keep the decision per-theme, apply it at emit. Assign each ground
+// a distinct palette INDEX up front, and let the pen resolver look a
+// cell's ground up in that map instead of computing `nearest`. The
+// emitter never has to form the pair — that was the objection to doing
+// this at emit, and it holds; it just does not need to, because the pair
+// was resolved upstream. Truecolor is untouched, no token moves, nothing
+// captured goes stale, and an arbitrary `Block::fill` colour simply
+// misses the map and falls back to `nearest` as today.
+//
+// What follows is not that implementation. It is the precondition the
+// implementation rests on, checked so the next slice starts from a fact.
+// ---------------------------------------------------------------------
+
+/// Prototype of the assignment the fix would precompute: give every
+/// ground a distinct xterm-256 index, moving as little as possible.
+///
+/// **This is where "no new algorithm needed" stopped being true.** Slices
+/// 2 and 3 concluded that `quantize_pair_256`'s existing re-pick was the
+/// whole policy. It is — for a PAIR. Applied as a sequence of independent
+/// pairwise fixes over a SET it does not converge: `observer-night` has
+/// `bg` and `surface` both on 233, and the re-pick moves one of them to
+/// the nearest distinct entry preserving luminance order, which is 234 —
+/// already held by `surface_raised`. One collapse traded for another.
+///
+/// The missing piece is small but real: the re-pick excludes exactly ONE
+/// index (`nearest_in`'s `exclude: Option<u8>`), and a set assignment has
+/// to exclude every index already spoken for. So the fix does add code to
+/// `color.rs`, and the earlier claim that it was a pure call-site change
+/// was wrong.
+///
+/// Ownership rule, from `the_repick_sacrifices_an_exactly_representable_
+/// ground`: grounds claim their natural entry in order of how exactly the
+/// palette already represents them, so a ground rendered perfectly is
+/// never the one displaced. That turns the rule from a special case into
+/// the traversal order.
+///
+/// A displaced ground must also avoid the natural entry of any ground not
+/// yet placed, or it just moves the collision along — `observer-night`
+/// cost two displacements instead of one until that was added, because
+/// `surface` took 234 before `surface_raised`, which naturally lives
+/// there, had been reached.
+fn assign_ground_indices(t: &TokenSet) -> [(&'static str, u8); 5] {
+    let g = grounds(t);
+    let natural: Vec<u8> = g.iter().map(|(_, c)| nearest_xterm256(*c)).collect();
+
+    // Most-exactly-represented first: they get first claim.
+    let mut order: Vec<usize> = (0..g.len()).collect();
+    order.sort_by(|&a, &b| {
+        let e = |k: usize| delta_e(XTERM_256[natural[k] as usize], g[k].1);
+        e(a).total_cmp(&e(b)).then(a.cmp(&b))
+    });
+
+    let mut out: [(&'static str, u8); 5] = std::array::from_fn(|i| (g[i].0, 0));
+    let mut taken: Vec<(u8, usize)> = Vec::new(); // (index, ground)
+    for &k in &order {
+        if let Some(&(_, blocker)) = taken.iter().find(|(i, _)| *i == natural[k]) {
+            // Nearest entry nobody holds, on the same side of the blocker
+            // this ground was on in truecolor.
+            let anchor = relative_luminance(g[blocker].1);
+            let lighter = relative_luminance(g[k].1) >= anchor;
+            let mut best: Option<(u8, u32)> = None;
+            for idx in 16u16..=255 {
+                let idx = idx as u8;
+                if taken.iter().any(|(i, _)| *i == idx) {
+                    continue;
+                }
+                // Also leave alone the natural entry of any ground not
+                // yet processed: grabbing it would only move the
+                // collision along, which is the cascade `observer-night`
+                // produced when this was omitted.
+                if order
+                    .iter()
+                    .skip_while(|&&o| o != k)
+                    .skip(1)
+                    .any(|&o| natural[o] == idx)
+                {
+                    continue;
+                }
+                let e = XTERM_256[idx as usize];
+                if (relative_luminance(e)
+                    >= relative_luminance(XTERM_256[natural[blocker] as usize]))
+                    != lighter
+                {
+                    continue;
+                }
+                let d = |x: u8, y: u8| {
+                    let d = x as i32 - y as i32;
+                    (d * d) as u32
+                };
+                let dist = d(e.r, g[k].1.r) + d(e.g, g[k].1.g) + d(e.b, g[k].1.b);
+                if best.is_none_or(|(_, bd)| dist < bd) {
+                    best = Some((idx, dist));
+                }
+            }
+            let chosen = best
+                .expect("240 entries cannot all be taken by 5 grounds")
+                .0;
+            out[k].1 = chosen;
+            taken.push((chosen, k));
+        } else {
+            out[k].1 = natural[k];
+            taken.push((natural[k], k));
+        }
+    }
+    out
+}
+
+/// The precondition: every theme's five grounds CAN be given five
+/// distinct palette entries, and the assignment is a no-op wherever
+/// nothing was colliding.
+///
+/// The second half is the one worth asserting. A fix that separates the
+/// 15 broken themes by quietly moving the 11 healthy ones would be a
+/// regression wearing a fix's clothes.
+#[test]
+fn a_distinct_index_per_ground_is_constructible_for_every_theme() {
+    for th in themes() {
+        let assigned = assign_ground_indices(&th.tokens);
+        let mut idx: Vec<u8> = assigned.iter().map(|(_, i)| *i).collect();
+        let before: Vec<u8> = grounds(&th.tokens)
+            .iter()
+            .map(|(_, c)| nearest_xterm256(*c))
+            .collect();
+        idx.sort_unstable();
+        idx.dedup();
+        assert_eq!(
+            idx.len(),
+            5,
+            "{}: could not give five grounds five distinct entries — the \
+             per-theme fix is not sufficient for this theme and the \
+             compositor route is back on the table",
+            th.id
+        );
+
+        let collided = before
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            < 5;
+        let moved: Vec<&str> = assigned
+            .iter()
+            .zip(&before)
+            .filter(|((_, now), was)| now != *was)
+            .map(|((n, _), _)| *n)
+            .collect();
+        if collided {
+            assert_eq!(
+                moved.len(),
+                1,
+                "{}: one collision should cost exactly one move, got {:?}",
+                th.id,
+                moved
+            );
+        } else {
+            assert!(
+                moved.is_empty(),
+                "{}: nothing collided here, but the assignment moved {:?} \
+                 — a fix that perturbs healthy themes is a regression",
+                th.id,
+                moved
+            );
+        }
+    }
+}
+
+/// The assignment must obey the ownership rule, not argument order: an
+/// exactly-representable ground is never the one that moves. This is the
+/// defect `the_repick_sacrifices_an_exactly_representable_ground` pins on
+/// the raw `quantize_pair_256` policy, shown to be fixable by the caller
+/// rather than by changing that function — which must keep its fg/bg
+/// behaviour, where always moving the foreground IS correct.
+#[test]
+fn the_assignment_never_sacrifices_an_exactly_representable_ground() {
+    for th in themes() {
+        let g = grounds(&th.tokens);
+        for (k, (name, idx)) in assign_ground_indices(&th.tokens).iter().enumerate() {
+            let own = nearest_xterm256(g[k].1);
+            let exact = delta_e(XTERM_256[own as usize], g[k].1) == 0.0;
+            assert!(
+                !exact || *idx == own,
+                "{}: {name} is represented exactly by the palette and the \
+                 assignment moved it anyway — the ownership rule is not \
+                 being applied",
+                th.id
+            );
+        }
+    }
+}
