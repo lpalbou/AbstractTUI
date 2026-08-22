@@ -125,6 +125,11 @@ impl std::fmt::Display for RegisterError {
     }
 }
 
+// So `seed -> derive -> register` composes under `?` in a consumer's
+// main(): `PaletteError` is a `std::error::Error`, and it would be odd for
+// the second half of the same flow not to be.
+impl std::error::Error for RegisterError {}
+
 /// Registered user themes, registration order. Newest-first lookup gives
 /// replace-on-re-register semantics without ever invalidating old handles.
 static USER_THEMES: RwLock<Vec<&'static Theme>> = RwLock::new(Vec::new());

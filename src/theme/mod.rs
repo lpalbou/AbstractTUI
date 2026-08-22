@@ -11,11 +11,18 @@
 //! Contrast floors and role hygiene are test-pinned (see
 //! `docs/design/theme-identity.md` for the full token model and floors).
 //!
+//! Apps bring their own theme through the same pipeline the built-ins
+//! ride: [`Palette`] (your ~12 authored colors) → [`Palette::derive`] (the
+//! engine's derivation, not a copy of it) → [`register()`] (the audit). See
+//! [`palette`] for why the derivation is public rather than left as an
+//! afternoon's reimplementation.
+//!
 //! OWNER: DESIGN.
 
 pub mod contrast;
 pub mod derive;
 pub mod mode;
+pub mod palette;
 pub mod register;
 pub mod registry;
 pub mod seeds;
@@ -23,6 +30,7 @@ pub mod tokens;
 
 pub use contrast::{audit, contrast_ratio, Violation};
 pub use mode::{themes_by_mode, ThemeMode};
+pub use palette::{BadHex, Palette, PaletteError};
 pub use register::{register, RegisterError, RegisterMode, Registration, ThemeCandidate};
 pub use registry::{default_theme, get, list, resolve, themes, Theme, DEFAULT_THEME_ID};
 pub use tokens::{TokenId, TokenSet};
