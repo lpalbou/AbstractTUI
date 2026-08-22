@@ -59,10 +59,22 @@ use crate::theme::registry::{derive_tokens, SeedColors};
 /// A consumer's authored colors: the same twelve the built-in seed table
 /// carries, as owned strings (a palette read at runtime is not `&'static`).
 ///
-/// Every field is required. There is deliberately no "fill the rest from
-/// `bg` and `accent`" shortcut here — inventing a `surface` a designer did
-/// not choose is a look decision, and this type only claims to run the
-/// derivation the built-ins run.
+/// Every field is required, and there is deliberately no "fill the rest
+/// from `bg` and `accent`" shortcut. The first real consumer of this API
+/// is what settled that: they arrived with **seven** of the twelve, and
+/// every one of the five they lacked was a *semantic* ink —
+/// `accent_alt`, `ok`, `warn`, `error`, `info`.
+///
+/// That is the shape of the gap in general, and it is the argument. The
+/// tokens a consumer is most likely to be missing are the ones a
+/// derivation has the least business guessing: "which green means
+/// resolved in this product" is a decision, not a shade, and a second
+/// brand accent that does not exist yet must not be minted by algorithm.
+/// A helper aimed at this gap would invent meaning, and the first thing
+/// it would do is put a green in someone's product that nobody chose.
+///
+/// So this type only claims to run the derivation the built-ins run.
+/// Choosing the authored colors stays with whoever owns the brand.
 ///
 /// Hex accepts `#rgb`, `#rrggbb` and `#rrggbbaa`, with or without the `#`
 /// (the grounds should be opaque; alpha is not rejected, but the audit
