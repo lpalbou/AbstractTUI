@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and wrap past one row, so tuning the generator cannot quietly make it
   vacuous.
 
+- tests: `grid_margin_box` pins the grid margin box — inset on every
+  edge, neighbours separated by gap plus both margins, `Auto` track and
+  `Auto` row each growing for the margins, alignment inside the margin
+  box, and over-large margins clamping to zero. Each of the three
+  implementation sites turns its own test red when reverted; the row
+  pass got its own case precisely because reverting it initially changed
+  nothing any test could see.
+
 ### Fixed
 
 - layout: **the 0.4.1 margin deduction did not reach WRAPPED
@@ -41,10 +49,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The wrap path now deducts the child's margins like the flex path.
   Wrapped ROWS were never affected: there the main size is corrected
   before the cross measure reads it.
-  GRID is deliberately unchanged: a grid child's box is its cell and
-  grid never reduces it by the child's margins, so measuring at the full
-  cell is self-consistent and the truncation cannot arise. Whether grid
-  should honour margins at all is a separate question, left open.
+  GRID never had the truncation bug: a grid child's box was its whole
+  cell, so measuring at the full cell was self-consistent. The separate
+  question that left open — whether grid honours margins at all — is
+  answered below.
+
+- layout: **`Style::margin()` on a GRID child was a silent no-op.** The
+  call compiled, nothing threw, and the value was discarded: grid
+  assigned the child its raw cell with no margin term anywhere in track
+  sizing or placement. The whole suite was byte-identical with and
+  without a margin on a grid child, in either direction — nothing
+  observed it, which is why it went unnoticed. Flex has always honoured
+  margins and CSS Grid honours them on grid items, so a margin that
+  silently vanishes was the worst of the three behaviours available.
+  A grid child's margins now come out of its cell on every edge, and it
+  sizes and aligns within the resulting margin box; an `Auto` track fits
+  the child's MARGIN box, so the track grows to make room instead of the
+  child being squeezed. Over-large margins clamp to a zero extent rather
+  than inverting the rect.
+  Found while establishing why grid was NOT affected by the wrap defect
+  above. Not addressed: a grid container's `align_items` still does not
+  reach its children — only a per-child `align_self` does, which is a
+  second asymmetry with flex and is now recorded in the module docs.
 
 ### Added
 

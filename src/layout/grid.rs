@@ -21,7 +21,14 @@
 //!   sizes to content/explicit and aligns inside the cell —
 //!   `align_self` drives the VERTICAL axis, `justify_self` does not
 //!   exist yet (horizontal follows `align_self` too; a split is a
-//!   later decision, documented).
+//!   later decision, documented). NOTE that only `align_self` is read
+//!   here: unlike flex, a grid container's `align_items` does not reach
+//!   its children yet.
+//! - Margins: a child's own margins come out of its CELL, as flex takes
+//!   them out of the content box — the child is inset on every edge and
+//!   sizes and aligns within the margin box. An `Auto` track fits the
+//!   child's MARGIN box, so the track grows to make room rather than
+//!   the child being squeezed.
 //!
 //! OWNER: REACT.
 
@@ -177,8 +184,21 @@ pub(super) fn layout_grid(tree: &mut LayoutTree, content: Rect, style: &Style, f
         if !matches!(cols_spec.get(p.col), Some(Track::Auto)) {
             continue;
         }
-        let est = intrinsic_size(tree, p.id, content.size());
-        let per = (est.w + p.col_span as i32 - 1) / p.col_span.max(1) as i32;
+        // An Auto track has to hold the child's MARGIN box, not just its
+        // content: measure inside the margins, then add them back.
+        let m = tree
+            .nodes
+            .get(p.id.0)
+            .expect("grid child alive")
+            .style
+            .margin;
+        let avail = Size::new(
+            (content.w - m.horizontal()).max(0),
+            (content.h - m.vertical()).max(0),
+        );
+        let est = intrinsic_size(tree, p.id, avail);
+        let outer = est.w + m.horizontal();
+        let per = (outer + p.col_span as i32 - 1) / p.col_span.max(1) as i32;
         col_fit[p.col] = col_fit[p.col].max(per);
     }
     let col_sizes = resolve_tracks(&cols_spec, content.w, col_gap, &col_fit);
@@ -196,8 +216,19 @@ pub(super) fn layout_grid(tree: &mut LayoutTree, content: Rect, style: &Style, f
             continue;
         }
         let avail_w = span_extent(&col_sizes, p.col, p.col_span, col_gap);
-        let est = intrinsic_size(tree, p.id, Size::new(avail_w, content.h));
-        let per = (est.h + p.row_span as i32 - 1) / p.row_span.max(1) as i32;
+        let m = tree
+            .nodes
+            .get(p.id.0)
+            .expect("grid child alive")
+            .style
+            .margin;
+        let avail = Size::new(
+            (avail_w - m.horizontal()).max(0),
+            (content.h - m.vertical()).max(0),
+        );
+        let est = intrinsic_size(tree, p.id, avail);
+        let outer = est.h + m.vertical();
+        let per = (outer + p.row_span as i32 - 1) / p.row_span.max(1) as i32;
         row_fit[p.row] = row_fit[p.row].max(per);
     }
     // Build the effective row spec (explicit + implicit Auto rows).
@@ -223,6 +254,17 @@ pub(super) fn layout_grid(tree: &mut LayoutTree, content: Rect, style: &Style, f
             .expect("grid child alive")
             .style
             .clone();
+        // The child's own margins come out of its cell, exactly as flex
+        // takes them out of the content box. Everything below sizes and
+        // aligns against `cell` — the margin box — so a margined child
+        // is inset on every edge and never overlaps its neighbour's.
+        let m = cstyle.margin;
+        let cell = Rect::new(
+            cell.x + m.left,
+            cell.y + m.top,
+            (cell.w - m.horizontal()).max(0),
+            (cell.h - m.vertical()).max(0),
+        );
         let align = cstyle.align_self.unwrap_or(Align::Stretch);
         let explicit_w = resolve_dim(cstyle.width, cell.w);
         let explicit_h = resolve_dim(cstyle.height, cell.h);
