@@ -1086,6 +1086,13 @@ impl Driver {
     /// its own fill, and widening the signature later would cost every
     /// caller what it costs nobody today.
     ///
+    /// **256 ONLY.** At truecolor there is nothing to separate; at
+    /// `Ansi16` the grounds you declare here are NOT kept apart, and the
+    /// collapse still happens. Stated on the call rather than left to be
+    /// found, because the covered depth works well enough to imply the
+    /// other is covered too — see `set_palette_assignment` for why 16 is
+    /// held back and what would change it.
+    ///
     /// Idempotent, and it owns its own repaint: a changed assignment
     /// changes the bytes a cell resolves to, and the frame diff will not
     /// re-emit a cell that did not change.

@@ -163,6 +163,18 @@ impl Presenter {
     /// [`color::quantize_set_256`](super::color::quantize_set_256) so
     /// that two surfaces the palette would merge stay distinct.
     ///
+    /// **256 ONLY. At `Ansi16` this does nothing, and the collapse it
+    /// prevents still happens there** (98 of 260 built-in ground pairs
+    /// merge at 16 colors). Said here rather than left to be discovered,
+    /// because the covered half works: an API that separates grounds
+    /// correctly at 256 invites the assumption that it does so at every
+    /// depth, and a partial guarantee is believable exactly in
+    /// proportion to how well its covered part behaves. The 16 system
+    /// registers are user-themable, so no build-time decision can know
+    /// what index 4 renders as — which is a reason not to pick the
+    /// index, and is being re-examined as a reason to leave two grounds
+    /// sharing one (`claim:tui-ansi16-ground-assignment`).
+    ///
     /// **The caller owns the repaint.** Changing the assignment changes
     /// the bytes a cell resolves to, and the frame diff will not re-emit
     /// a cell that did not change — so a caller that swaps this without
