@@ -18,9 +18,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Once;
 use std::time::Duration;
 
-use abstracttui::base::Size;
+use abstracttui::base::{Rgba, Size};
 use abstracttui::testing::pty::spawn_in_pty_opts;
-use abstracttui::testing::VtScreen;
+use abstracttui::testing::{Paint, VtScreen};
+use abstracttui::theme::contrast::{contrast_ratio, floors};
 
 const COLS: u16 = 100;
 const ROWS: u16 = 30;
@@ -97,9 +98,45 @@ struct SmokeReport {
     cursor_visible: bool,
     kitty_depth: u64,
     panic_text: bool,
+    /// The painted screen, one entry per row: the display text and the
+    /// per-cell paint the VT model ended up holding.
+    ///
+    /// Every other field here is a property of the BYTE STREAM — it ran,
+    /// it restored the terminal, it did not panic. None of them can say
+    /// what a reader would SEE, which is how `examples/grounds.rs`
+    /// shipped announced-and-unseen and then shipped again with swatches
+    /// nobody could put text on. A case that claims something is on the
+    /// screen has to be able to look at the screen.
+    grid: Vec<Vec<(String, Paint)>>,
 }
 
 impl SmokeReport {
+    /// Row index whose text contains `needle`, if any.
+    fn row_with(&self, needle: &str) -> Option<usize> {
+        self.grid.iter().position(|row| {
+            row.iter()
+                .map(|c| c.0.as_str())
+                .collect::<String>()
+                .contains(needle)
+        })
+    }
+
+    /// Every `(fg, bg)` pair painted under the glyphs of `word` on `row`.
+    fn painted_word(&self, row: usize, word: &str) -> Vec<(Rgba, Rgba)> {
+        let cells = &self.grid[row];
+        let text: String = cells.iter().map(|c| c.0.as_str()).collect();
+        let mut out = Vec::new();
+        let mut from = 0;
+        while let Some(rel) = text[from..].find(word) {
+            let at = from + rel;
+            if let (Some(fg), Some(bg)) = (cells[at].1.fg, cells[at].1.bg) {
+                out.push((fg, bg));
+            }
+            from = at + word.len();
+        }
+        out
+    }
+
     fn skipped(why: Skip) -> SmokeReport {
         SmokeReport {
             skipped: Some(why),
@@ -113,6 +150,7 @@ impl SmokeReport {
             cursor_visible: true,
             kitty_depth: 0,
             panic_text: false,
+            grid: Vec::new(),
         }
     }
 }
@@ -189,6 +227,16 @@ fn smoke_opts(
         cursor_visible: vt.modes().cursor_visible(),
         kitty_depth: vt.counters().kitty_push_depth,
         panic_text: text.contains("panicked at") || text.contains("RUST_BACKTRACE"),
+        grid: (0..ROWS as i32)
+            .map(|y| {
+                (0..COLS as i32)
+                    .map(|x| match vt.cell(x, y) {
+                        Some(c) => (c.display().to_string(), c.paint),
+                        None => (" ".to_string(), Paint::default()),
+                    })
+                    .collect()
+            })
+            .collect(),
     }
 }
 
@@ -380,6 +428,45 @@ fn live_grounds() {
         Duration::from_secs(8),
     );
     assert_clean("grounds", &r);
+    if r.skipped.is_some() {
+        return;
+    }
+    // @laurent, dm#15: "confirm that you can have text on top of those
+    // colored panels ... good contrast between colored panel and text".
+    // Confirmed HERE, off the painted pty screen, not off an exit code.
+    //
+    // The BRIGHT panel row deliberately, and this is the whole reason it
+    // exists in the example. On the dark themes this case walks, the
+    // theme's own grounds are all dark, so `t.text` reads on every one of
+    // them and an assertion there cannot tell `ink_on` apart from a
+    // hand-picked ink — a green check over a case that cannot fail.
+    // Measured: swapping `ink_on` for `t.text` left this case PASSING
+    // until the bright band existed. On the bright band a dark theme's
+    // body ink measures ~1.38:1, so the polarity choice is load-bearing
+    // and the check has teeth.
+    let row = r
+        .row_with("+ panel bright")
+        .expect("the bright declared-panel band should be on the first screen");
+    let painted = r.painted_word(row, "Text");
+    assert_eq!(
+        painted.len(),
+        3,
+        "expected the word Text painted on all three bands (truecolor, \
+         nearest, assigned) of the surface_raised row; found {}",
+        painted.len()
+    );
+    for (fg, bg) in painted {
+        let c = contrast_ratio(fg, bg);
+        assert!(
+            c >= floors::TEXT,
+            "text on a ground band measured {c:.2}:1 (floor {:.1}) — \
+             fg {} on bg {}. ink_on picked the wrong pole, or the band \
+             was painted with a hand-picked ink again.",
+            floors::TEXT,
+            fg.to_hex(),
+            bg.to_hex()
+        );
+    }
 }
 
 #[test]

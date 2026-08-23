@@ -311,3 +311,119 @@ fn color_distance(a: Rgba, b: Rgba) -> f32 {
 // cycle 3) — virtual-clock pacing honesty, drop-not-queue, hard
 // ceiling, fade-over-wide-glyphs, gate reasons, register() races.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Ink on an APP-DECLARED ground (`RunConfig::extra_grounds`).
+// claim:tui-ink-on-a-declared-ground
+//
+// `audit` guarantees `text` reads on the theme's OWN grounds. It cannot
+// say anything about a ground the theme never saw, and `extra_grounds`
+// exists so an application can declare exactly that. These tests pin the
+// size of the gap and the fact that `ink_on` closes it using only
+// authored tokens.
+// ---------------------------------------------------------------------------
+
+/// A mid-dark declared panel — the one `examples/grounds.rs` uses.
+const DECLARED_PANEL: Rgba = Rgba::rgb(41, 49, 62);
+/// A bright declared panel — laurent's "black font on bright panel".
+const DECLARED_BRIGHT: Rgba = Rgba::rgb(240, 200, 90);
+
+/// The premise: reaching for `t.text` on your own panel is a coin flip.
+///
+/// If this ever goes to zero the registry has changed such that every
+/// theme's body ink happens to read on these two grounds — which would
+/// make `ink_on` unnecessary for THESE panels and still not for an
+/// arbitrary one. Re-measure with a third panel before deleting anything.
+#[test]
+fn plain_text_on_a_declared_ground_is_unreadable_in_much_of_the_registry() {
+    use abstracttui::theme::contrast::floors;
+    let count = |ground: Rgba| {
+        themes()
+            .iter()
+            .filter(|t| contrast_ratio(t.tokens.text, ground) < floors::TEXT)
+            .count()
+    };
+    let (dark_fails, bright_fails) = (count(DECLARED_PANEL), count(DECLARED_BRIGHT));
+    assert_eq!(
+        (dark_fails, bright_fails),
+        (8, 19),
+        "the declared-ground readability gap CHANGED. This is the reason \
+         `ink_on` exists; it is not a contract that it stay broken."
+    );
+    // The worst instance, named so a regression cannot hide behind a count.
+    let worst = themes()
+        .iter()
+        .find(|t| t.id == "solarized-light")
+        .expect("solarized-light is the headline case");
+    let c = contrast_ratio(worst.tokens.text, DECLARED_PANEL);
+    assert!(
+        c < 1.1,
+        "solarized-light body text on the declared panel measured {c:.2} — \
+         it was 1.01, text the same colour as the panel it sits on"
+    );
+}
+
+/// `ink_on` clears the text floor wherever ANY authored ink can, and
+/// reports it when none can.
+#[test]
+fn ink_on_clears_the_text_floor_wherever_an_authored_ink_can() {
+    use abstracttui::theme::contrast::{floors, ink_on};
+    let mut unrescuable = vec![];
+    let mut total = 0;
+    for t in themes() {
+        for ground in [DECLARED_PANEL, DECLARED_BRIGHT] {
+            total += 1;
+            let ink = ink_on(&t.tokens, ground);
+            // Whatever it returns must be a colour the THEME authored.
+            assert!(
+                ink.color == t.tokens.text || ink.color == t.tokens.bg,
+                "{} : ink_on minted a colour that is in no token",
+                t.id
+            );
+            // It must never be beaten by the naive choice it replaces.
+            assert!(
+                ink.contrast >= contrast_ratio(t.tokens.text, ground) - 1e-6,
+                "{} : ink_on picked worse than plain t.text",
+                t.id
+            );
+            if ink.contrast < floors::TEXT {
+                unrescuable.push(format!("{} {:.2}", t.id, ink.contrast));
+            }
+        }
+    }
+    assert_eq!(
+        total, 52,
+        "registry size changed; re-measure the counts below"
+    );
+    assert_eq!(
+        unrescuable.len(),
+        1,
+        "the set of theme/ground pairs NO authored ink can serve changed: \
+         {unrescuable:?}"
+    );
+    assert!(
+        unrescuable[0].starts_with("everforest-light"),
+        "expected everforest-light (a soft light palette holds no ink dark \
+         enough for a bright panel), got {:?}",
+        unrescuable[0]
+    );
+}
+
+/// The polarity actually flips — this is the whole behaviour, and a
+/// helper that always returned `text` would pass the two tests above on
+/// the themes where `text` already wins.
+#[test]
+fn ink_on_flips_polarity_between_a_light_and_a_dark_theme() {
+    use abstracttui::theme::contrast::ink_on;
+    let pick = |id: &str, ground: Rgba| {
+        let t = themes().iter().find(|t| t.id == id).expect("theme").tokens;
+        ink_on(&t, ground).token
+    };
+    // A dark theme on a BRIGHT panel must reach for its background pole.
+    assert_eq!(pick("abstract-dark", DECLARED_BRIGHT), TokenId::Bg);
+    // ...and on a dark panel, for its text pole.
+    assert_eq!(pick("abstract-dark", DECLARED_PANEL), TokenId::Text);
+    // A light theme is the mirror image.
+    assert_eq!(pick("one-light", DECLARED_PANEL), TokenId::Bg);
+    assert_eq!(pick("one-light", DECLARED_BRIGHT), TokenId::Text);
+}

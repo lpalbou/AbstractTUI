@@ -368,6 +368,78 @@ pub fn ground_overlaps(theme_id: &str, t: &TokenSet, floor: f32) -> Vec<GroundOv
     out
 }
 
+/// An ink chosen for a ground, with the contrast it actually achieved.
+///
+/// The ratio is returned rather than swallowed on purpose: on some
+/// theme/ground combinations NO authored ink clears [`floors::TEXT`], and
+/// a bare `Rgba` return would hand the caller unreadable text that looks
+/// like a considered choice. Check `contrast` against the floor you need.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Ink {
+    /// The chosen colour — always a token the theme AUTHORED.
+    pub color: Rgba,
+    /// Which token it came from, for diagnostics and golden output.
+    pub token: TokenId,
+    /// Achieved WCAG ratio against the ground it was chosen for.
+    pub contrast: f32,
+}
+
+/// The theme's most readable authored ink for an arbitrary `ground`.
+///
+/// ## The gap this closes
+///
+/// [`audit`] guarantees `text` reads on the theme's own grounds, and it
+/// holds: across the built-in registry `text` clears [`floors::TEXT`] on
+/// 128 of 130 theme/ground pairs. It says nothing whatsoever about a
+/// ground the THEME never saw — and `RunConfig::extra_grounds` exists
+/// precisely so an application can declare one. Measured on the registry,
+/// a mid-dark declared panel leaves `text` below the floor in 8 of 26
+/// themes (`solarized-light` reaches 1.01 — text the same colour as the
+/// panel), and a bright declared panel in 19 of 26. An app that reaches
+/// for `t.text` on its own panel is reading a coin flip, and the failure
+/// is invisible until someone switches theme.
+///
+/// ## Why the candidates are exactly `text` and `bg`
+///
+/// Those are the theme's two POLES, and [`audit`]'s `text/bg` rule
+/// already guarantees they are far apart. Whichever pole a ground is
+/// near, the other one reads on it — which is the general form of "black
+/// font on a bright panel, white font on a dark panel" expressed in
+/// colours the theme's author chose, rather than in literal black and
+/// white that belong to no palette. Nothing here MINTS a colour:
+/// `decision:no-palette-fill-in-helper` rules that the engine does not
+/// invent tokens, and selecting between two authored ones by a
+/// measurable property is the opposite of inventing a meaning.
+///
+/// ## It can still fail, and says so
+///
+/// Best-of-the-two-poles clears [`floors::TEXT`] on 51 of 52 measured
+/// theme/declared-ground combinations. The one that does not is
+/// `everforest-light` on a bright yellow panel (best 3.49): a soft light
+/// palette holds no ink dark enough, and no choice among authored tokens
+/// can rescue it. That case is REPORTED through [`Ink::contrast`] rather
+/// than papered over — the caller picks a different panel colour, or
+/// accepts it knowingly.
+pub fn ink_on(t: &TokenSet, ground: Rgba) -> Ink {
+    let candidates = [(TokenId::Text, t.text), (TokenId::Bg, t.bg)];
+    let mut best = Ink {
+        color: candidates[0].1,
+        token: candidates[0].0,
+        contrast: contrast_ratio(candidates[0].1, ground),
+    };
+    for (token, color) in candidates.into_iter().skip(1) {
+        let contrast = contrast_ratio(color, ground);
+        if contrast > best.contrast {
+            best = Ink {
+                color,
+                token,
+                contrast,
+            };
+        }
+    }
+    best
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

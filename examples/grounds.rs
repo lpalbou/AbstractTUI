@@ -29,13 +29,22 @@ mod common;
 use abstracttui::base::palette::XTERM_256;
 use abstracttui::prelude::*;
 use abstracttui::render::color::{nearest_xterm256, quantize_set_256};
-use abstracttui::theme::themes;
+use abstracttui::theme::contrast::{floors, ink_on};
+use abstracttui::theme::{themes, TokenSet};
 use abstracttui::ui::Canvas;
 
 /// A panel ground an app might mint itself: the theme knows nothing
 /// about it, so nothing keeps it off another ground's palette entry
 /// unless the app declares it.
 const PANEL: Rgba = Rgba::rgb(41, 49, 62);
+
+/// A BRIGHT panel an app might mint. It earns its place here twice: it
+/// is a second undeclared ground for the separator, and it is the only
+/// band on this screen whose readable ink is the OPPOSITE pole from the
+/// dark one — so the polarity flip `ink_on` performs is visible on the
+/// first screen of every theme, instead of only on the light themes
+/// twenty keypresses away.
+const PANEL_BRIGHT: Rgba = Rgba::rgb(240, 200, 90);
 
 const LABEL_W: i32 = 16;
 const SWATCH_W: i32 = 10;
@@ -82,7 +91,7 @@ fn main() -> abstracttui::base::Result<()> {
     // `Driver::set_extra_grounds` setter is unreachable from here. An
     // app declares its grounds up front instead.
     app.run_with(RunConfig {
-        extra_grounds: vec![PANEL],
+        extra_grounds: vec![PANEL, PANEL_BRIGHT],
         ..RunConfig::default()
     })
 }
@@ -100,6 +109,8 @@ fn rows(theme_index: usize, declared: bool) -> (Vec<(String, Rgba, u8, u8)>, usi
     let mut colors: Vec<Rgba> = t.grounds().iter().map(|(_, c)| *c).collect();
     names.push("+ panel".into());
     colors.push(PANEL);
+    names.push("+ panel bright".into());
+    colors.push(PANEL_BRIGHT);
 
     // BEFORE: each ground quantised on its own — what the emitter did
     // before the assignment existed, and what it still does for a
@@ -110,14 +121,15 @@ fn rows(theme_index: usize, declared: bool) -> (Vec<(String, Rgba, u8, u8)>, usi
     // the set when the app has declared it — undeclared, it keeps its
     // nearest entry and may land on a theme ground's.
     let after: Vec<u8> = if declared {
-        let set: [Rgba; 6] = [
-            colors[0], colors[1], colors[2], colors[3], colors[4], colors[5],
+        let set: [Rgba; 7] = [
+            colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], colors[6],
         ];
         quantize_set_256(set).to_vec()
     } else {
         let set: [Rgba; 5] = [colors[0], colors[1], colors[2], colors[3], colors[4]];
         let mut v = quantize_set_256(set).to_vec();
         v.push(nearest_xterm256(PANEL));
+        v.push(nearest_xterm256(PANEL_BRIGHT));
         v
     };
 
@@ -134,10 +146,22 @@ fn rows(theme_index: usize, declared: bool) -> (Vec<(String, Rgba, u8, u8)>, usi
     (out, nb, na)
 }
 
+/// One ground band, with text ON it in the theme's readable pole.
+///
+/// The ink is never picked by hand: `ink_on` returns whichever of the
+/// theme's two authored poles reads better on `ground`, which is what
+/// makes this correct across all 26 themes and both depths rather than
+/// on the one the author happened to be looking at.
+fn band(canvas: &mut dyn Canvas, x: i32, y: i32, t: &TokenSet, ground: Rgba) {
+    canvas.fill(Rect::new(x, y, SWATCH_W, 1), ' ', t.text, ground);
+    let ink = ink_on(t, ground);
+    canvas.print(Point::new(x + 3, y), "Text", ink.color, Rgba::TRANSPARENT);
+}
+
 fn draw(canvas: &mut dyn Canvas, rect: Rect, sel: usize, declared: bool) {
     let theme = &themes()[sel];
     let t = theme.tokens;
-    if common::too_small(canvas, rect, Size::new(72, 16), &t) {
+    if common::too_small(canvas, rect, Size::new(72, 17), &t) {
         return;
     }
     canvas.fill(rect, ' ', t.text, t.bg);
@@ -173,20 +197,25 @@ fn draw(canvas: &mut dyn Canvas, rect: Rect, sel: usize, declared: bool) {
     y += 1;
 
     for (name, color, before, after) in &rows {
-        if y >= rect.bottom() - 4 {
+        // Five lines are reserved below: blank, verdict, declaration
+        // note, the repeated-index note, and the readability line.
+        if y >= rect.bottom() - 5 {
             break;
         }
         canvas.print(Point::new(rect.x + 2, y), name, t.text, Rgba::TRANSPARENT);
         // The three columns are painted as GROUNDS (a filled band), not
         // as glyph ink: the defect is about backgrounds sitting next to
         // each other, and it only reads when they are.
-        canvas.fill(Rect::new(x_true, y, SWATCH_W, 1), ' ', t.text, *color);
-        canvas.fill(
-            Rect::new(x_before, y, SWATCH_W, 1),
-            ' ',
-            t.text,
-            XTERM_256[*before as usize],
-        );
+        //
+        // Each band then carries the word `Text`, inked by
+        // `theme::contrast::ink_on` against the colour ACTUALLY under it.
+        // Two things are on show: that a ground is a surface you can put
+        // text on, and that the polarity flips per theme and per band —
+        // the dark bands take the light pole, the bright ones the dark.
+        // Reaching for `t.text` here instead would be unreadable in 8 of
+        // the 26 themes on the declared panel alone.
+        band(canvas, x_true, y, &t, *color);
+        band(canvas, x_before, y, &t, XTERM_256[*before as usize]);
         canvas.print(
             Point::new(x_before + SWATCH_W + 1, y),
             &format!("{before:>3}"),
@@ -197,12 +226,7 @@ fn draw(canvas: &mut dyn Canvas, rect: Rect, sel: usize, declared: bool) {
             },
             Rgba::TRANSPARENT,
         );
-        canvas.fill(
-            Rect::new(x_after, y, SWATCH_W, 1),
-            ' ',
-            t.text,
-            XTERM_256[*after as usize],
-        );
+        band(canvas, x_after, y, &t, XTERM_256[*after as usize]);
         canvas.print(
             Point::new(x_after + SWATCH_W + 1, y),
             &format!("{after:>3}"),
@@ -244,6 +268,30 @@ fn draw(canvas: &mut dyn Canvas, rect: Rect, sel: usize, declared: bool) {
         t.text_faint,
         Rgba::TRANSPARENT,
     );
+    y += 1;
+    // The readability of the text ON those bands, reported rather than
+    // assumed. `ink_on` picks the best AUTHORED pole; on a few
+    // theme/ground combinations the best available still misses the 4.5
+    // floor, and a demo that hid that would be teaching the wrong thing.
+    let worst = rows
+        .iter()
+        .map(|(name, color, _, _)| (name, ink_on(&t, *color).contrast))
+        .fold(None::<(&String, f32)>, |acc, (n, c)| match acc {
+            Some((_, best)) if best <= c => acc,
+            _ => Some((n, c)),
+        });
+    if let Some((name, c)) = worst {
+        let ok = c >= floors::TEXT;
+        canvas.print(
+            Point::new(rect.x + 2, y),
+            &format!(
+                "text on grounds: worst is {name} at {c:.2}:1 ({}) — ink_on picks the pole",
+                if ok { "clears 4.5" } else { "MISSES 4.5" }
+            ),
+            if ok { t.text_faint } else { t.error },
+            Rgba::TRANSPARENT,
+        );
+    }
 }
 
 /// Does `entry` appear more than once in the column `pick` reads?
