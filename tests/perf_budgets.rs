@@ -75,14 +75,18 @@ use abstracttui::testing::{hostile_corpus, sink, time_median, Measurement};
 /// `CONTRIBUTING.md` both invoke this file with `--release`, and
 /// `ci.yml` never invokes it at all. Checked, not assumed.
 fn assert_budget(m: &Measurement, budget: Duration) {
-    assert!(
-        !cfg!(debug_assertions),
-        "perf budgets cannot be judged in a debug build, and this test \
-         will not pass pretending otherwise.\n  run: cargo test --release \
-         --test perf_budgets -- --ignored\n  measured anyway, for \
-         reference: {}",
-        m.report()
-    );
+    // `cfg!` is a compile-time constant, so this is deliberately a
+    // branch-and-panic rather than an `assert!` clippy would (rightly)
+    // read as an assertion on a constant.
+    if cfg!(debug_assertions) {
+        panic!(
+            "perf budgets cannot be judged in a debug build, and this test \
+             will not pass pretending otherwise.\n  run: cargo test --release \
+             --test perf_budgets -- --ignored\n  measured anyway, for \
+             reference: {}",
+            m.report()
+        );
+    }
     eprintln!("{}", m.report());
     m.assert_under(budget);
 }

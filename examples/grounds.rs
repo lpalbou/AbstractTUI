@@ -96,10 +96,14 @@ fn main() -> abstracttui::base::Result<()> {
     })
 }
 
-/// Every ground of `theme`, plus the consumer panel: its true colour,
-/// the palette entry a plain nearest lookup gives it, and the entry the
-/// assignment gives it.
-fn rows(theme_index: usize, declared: bool) -> (Vec<(String, Rgba, u8, u8)>, usize, usize) {
+/// One printed line: the ground's name, its true colour, the palette
+/// entry a plain nearest lookup gives it, and the entry the assignment
+/// gives it.
+type GroundRow = (String, Rgba, u8, u8);
+
+/// Every ground of `theme`, plus the consumer panel, with the count of
+/// distinct entries before and after the assignment.
+fn rows(theme_index: usize, declared: bool) -> (Vec<GroundRow>, usize, usize) {
     let t = themes()[theme_index].tokens;
     let mut names: Vec<String> = t
         .grounds()

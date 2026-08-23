@@ -598,7 +598,7 @@ fn content_sized_grid_children_are_solved_big_enough_for_their_own_content() {
     let mut rng = Rng::new(0x0061_1D00);
     let mut load_bearing = 0usize;
     for case in 0..400 {
-        let ncols = 1 + rng.below(4) as usize;
+        let ncols = 1 + rng.below(4);
         let cols: Vec<Track> = (0..ncols)
             .map(|_| match rng.below(4) {
                 0 => Track::Cells(2 + rng.below(12) as i32),
