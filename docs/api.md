@@ -1827,8 +1827,10 @@ and is not planned.) See `examples/shell.rs` (the 'i'/'g' drawers) and
 
 ## app::ThemeSwitcher — the theme menu button
 
-One cell of chrome that gives any app runtime theming — mount it in a
-header, tab bar or footer row:
+Five columns of chrome that give any app runtime theming — a 3x1 chip
+(glyph plus a cell of padding each side) with a cell of margin each side
+so it stays off the terminal edge. Mount it in a header, tab bar or footer
+row; if that row uses a fixed-width slot, size the slot at 5:
 
 ```rust,ignore
 use abstracttui::prelude::*;
@@ -2202,6 +2204,41 @@ set_theme_by_id("catppuccin-mocha"); // false for unknown ids, nothing changes
 can add their own themes at runtime with `theme::register(candidate, mode)`:
 every registration runs the full contrast audit, and the mode decides
 whether violations refuse the theme or register it with labeled findings.
+
+A house palette goes through the engine's own derivation rather than a
+reimplementation of it — `theme::Palette` takes the twelve authored colors
+the built-in seed table carries and `Palette::derive()` returns the
+`ThemeCandidate` you register:
+
+```rust
+use abstracttui::theme::{register, Palette, RegisterMode};
+
+let mut palette = Palette::new("acme", "Acme", true);
+palette.bg = "#101014".into();
+// ... the other eleven authored colors ...
+let reg = register(palette.derive()?, RegisterMode::Strict)?;
+```
+
+`derive` neither audits nor validates the id — `register` stays the one
+place a theme is judged — and a `PaletteError` names every malformed hex
+field at once. See
+[docs/theming.md](theming.md#deriving-tokens-from-your-house-colors).
+
+Two surfaces for grounds the theme does not own.
+`theme::contrast::ink_on(&tokens, ground)` returns the theme's most
+readable authored ink for an arbitrary ground as
+`Ink { color, token, contrast }` — check `contrast` against
+`floors::TEXT`, because on a few theme/panel pairs no authored ink clears
+it. `theme::contrast::ground_overlaps(id, &tokens, floor)` reports pairs of
+the theme's own grounds that measure below `floor`
+(`floors::GROUND_SEPARATION_REPORT` is the engine's reporting threshold),
+walking the list `TokenSet::grounds()` publishes.
+
+At 256 colors the driver keeps the theme's grounds on distinct palette
+entries automatically; grounds your app mints are declared through
+`RunConfig::extra_grounds` (or `Driver::set_extra_grounds`). See
+[docs/theming.md](theming.md#grounds-at-256-colours) and
+`cargo run --example grounds`.
 
 Polarity is first-class: `ThemeMode::{Dark, Light}` (closed — the
 decisive-ground invariant admits no third value), `theme.mode()` derived
@@ -2597,6 +2634,29 @@ term.push_input(b"+");                              // a keypress
 driver.turn(&mut app, &mut term).unwrap();          // dispatch + repaint
 assert!(term.screen().to_text().contains("n = 1"));
 ```
+
+**Capabilities in a headless test.** A capture terminal is not a tty, so
+undeclared capabilities (`RunConfig::caps: None`) resolve to
+`Capabilities::headless()` — full color, UTF-8, every terminal-bound
+feature off — and never to the environment of whoever runs the suite. That
+matters for color assertions: an environment pass on a host without
+`COLORTERM` quantizes every emitted color through the 256 cube, and
+token-against-token comparisons pass at either depth, so the verdict would
+move with the machine. Declare `caps` explicitly when a test needs a
+specific depth:
+
+```rust
+let cfg = RunConfig {
+    caps: Some(Capabilities::with(|c| { c.truecolor = true; c.colors_256 = true; })),
+    probe: false,
+    ..RunConfig::default()
+};
+```
+
+A custom `Terminal` implementation that IS attached to a terminal must
+override `Terminal::is_tty` (or call `set_tty(true)`), or it gets the
+headless set too. The substitution announces itself with a startup notice
+either way.
 
 Input is fed as the terminal would send it, so every dispatch, focus, and
 damage path is the real one. For pure component tests, skip the driver: mount

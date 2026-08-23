@@ -105,8 +105,11 @@
   switching through one signal, theme modes (`ThemeMode`, `themes_by_mode`, the
   remembered-choice `toggle_mode()`) and the drop-in `ThemeSwitcher` chrome control
   (grouped Dark/Light menu with live preview), WCAG-derived contrast floors and the
-  audit, registering custom themes (Strict/Labeled modes), token derivation helpers, and
-  styling rules for widget authors.
+  audit, registering custom themes (Strict/Labeled modes), deriving a full token set
+  from your own twelve house colours (`theme::Palette` → `derive()` → `register`),
+  readable ink on grounds the theme never saw (`contrast::ink_on`, the `ground_overlaps`
+  report, `RunConfig::extra_grounds` and ground separation at 256 colours), the
+  derivation primitives, and styling rules for widget authors.
 - [Graphics and 3D](docs/graphics-and-3d.md): Images end-to-end (decode → capability
   ladder → mosaic modes → tmux passthrough), the GLB 3D pipeline (supported subset, scene/
   camera/light, the Viewport3D widget, animation and skinning, textures and mips), the
@@ -149,10 +152,10 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, **0.4.1** (2026-08-22) the current one.
-  The extension family is at `abstracttui-graph` 0.2.0 and
-  `abstracttui-mermaid` 0.2.0, each with its own changelog under `extensions/`.
-- [Contributing](CONTRIBUTING.md): Building, the test suite (~2,120 core tests; ~2,245
+  (2026-07-21) is the first public release, **0.5.0** (2026-08-23) the current one.
+  The extension family is at `abstracttui-graph` 0.4.0 and
+  `abstracttui-mermaid` 0.4.0, each with its own changelog under `extensions/`.
+- [Contributing](CONTRIBUTING.md): Building, the test suite (~2,435 core tests; ~2,600
   with the extension family via `--workspace`, the CI gate) and the explicitly-run suites
   (live pty, two release-mode perf-budget suites with byte-emission ratchets, plus the
   scheduled weekly `perf.yml` deep gate), golden snapshots, lint gates, the strict module
@@ -173,17 +176,18 @@
 - [src/lib.rs](src/lib.rs): Crate root with the layer map — `base`, `term`, `input`,
   `render`, `text`, `anim`, `reactive`, `layout`, `ui`, `canvas`, `widgets`, `gfx`,
   `three`, `theme`, `app`, `boot`, `testing`.
-- [examples/](examples/README.md): The catalog of the 31 runnable examples,
+- [examples/](examples/README.md): The catalog of the 32 runnable examples,
   ordered as a learning path —
   `hello`,
-  `widgets`, `components`, `gallery`, `themes`, `grid`, `activate`, `presence_board`,
+  `widgets`, `components`, `gallery`, `themes`, `grounds`, `grid`, `activate`,
+  `presence_board`,
   `scrollbar`, `decide`, `feed`,
   `transcript`, `attachments`, `reader`, `voice_mock`, `shell`, `drawers`, `dashboard`,
   `images`, `animation`,
   `effects`, `splash`, `viewer3d`,
   `screenshot`, `caps`, `capture` — plus the extension-crate examples
-  (`workflow`/`network` in `extensions/graph`, `mermaid` in `extensions/mermaid`); each
-  documented with keys and requirements; every one exits cleanly without a tty, and
+  (`workflow`/`network` in `extensions/graph`, `mermaid`/`mermaid_doc` in
+  `extensions/mermaid`); each documented with keys and requirements; every one exits cleanly without a tty, and
   `dashboard`/`viewer3d`/`images` take `--caps`.
 - [docs/captures/](docs/captures/): Deterministic text "screenshots" of the shipped
   examples (plain, style-annotated, and rendered SVG via `Screenshot::to_svg`) and

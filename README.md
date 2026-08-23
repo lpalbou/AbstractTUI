@@ -83,8 +83,10 @@ through ordinary reactivity.*
   dracula, monokai, gruvbox, solarized, everforest and the Abstract originals —
   over 36 semantic design tokens, contrast-audited against WCAG floors, and
   hot-swappable at runtime through one signal. `ThemeSwitcher` is the drop-in
-  chrome: a one-cell ☾/☼ button opening a grouped Dark/Light menu with live
-  preview, or a one-click dark↔light toggle that remembers your theme per mode.
+  chrome: a ☾/☼ chip opening a grouped Dark/Light menu with live preview, or a
+  one-click dark↔light toggle that remembers your theme per mode. Bring your
+  own palette through `theme::Palette` and it runs the same audited derivation
+  the built-ins do.
 - **Input everywhere** — keyboard and mouse (click, hover, drag, wheel), the
   kitty keyboard protocol and xterm modifyOtherKeys decoded automatically when
   present, bracketed paste hardened against multi-megabyte and hostile input,

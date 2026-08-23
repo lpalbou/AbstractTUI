@@ -143,7 +143,11 @@ driver.turn(&mut app, &mut term)?;
 
 `CaptureTerm` records the emitted bytes and models the screen, so you
 assert on rendered text (or raw bytes) with every dispatch, focus, and
-damage path being the real one. For pure component tests, skip the driver:
+damage path being the real one. A capture terminal is not a tty, so
+undeclared capabilities resolve to `Capabilities::headless()` (full color,
+UTF-8, terminal-bound features off) rather than to the environment of
+whoever runs the suite — set `RunConfig::caps` explicitly when a test needs
+a particular color depth. For pure component tests, skip the driver:
 mount into a `ui::UiTree`, dispatch events, draw into a buffer canvas.
 
 ## How do I capture a screenshot of my app?
@@ -203,6 +207,36 @@ on your themes — refusing in strict mode or labeling every finding in
 labeled mode. See [theming.md](theming.md#contrast-guarantees) for the
 full table.
 
+The audit covers the theme's own grounds. If your app paints a ground of
+its own — a card fill, a client's panel colour — pick its text with
+`theme::contrast::ink_on(&tokens, ground)`, which returns the theme's most
+readable authored ink together with the ratio it achieved, and declare the
+ground through `RunConfig::extra_grounds` so it stays distinct from the
+theme's when colour downlevels to 256.
+
+## Can I use my own brand palette?
+
+Yes, through the same derivation the built-in themes use. Fill a
+`theme::Palette` with your twelve authored colours (grounds, three text
+tiers, two accents, four semantic inks), call `derive()`, and register the
+result:
+
+```rust
+use abstracttui::theme::{register, set_theme, Palette, RegisterMode};
+
+let mut palette = Palette::new("acme", "Acme", true);
+palette.bg = "#101014".into();
+// ... the other eleven ...
+set_theme(register(palette.derive()?, RegisterMode::Strict)?.theme);
+```
+
+Borders, selection tints, focus rings, the chart ramp and the syntax
+family are derived for you by the contrast-guarded rules the registry
+runs, and `register` audits the result. Building a `TokenSet` by hand
+still works, but a hand-rolled derivation drifts from the engine's the
+next time a floor moves. See
+[theming.md](theming.md#deriving-tokens-from-your-house-colors).
+
 ## What happens on a dumb terminal, or with NO_COLOR?
 
 Both are honored. `TERM=dumb` (or an empty `TERM`) marks the terminal as
@@ -211,7 +245,10 @@ the splash refuses to play. `NO_COLOR` forces color depth down regardless
 of what the terminal supports, and the raw fact is surfaced so themes can
 react. On limited-color terminals, the presenter quantizes to the 256- or
 16-color palette pairwise — foreground and background are re-picked
-together so text never vanishes into its own background.
+together so text never vanishes into its own background. At 256 colors the
+theme's grounds additionally get one palette entry each, so panel elevation
+survives the downgrade instead of collapsing into the app field; grounds
+your own app mints are declared through `RunConfig::extra_grounds`.
 
 ## Is Windows supported?
 

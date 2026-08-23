@@ -185,8 +185,19 @@ use abstracttui::prelude::*;
 
 // In your header / tab bar / footer row:
 let menu = ThemeSwitcher::new().view(cx); // ☾/☼ button; opens the grouped menu
-let flip = ThemeSwitcher::toggle().view(cx); // same cell; one click flips the mode
+let flip = ThemeSwitcher::toggle().view(cx); // same chip; one click flips the mode
 ```
+
+Both faces are a **5-column** control: a 3x1 chip — the glyph with one cell
+of padding each side, so the hit area is the visible shape — plus one cell
+of margin each side, which is what keeps it off the terminal edge when it
+is mounted last in a right-aligned chrome row. The chip carries a
+`surface_raised` ground in every state including idle, so it reads as
+pressable; hover and focus change the ink, not whether there is a ground.
+If your chrome gives the switcher a fixed-width slot, give it 5 columns.
+`ThemeSwitcher::layout()` replaces the geometry wholesale when you want
+something else — the face fills whatever box it is given and centres the
+glyph in it.
 
 The menu face opens an owned anchored popup (modal, above the whole
 live stack — it layers and anchors correctly inside a `Modal` or
@@ -257,6 +268,73 @@ stale exception fails the test suite. Exactly one exists:
 are verbatim upstream colors, the rule is stricter than the mandated
 text/ground floor, and 4.25:1 still clears WCAG AA-large.
 
+### Text on a ground the theme never saw
+
+The audit covers the theme's own grounds. An application that paints a
+ground of its own — a custom card fill, a panel colour from a client's
+brand — is outside it: across the built-in registry, body `text` on a
+mid-dark application panel falls below the 4.5:1 floor in 8 of the 26
+themes, and on a bright one in 19 (`solarized-light` reaches 1.01, text
+the same colour as the panel beneath it).
+
+`theme::contrast::ink_on` picks the theme's most readable **authored**
+ink for any ground and tells you what it achieved:
+
+```rust
+use abstracttui::theme::contrast::{floors, ink_on};
+
+let ink = ink_on(&t, my_panel);       // Ink { color, token, contrast }
+let fg = if ink.contrast >= floors::TEXT { ink.color } else { warn_and_pick() };
+```
+
+It clears the text floor on 51 of the 52 theme/panel combinations
+measured. The ratio comes back rather than being swallowed because of the
+52nd: a deliberately soft palette can hold no ink dark enough for a bright
+panel (`everforest-light` tops out at 3.49:1), and returning a bare colour
+would hand you unreadable text that looks like a considered choice.
+
+This is a door, not a default — widgets ink themselves from the theme's
+own tokens, and nothing in the paint path consults `ink_on` for you.
+
+### Grounds at 256 colours
+
+The audit measures truecolor. Quantisation to the xterm-256 cube happens
+downstream at emit, and two grounds a theme authored a step apart can land
+on the same palette entry: measured across the registry, 15 of 260 ground
+pairs collapse, in 15 of the 26 themes — panel elevation rendering as flat.
+
+The engine handles the theme's own grounds for you: at `Xterm256` the
+driver assigns each ground its own palette entry (`quantize_set_256`
+decides the assignment, `Presenter::set_palette_assignment` installs it),
+re-deriving only when the theme or the colour depth changes. Truecolor
+output is unchanged, and so is a 256-colour app whose grounds do not
+collide.
+
+Grounds **your app** mints are declared, because the separator can only
+keep apart what it is handed:
+
+```rust
+App::new(root).run_with(RunConfig {
+    extra_grounds: vec![my_panel, my_folded_panel],
+    ..Default::default()
+})
+```
+
+`Driver::set_extra_grounds` is the same thing for a hand-driven loop.
+
+Two limits worth knowing. This is **256 only**: at `Ansi16` the collapse
+still happens (98 of 260 pairs), because the 16 system registers are
+user-themable and no build-time decision can know what index 4 renders as.
+And separation of a foreground from its own background still wins over the
+ground assignment — text reading as its own background is the worse defect.
+
+To ask the question about your own theme, `theme::contrast::ground_overlaps`
+returns a `GroundOverlap` for every pair of opaque grounds measuring below
+the floor you pass (`floors::GROUND_SEPARATION_REPORT`, 1.10, is the
+threshold the engine's own measurements report at). It is a report, not a
+rule: drawing two grounds alike can be deliberate. `TokenSet::grounds()` is
+the list it walks.
+
 ## Registering a custom theme
 
 `theme::register(candidate, mode)` is the runtime door:
@@ -299,10 +377,59 @@ cycling. Re-registering an id replaces it for future lookups while old
 handles stay valid; re-registering a byte-identical candidate returns the
 existing handle without allocating.
 
-### Deriving tokens
+### Deriving tokens from your house colors
 
-You rarely design 36 colors by hand. `theme::derive` provides the same
-helpers the built-in registry uses:
+You rarely design 36 colors by hand, and you should not reimplement the
+transform that avoids it. `theme::Palette` is the same seed input the
+built-in table uses — twelve authored colors, as owned strings, because a
+palette read from a config file at runtime is not `&'static` — and
+`Palette::derive()` runs the engine's own derivation over them:
+
+```rust
+use abstracttui::theme::{register, set_theme, Palette, RegisterMode};
+
+let mut palette = Palette::new("acme", "Acme", /* dark */ true);
+palette.bg = "#101014".into();
+palette.surface = "#16161d".into();
+palette.surface_raised = "#1e1e29".into();
+palette.text = "#e6e6ef".into();
+palette.text_muted = "#a3a3b8".into();
+palette.text_faint = "#6b6b80".into();
+palette.accent = "#ff6188".into();
+palette.accent_alt = "#a29bfe".into();
+palette.ok = "#7ee787".into();
+palette.warn = "#f0c85a".into();
+palette.error = "#ff6b6b".into();
+palette.info = "#6ec7ff".into();
+
+let candidate = palette.derive()?;                     // 12 colors -> a full TokenSet
+let reg = register(candidate, RegisterMode::Strict)?;  // the audit above judges it
+set_theme(reg.theme);
+```
+
+Hex accepts `#rgb`, `#rrggbb` and `#rrggbbaa`, with or without the `#`.
+`derive` is the transform and nothing else — it neither audits nor
+validates the id, so `register` remains the single place a theme is judged
+and there is no second audit to keep in step. Malformed input comes back
+as a `PaletteError` naming **every** bad field, so a config with three
+typos costs one round trip.
+
+All twelve are required, deliberately: there is no "fill the rest from
+`bg` and `accent`" shortcut. The colors an app is most likely to be
+missing are the semantic inks — `accent_alt`, `ok`, `warn`, `error`,
+`info` — and which green means "resolved" in a product is a decision, not
+a shade.
+
+Going through this door rather than around it is what keeps your theme in
+step with the engine: the built-in table and `Palette` parse into the same
+seed type and run the same derivation, pinned byte-for-byte across all 26
+built-ins by a test, so a change to a contrast floor reaches your palette
+too.
+
+### The derivation primitives
+
+`theme::derive` exposes the steps that transform uses, for tooling that
+needs a single value rather than a whole theme:
 
 - `mix(a, b, t)`, `lighten(c, t)`, `darken(c, t)` — sRGB-space mixes
   (the perceptual limits are documented at the definitions; these are for
@@ -314,9 +441,12 @@ helpers the built-in registry uses:
   tint downward until the foreground stays readable on it (how selection
   backgrounds are derived).
 
-The intended recipe: start from your four anchor colors (ground, text,
-accent, one semantic), derive surfaces with `lighten`/`darken` steps, fill
-the rest with the walks, then run `theme::audit` and fix what it names.
+Use these to compose the twelve authored colors a `Palette` wants — a
+surface from a `lighten`/`darken` step off your ground, say — rather than
+to rebuild the twelve-to-thirty-six transform `Palette::derive` already
+runs. Building a whole `TokenSet` by hand is supported (`register` accepts
+any `ThemeCandidate`), but a hand-rolled transform drifts from the
+engine's the next time a floor moves, and nothing will report it.
 
 ## Design guidance for widget authors
 

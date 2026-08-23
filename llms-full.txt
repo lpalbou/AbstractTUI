@@ -100,11 +100,13 @@ through ordinary reactivity.*
   trailing accessory columns and rich row labels — see `presence_board`),
   tabs, checkboxes, radio groups, scroll regions, panels (closable via an
   opt-in title-row ✕), a directory `FilePicker`, badges, progress
-  bars, spinners, modals, toasts, tooltips — plus the app-shell pair:
+  bars, spinners, modals, toasts, tooltips — plus the app-shell trio:
   `PageHost` (full pages behind one themed tab bar — container-reserved
-  chords, reactive tab badges, overflow windowing) and `Drawer`
+  chords, reactive tab badges, overflow windowing), `Drawer`
   (edge-anchored overlay panels, modal or glanceable, sliding from any
-  edge) — arranged by a flexbox-style solver
+  edge) and `DrawerDock` (a right-edge rail of always-visible vertical
+  tabs fronting docked side panels — one open at a time, fully
+  collapsed otherwise, reactive badge dots) — arranged by a flexbox-style solver
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
 - **Transcripts and documents** — `Feed` renders append-only conversations
@@ -134,8 +136,10 @@ through ordinary reactivity.*
   dracula, monokai, gruvbox, solarized, everforest and the Abstract originals —
   over 36 semantic design tokens, contrast-audited against WCAG floors, and
   hot-swappable at runtime through one signal. `ThemeSwitcher` is the drop-in
-  chrome: a one-cell ☾/☼ button opening a grouped Dark/Light menu with live
-  preview, or a one-click dark↔light toggle that remembers your theme per mode.
+  chrome: a ☾/☼ chip opening a grouped Dark/Light menu with live preview, or a
+  one-click dark↔light toggle that remembers your theme per mode. Bring your
+  own palette through `theme::Palette` and it runs the same audited derivation
+  the built-ins do.
 - **Input everywhere** — keyboard and mouse (click, hover, drag, wheel), the
   kitty keyboard protocol and xterm modifyOtherKeys decoded automatically when
   present, bracketed paste hardened against multi-megabyte and hostile input,
@@ -203,7 +207,10 @@ fn main() -> abstracttui::base::Result<()> {
 ```
 
 Tab focus, Enter/Space activation, and Ctrl+C quit are all defaults. The count
-line re-renders fine-grained through `dyn_view` — nothing else repaints. The
+line re-renders fine-grained through `dyn_view` — nothing else repaints. Keys go
+to the focused widget, and a screen that should start with the caret in a field
+says so with `.autofocus()` — see
+[Focus — who receives keys](docs/api.md#focus--who-receives-keys). The
 walkthrough lives in [docs/getting-started.md](docs/getting-started.md).
 
 ## Install
@@ -488,7 +495,6 @@ let composer = LayoutStyle::column().height(Dimension::Cells(3)).shrink(0.0);
 a wrapper around a `Scroll` re-derives its own starting size from its content
 unless you give the wrapper `basis(Cells(0))` too. Put it on the element that
 sits directly in the pressured column.
-
 
 For two-dimensional layouts there is a track-based `Grid` — columns and rows
 declared as `Track::Cells(n)`, `Track::Percent(f)`, `Track::Fr(f)`, or
@@ -1151,12 +1157,7 @@ for the state diagram and a worker-thread example.
 event handlers, keyboard shortcuts, an optional draw closure, and an
 optional intrinsic measure (`.measure(fn(Size) -> Size)`) so a draw
 widget can answer `Auto` sizing like a text leaf instead of defaulting
-to zero. `.rect_signal(Signal<Option<Rect>>)` publishes the element's
-SOLVED rect back to the caller — the read seam for scrolling one of your
-own children into view without re-deriving layout arithmetic. It
-publishes from layout rather than paint, so a child scrolled out of the
-viewport (culled, never painted) still reports where it is; `None` means
-the element solved to zero area, which is absence and not a position.
+to zero.
 Components are plain functions `fn(Scope, Props) -> View` — no trait, no
 registry. They run **once**; reactivity comes from `dyn_view(style, f)`,
 which re-runs `f` when the signals it reads change and re-renders only that
@@ -2086,6 +2087,7 @@ its rightmost column and answers the same gestures:
 | drag after that press | the thumb tracks the pointer row for row, and keeps steering after the pointer leaves the strip (pointer capture) |
 | press on bare track | teleports: the thumb centers on the pressed row |
 | release | commits where it stands — no snap-back |
+| any of the above with SELECT MODE on | still the bar's: the strip is a drag zone, so the screen-text layer stands down over it |
 
 The thumb's length is proportional to the visible fraction with a floor
 of 3 rows (the exact proportion of a long transcript rounds to zero),
@@ -2833,10 +2835,13 @@ MOUSE-ONLY affordance (deliberately not focusable — chrome must never
 steal a modal's initial focus from the content it frames, so
 `focus_init` lands on the page and a hosted `PageHost`'s chords answer
 from frame one); Esc is the keyboard close. Since 0.3.1 the whole
-trailing CORNER of the header row closes on a left press (glyph,
-padding margin, two cells of jitter room) — the ✕ alone is a one-cell
-target at the panel's outermost column, exactly where real terminals
-quantize edge clicks ±1 column. Closing releases the
+trailing CORNER of the header row closes on a left press — the glyph,
+the padding margin beside it, and two cells of jitter room before it —
+because the ✕ alone is a one-cell target at the panel's outermost
+column, which is exactly where a terminal whose window width is not an
+exact multiple of the cell width quantizes an edge click into the
+neighbouring column (a cell-perfect test suite cannot observe that
+miss; a field report can, and did). The title area stays inert. Closing releases the
 keyboard the INSTANT it begins: keys pressed during the closing slide
 route to the app (the departing panel is display-only — Esc-then-
 shortcut works at any typing speed), and a reopen that reverses the
@@ -2876,8 +2881,10 @@ and is not planned.) See `examples/shell.rs` (the 'i'/'g' drawers) and
 
 ## app::ThemeSwitcher — the theme menu button
 
-One cell of chrome that gives any app runtime theming — mount it in a
-header, tab bar or footer row:
+Five columns of chrome that give any app runtime theming — a 3x1 chip
+(glyph plus a cell of padding each side) with a cell of margin each side
+so it stays off the terminal edge. Mount it in a header, tab bar or footer
+row; if that row uses a fixed-width slot, size the slot at 5:
 
 ```rust,ignore
 use abstracttui::prelude::*;
@@ -3115,6 +3122,19 @@ rules, stated plainly:
 - **Left Down while a region is VISIBLE**: the click DISMISSES the
   selection — clear + consume, both halves of the click (Esc parity:
   the user was clearing a highlight, not aiming at the widget beneath).
+- **Left Down inside a widget's DRAG ZONE**: the layer stands down —
+  no anchor arms, and the whole gesture (Down, Drag, Up) belongs to the
+  widget. Click-through is not enough for a widget that owns drags
+  rather than clicks: a scrollbar thumb takes hold on the Down, and the
+  claim one drag later would cancel that press. Every engine drag
+  surface declares its zone — both `Scroll` bars, the `List` / `Table` /
+  `FilePicker` internal bars, and an orbiting `Viewport3D` — so with
+  select mode on the thumb still scrolls and the camera still orbits.
+  Your own drag widgets declare one with
+  [`Element::drag_zone`](#ui--elements-views-composition); an invisible or
+  non-overflowing bar returns `None` and owns nothing. The **anchor**
+  decides: a drag that starts in content and crosses a strip keeps
+  selecting.
 
 **Every copy ends the gesture**: the region clears with the copy,
 so the app's next keystrokes — including Enter and `c` — route normally
@@ -3239,6 +3259,41 @@ can add their own themes at runtime with `theme::register(candidate, mode)`:
 every registration runs the full contrast audit, and the mode decides
 whether violations refuse the theme or register it with labeled findings.
 
+A house palette goes through the engine's own derivation rather than a
+reimplementation of it — `theme::Palette` takes the twelve authored colors
+the built-in seed table carries and `Palette::derive()` returns the
+`ThemeCandidate` you register:
+
+```rust
+use abstracttui::theme::{register, Palette, RegisterMode};
+
+let mut palette = Palette::new("acme", "Acme", true);
+palette.bg = "#101014".into();
+// ... the other eleven authored colors ...
+let reg = register(palette.derive()?, RegisterMode::Strict)?;
+```
+
+`derive` neither audits nor validates the id — `register` stays the one
+place a theme is judged — and a `PaletteError` names every malformed hex
+field at once. See
+[docs/theming.md](theming.md#deriving-tokens-from-your-house-colors).
+
+Two surfaces for grounds the theme does not own.
+`theme::contrast::ink_on(&tokens, ground)` returns the theme's most
+readable authored ink for an arbitrary ground as
+`Ink { color, token, contrast }` — check `contrast` against
+`floors::TEXT`, because on a few theme/panel pairs no authored ink clears
+it. `theme::contrast::ground_overlaps(id, &tokens, floor)` reports pairs of
+the theme's own grounds that measure below `floor`
+(`floors::GROUND_SEPARATION_REPORT` is the engine's reporting threshold),
+walking the list `TokenSet::grounds()` publishes.
+
+At 256 colors the driver keeps the theme's grounds on distinct palette
+entries automatically; grounds your app mints are declared through
+`RunConfig::extra_grounds` (or `Driver::set_extra_grounds`). See
+[docs/theming.md](theming.md#grounds-at-256-colours) and
+`cargo run --example grounds`.
+
 Polarity is first-class: `ThemeMode::{Dark, Light}` (closed — the
 decisive-ground invariant admits no third value), `theme.mode()` derived
 from the audited flag, and `theme::themes_by_mode(mode)` listing one
@@ -3335,6 +3390,27 @@ anchor_id }` with GitHub-compatible, deduplicated slugs
 `MarkdownView::outline_rows(source, &tokens, width)` pairs each heading
 with the typeset ROW its text starts at (the TOC jump target), and
 `MarkdownView::resolve_anchor(...)` answers `[text](#anchor)` links.
+
+**The `---` policy.** A horizontal rule spends three things — ink,
+width and vertical space — and all three are the caller's:
+`MdRuleStyle { ink, width, space_before, space_after }`, installed with
+`MarkdownView::rule_style(...)` or `Feed::rule_style(...)`. `ink` is a
+`TokenId` (resolved against the LIVE theme every typeset, so the rule
+follows a theme switch) or a fixed `Rgba`; `width` is `FullBleed`,
+`Measure` (the box the block was typeset at) or `Inset(cells)`; the two
+space counts are the rule's own gap, which the following block does not
+add to — `1`/`1` is the historical three-row rule, `0`/`0` a one-row
+one. Defaults reproduce every earlier release byte for byte.
+
+All three open together on purpose: a policy exposing one axis lets a
+consumer ship half an ordinal and believe it is finished. Two things it
+deliberately does NOT do — restyle the level-1 heading underline (a
+different block that paints the same chrome), and produce an invisible
+rule (an inset past the measure floors at one cell rather than paint
+nothing). Row positions move with it, so a styled view takes its scroll
+clamp, outline and search rows from the `_ruled` twins
+(`rows_ruled`, `outline_rows_ruled`, `resolve_anchor_ruled`,
+`find_ruled`) rather than the default-fold statics.
 
 `MarkdownView` AND `Feed` markdown items render the full doc
 vocabulary (one shared typeset recipe — a feed item and a reader pane
@@ -3612,6 +3688,29 @@ term.push_input(b"+");                              // a keypress
 driver.turn(&mut app, &mut term).unwrap();          // dispatch + repaint
 assert!(term.screen().to_text().contains("n = 1"));
 ```
+
+**Capabilities in a headless test.** A capture terminal is not a tty, so
+undeclared capabilities (`RunConfig::caps: None`) resolve to
+`Capabilities::headless()` — full color, UTF-8, every terminal-bound
+feature off — and never to the environment of whoever runs the suite. That
+matters for color assertions: an environment pass on a host without
+`COLORTERM` quantizes every emitted color through the 256 cube, and
+token-against-token comparisons pass at either depth, so the verdict would
+move with the machine. Declare `caps` explicitly when a test needs a
+specific depth:
+
+```rust
+let cfg = RunConfig {
+    caps: Some(Capabilities::with(|c| { c.truecolor = true; c.colors_256 = true; })),
+    probe: false,
+    ..RunConfig::default()
+};
+```
+
+A custom `Terminal` implementation that IS attached to a terminal must
+override `Terminal::is_tty` (or call `set_tty(true)`), or it gets the
+headless set too. The substitution announces itself with a startup notice
+either way.
 
 Input is fed as the terminal would send it, so every dispatch, focus, and
 damage path is the real one. For pure component tests, skip the driver: mount
@@ -3980,8 +4079,19 @@ use abstracttui::prelude::*;
 
 // In your header / tab bar / footer row:
 let menu = ThemeSwitcher::new().view(cx); // ☾/☼ button; opens the grouped menu
-let flip = ThemeSwitcher::toggle().view(cx); // same cell; one click flips the mode
+let flip = ThemeSwitcher::toggle().view(cx); // same chip; one click flips the mode
 ```
+
+Both faces are a **5-column** control: a 3x1 chip — the glyph with one cell
+of padding each side, so the hit area is the visible shape — plus one cell
+of margin each side, which is what keeps it off the terminal edge when it
+is mounted last in a right-aligned chrome row. The chip carries a
+`surface_raised` ground in every state including idle, so it reads as
+pressable; hover and focus change the ink, not whether there is a ground.
+If your chrome gives the switcher a fixed-width slot, give it 5 columns.
+`ThemeSwitcher::layout()` replaces the geometry wholesale when you want
+something else — the face fills whatever box it is given and centres the
+glyph in it.
 
 The menu face opens an owned anchored popup (modal, above the whole
 live stack — it layers and anchors correctly inside a `Modal` or
@@ -4052,6 +4162,73 @@ stale exception fails the test suite. Exactly one exists:
 are verbatim upstream colors, the rule is stricter than the mandated
 text/ground floor, and 4.25:1 still clears WCAG AA-large.
 
+### Text on a ground the theme never saw
+
+The audit covers the theme's own grounds. An application that paints a
+ground of its own — a custom card fill, a panel colour from a client's
+brand — is outside it: across the built-in registry, body `text` on a
+mid-dark application panel falls below the 4.5:1 floor in 8 of the 26
+themes, and on a bright one in 19 (`solarized-light` reaches 1.01, text
+the same colour as the panel beneath it).
+
+`theme::contrast::ink_on` picks the theme's most readable **authored**
+ink for any ground and tells you what it achieved:
+
+```rust
+use abstracttui::theme::contrast::{floors, ink_on};
+
+let ink = ink_on(&t, my_panel);       // Ink { color, token, contrast }
+let fg = if ink.contrast >= floors::TEXT { ink.color } else { warn_and_pick() };
+```
+
+It clears the text floor on 51 of the 52 theme/panel combinations
+measured. The ratio comes back rather than being swallowed because of the
+52nd: a deliberately soft palette can hold no ink dark enough for a bright
+panel (`everforest-light` tops out at 3.49:1), and returning a bare colour
+would hand you unreadable text that looks like a considered choice.
+
+This is a door, not a default — widgets ink themselves from the theme's
+own tokens, and nothing in the paint path consults `ink_on` for you.
+
+### Grounds at 256 colours
+
+The audit measures truecolor. Quantisation to the xterm-256 cube happens
+downstream at emit, and two grounds a theme authored a step apart can land
+on the same palette entry: measured across the registry, 15 of 260 ground
+pairs collapse, in 15 of the 26 themes — panel elevation rendering as flat.
+
+The engine handles the theme's own grounds for you: at `Xterm256` the
+driver assigns each ground its own palette entry (`quantize_set_256`
+decides the assignment, `Presenter::set_palette_assignment` installs it),
+re-deriving only when the theme or the colour depth changes. Truecolor
+output is unchanged, and so is a 256-colour app whose grounds do not
+collide.
+
+Grounds **your app** mints are declared, because the separator can only
+keep apart what it is handed:
+
+```rust
+App::new(root).run_with(RunConfig {
+    extra_grounds: vec![my_panel, my_folded_panel],
+    ..Default::default()
+})
+```
+
+`Driver::set_extra_grounds` is the same thing for a hand-driven loop.
+
+Two limits worth knowing. This is **256 only**: at `Ansi16` the collapse
+still happens (98 of 260 pairs), because the 16 system registers are
+user-themable and no build-time decision can know what index 4 renders as.
+And separation of a foreground from its own background still wins over the
+ground assignment — text reading as its own background is the worse defect.
+
+To ask the question about your own theme, `theme::contrast::ground_overlaps`
+returns a `GroundOverlap` for every pair of opaque grounds measuring below
+the floor you pass (`floors::GROUND_SEPARATION_REPORT`, 1.10, is the
+threshold the engine's own measurements report at). It is a report, not a
+rule: drawing two grounds alike can be deliberate. `TokenSet::grounds()` is
+the list it walks.
+
 ## Registering a custom theme
 
 `theme::register(candidate, mode)` is the runtime door:
@@ -4094,10 +4271,59 @@ cycling. Re-registering an id replaces it for future lookups while old
 handles stay valid; re-registering a byte-identical candidate returns the
 existing handle without allocating.
 
-### Deriving tokens
+### Deriving tokens from your house colors
 
-You rarely design 36 colors by hand. `theme::derive` provides the same
-helpers the built-in registry uses:
+You rarely design 36 colors by hand, and you should not reimplement the
+transform that avoids it. `theme::Palette` is the same seed input the
+built-in table uses — twelve authored colors, as owned strings, because a
+palette read from a config file at runtime is not `&'static` — and
+`Palette::derive()` runs the engine's own derivation over them:
+
+```rust
+use abstracttui::theme::{register, set_theme, Palette, RegisterMode};
+
+let mut palette = Palette::new("acme", "Acme", /* dark */ true);
+palette.bg = "#101014".into();
+palette.surface = "#16161d".into();
+palette.surface_raised = "#1e1e29".into();
+palette.text = "#e6e6ef".into();
+palette.text_muted = "#a3a3b8".into();
+palette.text_faint = "#6b6b80".into();
+palette.accent = "#ff6188".into();
+palette.accent_alt = "#a29bfe".into();
+palette.ok = "#7ee787".into();
+palette.warn = "#f0c85a".into();
+palette.error = "#ff6b6b".into();
+palette.info = "#6ec7ff".into();
+
+let candidate = palette.derive()?;                     // 12 colors -> a full TokenSet
+let reg = register(candidate, RegisterMode::Strict)?;  // the audit above judges it
+set_theme(reg.theme);
+```
+
+Hex accepts `#rgb`, `#rrggbb` and `#rrggbbaa`, with or without the `#`.
+`derive` is the transform and nothing else — it neither audits nor
+validates the id, so `register` remains the single place a theme is judged
+and there is no second audit to keep in step. Malformed input comes back
+as a `PaletteError` naming **every** bad field, so a config with three
+typos costs one round trip.
+
+All twelve are required, deliberately: there is no "fill the rest from
+`bg` and `accent`" shortcut. The colors an app is most likely to be
+missing are the semantic inks — `accent_alt`, `ok`, `warn`, `error`,
+`info` — and which green means "resolved" in a product is a decision, not
+a shade.
+
+Going through this door rather than around it is what keeps your theme in
+step with the engine: the built-in table and `Palette` parse into the same
+seed type and run the same derivation, pinned byte-for-byte across all 26
+built-ins by a test, so a change to a contrast floor reaches your palette
+too.
+
+### The derivation primitives
+
+`theme::derive` exposes the steps that transform uses, for tooling that
+needs a single value rather than a whole theme:
 
 - `mix(a, b, t)`, `lighten(c, t)`, `darken(c, t)` — sRGB-space mixes
   (the perceptual limits are documented at the definitions; these are for
@@ -4109,9 +4335,12 @@ helpers the built-in registry uses:
   tint downward until the foreground stays readable on it (how selection
   backgrounds are derived).
 
-The intended recipe: start from your four anchor colors (ground, text,
-accent, one semantic), derive surfaces with `lighten`/`darken` steps, fill
-the rest with the walks, then run `theme::audit` and fix what it names.
+Use these to compose the twelve authored colors a `Palette` wants — a
+surface from a `lighten`/`darken` step off your ground, say — rather than
+to rebuild the twelve-to-thirty-six transform `Palette::derive` already
+runs. Building a whole `TokenSet` by hand is supported (`register` accepts
+any `ThemeCandidate`), but a hand-rolled transform drifts from the
+engine's the next time a floor moves, and nothing will report it.
 
 ## Design guidance for widget authors
 
@@ -4612,9 +4841,9 @@ the mermaid parser is hand-rolled).
 
 ```toml
 [dependencies]
-abstracttui = "0.4"
-abstracttui-graph = "0.3"    # graph layout + GraphView
-abstracttui-mermaid = "0.3"  # mermaid subset (depends on -graph)
+abstracttui = "0.5"
+abstracttui-graph = "0.4"    # graph layout + GraphView
+abstracttui-mermaid = "0.4"  # mermaid subset (depends on -graph)
 ```
 
 ## The one data contract: `GraphDesc -> Layout`
@@ -4719,17 +4948,40 @@ the YES rows enumerate accepted SPELLINGS, and any spelling outside
 them triggers the fallback naming the first unrecognized line —
 unknown syntax is safe by construction:
 
-| Mermaid | v1 | Accepted spellings (exhaustive) | Behavior |
+| Mermaid | Status | Accepted spellings | Behavior |
 | --- | --- | --- | --- |
-| `flowchart` / `graph` TD/TB/LR/BT/RL | YES | header keyword + direction token only | layered layout (BT/RL as transposes) |
-| Node shapes | YES | `id`, `id[text]`, `id(text)`, `id{text}`, `id([text])`; quoted `"text"` inside brackets | cards; shape = accent + badge sigil (see below) |
-| Edges | YES | `-->`, `---`, `-.->`, `==>`; label as postfix `\|label\|` only | strokes; dotted/thick as stroke styles |
-| `subgraph` | NO (v2) | — | atomic fallback |
+| `flowchart` / `graph` TD/TB/LR/BT/RL | YES | header keyword + direction token | layered layout (BT/RL as transposes) |
+| Node shapes | YES | `id`, `id[text]`, `id(text)`, `id{text}`, `id([text])`, `id((text))`, `id[[text]]`, `id[(text)]`, `id{{text}}`, `id>text]`; quoted `"text"` inside brackets | cards; shape = accent + badge sigil (see below) |
+| Edges | YES | any body length (`-->`, `--->`, `---`, `-----`), dotted (`-.->`, `-..->`, `-.-`), thick (`==>`, `===`); heads `>`, `x`, `o`; `<-->` | strokes; dotted/thick as stroke styles |
+| Edge labels | YES | postfix `\|label\|` and infix (`-- label -->`, `-. label .->`, `== label ==>`) | drawn centred in the rank corridor |
+| Chaining / `&` groups | YES | `A --> B --> C`; `A & B --> C & D` | one edge per link; `&` is a cross product |
+| `subgraph` | FLATTENED | `subgraph id`, `subgraph id [Title]`, nesting, `direction` inside | members render; the GROUP BOX does not, with a notice |
 | `sequenceDiagram` | YES | `participant id [as alias]`; messages `->>`, `-->>`, `->`, `-->` with `: text`; `Note left of/right of/over` | deterministic columns/rows — no solver |
-| sequence `loop`/`alt`/`par`/activations | NO (v2) | — | atomic fallback |
+| sequence blocks | YES | `alt` + `else`, `opt`, `loop`, `par` + `and`, nested | a labeled frame with dashed branch dividers |
+| sequence activations | YES | `activate id` / `deactivate id`, and the `->>+` / `-->>-` suffixes | a bar on the lifeline; nested bars step right |
+| sequence `rect`/`critical`/`break`/`box` | NO | — | atomic fallback |
 | `stateDiagram-v2` (flat) | YES | `[*]`, `id`, `id : label`, `-->` with `: label` | compiles to the flowchart engine |
 | `classDiagram`, `erDiagram`, `gantt`, `pie`, `journey`, `mindmap`, `timeline`, `gitGraph` | NO | — | atomic fallback |
-| `classDef`, `style`, `%%{init}` directives | IGNORED | recognized-and-dropped WITH a notice; `%%` comments drop silently | render proceeds |
+| `classDef`, `style`, `click`, `linkStyle`, `class`, `direction`, `%%{init}` | IGNORED | recognized-and-dropped WITH a notice; `%%` comments drop silently | render proceeds |
+
+**The link rule that decides chaining vs labels.** A body of exactly
+TWO dashes (`--`, `==`) OPENS a labelled link whose text runs to the
+closing body; THREE or more (`---`, `----`) is a complete open link. So
+`A -- B --> C` is one labelled edge and `A --- B --> C` is a two-edge
+chain — mermaid's own rule, and the only way to tell them apart without
+guessing.
+
+Sequence frames are chrome drawn UNDER the conversation: where a
+frame's border crosses a lifeline or an activation bar, the border wins
+the cell — one cell cannot show both, and a broken frame reads worse
+than a broken line. Block nesting is capped at 64; deeper input falls
+back by name rather than recursing the renderer into a stack overflow.
+
+**Labeled downgrades** (rendered, and said out loud in a notice): the
+`x` and `o` arrowheads and `<-->` bidirectionality have no cell glyph
+and draw as plain arrows; `<br/>` in a label flattens to a word break
+because a card is one line; a `subgraph` renders its members without
+the group box.
 
 Flat `stateDiagram-v2` parses as a third
 front end to the flowchart IR (`[*]` becomes synthetic start/end
@@ -4753,6 +5005,29 @@ diagram travels in the URL FRAGMENT, never to a server; nothing is
 shared until the user opens the link. Partial rendering of a
 half-understood diagram misleads; the code block never lies.
 
+### Diagrams inside a markdown document
+
+A ```mermaid fence renders as a diagram in place, in the document's own
+scroll surface — not as a code block, and not as a separate widget the
+app has to splice in:
+
+```rust
+use abstracttui::widgets::MarkdownView;
+use abstracttui_mermaid::MermaidFence;
+use std::rc::Rc;
+
+MarkdownView::new(source).fence_block(Rc::new(MermaidFence::new()))
+```
+
+The seam is `widgets::FenceBlock` in the core: a claimant measures a
+fence it recognizes and paints its rows. Fences it declines render as
+code, unchanged. The engine ships no diagram languages — this is how a
+sibling crate brings one without the core knowing it exists.
+
+`MermaidFence` renders once per (source, width, theme) and serves rows
+from that, so scrolling a long document does not re-render its
+diagrams.
+
 ### Usage
 
 ```rust
@@ -4770,9 +5045,15 @@ let view = MermaidView::new(
 // live_link_url(&str) -> String                  (the escape hatch)
 ```
 
-Run the demo: `cargo run --example mermaid`
-(four embedded samples including an honest fallback; or pass a `.mmd`
-path).
+Run the demos:
+
+- `cargo run --example mermaid` — nine embedded
+  samples: chaining, infix labels, `&` groups, the shape vocabulary, a
+  flattened `subgraph` with its notice, sequence control-flow blocks,
+  activations, and an honest fallback (or pass a `.mmd` path).
+- `cargo run --example mermaid_doc` — a markdown
+  document whose ```mermaid fences render as diagrams in place (or pass
+  a `.md` path).
 
 ## Honest limits (v1)
 
@@ -5263,7 +5544,11 @@ driver.turn(&mut app, &mut term)?;
 
 `CaptureTerm` records the emitted bytes and models the screen, so you
 assert on rendered text (or raw bytes) with every dispatch, focus, and
-damage path being the real one. For pure component tests, skip the driver:
+damage path being the real one. A capture terminal is not a tty, so
+undeclared capabilities resolve to `Capabilities::headless()` (full color,
+UTF-8, terminal-bound features off) rather than to the environment of
+whoever runs the suite — set `RunConfig::caps` explicitly when a test needs
+a particular color depth. For pure component tests, skip the driver:
 mount into a `ui::UiTree`, dispatch events, draw into a buffer canvas.
 
 ## How do I capture a screenshot of my app?
@@ -5323,6 +5608,36 @@ on your themes — refusing in strict mode or labeling every finding in
 labeled mode. See [theming.md](theming.md#contrast-guarantees) for the
 full table.
 
+The audit covers the theme's own grounds. If your app paints a ground of
+its own — a card fill, a client's panel colour — pick its text with
+`theme::contrast::ink_on(&tokens, ground)`, which returns the theme's most
+readable authored ink together with the ratio it achieved, and declare the
+ground through `RunConfig::extra_grounds` so it stays distinct from the
+theme's when colour downlevels to 256.
+
+## Can I use my own brand palette?
+
+Yes, through the same derivation the built-in themes use. Fill a
+`theme::Palette` with your twelve authored colours (grounds, three text
+tiers, two accents, four semantic inks), call `derive()`, and register the
+result:
+
+```rust
+use abstracttui::theme::{register, set_theme, Palette, RegisterMode};
+
+let mut palette = Palette::new("acme", "Acme", true);
+palette.bg = "#101014".into();
+// ... the other eleven ...
+set_theme(register(palette.derive()?, RegisterMode::Strict)?.theme);
+```
+
+Borders, selection tints, focus rings, the chart ramp and the syntax
+family are derived for you by the contrast-guarded rules the registry
+runs, and `register` audits the result. Building a `TokenSet` by hand
+still works, but a hand-rolled derivation drifts from the engine's the
+next time a floor moves. See
+[theming.md](theming.md#deriving-tokens-from-your-house-colors).
+
 ## What happens on a dumb terminal, or with NO_COLOR?
 
 Both are honored. `TERM=dumb` (or an empty `TERM`) marks the terminal as
@@ -5331,7 +5646,10 @@ the splash refuses to play. `NO_COLOR` forces color depth down regardless
 of what the terminal supports, and the raw fact is surfaced so themes can
 react. On limited-color terminals, the presenter quantizes to the 256- or
 16-color palette pairwise — foreground and background are re-picked
-together so text never vanishes into its own background.
+together so text never vanishes into its own background. At 256 colors the
+theme's grounds additionally get one palette entry each, so panel elevation
+survives the downgrade instead of collapsing into the app field; grounds
+your own app mints are declared through `RunConfig::extra_grounds`.
 
 ## Is Windows supported?
 
@@ -5928,6 +6246,10 @@ protocol, not a bug.
    highlight clamped to the pane under the anchor; releasing (or
    `c`/Enter/Ctrl+C) copies the selected screen text to the system
    clipboard through OSC 52. `cargo run --example feed` demonstrates it.
+   A live selection freezes every follow-tail `Scroll` for the length of
+   the drag, so a streaming transcript stops sliding under the highlight
+   and the copy is the text you actually pointed at; clearing the region
+   returns the pane to the live tail.
 
 ## The engine's copy doesn't reach my clipboard
 
@@ -5997,14 +6319,14 @@ timeouts, and no sleeps.
 
 ===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.4.1 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.4.1 (2026-08-22).
+- Crate: `abstracttui` 0.5.0 (Rust, edition 2021). First public release: 2026-07-21
+  (0.1.0); current release 0.5.0 (2026-08-23).
 - Extension family (sibling crates in the repo workspace, installed only when needed;
   ADR-0004 — public core API only, same MIT license and dependency discipline):
-  - `abstracttui-graph` 0.2.0 — graph auto-layout (`GraphDesc -> Layout`: layered /
-    force / grid passes) + the `GraphView` widget. Depends on `abstracttui` 0.3.
-  - `abstracttui-mermaid` 0.2.0 — honest-subset mermaid rendering (atomic fallback).
-    Depends on `abstracttui` 0.3 and `abstracttui-graph` 0.2.
+  - `abstracttui-graph` 0.4.0 — graph auto-layout (`GraphDesc -> Layout`: layered /
+    force / grid passes) + the `GraphView` widget. Depends on `abstracttui` 0.5.
+  - `abstracttui-mermaid` 0.4.0 — honest-subset mermaid rendering (atomic fallback).
+    Depends on `abstracttui` 0.5 and `abstracttui-graph` 0.4.
 - Description: a reactive, compositor-grade terminal UI engine — fine-grained signals,
   layered rendering with damage tracking, streaming transcripts and live-data ingestion,
   file-attachment surfaces (paste intercept, drop classifier, FilePicker),
@@ -6013,9 +6335,10 @@ timeouts, and no sleeps.
   software-rasterized 3D (GLB), a sub-cell vector canvas, themes (with a drop-in
   theme switcher) and animation.
 - Examples: 28 runnable in-crate examples (`examples/README.md`, ordered as a learning
-  path; includes `presence_board` for rich list rows with accessories) plus 3 extension-crate
-  examples (`workflow`/`network` in `extensions/graph`, `mermaid` in `extensions/mermaid`);
-  every example exits cleanly without a tty.
+  path; includes `grounds` for 256-colour ground separation and `presence_board` for rich
+  list rows with accessories) plus 4 extension-crate examples (`workflow`/`network` in
+  `extensions/graph`, `mermaid`/`mermaid_doc` in `extensions/mermaid`); every example
+  exits cleanly without a tty.
 - License: MIT.
 - Repository / homepage: https://github.com/lpalbou/abstracttui
 - API reference: https://docs.rs/abstracttui (family: https://docs.rs/abstracttui-graph,
@@ -6027,9 +6350,9 @@ timeouts, and no sleeps.
   - `libc` 0.2 — Unix terminal FFI (unix targets only)
   - `windows-sys` 0.61 — Windows console FFI (windows targets only)
 - Test invocation (from CONTRIBUTING.md):
-  - `cargo test` — the core suite (~2,120 tests: unit tests, integration suites under
+  - `cargo test` — the core suite (~2,435 tests: unit tests, integration suites under
     `tests/`, and doctests).
-  - `cargo test --workspace` — core plus the extension family (~2,245 tests; the CI gate).
+  - `cargo test --workspace` — core plus the extension family (~2,600 tests; the CI gate).
   - `cargo test --test live_smoke -- --ignored --test-threads=1` — live pty smoke tests
     (spawn a real terminal session; run serially).
   - `cargo test --test perf_budgets --release -- --ignored --test-threads=1` —

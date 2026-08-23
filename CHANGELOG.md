@@ -7,427 +7,270 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [0.5.0] - 2026-08-23
 
-- `ThemeSwitcher` is a padded chip instead of a bare glyph. It was a
-  1x1 cell drawing `☾`/`☼` on a TRANSPARENT ground with no margin: the
-  smallest possible click target, the smallest possible visual object,
-  and — mounted last in a right-aligned chrome row, which is where apps
-  put it — flush against the terminal edge. Reported from a real app as
-  "ridiculously small, invisible, always ends up in the corner", and
-  all three of those are separate causes:
+A minor bump because one addition is technically breaking (below); the
+public surface is otherwise additive, and the migration is one line in the
+rare code that needs it.
 
-  - the ground is now `surface_raised` in EVERY state including idle,
-    so the control reads as pressable rather than as decoration; hover
-    and focus change the ink, not whether there is a ground;
-  - one cell of padding each side, INSIDE the button, so the hit area
-    grows with the chip (3x1, the same shape `Badge` uses for a chip);
-  - one cell of margin each side, which is what actually keeps it off
-    the screen edge — padding alone just moves the chip's own ground
-    into the corner.
+### Breaking
 
-  The default layout is unchanged in kind: `ThemeSwitcher::layout`
-  still replaces it wholesale. A latent bug went with it — the face
-  was a hardcoded 1x1 child, so any `layout()` override wider than one
-  cell drew the glyph in the corner of an empty box and left the rest
-  blank. The face now fills its button and centres the glyph.
+- app: **`RunConfig` gained a public field, `extra_grounds`.** Under
+  ADR-0003 a config struct stays exhaustively constructible and grows
+  behind the functional-update idiom, so the documented form keeps
+  compiling untouched:
 
-### Fixed
+  ```rust
+  let cfg = RunConfig { hover_ink: true, ..RunConfig::default() };
+  ```
 
-- layout: a wrapped line is now tall enough for the children that
-  **stretch** into it. `wrap.rs` sized each line from the maximum of its
-  members' cross sizes but gave a `Align::Stretch` member no cross size
-  at all — its size "comes from the line", so it contributed nothing to
-  the line it was about to be measured against. A line was therefore only
-  as tall as its non-stretch members, and since `Stretch` is the DEFAULT
-  `align_items`, an ordinary wrapped row of text beside a one-row chip
-  was clipped to one row: a paragraph needing five rows was solved to
-  `h: 1`. Lines are now sized from every member's HYPOTHETICAL cross size
-  — what it would be if it did not stretch — which is how CSS breaks the
-  same cycle. Both axes: a column-direction wrap had the identical defect
-  in its widths.
+  What breaks is an **exhaustive** literal — one that names every field and
+  has no `..` tail. Migration: add `..RunConfig::default()` to it. Nothing
+  else in the public API changed incompatibly; the semver gate reports this
+  single finding against 0.4.1.
 
-  The same change removes an all-stretch fallback that measured children
-  at the CONTAINER's main extent rather than the one they were solved to
-  — the stale-estimate class already fixed twice on the flex path, here
-  one layer down. It is no longer reachable: every member now has a
-  measured hypothetical, so a line can no longer come out zero-extent.
+- extensions: `abstracttui-graph` and `abstracttui-mermaid` are **0.4.0**
+  and require `abstracttui` 0.5. Neither crate's own API changed. Update
+  all three versions together:
+
+  ```toml
+  abstracttui = "0.5"
+  abstracttui-graph = "0.4"
+  abstracttui-mermaid = "0.4"
+  ```
 
 ### Added
 
-- tests: `wrap_stretch_line_extent` pins the above, one test per
-  mechanism, with a non-stretch control that passed before the fix so a
-  failure names the solver rather than the fixture. Against the pre-fix
-  source it and the new wrap population are the ONLY failing targets in
-  the whole workspace — 105 test binaries, and the defect had no pin in
-  any of them.
+- theme: **`theme::Palette` — your house colors through the engine's own
+  derivation.** `theme::register` has always been public, but the transform
+  that turns a handful of authored colors into a full `TokenSet` was not, so
+  an application with a brand palette had to reimplement it — and its tokens
+  would then drift from the engine's at the next contrast-floor change, with
+  nothing to notice. `Palette` carries the same twelve colors the built-in
+  seed table does, as owned `String`s (a palette read from a config file is
+  not `&'static`), and `Palette::derive()` returns a `ThemeCandidate`:
 
-- tests: `theme_quantisation_grounds` measures whether a theme's distinct
-  GROUNDS survive colour-depth quantisation, and pins a defect it found.
-  The contrast audit runs on truecolor; quantisation to `Ansi256`/`Ansi16`
-  happens downstream at emit, so the audit's guarantees are not carried
-  across a depth downgrade and nothing was checking what happens when
-  they are not. `quantize_pair_256` protects a foreground from colliding
-  with its OWN background — it cannot protect two different grounds from
-  collapsing into each other, because they are never handed to it as a
-  pair. Measured: 8 of 104 ground pairs collapse at 256 colours, every
-  one of them `surface vs bg`, and two of the eight are the house themes.
-  So on a 256-colour terminal the engine's default theme has no visible
-  panel elevation. Pinned as a known set that fails if it grows OR
-  shrinks, not as a guarantee; the fix is open on
-  `claim:tui-audit-does-not-survive-quantisation`.
+  ```rust
+  use abstracttui::theme::{register, Palette, RegisterMode};
 
-  Two findings came with it and are pinned as passing properties. Borders
-  never collapse, so elevation-by-border survives where elevation-by-fill
-  does not — that is the mitigation. And `selection_bg`, which is the
-  pair I predicted would fail, never collapses in any theme: the DERIVED
-  token survives quantisation better than the authored one, because
-  `tint_until_readable` pushes it far enough off the ground that the cube
-  separates them. Ansi16 is measured (36 of 104) and deliberately not
-  asserted against a floor — the 16 system registers are user-themable,
-  so no build-time check can know the rendered colour.
+  let mut palette = Palette::new("acme", "Acme", true);
+  palette.bg = "#101014".into();
+  palette.accent = "#ff6188".into();
+  // ... the other ten authored colors ...
+  let reg = register(palette.derive()?, RegisterMode::Strict)?;
+  ```
 
-  The same file now costs the two candidate fixes, because the cost is
-  what chooses between them and it should not have to be re-derived by
-  hand. Moving the eight authored seeds so the cube separates them turns
-  out to be invisible: every one separates for a CIE76 ΔE below the 2.3
-  just-noticeable difference (worst case 1.30) with the contrast audit
-  still passing, so the assumption that it meant visibly restyling
-  published themes was wrong. What actually argues against it is that six
-  of the eight are third-party ports whose value is byte-fidelity to
-  upstream, and that it does nothing for a consumer palette arriving
-  through `theme::Palette`. Separating the grounds at render time needs no
-  new algorithm — handed the two grounds, the existing `quantize_pair_256`
-  re-pick separates all eight and lands on exactly the palette entry the
-  optimal seed edit reaches, in every case — so the two approaches produce
-  an identical rendered result and only one of them touches upstream hex.
+  `derive` runs the transform and nothing else — `register` stays the single
+  place a theme is audited, so there is no second audit to keep in step. Bad
+  hex comes back as a `PaletteError` naming **every** malformed field rather
+  than the first, so a config with three typos costs one round trip. All
+  twelve colors are required: the tokens a consumer is most likely to lack
+  are semantic inks (`accent_alt`, `ok`, `warn`, `error`, `info`), and which
+  green means "resolved" in a product is a decision, not a shade.
 
-  Two things came out of the costing. The site first sketched for it does
-  not exist: `sgr::resolve_pen` takes ONE cell, which is precisely why the
-  fg/bg pair is available there, and two grounds are never in one cell. And
-  the re-pick has a defect of its own when applied to grounds — it always
-  nudges its first argument, which is right for fg/bg (never move a
-  background out from under other cells) and arbitrary for two grounds. In
-  both light themes it therefore sacrifices `surface`, which the palette
-  represents EXACTLY, instead of the off-white `bg` it can only
-  approximate. Pinned with the rule its fix should follow.
+- theme: **`theme::contrast::ink_on(&tokens, ground)` — readable text on a
+  ground the theme never saw.** The audit guarantees `text` reads on the
+  theme's own grounds, and it holds; it says nothing about a panel color your
+  application mints. Measured across the 26 built-ins, a mid-dark app panel
+  leaves `text` below the 4.5:1 floor in 8 themes and a bright one in 19
+  (`solarized-light` reaches 1.01 — text the same color as the panel under
+  it). `ink_on` returns the theme's most readable **authored** ink for an
+  arbitrary ground as `Ink { color, token, contrast }`, clearing 4.5:1 on 51
+  of the 52 theme/panel combinations measured. The achieved ratio is returned
+  rather than swallowed because of the 52nd: on a bright yellow panel
+  `everforest-light` tops out at 3.49:1, and a bare color would hand you
+  unreadable text that looks like a considered choice. Check `contrast`
+  against the floor you need.
 
-  The pair set is now EXHAUSTIVE, and that changed the numbers and one of
-  the conclusions. The first two passes measured four pairs picked by
-  hand, found 8 collapses all of them `surface vs bg`, and wrote up that
-  uniformity as a finding. It was an artefact of the list. Every pair of
-  the five opaque grounds — 10 per theme, 260 in all — gives **15
-  collapses across six different pairs, in 15 of the 26 themes**. The
-  hand-picked set missed `shadow_ground` entirely (4 collapses, and its
-  only job is drawing elevation, so a collapse there is a shadow that
-  renders as nothing), missed `surface_raised vs selection_bg` (2), and
-  missed `bg vs surface_raised` (1). The pair list is generated from the
-  ground list now, so a new ground in `TokenSet` cannot be forgotten.
-  Ansi16 is 98 of 260.
+  This is a door, not a default: widgets still ink themselves from the
+  theme's tokens, and nothing in the paint path changes.
 
-  Two claims the narrow set had let stand were wrong. "selection never
-  collapses into its ground" was true only against `bg`: a selected row
-  inside a popover is drawn on `surface_raised`, and against that it
-  collapses in tokyo-night and solarized-dark. And "(b) is visually free"
-  holds for 14 of the 15 — the fifteenth, solarized-dark, needs a plainly
-  visible ΔE 6.99 to move `selection_bg`, while its `surface_raised`
-  cannot be separated by any small edit at all. Since `selection_bg` is
-  derived rather than authored, editing a seed does not even reach it. So
-  for one theme option (b) is not expensive but *unavailable*.
+- render, app: **grounds stay distinct when color downlevels to 256.** The
+  contrast audit runs at truecolor; quantization to the xterm-256 cube
+  happens downstream at emit, so the audit's guarantees were not carried
+  across the downgrade. Measured across the registry, 15 of 260 ground pairs
+  — in 15 of the 26 themes — collapse onto a single palette entry at 256
+  colors, the house themes among them, which lost panel elevation entirely.
 
-  What did survive is the fact that decides where a fix belongs: no theme
-  has more than one colliding pair, so there is no three-way pileup
-  needing a joint solve. Making the ground set pairwise distinct
-  separates every adjacency at once — and that is placement-independent,
-  which matters because widgets choose a ground token unconditionally
-  (`let ground = t.surface;`) with no idea what they are drawn on, so the
-  same token really does appear over different grounds.
+  `render::color::quantize_set_256` (with `quantize_set_256_into` for a
+  runtime-sized set) is the set analogue of `quantize_pair_256`: hand it N
+  colors, get back N distinct indices, moving as few as possible, keeping a
+  displaced ground on the authored side of the ground that displaced it, and
+  never displacing a color the palette represents exactly.
+  `Presenter::set_palette_assignment` installs the result, and the pen
+  resolver consults it for cell foregrounds, backgrounds and underline colors
+  alike. `Driver` keeps the assignment in lockstep with the live theme and
+  the color depth — cached on its inputs, re-derived only when they change —
+  so the theme's own grounds need nothing from you.
 
-  The fix is now specified and its precondition proved, though not yet
-  written. Reading the app moved it twice more. Adjusting the ground
-  TOKENS at caps-resolution — the previously stated plan — does not work:
-  `Driver::apply_caps_upgrade` recomputes `present_caps` after the probe
-  answers, so depth is not fixed at startup; `TokenSet` is `Copy` and
-  five widgets capture one by value into their state, so a live
-  adjustment would silently split the theme in two; and at truecolor
-  there is no defect to fix, so an adjusted token set would have to
-  differ by depth, moving authored colours on terminals that render them
-  exactly. So the decision stays per-theme and the application moves to
-  emit: assign each ground a distinct palette INDEX up front and let the
-  pen resolver look a cell's ground up in that map. The emitter still
-  cannot form the pair — that objection holds — but it no longer needs
-  to, because the pair was resolved upstream. Truecolor is untouched, no
-  token moves, and an arbitrary `Block::fill` colour misses the map and
-  falls back to `nearest` as today.
+  Grounds **your app** mints are declared: `RunConfig::extra_grounds` on the
+  `App::run` path, `Driver::set_extra_grounds` on a hand-driven loop. The
+  separator can only keep apart what it is given.
 
-  Building that assignment as a prototype also retracted the claim that
-  the fix needs no new algorithm. `quantize_pair_256`'s re-pick is the
-  whole policy for a PAIR, but applied over a SET it does not converge:
-  `observer-night` has `bg` and `surface` both on 233, and the re-pick
-  moves one to 234 — already held by `surface_raised`. One collapse
-  traded for another. A set assignment must exclude every index already
-  spoken for, and also every index an unplaced ground naturally wants, or
-  the collision cascades. The prototype now gives all 26 themes five
-  distinct entries at a cost of exactly one displacement per collision,
-  perturbs none of the eleven healthy themes, and never displaces a
-  ground the palette represents exactly — that last by making the
-  ownership rule the traversal order rather than a special case.
+  Three limits, all stated on the calls that carry them. **256 only** — at
+  truecolor there is nothing to separate, and at `Ansi16` the collapse still
+  happens (98 of 260 pairs), because the 16 system registers are user-themable
+  and no build-time decision can know what index 4 renders as. **Foreground
+  separation still wins** — where an assignment would push a ground onto the
+  entry a foreground drawn over it wants, the foreground moves: two surfaces
+  reading as one is a defect, text reading as its own background is erased.
+  And in 7 of the 260 pairs the assignment renders two grounds the theme
+  authored as *indistinguishable* (below 1.05) slightly further apart than
+  truecolor does — an edge the author did not draw. That set is pinned and
+  measured; a single distance threshold provably cannot separate those pairs
+  from the ones that need separating.
 
-- `render::color::quantize_set_256` — the prototype above, shipped. The
-  set analogue of `quantize_pair_256`: hand it N colours, get back N
-  distinct xterm-256 indices, moving as few as possible. It is not yet
-  wired into emit (that is the rest of the claim); this is the policy
-  landing where the pair policy lives, with the pair path refactored onto
-  the same primitive — `nearest_in` now excludes a SET of indices rather
-  than a single one, because a set assignment has to avoid every entry
-  already spoken for.
+  Truecolor output is byte-for-byte unchanged, as is any 256-color app whose
+  grounds do not collide: the empty assignment is literally the previous path.
 
-  Two things changed in the port, both because the shipped function
-  computes in the module's own integer metrics (`sq_dist`, the integer
-  `luma` proxy) rather than the prototype's CIE76 and float relative
-  luminance — `color.rs` keeps float gamma out of the emission path
-  deliberately, and the entry a colour lands on should be defended in the
-  metric that picked it.
+- theme: **`theme::contrast::ground_overlaps(theme_id, &tokens, floor)`** asks
+  the ground-against-ground question the pairwise audit does not. It returns a
+  `GroundOverlap` for every pair of the theme's opaque grounds measuring below
+  `floor`, so a theme author can see where elevation reads as flat.
+  `floors::GROUND_SEPARATION_REPORT` (1.10) is the reporting threshold the
+  engine's own measurements use — reported, never enforced: drawing two
+  grounds alike can be deliberate. `TokenSet::grounds()` is the list it walks,
+  public so your own tooling measures the same set.
 
-  Those metrics disagree on **one** theme, and measuring the disagreement
-  was worth more than the agreement. In `tokyo-night` neither colliding
-  ground is close to exact (ΔE 20.6 and 21.5 — blues forced onto the grey
-  ramp), so the ownership sort is ranking two bad approximations and the
-  two metrics rank them opposite ways. The shipped choice moves
-  `surface_raised` 238→239, which takes it *closer* to its true colour
-  (ΔE 20.559→20.509, squared distance 1321→881); the prototype moves
-  `selection_bg` 238→237, away from it (21.490→21.997, 1258→1958). Equal
-  separation either way. So the shipped choice is better in the
-  prototype's own metric, and the disagreement is pinned with the numbers
-  rather than settled by preference. The finding underneath: "least
-  exactly represented moves" is a *proxy* for "cheapest move", and they
-  come apart when neither colour is exact, because the direction a colour
-  must move to preserve the authored elevation order may point away from
-  it. The proxy still ships — it is what makes the exactly-represented
-  case unconditional — but it is now visibly a proxy.
+- widgets: **markdown horizontal rules are stylable, on all three axes at
+  once.** `MdRuleStyle` opens the ink (`MdRuleInk::Token`, resolved at typeset
+  so a rule follows a theme switch, or `MdRuleInk::Fixed`), the width
+  (`MdRuleWidth::{FullBleed, Measure, Inset}`) and the vertical space
+  (`space(before, after)`), on both renderers — `MarkdownView::rule_style` and
+  `Feed::rule_style`:
 
-  The port also adds a rule the prototype has not got: byte-identical
-  colours share an index. A theme whose `surface` equals its `bg` said
-  those are one surface, and separating them would invent an elevation
-  nobody authored — the same `rgb_eq` guard `quantize_pair_256` has, for
-  the same reason. No built-in theme exercises it, so it is unit-tested.
+  ```rust
+  let quiet = MdRuleStyle::default()
+      .ink(MdRuleInk::Token(TokenId::TextFaint))
+      .width(MdRuleWidth::Inset(2))
+      .space(0, 0);
+  MarkdownView::new(src).rule_style(quiet)
+  ```
 
-  And it corrected this row's costing of option (b) again, harder than
-  before. Checking the shipped assignment against the "optimal seed edit"
-  it was supposed to match finds **5 of the 15 collapsed pairs** where
-  that edit is unreachable: the entry it lands on belongs to a THIRD
-  ground (observer-night, catppuccin-macchiato, rose-pine,
-  everforest-light, abstract-midnight). `nearest_separating` is
-  pairwise-blind, so the sub-JND figure that made (b) look free
-  understates a third of the set — an author taking that edit would
-  separate the reported pair and collapse another. That is evidence
-  against (b), and it is the clearest thing yet in favour of a whole-set
-  assignment: a per-pair re-pick cannot see the third ground by
-  construction.
+  All three at once, because a policy that opens one axis lets a consumer
+  build half a document convention and believe it is finished. The default is
+  byte-identical to previous releases: `border` ink, full bleed, one blank row
+  each side. Callers that measure or anchor into a document rendered with a
+  non-default rule use the rule-aware forms — `rows_ruled`, `find_ruled`,
+  `outline_rows_ruled`, `resolve_anchor_ruled`.
 
-- The emit path can now be handed that assignment:
-  `Presenter::set_palette_assignment` installs `(color, index)` pairs and
-  `resolve_pen` consults them ahead of the nearest lookup, for cell
-  foregrounds, backgrounds and underline colours alike (one colour must
-  resolve to one index everywhere, or an underline drawn in a ground
-  colour would disagree with the ground). An empty assignment — the
-  default — is byte-for-byte the previous path: `quantize_pair_256` is
-  now literally `quantize_pair_256_assigned(fg, bg, &[])`, so the two
-  cannot drift. Nothing installs one yet; the theme/driver wiring is the
-  remaining step.
+- term: **`Capabilities::headless()`** — the fixed capability set for a byte
+  sink: full color and UTF-8, every terminal-bound feature (kitty
+  keyboard/graphics, sixel, OSC 52, mouse, paste, focus, synchronized output)
+  off, and no environment read at all. `Terminal::set_tty` lets a custom
+  terminal declare whether it is attached to one.
 
-  A precedence rule came with it, and it is the interesting part. An
-  assignment can CREATE a collision as easily as it removes one — a
-  displaced ground can land on the entry a foreground drawn over it
-  naturally wants. When that happens the foreground still moves. The
-  ground assignment is a *preference*; the fg/bg separation is a
-  *guarantee*: two surfaces reading as one is a defect, text reading as
-  its own background is erased. No built-in theme produces the case, so
-  it is tested on a constructed one rather than left until it is wrong in
-  production.
-
-  `TokenSet::grounds` now owns the ground list, and the quantisation
-  tests read it instead of keeping their own copy. The list had been
-  duplicated in the test file, which meant a ground added to `TokenSet`
-  would silently stop being measured — the exact failure the file exists
-  to catch. Names come from `TokenId::name`, so the pinned sets did not
-  have to change.
-
-  Proved on the wire, not just in the lookup: three tests drive a real
-  `Presenter` into the VT model at 256 colours and read the colours back
-  off the screen. Without an assignment the default theme's panel and its
-  ground arrive as ONE colour — the defect, live at the byte level, which
-  is what makes the second half meaningful; with the assignment installed
-  they arrive distinct, an unassigned colour is untouched, and the
-  constructed collision keeps its text visible.
-
-- tests: `perf_budgets` no longer reports a pass when it asserted
-  nothing. The whole file is `#[ignore]`d and release-only, correctly —
-  a debug build cannot judge a timing budget. What it did about that was
-  print a note and PASS, so `cargo test --test perf_budgets -- --ignored`
-  in a debug build reported "12 passed" having asserted not one budget:
-  a green meaning the opposite of what it looks like. It now fails and
-  names the command to run, still printing the measurement, because
-  wanting the numbers without the judgement is reasonable and getting a
-  green for it is not. The release path is unchanged, and the two tests
-  in the file whose assertions are timing-INDEPENDENT (the pool cap and
-  the link-id refusals) still pass in debug, as they should. Verified
-  against every caller first: the scheduled perf workflow and
-  `CONTRIBUTING.md` both pass `--release`, and per-PR `ci.yml` never
-  invokes this file.
-
-  The audit behind it is recorded in the module docs: measured-vs-budget
-  for all ten timing tests, ranging from 4.7x to 66x slack. Deliberately
-  NOT tightened — these are acceptance ceilings against charter numbers,
-  not regression detectors, and the ratios are host-specific on a host
-  that is ~2.3x faster than the one in the recorded baseline. Tightening
-  them against a dev laptop would produce weekly false failures on the
-  scheduled run. Catching a slowdown that stays under the ceiling needs
-  a calibration-normalised ratchet, which is named as absent rather than
-  faked.
-
-- tests: the allocation budgets now state budgets that can be exceeded.
-  `alloc_budget` carried a diff/present ratchet asserting `<= 8_000` and
-  `<= 2_000` allocs, left over from the pre-fix numbers; the real budget
-  landed as the `(0, 0)` acceptance test beside it and the ratchet was
-  never removed. Measuring the SAME function, it could not fail unless
-  the stricter test already had — 8,000x and 2,000x above the value it
-  guarded. Deleted; its per-stage attribution print, the only part still
-  doing work, moved to the test that supersedes it. The VT feed budget
-  was stated per CELL at 100x the measured cost, wide enough for the
-  exact regression its comment feared — a `String` per printed cell — to
-  pass with room to spare; it is now stated per ROW, the unit the model
-  actually allocates in, with 2x headroom over the measured 240. The
-  hostile-JPEG corpus budget goes from 334x slack to ~10x. Each new
-  threshold was shown to FAIL when set one notch below the measured
-  value, rather than assumed to bind. The dimension-bomb budget keeps
-  its 1,170x slack deliberately, and now says why: its only failure mode
-  is ~17 GB, so any bound from kilobytes to megabytes catches it
-  identically and tightening buys detection of nothing.
-
-- tests: the random-tree layout properties gain a **grid** population,
-  completing the set — column, row, wrap, grid. A grid child negotiates
-  with neither the container nor its siblings but with its CELL, whose
-  width track resolution decides before any height is known: the same
-  ordering cycle in a third shape. Unlike the wrap one this was green on
-  arrival — `grid.rs` already re-measures each child at its resolved
-  column width — so it is pinned against a weakening instead: measuring
-  that pass at the container width reds it, and crate-wide it is then
-  the ONLY failing test in 105 test binaries. The existing grid suites
-  stay green because every one of them uses fixed-size leaves, whose
-  height does not depend on the width they are measured at. Spanning
-  rows and non-`Auto` rows are excluded deliberately, both because they
-  are documented to clip rather than fit.
-
-- tests: the random-tree layout properties gain a **wrap** population.
-  The two content-sized populations cover column and row parents, where
-  the container is the only thing a child negotiates with; in a wrapped
-  row a child's cross size is bounded by its LINE, so a generous
-  container saves nothing and the child's own measure has to survive a
-  negotiation with its siblings. That path — the one where the same class
-  of defect has now shipped twice — had no property coverage. Like its
-  two siblings it carries a vacuity counter, and unlike the row
-  population it deliberately INCLUDES `Stretch`: there Stretch makes the
-  invariant free, here it was the broken case.
+- examples: **`grounds`** (`cargo run --example grounds`) walks the
+  256-color ground work on a real screen — theme by theme, with and without a
+  declared application panel, showing the entry each ground quantizes to and
+  the contrast the chosen ink achieves.
 
 - tests: the random-tree layout properties now cover **content-sized**
-  children. Every existing population in `adv_layout` gives its children
-  fixed dimensions, so the intrinsic pass — the one that asks a leaf how
-  big it wants to be — had no property coverage at all, which is how two
-  margin-deduction defects shipped through it. The new population
-  generates measured text leaves under randomised margins, padding, gap,
-  wrap and alignment, and asserts that a content-sized box is solved big
-  enough for what it will actually render. Reverting either intrinsic
-  call site turns it red on a shape no hand-written fixture named, while
-  the five existing invariants stay green — the blind spot demonstrated
-  rather than asserted. The assertion is deliberately not containment:
-  flex shrink absorbs the shortfall, so an undersized child is truncated
-  while remaining inside its parent. A counter fails the test if the
-  generated population stops containing leaves that both carry margins
-  and wrap past one row, so tuning the generator cannot quietly make it
-  vacuous.
+  children and gain **wrap** and **grid** populations, completing the set
+  (column, row, wrap, grid); `theme_quantisation_grounds` measures ground
+  separation across all 26 themes at both depths and pins what it found; and
+  the pty smoke suite gained a `grounds` case. Each fix below shipped with a
+  probe that turns red when the fix is reverted.
 
-- tests: `grid_margin_box` pins the grid margin box — inset on every
-  edge, neighbours separated by gap plus both margins, `Auto` track and
-  `Auto` row each growing for the margins, alignment inside the margin
-  box, and over-large margins clamping to zero. Each of the three
-  implementation sites turns its own test red when reverted; the row
-  pass got its own case precisely because reverting it initially changed
-  nothing any test could see.
+### Changed
 
-- tests: `grid_align_items` pins the alignment resolution order, and
-  includes a case asserting grid and flex agree on where a child's
-  alignment comes from — the property that was actually broken. Two of
-  its four tests passed before the fix: they guard the parts that must
-  NOT move (`align_self` still overrides, `Stretch` is still the
-  default), and the first of those goes red against the plausible wrong
-  fix of reading `align_items` alone.
+- widgets: **`ThemeSwitcher` is a padded chip instead of a bare glyph, and it
+  is now 5 columns wide instead of 1.** It was a 1x1 cell drawing `☾`/`☼` on a
+  transparent ground with no margin: the smallest possible click target, the
+  smallest possible visual object, and — mounted last in a right-aligned
+  chrome row, which is where applications put it — flush against the terminal
+  edge. Three separate causes, all three addressed:
+
+  - the ground is `surface_raised` in **every** state including idle, so the
+    control reads as pressable rather than as decoration; hover and focus
+    change the ink, not whether there is a ground;
+  - one cell of padding each side, **inside** the button, so the hit area
+    grows with the chip (3x1, the shape `Badge` uses);
+  - one cell of margin each side, which is what actually keeps it off the
+    screen edge — padding alone moves the chip's own ground into the corner.
+
+  **If your chrome row pins the switcher into a fixed-width slot, widen that
+  slot to 5 columns**, or the chip is clipped back to what it was. Rows that
+  lay out from the widget's own size need no change. `ThemeSwitcher::layout`
+  still replaces the default wholesale if you want different geometry — and an
+  override wider than one cell now works: the face was a hardcoded 1x1 child,
+  so a wider box drew the glyph in its corner and left the rest blank. The
+  face fills its button and centres the glyph.
+
+- app: **capabilities are no longer detected from the environment when the
+  terminal is not a tty.** `Driver::new` resolved an undeclared `RunConfig::caps`
+  with `Capabilities::detect_env()`, which is right over a real terminal and
+  wrong over a capture terminal: a byte sink has nothing to detect, so it
+  inherited the shell of whoever ran the suite, and a host without `COLORTERM`
+  quantized every asserted color through the 256 cube. Nothing went red —
+  token-against-token comparisons pass at either depth — so the suite's verdict
+  was a property of the machine.
+
+  The branch is now three cases: declared caps win; undeclared over a tty is
+  the environment pass, unchanged; undeclared over a non-tty is
+  `Capabilities::headless()`. The substitution is never silent — it pushes a
+  startup notice naming both ways to take control (declare `RunConfig::caps`,
+  or override `Terminal::is_tty`). **A custom `Terminal` implementation that is
+  attached to a real terminal but does not override `is_tty` now gets headless
+  defaults**: override it, or call `set_tty(true)`.
+
+- tests: the performance and allocation budgets state budgets that can fail.
+  `perf_budgets` printed its measurements and **passed** in a debug build,
+  where a timing budget cannot be judged — a green meaning the opposite of what
+  it looked like; it now fails and names the release command to run, still
+  printing the measurement, and the two timing-independent tests in the file
+  still pass in debug. The allocation ratchets were restated against measured
+  values (each shown to fail one notch below), and a diff/present ratchet
+  sitting 8,000x above the acceptance test beside it was deleted. Contributor-
+  facing only: `ci.yml` never invoked these, and both documented callers pass
+  `--release`.
 
 ### Fixed
 
-- layout: **the 0.4.1 margin deduction did not reach WRAPPED
-  containers.** `intrinsic_size` is called from the single-line flex
-  path, the wrap path and the grid path; 0.4.1 deducted the child's own
-  margins on the flex path only. So the same defect it fixed survived
-  verbatim behind `Style::wrap()`: the line-breaking basis measured a
-  content-sized child at the full content extent, and because that basis
-  becomes the child's main size and is never re-derived, a wrapping leaf
-  with side margins in a wrapped column was solved a row short of its
-  own text. Measured: 120 columns with `margin: 3` in a 40-wide wrapped
-  column is solved to width 34 — which needs 4 rows — and was given 3.
-  The wrap path now deducts the child's margins like the flex path.
-  Wrapped ROWS were never affected: there the main size is corrected
-  before the cross measure reads it.
-  GRID never had the truncation bug: a grid child's box was its whole
-  cell, so measuring at the full cell was self-consistent. The separate
-  question that left open — whether grid honours margins at all — is
-  answered below.
+- layout: **a wrapped line is now tall enough for the children that stretch
+  into it.** `wrap` sized each line from the maximum of its members' cross
+  sizes, but gave an `Align::Stretch` member no cross size at all — its size
+  comes from the line, so it contributed nothing to the line it was about to be
+  measured against. Since `Stretch` is the default `align_items`, an ordinary
+  wrapped row of text beside a one-row chip was clipped to one row: a paragraph
+  needing five rows was solved to `h: 1`. Lines are now sized from every
+  member's hypothetical cross size — what it would be if it did not stretch —
+  which is how CSS breaks the same cycle. Both axes: a column-direction wrap
+  had the identical defect in its widths. The change also removes an
+  all-stretch fallback that measured children at the container's main extent
+  rather than the one they were solved to.
 
-- layout: **`Style::margin()` on a GRID child was a silent no-op.** The
-  call compiled, nothing threw, and the value was discarded: grid
-  assigned the child its raw cell with no margin term anywhere in track
-  sizing or placement. The whole suite was byte-identical with and
-  without a margin on a grid child, in either direction — nothing
-  observed it, which is why it went unnoticed. Flex has always honoured
-  margins and CSS Grid honours them on grid items, so a margin that
-  silently vanishes was the worst of the three behaviours available.
-  A grid child's margins now come out of its cell on every edge, and it
-  sizes and aligns within the resulting margin box; an `Auto` track fits
-  the child's MARGIN box, so the track grows to make room instead of the
-  child being squeezed. Over-large margins clamp to a zero extent rather
-  than inverting the rect.
-  Found while establishing why grid was NOT affected by the wrap defect
-  above.
+- layout: **the 0.4.1 margin deduction now reaches wrapped containers.**
+  `intrinsic_size` is called from the single-line flex path, the wrap path and
+  the grid path; 0.4.1 deducted a child's own margins on the flex path only, so
+  the same defect survived verbatim behind `Style::wrap()`. The line-breaking
+  basis measured a content-sized child at the full content extent, and because
+  that basis becomes the child's main size and is never re-derived, a wrapping
+  leaf with side margins in a wrapped column was solved a row short of its own
+  text — 120 columns with `margin: 3` in a 40-wide wrapped column is solved to
+  width 34, which needs 4 rows, and was given 3. Wrapped rows were never
+  affected: there the main size is corrected before the cross measure reads it.
 
-- layout: **`Style::align_items()` on a GRID container was a silent
-  no-op too.** Grid hardcoded the alignment fallback to `Stretch`, while
-  the crate's other three alignment sites — the flex path and both wrap
-  passes — resolve a child's alignment as its own `align_self` falling
-  back to the container's `align_items`. So a grid child was always
-  stretched no matter what its container asked for. Grid now resolves it
-  the same way the other three do. A grid that never mentions alignment
-  is bit-for-bit unchanged, since the default `align_items` is already
-  `Stretch`; only grids that explicitly set it change, and those were
-  precisely the ones being ignored. Found by a test written for the
-  margin work above that failed on the wrong expectation — the crate
-  contains 26 grid call sites and not one of them set `align_items`,
-  which is its own evidence that the option was unusable rather than
-  unwanted.
+- layout: **`Style::margin()` on a grid child is no longer a silent no-op.**
+  The call compiled, nothing threw, and the value was discarded: grid assigned
+  the child its raw cell with no margin term anywhere in track sizing or
+  placement, and the whole suite was byte-identical with and without a margin
+  on a grid child. A grid child's margins now come out of its cell on every
+  edge, and it sizes and aligns within the resulting margin box; an `Auto`
+  track fits the child's margin box, so the track grows to make room instead of
+  the child being squeezed. Over-large margins clamp to a zero extent rather
+  than inverting the rect. Flex has always honored margins and CSS Grid honors
+  them on grid items — a margin that silently vanished was the worst of the
+  three behaviors available.
 
-### Added
-
-- tests: `margin_intrinsic_probe` pins the 0.4.1 margin deduction, which
-  shipped with a suite that was byte-identical before and after it —
-  each of the two intrinsic call sites now turns exactly one test red
-  when reverted. `wrap_grid_margin_probe` covers the same invariant
-  across the flex, wrap and grid paths, with the flex case as a control
-  so a failure names the path rather than the fixture.
-  Both express the invariant as *a content-sized box is tall enough for
-  its own wrap at the width it was solved to*, deliberately not as a
-  containment check: when the estimate is short, flex shrink absorbs the
-  difference, so the child is silently truncated while staying inside
-  its parent. The random-tree invariants in `adv_layout` assert
-  containment and are structurally unable to see this class.
+- layout: **`Style::align_items()` on a grid container is no longer a silent
+  no-op either.** Grid hardcoded the alignment fallback to `Stretch`, while the
+  crate's three other alignment sites resolve a child's alignment as its own
+  `align_self` falling back to the container's `align_items`; a grid child was
+  therefore always stretched no matter what its container asked for. Grid now
+  resolves it the same way. A grid that never mentions alignment is unchanged,
+  since the default `align_items` is already `Stretch`; only grids that set it
+  explicitly change, and those were precisely the ones being ignored.
 
 ## [0.4.1] - 2026-08-22
 
@@ -3038,7 +2881,8 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
-[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/lpalbou/abstracttui/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/lpalbou/abstracttui/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/lpalbou/abstracttui/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/lpalbou/abstracttui/compare/v0.3.6...v0.3.7
