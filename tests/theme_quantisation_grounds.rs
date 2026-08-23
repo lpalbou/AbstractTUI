@@ -1297,3 +1297,78 @@ fn no_single_colour_distance_threshold_can_separate_the_two_populations() {
          re-open the row and take the simple fix."
     );
 }
+
+// ---------------------------------------------------------------------
+// The AUDIT could not ask the ground-vs-ground question at all.
+// claim:tui-separator-invents-distinctions-the-author-did-not-draw
+//
+// Every rule in theme::contrast::audit is ink-on-ground; surface_raised
+// appears only as a BACKGROUND for text and syntax checks, never as a
+// subject measured against surface or bg. `ground_overlaps` is the
+// question, reported and not enforced, because the VERDICT on a
+// near-invisible authored pair is DESIGN's and reddening the registry
+// on my own initiative is the valid-input-fails defect this module
+// already paid for once.
+// ---------------------------------------------------------------------
+
+/// The premise: a clean `audit` and an overlapping ground pair coexist.
+///
+/// This is the whole reason the new function exists. If it ever fails
+/// because `audit` grew a ground rule, delete this test — do not weaken
+/// it — and move the count below into the audit's own suite.
+#[test]
+fn a_theme_can_pass_the_audit_with_two_grounds_a_reader_cannot_tell_apart() {
+    use abstracttui::theme::contrast::{audit, floors, ground_overlaps};
+    let worst = abstracttui::theme::themes()
+        .iter()
+        .filter_map(|t| {
+            ground_overlaps(t.id, &t.tokens, floors::GROUND_SEPARATION_REPORT)
+                .into_iter()
+                .min_by(|x, y| x.measured.partial_cmp(&y.measured).unwrap())
+                .map(|o| (t, o))
+        })
+        .min_by(|a, b| a.1.measured.partial_cmp(&b.1.measured).unwrap())
+        .expect("the registry has at least one overlapping ground pair");
+    let (theme, overlap) = worst;
+    assert!(
+        overlap.measured < 1.01,
+        "expected a pair that is effectively one colour, got {overlap}"
+    );
+    assert!(
+        audit(theme.id, &theme.tokens).is_empty(),
+        "{}: premise broken — this theme now HAS audit violations, so the \
+         clean-audit-plus-invisible-grounds case needs a different witness. \
+         Overlap was: {overlap}",
+        theme.id
+    );
+}
+
+/// Pins the size of the reported set, and that the report is not empty.
+///
+/// A reporting-only check that nobody looks at is decoration, so the
+/// numbers live here where `cargo test --all` reads them. These are
+/// MEASUREMENTS of the registry as authored, not a contract: if DESIGN
+/// rules and themes are edited, update them deliberately.
+#[test]
+fn the_registry_ground_overlap_report_is_the_measured_size() {
+    use abstracttui::theme::contrast::{floors, ground_overlaps};
+    let all: Vec<_> = abstracttui::theme::themes()
+        .iter()
+        .flat_map(|t| ground_overlaps(t.id, &t.tokens, floors::GROUND_SEPARATION_REPORT))
+        .collect();
+    let themes_hit: std::collections::BTreeSet<&str> =
+        all.iter().map(|o| o.theme.as_str()).collect();
+    assert_eq!(
+        (all.len(), themes_hit.len()),
+        (44, 22),
+        "the authored ground-overlap set changed: {} pairs across {} of 26 themes",
+        all.len(),
+        themes_hit.len()
+    );
+    // Falsifiable floor: a report that cannot fire is decoration.
+    assert!(
+        ground_overlaps("none", &abstracttui::theme::themes()[0].tokens, 1.0).is_empty(),
+        "a floor of 1.0 must report nothing — contrast is never below 1.0, \
+         so a hit here means the comparison is inverted"
+    );
+}

@@ -111,6 +111,17 @@ pub mod floors {
     /// palettes (everforest-light) set the honest ceiling.
     pub const SYNTAX: f32 = 4.5;
     pub const SYNTAX_COMMENT: f32 = 3.0;
+    /// Ground-vs-ground separation, REPORTED and not enforced — the
+    /// default floor for [`super::ground_overlaps`]. Below this two
+    /// grounds are close enough that a reader is unlikely to see an edge
+    /// between them, so a panel raised onto a surface has none.
+    ///
+    /// Not a member of the enforced set above, and deliberately so: at
+    /// this value it fires across most of the registry, and whether that
+    /// is a defect or authored subtlety is DESIGN's ruling. Same standing
+    /// as `TEXT_TARGET` — a number the engine will tell you about and
+    /// will not fail you for.
+    pub const GROUND_SEPARATION_REPORT: f32 = 1.10;
 }
 
 /// Audit one token set against every documented floor. Returns an empty
@@ -278,6 +289,82 @@ pub fn audit(theme_id: &str, t: &TokenSet) -> Vec<Violation> {
         });
     }
 
+    out
+}
+
+/// Two GROUNDS that a reader may not be able to tell apart.
+///
+/// Deliberately not a [`Violation`]: this is **reported, never enforced**,
+/// and calling it a violation would state a verdict that is not mine to
+/// state. See [`ground_overlaps`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct GroundOverlap {
+    /// Theme id the pair was measured in.
+    pub theme: String,
+    /// The two grounds, in `TokenSet::grounds()` order.
+    pub a: TokenId,
+    pub b: TokenId,
+    /// Their WCAG contrast ratio, at TRUECOLOR — before any quantisation.
+    pub measured: f32,
+}
+
+impl core::fmt::Display for GroundOverlap {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "[{}] {} / {} measure {:.3} apart",
+            self.theme,
+            self.a.name(),
+            self.b.name(),
+            self.measured
+        )
+    }
+}
+
+/// Every pair of GROUNDS in `t` closer together than `floor`.
+///
+/// ## Why this exists as its own function
+///
+/// [`audit`] cannot ask this question. Every one of its rules is
+/// INK-on-GROUND: `surface_raised` appears there only as a *background*
+/// for text and syntax checks, never as a subject measured against
+/// `surface` or `bg`. So a theme may author two grounds `1.006` apart —
+/// one colour to any reader — and pass a clean audit with zero
+/// violations. That is the same hole `quantize_pair_256` had against
+/// `quantize_set_256`: a rule that protects a foreground from its own
+/// background cannot protect two grounds from each other, because they
+/// live in different cells and are never handed to it as a pair.
+///
+/// ## Why it REPORTS instead of failing
+///
+/// Whether a near-invisible ground pair is a defect or deliberate
+/// subtlety is a DESIGN call, and at the default reporting floor it fires
+/// on most of the registry — so wiring it into `audit` would redden
+/// themes whose authors may well have meant it, which is the
+/// valid-input-fails defect this module spent a day learning. The
+/// engineering claim here is only that the question should be
+/// ASKABLE. Set a floor in `audit` once DESIGN has ruled; until then the
+/// honest instrument is a measurement anyone can run, not a verdict
+/// nobody agreed.
+///
+/// Note the measurement is at truecolor: it says what the theme AUTHORED,
+/// independent of what any depth downgrade later does with it.
+pub fn ground_overlaps(theme_id: &str, t: &TokenSet, floor: f32) -> Vec<GroundOverlap> {
+    let g = t.grounds();
+    let mut out = Vec::new();
+    for i in 0..g.len() {
+        for j in (i + 1)..g.len() {
+            let measured = contrast_ratio(g[i].1, g[j].1);
+            if measured < floor {
+                out.push(GroundOverlap {
+                    theme: theme_id.to_string(),
+                    a: g[i].0,
+                    b: g[j].0,
+                    measured,
+                });
+            }
+        }
+    }
     out
 }
 
