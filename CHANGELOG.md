@@ -39,6 +39,13 @@ rare code that needs it.
   abstracttui-mermaid = "0.4"
   ```
 
+  If you consume the engine through `[patch.crates-io]` and a `path`
+  rather than from the registry, pin the **exact** version instead
+  (`abstracttui = "0.5.0"`). A patch outside your requirement is not an
+  error — cargo ignores it and resolves the published crate instead, so a
+  stale `"0.4"` requirement builds against 0.4.1 with a warning and exit
+  0. See [docs/troubleshooting.md](docs/troubleshooting.md#a-local-checkout-stops-being-the-engine-i-build-against).
+
 ### Added
 
 - theme: **`theme::Palette` — your house colors through the engine's own
