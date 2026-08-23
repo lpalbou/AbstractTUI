@@ -427,3 +427,113 @@ fn ink_on_flips_polarity_between_a_light_and_a_dark_theme() {
     assert_eq!(pick("one-light", DECLARED_PANEL), TokenId::Bg);
     assert_eq!(pick("one-light", DECLARED_BRIGHT), TokenId::Text);
 }
+
+// ---------------------------------------------------------------------
+// border: guaranteed on `bg`, drawn on everything else
+// ---------------------------------------------------------------------
+//
+// CHARACTERIZATION, NOT A GUARANTEE. `border` is derived as
+// `mix_until_contrast(bg, text, bg, ..., floors::BORDER)` — it earns its
+// floor against `bg` and against nothing else. The documented panel
+// recipe in `widgets::block` is `.fill(t.surface)`, so the idiomatic
+// bordered container puts that border on a ground its derivation never
+// looked at.
+//
+// The three tests below pin what the engine does TODAY so that fixing it
+// has something to turn red. When the derivation starts earning its floor
+// on the grounds it is drawn on, they go red BY DESIGN: invert them into
+// guarantees, do not delete them. A deleted characterization test is how
+// a fix ships without anyone measuring what it moved.
+
+/// The guarantee that exists, restated here as the baseline the other two
+/// are measured against. Duplicates `registry::borders_stay_subtle_not_
+/// shouting` on purpose: that test is inside the module that derives the
+/// value, this one is outside it, and the pair is the point.
+#[test]
+fn border_clears_its_floor_on_bg_in_every_theme() {
+    use abstracttui::theme::contrast::floors;
+    for t in themes() {
+        let r = contrast_ratio(t.tokens.border, t.tokens.bg);
+        assert!(
+            r >= floors::BORDER,
+            "[{}] border on bg measures {r:.3} (floor {})",
+            t.id,
+            floors::BORDER
+        );
+        assert!(r < 3.2, "[{}] border shouting on bg at {r:.3}", t.id);
+    }
+}
+
+/// THE DEFECT. A `Block` filled with `t.surface` — the recipe in the
+/// widget's own module docs — draws a border that misses the floor in
+/// well over half the registry.
+#[test]
+fn border_on_surface_misses_the_floor_in_15_of_26_themes() {
+    use abstracttui::theme::contrast::floors;
+    let mut below: Vec<(String, f32)> = themes()
+        .iter()
+        .map(|t| {
+            (
+                t.id.to_string(),
+                contrast_ratio(t.tokens.border, t.tokens.surface),
+            )
+        })
+        .filter(|(_, r)| *r < floors::BORDER)
+        .collect();
+    below.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+    assert_eq!(
+        themes().len(),
+        26,
+        "the pinned counts below are against a 26-theme registry"
+    );
+    assert_eq!(
+        below.len(),
+        15,
+        "border/surface below {}: expected the pinned 15, got {} — {below:?}. \
+         If a fix landed, invert this test into a guarantee.",
+        floors::BORDER,
+        below.len()
+    );
+    let (worst_id, worst) = &below[0];
+    assert_eq!(worst_id, "gruvbox", "worst offender moved: {below:?}");
+    assert!(
+        (1.20..1.22).contains(worst),
+        "gruvbox border/surface measured {worst:.3}, pinned at ~1.209"
+    );
+}
+
+/// Worse, and not in the row that opened this: on `surface_raised` — the
+/// ground `Code`, `Badge`, `Progress` and the drawer panels sit on — the
+/// border clears the floor in ZERO of 26. Any fix that guarantees
+/// {bg, surface} and stops there leaves this whole set unaddressed.
+#[test]
+fn border_on_surface_raised_misses_the_floor_in_every_theme() {
+    use abstracttui::theme::contrast::floors;
+    let mut best = (0.0f32, String::new());
+    for t in themes() {
+        let r = contrast_ratio(t.tokens.border, t.tokens.surface_raised);
+        assert!(
+            r < floors::BORDER,
+            "[{}] border on surface_raised measures {r:.3} — that is ABOVE \
+             the floor, which this test pins as impossible today. A fix \
+             landed: invert this into a guarantee.",
+            t.id
+        );
+        if r > best.0 {
+            best = (r, t.id.to_string());
+        }
+    }
+    assert!(
+        best.0 < floors::BORDER,
+        "best case {} at {:.3} clears the floor",
+        best.1,
+        best.0
+    );
+    assert!(
+        (1.38..1.40).contains(&best.0),
+        "best case moved: {} at {:.3}, pinned at ~1.388",
+        best.1,
+        best.0
+    );
+}
