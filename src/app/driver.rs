@@ -1464,6 +1464,69 @@ mod tests {
         assert_eq!(d, vec![Rect::new(0, 0, 5, 5), Rect::new(18, 8, 2, 2)]);
     }
 
+    /// THE INSTRUMENT that was missing: how many damage rects does a
+    /// real long-list scroll actually produce?
+    ///
+    /// `coalesce_damage` is O(n²) in the length of that list, and the
+    /// quadratic has been carried as a suspect on
+    /// `commons/claim:msg-47-make-long-lists-fast` precisely because
+    /// nobody had measured `n`. A quadratic over 3 rects is not a cost;
+    /// over 400 it is the frame. This answers which one we have, and it
+    /// is deliberately a COUNT rather than a timing, so it is
+    /// deterministic and states a fact the next reader can act on.
+    ///
+    /// Prints the observed count. The assertion is the guard: if a
+    /// change ever makes a scroll emit per-row damage, `n` jumps by two
+    /// orders of magnitude and this goes red with the real number in
+    /// the message.
+    #[test]
+    fn a_long_list_scroll_emits_few_damage_rects_not_one_per_row() {
+        use crate::layout::Style as LayoutStyle;
+        use crate::reactive::create_root;
+        use crate::ui::{text, Element, UiTree};
+        use crate::widgets::Scroll;
+
+        const ROWS: i32 = 400;
+        let viewport = Size::new(100, 30);
+        let mut tree = UiTree::new(viewport);
+        let (_root, offset) = create_root(|cx| {
+            let offset = cx.signal(0i32);
+            let mut col = Element::new().style(LayoutStyle::column());
+            for i in 0..ROWS {
+                col = col.child(text(format!("row {i} — some content to wrap and measure")));
+            }
+            let view = Scroll::new(col.build()).offset_y(offset).view(cx);
+            tree.mount(cx, view);
+            offset
+        });
+        tree.layout();
+        let _first_paint = tree.take_damage();
+
+        // A scroll-shaped change: the offset moves by a page.
+        offset.set(30);
+        crate::reactive::flush_effects();
+        tree.layout();
+        let damage = tree.take_damage();
+
+        eprintln!(
+            "[instrument] {ROWS}-row scroll by one page emitted {} damage rect(s): {:?}",
+            damage.len(),
+            damage
+        );
+
+        // The guard, stated as the thing that would make the quadratic
+        // matter. `coalesce_damage` compares every kept rect against
+        // every input rect, so this bound is what keeps that cost
+        // irrelevant.
+        assert!(
+            damage.len() < 32,
+            "a scroll emitted {} damage rects for {ROWS} rows — approaching \
+             per-row damage, which is the input size that makes \
+             coalesce_damage's O(n^2) a real frame cost",
+            damage.len()
+        );
+    }
+
     #[test]
     fn present_caps_mapping_delegates_to_kernel_including_underline() {
         let mut caps = Capabilities::default();

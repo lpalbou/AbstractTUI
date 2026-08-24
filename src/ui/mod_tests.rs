@@ -1189,6 +1189,79 @@ fn the_memo_holds_two_widths_and_folds_every_unconstrained_one_together() {
 /// `measures` is the honest denominator: it is `text::measure`
 /// executions, so it reads the memo's effect directly rather than
 /// inferring it from wall clock.
+/// A REAL scroll must not re-measure text, and `ui_frame_cost_table`
+/// cannot tell you whether it does.
+///
+/// That instrument models "scrolling a long list" as `set_viewport` at
+/// the SAME width followed by `layout()`. That is a re-solve, and the
+/// memo handles it — but it is not a scroll. A scroll moves a
+/// `Scroll`'s offset signal, which is a different write reaching the
+/// tree by a different path, and `agora-tui`'s 8000-row channel does
+/// the second thing rather than the first.
+///
+/// The distinction is the one that cost this seat twice today: a check
+/// that models the operation instead of performing it is green about a
+/// world nobody runs. So this performs the scroll and counts
+/// `text::measure` executions, which is the memo's effect read directly
+/// rather than inferred from wall clock.
+///
+/// Falsifiable: delete the `WidthMemo` wrapper in `ui::mount` and the
+/// count jumps from zero to one per text leaf per frame.
+#[test]
+fn a_real_scroll_offset_change_re_measures_no_text_at_all() {
+    const BODY: &str = "the seam you flagged is real and the transit guard \
+                        I mentioned is in the same file, a few lines below \
+                        the one you quoted back at me";
+    const ROWS: usize = 400;
+
+    let mut tree = UiTree::new(Size::new(80, 40));
+    let (root, offset) = create_root(|cx| {
+        let offset = cx.signal(0i32);
+        let mut col = Element::new().style(Style::column());
+        for _ in 0..ROWS {
+            col = col.child(
+                Element::new()
+                    .style(Style::column().padding(crate::layout::Edges::all(1)))
+                    .child(super::text("agora-tui"))
+                    .child(super::text(BODY))
+                    .build(),
+            );
+        }
+        let view = crate::widgets::Scroll::new(col.build())
+            .offset_y(offset)
+            .view(cx);
+        tree.mount(cx, view);
+        offset
+    });
+    // Cold solve: every leaf measures once and nothing can prevent it.
+    tree.layout();
+    let cold = crate::text::measure_calls();
+    assert!(
+        cold > 0,
+        "the cold solve measured nothing, so this rig never reached the \
+         text leaves and the assertion below would prove nothing"
+    );
+
+    // THE SCROLL: move the offset, flush, re-solve. Widths are
+    // unchanged, so no leaf has a new question to answer.
+    crate::text::reset_measure_calls();
+    for i in 0..8 {
+        offset.set(if i % 2 == 0 { 2 } else { 0 });
+        crate::reactive::flush_effects();
+        tree.layout();
+    }
+    let scrolling = crate::text::measure_calls();
+
+    drop(root);
+    assert_eq!(
+        scrolling, 0,
+        "eight scroll frames over {ROWS} rows re-measured text {scrolling} times \
+         (cold solve was {cold}) — the WidthMemo is not surviving a real offset \
+         change, so every retained row pays wrap-aware measurement on every \
+         scroll frame"
+    );
+}
+
 #[test]
 #[ignore = "measurement report, not a guard: prints a table, asserts nothing"]
 fn ui_frame_cost_table() {
