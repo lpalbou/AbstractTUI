@@ -42,13 +42,13 @@ release).
 On crates.io (logged in as the crate owner):
 
 - **New crate (first publish):** Trusted Publishing can only be configured
-  for an existing crate, so either
-  - use the **Pending Publisher** flow (crates.io account settings →
-    "Publishing tokens / Trusted Publishing" → add a pending publisher for
-    crate `abstracttui`) *before* the first CI publish, or
-  - do the very first `cargo publish` manually with an API token from your
-    machine, then continue below.
-- **Existing crate:** crate page → **Settings → Trusted Publishing → Add**:
+  for an existing crate unless you use the **Pending Publisher** flow.
+  Before its first release, open crates.io account settings → "Publishing
+  tokens / Trusted Publishing" and add a pending publisher for the new
+  crate name.
+- **Existing crates:** configure `abstracttui`, `abstracttui-graph`, and
+  `abstracttui-mermaid` separately. On each crate page, open **Settings →
+  Trusted Publishing → Add** and enter:
   - GitHub owner: `lpalbou`
   - Repository: `AbstractTUI` (exact GitHub capitalization — the OIDC claim
     reports `lpalbou/AbstractTUI` and the match is on that string)
@@ -59,13 +59,9 @@ In the GitHub repo, create the environment **Settings → Environments →
 `crates-io`** (it must match the crates.io config; optionally add yourself
 as a required reviewer so every publish needs a click of approval).
 
-**Fallback (classic token):** if you prefer not to use Trusted Publishing,
-create an API token on crates.io (scope: `publish-update`, and
-`publish-new` for the first release), store it as the repository secret
-`CARGO_REGISTRY_TOKEN`, and in `release.yml` comment out the
-"Authenticate with crates.io" step and swap the two `CARGO_REGISTRY_TOKEN`
-lines in the `cargo publish` step (the fallback line is already there,
-commented).
+The publish jobs obtain an ephemeral token from
+`rust-lang/crates-io-auth-action`; do not create a `CARGO_REGISTRY_TOKEN`
+repository or environment secret.
 
 ## 4. Protect `main` (optional, recommended)
 
