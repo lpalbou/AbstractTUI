@@ -33,6 +33,19 @@
 //! it. That pair is resolvable once per theme and depth instead, upstream
 //! of emit; `quantize_set_256` is that policy, and it is the same metrics
 //! (`sq_dist`, `luma`) applied to a set rather than a pair.
+//!
+//! Ground intent (`GroundIntent`, `PairIntent`): separating every ground
+//! is right when the author drew every ground apart, and wrong when they
+//! did not — for seven built-in pairs the 256 rendering ends up MORE
+//! separated than truecolor, an edge nobody drew. Which grounds *should*
+//! read as distinct is a statement about AUTHOR INTENT, and intent is not
+//! a function of the two color values: no predicate `f(a, b)` gets it
+//! right, because the same pair can be one an author left indistinct AND
+//! one whose elevation the plain lookup collapses. So the intent is
+//! DECLARED rather than inferred, per pair, and additively: an unnamed
+//! pair falls to today's behavior, so declaring one pair cannot move
+//! another and opting in at all cannot move anything by itself. See
+//! `GroundIntent` for the rule and the ruling it implements.
 
 use crate::base::palette::{SYSTEM_16, XTERM_256};
 use crate::base::Rgba;
@@ -202,6 +215,10 @@ const ASSIGNABLE_256: usize = 240;
 ///
 /// Ties pick the lower index — deterministic bytes.
 ///
+/// Separating every ground is the right answer only for a theme that drew
+/// every ground apart; [`GroundIntent`] is how a theme says otherwise, and
+/// this function is its [`UNDECLARED`](GroundIntent::UNDECLARED) case.
+///
 /// `N` above `ASSIGNABLE_256 / 2` is not rejected but is not guaranteed
 /// either: a color that finds every candidate spoken for keeps its
 /// nearest entry, exactly as today. Five grounds are the intended scale.
@@ -216,6 +233,103 @@ pub fn quantize_set_256<const N: usize>(colors: [Rgba; N]) -> [u8; N] {
     out
 }
 
+/// What a theme said about ONE pair of its grounds.
+///
+/// The third state — the theme said nothing about this pair — is the
+/// absence of an entry in [`GroundIntent`], not a variant here. That is
+/// deliberate: a state you can only reach by *not* writing something down
+/// cannot be written down wrong.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum PairIntent {
+    /// These two grounds must read as different surfaces. They never
+    /// share a palette entry — which is also what silence does, so
+    /// declaring it changes no bytes today. It states the intent on the
+    /// record instead of leaving it to a default.
+    Distinct,
+    /// These two grounds may read as one surface. When they collide at
+    /// 256 they are allowed to share the entry rather than one being
+    /// displaced onto an edge the author never drew.
+    Same,
+}
+
+/// What the theme said about which of its GROUNDS must read as different
+/// surfaces once the palette cannot hold them all apart.
+///
+/// The set assignment above gives every originally-distinct ground its
+/// own entry. That is right for a theme whose grounds are drawn apart and
+/// wrong for one whose grounds are not: seven built-in pairs come out of
+/// the 256 path MORE separated than they are at truecolor, an edge the
+/// author never drew. (Three of the seven are this policy's; the other
+/// four are plain [`nearest_xterm256`] and survive with the set policy
+/// deleted.) The obvious repair — merge grounds that are *close enough* —
+/// is refuted by measurement, and not marginally: the same pair can be
+/// simultaneously one an author left indistinct and one whose elevation
+/// plain nearest collapses (`solarized-dark` `surface_raised`/
+/// `selection_bg`, `one-light` `bg`/`surface`, `abstract-midnight`
+/// `bg`/`shadow_ground`). No rule over the two color values can be right
+/// about a pair whose two requirements contradict each other.
+///
+/// So the answer is not measured, it is DECLARED. Per the ruling recorded
+/// as `decision:ground-separation-intent-is-declared-by-the-theme`:
+///
+/// - **The declaration is PER PAIR and ADDITIVE.** A pair the theme did
+///   not name is undeclared and falls to the default, exactly as if the
+///   theme carried no declaration at all. Naming one pair says nothing
+///   about the others.
+/// - **Silence means elevation wins.** An undeclared pair keeps two
+///   distinct entries — byte-for-byte the behavior that shipped before
+///   this type existed.
+/// - **Opting in cannot flip the default.** An empty declaration and a
+///   declaration of nothing but [`Distinct`](PairIntent::Distinct) are
+///   both identical to no declaration. There is no way to spell "merge
+///   everything I did not mention", because that is the option the ruling
+///   rejected and a theme should not be able to reach it by omission.
+/// - **Intent RELEASES a merge; it never CREATES one.** [`Same`](
+///   PairIntent::Same) permits two grounds to share an entry *when they
+///   collide*. It never moves a ground that had an entry of its own:
+///   forcing a collapse the palette did not ask for would invent the
+///   mirror of the defect this exists to end. A theme that authored two
+///   grounds to read as one surface and wants that guaranteed at 256 is
+///   asking for a different feature, to be ruled on its own evidence.
+///
+/// Indices are positions in the `colors` slice, in either order;
+/// `(0, 3, _)` and `(3, 0, _)` are the same pair. Three caller bugs panic
+/// rather than being skipped — an index outside the slice, a pair of a
+/// ground with itself, and the same pair named twice — because each one
+/// would otherwise leave the author believing they had declared something
+/// that has no effect.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct GroundIntent<'a>(&'a [(usize, usize, PairIntent)]);
+
+impl GroundIntent<'static> {
+    /// The theme said nothing about any pair: every originally-distinct
+    /// ground keeps its own entry. The default, and what every theme gets
+    /// until its author opts in.
+    pub const UNDECLARED: GroundIntent<'static> = GroundIntent(&[]);
+}
+
+impl<'a> GroundIntent<'a> {
+    /// Declare intent for the named pairs. Everything not named stays
+    /// undeclared.
+    pub const fn new(pairs: &'a [(usize, usize, PairIntent)]) -> Self {
+        GroundIntent(pairs)
+    }
+
+    /// The declared pairs, as given.
+    pub const fn pairs(&self) -> &'a [(usize, usize, PairIntent)] {
+        self.0
+    }
+
+    /// What the theme said about this pair, or `None` if it said nothing.
+    /// Order-insensitive.
+    pub fn get(&self, i: usize, j: usize) -> Option<PairIntent> {
+        self.0
+            .iter()
+            .find(|&&(a, b, _)| (a == i && b == j) || (a == j && b == i))
+            .map(|&(_, _, k)| k)
+    }
+}
+
 /// [`quantize_set_256`] for a runtime-sized set, writing into `out`.
 ///
 /// Panics if `out` is shorter than `colors`; the extra entries of a
@@ -226,12 +340,59 @@ pub fn quantize_set_256<const N: usize>(colors: [Rgba; N]) -> [u8; N] {
 /// cached and installed on the presenter. The emitter consults that
 /// result; it never calls this.
 pub fn quantize_set_256_into(colors: &[Rgba], out: &mut [u8]) {
+    quantize_set_256_into_with(colors, GroundIntent::UNDECLARED, out);
+}
+
+/// [`quantize_set_256_into`] against a declared [`GroundIntent`] — the
+/// single implementation; the other three entry points are this one with
+/// [`GroundIntent::UNDECLARED`].
+///
+/// Two guarantees survive any declaration, and both are decided here
+/// rather than by the caller:
+///
+/// - **Byte-identical colors share an entry even when declared distinct.**
+///   The colors are the artifact; the declaration is metadata about them.
+///   At truecolor those two grounds ARE one surface, and drawing an edge
+///   at 256 that truecolor does not draw is the exact defect this type
+///   exists to end — so the bytes win and the declaration is a
+///   contradiction resolved against itself.
+/// - **A merge never crosses a non-`Same` pair.** A ground merges onto an
+///   entry only when every color already holding it is declared
+///   [`Same`](PairIntent::Same) with it, so two grounds cannot be reunited
+///   by way of a third that each may merge with.
+///
+/// Displacement, when a colliding pair is not declared `Same`, is
+/// unchanged: the same ownership, ordering and lookahead rules as
+/// [`quantize_set_256`], including avoiding the natural entry of an
+/// unplaced color even where that color would have been free to merge.
+/// That costs at most an extra displacement and never a wrong one.
+pub fn quantize_set_256_into_with(colors: &[Rgba], intent: GroundIntent, out: &mut [u8]) {
     let n = colors.len();
     assert!(
         out.len() >= n,
         "quantize_set_256_into: out is {} long for {n} colors",
         out.len()
     );
+    let pairs = intent.pairs();
+    for (p, &(a, b, _)) in pairs.iter().enumerate() {
+        assert!(
+            a < n && b < n,
+            "GroundIntent names pair ({a}, {b}) in a set of {n} colors"
+        );
+        assert!(
+            a != b,
+            "GroundIntent names ground {a} as a pair with itself"
+        );
+        assert!(
+            !pairs[..p]
+                .iter()
+                .any(|&(x, y, _)| (x == a && y == b) || (x == b && y == a)),
+            "GroundIntent names pair ({a}, {b}) twice — the second is silently ignored"
+        );
+    }
+    // Only `Same` releases a merge. Undeclared and `Distinct` both keep
+    // two entries, which is why opting in cannot flip the default.
+    let may_merge = |i: usize, j: usize| intent.get(i, j) == Some(PairIntent::Same);
     let natural: Vec<u8> = colors.iter().map(|c| nearest_xterm256(*c)).collect();
 
     // Most-exactly-represented first: they get first claim on their own
@@ -251,6 +412,14 @@ pub fn quantize_set_256_into(colors: &[Rgba], out: &mut [u8]) {
             assigned[k] = Some(natural[k]);
             continue;
         };
+        // The entry is taken, but the theme may have said these two read
+        // as one surface. Every color already on it must be one `k` is
+        // declared `Same` with — otherwise a pair that is not `Same`
+        // would be reunited through a third ground.
+        if (0..n).all(|j| assigned[j] != Some(natural[k]) || may_merge(j, k)) {
+            assigned[k] = Some(natural[k]);
+            continue;
+        }
         // Every entry already spoken for: the ones handed out, plus the
         // natural entry of every color still to be placed.
         let mut blocked: Vec<u8> = (0..n).filter_map(|j| assigned[j]).collect();
@@ -500,6 +669,149 @@ mod tests {
     fn set_degenerate_sizes_are_total() {
         assert_eq!(quantize_set_256([Rgba::rgb(255, 0, 0)]), [196]);
         assert_eq!(quantize_set_256::<0>([]), [0u8; 0]);
+    }
+
+    fn set_with(colors: &[Rgba], intent: GroundIntent) -> Vec<u8> {
+        let mut out = vec![0u8; colors.len()];
+        quantize_set_256_into_with(colors, intent, &mut out);
+        out
+    }
+
+    /// Two grounds a theme author drew almost the same, colliding on one
+    /// entry. Silence separates them — the elevation default — and the
+    /// theme declaring THAT PAIR `Same` lets them share. Both directions
+    /// on ONE input, because the whole point of the type is that the
+    /// colors do not decide it.
+    #[test]
+    fn set_a_pair_declared_same_merges_what_silence_separates() {
+        let white = Rgba::rgb(255, 255, 255);
+        let off = Rgba::rgb(250, 250, 250);
+        assert_eq!(
+            nearest_xterm256(white),
+            nearest_xterm256(off),
+            "premise: collision"
+        );
+        let colors = [white, off];
+        let silent = set_with(&colors, GroundIntent::UNDECLARED);
+        assert_ne!(silent[0], silent[1], "undeclared: elevation wins");
+        let same = set_with(&colors, GroundIntent::new(&[(0, 1, PairIntent::Same)]));
+        assert_eq!(
+            same,
+            vec![231, 231],
+            "declared same: one surface, on the natural entry"
+        );
+        // Order within a pair is not information.
+        assert_eq!(
+            same,
+            set_with(&colors, GroundIntent::new(&[(1, 0, PairIntent::Same)]))
+        );
+    }
+
+    /// **Opting in cannot flip the default** — the ruling's core
+    /// guarantee, and the reason the declaration is additive rather than
+    /// a single distinctness list. A theme that carries a declaration but
+    /// says nothing about a pair, and a theme that declares that pair
+    /// `Distinct`, both get exactly what silence gets. A theme cannot
+    /// convert itself to merge-by-default by omission.
+    ///
+    /// It also pins the cost of the third state: `Distinct` moves no
+    /// bytes today. When that stops being true this goes red, which is
+    /// the point of asserting it rather than remarking it.
+    #[test]
+    fn set_an_empty_or_distinct_declaration_is_exactly_silence() {
+        let white = Rgba::rgb(255, 255, 255);
+        let off = Rgba::rgb(250, 250, 250);
+        let colors = [white, off];
+        let silent = set_with(&colors, GroundIntent::UNDECLARED);
+        assert_ne!(silent[0], silent[1], "premise: silence separates");
+        assert_eq!(silent[0], 231, "the exactly-represented one keeps it");
+        assert!(luma(XTERM_256[silent[1] as usize]) <= luma(XTERM_256[silent[0] as usize]));
+        assert_eq!(
+            set_with(&colors, GroundIntent::new(&[])),
+            silent,
+            "an empty declaration is not a declaration of sameness"
+        );
+        assert_eq!(
+            set_with(&colors, GroundIntent::new(&[(0, 1, PairIntent::Distinct)])),
+            silent,
+            "declaring the default is the default"
+        );
+    }
+
+    /// A pair that is not `Same` must not be reunited through a third
+    /// ground that each may merge with. Three colors on one entry, with
+    /// `0`/`1` and `1`/`2` declared `Same` but `0`/`2` left undeclared:
+    /// the middle one merges with whichever it meets, and `0` and `2`
+    /// still do not end up on one entry.
+    #[test]
+    fn set_merge_never_crosses_a_non_same_pair_through_a_third_ground() {
+        let colors = [
+            Rgba::rgb(26, 27, 38),
+            Rgba::rgb(28, 29, 36),
+            Rgba::rgb(30, 30, 40),
+        ];
+        let n = nearest_xterm256(colors[0]);
+        assert!(
+            colors.iter().all(|c| nearest_xterm256(*c) == n),
+            "premise: all three collide on {n}"
+        );
+        let out = set_with(
+            &colors,
+            GroundIntent::new(&[(0, 1, PairIntent::Same), (1, 2, PairIntent::Same)]),
+        );
+        assert_ne!(out[0], out[2], "the non-Same pair stays apart: {out:?}");
+        assert!(
+            out[1] == out[0] || out[1] == out[2],
+            "the Same-with-both one merges rather than taking a third entry: {out:?}"
+        );
+    }
+
+    /// A declaration is metadata ABOUT the colors and cannot manufacture
+    /// a difference they do not carry: at truecolor these two grounds are
+    /// one surface, and drawing an edge at 256 that truecolor does not
+    /// draw is the defect `GroundIntent` exists to end.
+    #[test]
+    fn set_identical_colors_share_even_when_declared_distinct() {
+        let c = Rgba::rgb(30, 30, 40);
+        let out = set_with(&[c, c], GroundIntent::new(&[(0, 1, PairIntent::Distinct)]));
+        assert_eq!(out[0], out[1]);
+        assert_eq!(out[0], nearest_xterm256(c));
+    }
+
+    /// A pair naming a ground that is not in the set is a caller bug, and
+    /// skipping it would leave the author believing a pair is protected
+    /// when nothing protects it.
+    #[test]
+    #[should_panic(expected = "names pair (0, 5) in a set of 2 colors")]
+    fn set_declaration_out_of_range_is_a_panic_not_a_shrug() {
+        set_with(
+            &[Rgba::rgb(0, 0, 0), Rgba::rgb(255, 255, 255)],
+            GroundIntent::new(&[(0, 5, PairIntent::Same)]),
+        );
+    }
+
+    /// A ground is not a pair with itself. Accepting it would read as a
+    /// declaration and mean nothing.
+    #[test]
+    #[should_panic(expected = "names ground 1 as a pair with itself")]
+    fn set_declaring_a_ground_against_itself_is_a_panic() {
+        set_with(
+            &[Rgba::rgb(0, 0, 0), Rgba::rgb(255, 255, 255)],
+            GroundIntent::new(&[(1, 1, PairIntent::Same)]),
+        );
+    }
+
+    /// The same pair twice — the shape a contradiction arrives in
+    /// (`Same` then `Distinct`). First-wins would silently discard the
+    /// author's second statement, so neither wins and the caller hears
+    /// about it.
+    #[test]
+    #[should_panic(expected = "names pair (1, 0) twice")]
+    fn set_declaring_one_pair_twice_is_a_panic_not_first_wins() {
+        set_with(
+            &[Rgba::rgb(0, 0, 0), Rgba::rgb(255, 255, 255)],
+            GroundIntent::new(&[(0, 1, PairIntent::Same), (1, 0, PairIntent::Distinct)]),
+        );
     }
 
     #[test]

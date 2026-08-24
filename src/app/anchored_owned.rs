@@ -52,10 +52,13 @@
 //! ## TOOLTIP mode ([`Tooltip`])
 //!
 //! Passive AND non-interactive: a `layer_draw` label (no tree, no
-//! focus, no handlers) shown after a hover delay (`after` one-shot —
-//! zero wakeups until due), hidden on `MouseLeave` or anchor loss.
-//! Consumer: extensions 0430 hover tips; the 0500 select faces do not
-//! use it.
+//! focus, no handlers) or a passive card tree, shown after a delay
+//! (`after` one-shot — zero wakeups until due) and hidden on
+//! `MouseLeave`, `FocusOut`, `Escape`, the anchor moving, or anchor
+//! loss. Triggered by hover OR by the anchor taking focus, so the tip
+//! is not invisible to a keyboard user or to a terminal with no mouse
+//! reporting. Consumer: extensions 0430 hover tips; the 0500 select
+//! faces do not use it.
 //!
 //! OWNER: SELECT (0500).
 
@@ -365,6 +368,10 @@ struct TipState {
     generation: u64,
     open: Option<OpenTip>,
     anchor: Rect,
+    /// A deferred anchor-moved close is already armed — the anchor may
+    /// draw several times before the one-shot comes due, and each of
+    /// those draws still sees the stale rect.
+    stale_armed: bool,
 }
 
 struct OpenTip {
@@ -372,13 +379,20 @@ struct OpenTip {
     /// Rich cards own a child reactive scope; plain labels do not
     /// mount a tree and therefore have nothing to dispose.
     scope: Option<Scope>,
+    /// The "N more" row drawn over a card the viewport could not fit.
+    /// Absent when the card fitted whole — see [`show_tip`].
+    truncation: Option<LayerHandle>,
 }
 
 impl TipState {
     fn close(&mut self) {
         self.generation += 1;
+        self.stale_armed = false;
         if let Some(open) = self.open.take() {
             open.layer.remove();
+            if let Some(marker) = open.truncation {
+                marker.remove();
+            }
             if let Some(scope) = open.scope {
                 scope.dispose();
             }
@@ -434,9 +448,14 @@ impl std::fmt::Debug for TipContent {
     }
 }
 
-/// TOOLTIP mode (0500 routing mode 3): a hover-timed, non-interactive
-/// tip — above the live stack, never focused. Zero cost while dormant
-/// (one one-shot timer arms per hover; nothing wakes until due).
+/// TOOLTIP mode (0500 routing mode 3): a delay-timed, non-interactive
+/// tip — above the live stack, and the LAYER is never focused. Zero
+/// cost while dormant (one one-shot timer arms per trigger; nothing
+/// wakes until due).
+///
+/// Two triggers, one arming path: the pointer entering the anchor, and
+/// the ANCHOR taking focus — see [`Tooltip::attach_content`] for how
+/// far the keyboard half reaches and why it cannot reach further.
 ///
 /// A [`TipContent::Label`] rides a `layer_draw` with no tree at all; a
 /// [`TipContent::Card`] rides a passive tree layer. Both share ONE
@@ -462,12 +481,44 @@ impl Tooltip {
         Tooltip::attach_content(cx, overlays, TipContent::Label(text.into()), delay, view)
     }
 
-    /// [`Tooltip::attach`] with rich content: the same hover trigger,
+    /// [`Tooltip::attach`] with rich content: the same triggers,
     /// showing whatever [`TipContent`] describes.
     ///
     /// Every contract of `attach` holds unchanged — hover delay,
     /// hide on `MouseLeave`, close on anchor unmount, screen-space
     /// anchor capture, nothing woken until the timer is due.
+    ///
+    /// # Keyboard reach, and exactly how far it goes
+    ///
+    /// A hover-only affordance is invisible to a keyboard user, and to
+    /// a terminal with no mouse reporting at all. So the tip also opens
+    /// on `FocusIn` and closes on `FocusOut`, and `Escape` dismisses an
+    /// open one.
+    ///
+    /// **The trigger sits on the ROOT of the `view` you pass, and that
+    /// root must be the thing that takes focus.** Focus transitions are
+    /// delivered TARGET-ONLY (`ui::focus`) — unlike hover, which is
+    /// delivered per-node along the hovered path — so a listener on the
+    /// wrapper this function builds could hear the mouse and could
+    /// never hear focus. Two consequences worth knowing before you rely
+    /// on it:
+    ///
+    /// - `Tooltip::attach(cx, ov, "…", d, Button::new(…))` gets the
+    ///   keyboard trigger: the button's own root is the focus target.
+    /// - An anchor that merely CONTAINS the focusable thing — an
+    ///   `Element` wrapping a button, or a `dyn_view` around one — does
+    ///   not. The descendant takes focus and this listener never hears
+    ///   it. Attach to the focusable node itself.
+    ///
+    /// The engine does not make the anchor focusable for you: that
+    /// would silently insert a tab stop into the app's traversal order,
+    /// which is the app's call and not the tip's. A tip on a
+    /// non-interactive decoration stays mouse-only, deliberately.
+    ///
+    /// Focus reuses the same `delay` as hover rather than opening at
+    /// once. Tabbing through a row of chips would otherwise mount and
+    /// tear down a tip per stop; the generation counter makes that
+    /// correct either way, but one policy is one code path.
     pub fn attach_content(
         cx: Scope,
         overlays: &Overlays,
@@ -477,59 +528,141 @@ impl Tooltip {
     ) -> View {
         let text = content;
         let overlays = overlays.clone();
+        // A tooltip that never opens on hover is not a degraded
+        // tooltip, it is a broken one — and the default session posture
+        // (`MouseMode::ButtonDrag`) reports motion only while a button
+        // is held, so the tip opened on CLICK and stayed shut on hover.
+        // Declaring the need here means mounting one is enough; the
+        // app is not asked to know which terminal mode its widgets run
+        // on. Costs the 1003 traffic only for apps that have a tip.
+        overlays.require_pointer_motion();
         let state = Rc::new(RefCell::new(TipState {
             generation: 0,
             open: None,
             anchor: Rect::ZERO,
+            stale_armed: false,
         }));
         {
             // Anchor loss: the wrapped subtree unmounting hides the tip.
             let state = state.clone();
             cx.on_cleanup(move || state.borrow_mut().close());
         }
+        // ONE arming path for both triggers. Hover and focus are two
+        // ways of saying "the reader is on this element"; giving them
+        // an open path each would give the stale-timer bug two homes,
+        // which is the same reason `Label` and `Card` share one.
+        let arm: Rc<dyn Fn(&mut crate::ui::EventCtx)> = {
+            let state = state.clone();
+            let overlays = overlays.clone();
+            let text = text.clone();
+            Rc::new(move |ctx: &mut crate::ui::EventCtx| {
+                let generation = {
+                    let mut s = state.borrow_mut();
+                    s.generation += 1;
+                    // SCREEN cells: the tip places in viewport space,
+                    // and the anchor may live on a positioned overlay
+                    // (a GraphView card inside a Drawer). Captured at
+                    // trigger time — a layer still mid-slide when the
+                    // delay fires keeps the trigger-time position (the
+                    // pre-existing capture-once contract, in the right
+                    // space).
+                    s.anchor = ctx.current_rect_screen();
+                    s.generation
+                };
+                let state = state.clone();
+                let overlays = overlays.clone();
+                let text = text.clone();
+                after(delay, move || {
+                    let anchor = {
+                        let s = state.borrow();
+                        if s.generation != generation || s.open.is_some() {
+                            return; // left (or re-shown) meanwhile
+                        }
+                        s.anchor
+                    };
+                    let open = show_tip(&overlays, cx, anchor, &text);
+                    state.borrow_mut().open = open;
+                });
+            })
+        };
+        // The keyboard trigger, on the caller's own root — the only
+        // node that will ever be sent `FocusIn` for this anchor. See
+        // the doc comment for what that does and does not reach.
+        let mut view = view;
+        {
+            let state = state.clone();
+            let arm = arm.clone();
+            view.on_root(Phase::Bubble, move |ctx, ev| match ev {
+                UiEvent::FocusIn => arm(ctx),
+                UiEvent::FocusOut => state.borrow_mut().close(),
+                // Escape dismisses what the reader can see, and is
+                // CONSUMED only then: a tip is the innermost
+                // dismissible thing on screen, but swallowing every
+                // Escape an anchor happens to be focused for would
+                // wedge the dialog behind it.
+                UiEvent::Key(k) if k.key == Key::Escape && k.mods == Mods::NONE => {
+                    let open = state.borrow().open.is_some();
+                    if open {
+                        state.borrow_mut().close();
+                        ctx.stop_propagation();
+                    }
+                }
+                _ => {}
+            });
+        }
         let handler = {
             let state = state.clone();
             move |ctx: &mut crate::ui::EventCtx, ev: &UiEvent| match ev {
-                UiEvent::MouseEnter => {
-                    let generation = {
-                        let mut s = state.borrow_mut();
-                        s.generation += 1;
-                        // SCREEN cells: the tip places in viewport
-                        // space, and the hovered element may live on a
-                        // positioned overlay (a GraphView card inside
-                        // a Drawer). Captured at hover time — a layer
-                        // still mid-slide when the delay fires keeps
-                        // the hover-time position (the pre-existing
-                        // capture-once contract, now in the right
-                        // space).
-                        s.anchor = ctx.current_rect_screen();
-                        s.generation
-                    };
-                    let state = state.clone();
-                    let overlays = overlays.clone();
-                    let text = text.clone();
-                    after(delay, move || {
-                        let anchor = {
-                            let s = state.borrow();
-                            if s.generation != generation || s.open.is_some() {
-                                return; // left (or re-shown) meanwhile
-                            }
-                            s.anchor
-                        };
-                        let open = show_tip(&overlays, cx, anchor, &text);
-                        state.borrow_mut().open = open;
-                    });
-                }
+                UiEvent::MouseEnter => arm(ctx),
                 UiEvent::MouseLeave => state.borrow_mut().close(),
                 _ => {}
             }
         };
+        // Anchor-moved guard. The anchor rect is captured ONCE, at
+        // hover time, and hover itself is recomputed only from mouse
+        // REPORTS — so a feed that scrolls under a stationary pointer
+        // moves the anchor with nothing to synthesise a `MouseLeave`
+        // from, and the tip is left describing a row that is no longer
+        // there. The anchor's own draw is the cheapest truthful signal
+        // that it moved: it runs exactly when the anchor repaints,
+        // which is what moving IS, and costs nothing while idle. A
+        // per-frame task would cost a frame forever; a resize watcher
+        // (the `Popup` spelling) would miss scrolling entirely.
+        //
+        // The close is DEFERRED to the next timer phase rather than
+        // done here, because a draw closure runs inside the tree's
+        // paint walk and must not mutate the overlay store being
+        // walked. Generation makes the one-shot idempotent against a
+        // re-hover that lands first.
+        let draw_state = state.clone();
         // Content-tight wrapper: `align_self(Start)` opts out of the
         // parent's cross-axis stretch, so the hover box (= the tip's
         // anchor rect) is the wrapped view's own extent, not a
         // stretched row.
         Element::new()
             .style(LayoutStyle::default().align_self(crate::layout::Align::Start))
+            .draw(move |_canvas, rect| {
+                // SCREEN cells, to compare against a screen-space
+                // capture: the draw rect is layer-local.
+                let o = crate::ui::layer_origin();
+                let live = rect.translate(o.x, o.y);
+                let generation = {
+                    let mut s = draw_state.borrow_mut();
+                    if s.open.is_none() || s.stale_armed || s.anchor == live {
+                        return;
+                    }
+                    s.stale_armed = true;
+                    s.generation
+                };
+                let state = draw_state.clone();
+                after(Duration::ZERO, move || {
+                    let mut s = state.borrow_mut();
+                    s.stale_armed = false;
+                    if s.generation == generation {
+                        s.close();
+                    }
+                });
+            })
             .on(Phase::Bubble, handler)
             .child(view)
             .build()
@@ -566,13 +699,22 @@ fn show_tip(overlays: &Overlays, cx: Scope, anchor: Rect, content: &TipContent) 
             let tokens = &current_theme().tokens;
             let ink = tokens.text;
             let ground = tokens.surface_raised;
-            let text = text.to_string();
+            // The one-column pad on each side is the label's frame; what
+            // is left is the text's budget. A viewport too narrow for the
+            // whole label ELLIPSISES it rather than letting the canvas
+            // clip — a clipped label ends on a real word and reads as the
+            // whole message.
+            let text = crate::text::truncate_ellipsis(text, (rect.w - 2).max(0));
             let layer = overlays.layer_draw(z, rect, move |canvas, rect| {
                 let style = Style::new().fg(ink).bg(ground);
                 canvas.fill_styled(rect, ' ', &style);
                 canvas.print_styled(crate::base::Point::new(rect.x + 1, rect.y), &text, &style);
             });
-            Some(OpenTip { layer, scope: None })
+            Some(OpenTip {
+                layer,
+                scope: None,
+                truncation: None,
+            })
         }
         // `modal: false` is the whole routing contract: keys stay with
         // the anchor owner and the tip is never focused.
@@ -583,9 +725,44 @@ fn show_tip(overlays: &Overlays, cx: Scope, anchor: Rect, content: &TipContent) 
             Some(OpenTip {
                 layer,
                 scope: Some(scope),
+                truncation: truncation_marker(overlays, z + 1, rect, want.h),
             })
         }
     }
+}
+
+/// Draw the "N more" row over the last line of a card the viewport could
+/// not fit, or return None when the card fitted whole.
+///
+/// A browser can clip a preview and stay honest, because the scrollbar is
+/// visible evidence there is more. A terminal has no such affordance: a
+/// 12-row card cut to 5 is indistinguishable from a 5-row card, so the
+/// engine must SAY so. The marker sits one z above the card and covers
+/// its bottom row — the row it hides was the partial one, and at
+/// `rect.h == 1` the marker is all there is room for, which is the
+/// honest report of that geometry.
+fn truncation_marker(
+    overlays: &Overlays,
+    z: i32,
+    rect: Rect,
+    wanted_h: i32,
+) -> Option<LayerHandle> {
+    if rect.h >= wanted_h {
+        return None;
+    }
+    // The marker row itself displaces a row of content, so what the
+    // reader cannot see is everything below the rows that remain.
+    let hidden = wanted_h - (rect.h - 1).max(0);
+    let tokens = &current_theme().tokens;
+    let ink = tokens.text_faint;
+    let ground = tokens.surface_raised;
+    let label = crate::text::truncate_ellipsis(&format!("… {hidden} more"), (rect.w - 2).max(0));
+    let row = Rect::new(rect.x, rect.bottom() - 1, rect.w, 1);
+    Some(overlays.layer_draw(z, row, move |canvas, rect| {
+        let style = Style::new().fg(ink).bg(ground);
+        canvas.fill_styled(rect, ' ', &style);
+        canvas.print_styled(crate::base::Point::new(rect.x + 1, rect.y), &label, &style);
+    }))
 }
 
 #[cfg(test)]

@@ -18,7 +18,7 @@ native library to install and no GPU requirement.
 Building against a working copy instead of a release — `[patch.crates-io]`
 pointing at a `path`, which is how a sibling app tracks the engine — has one
 rule that is not obvious: **pin the version requirement to the exact version
-the checkout carries** (`abstracttui = "0.5.0"`, not `"0.5"`). A patch whose
+the checkout carries** (`abstracttui = "0.6.0"`, not `"0.6"`). A patch whose
 version falls outside your requirement is not an error; cargo ignores it and
 resolves from crates.io instead, so you build against a published version
 while believing you build against your tree. The symptom and a check that

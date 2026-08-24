@@ -57,7 +57,7 @@ pub mod paint;
 pub mod present;
 pub mod rich;
 pub mod screenshot;
-mod screenshot_font_data;
+pub(crate) mod screenshot_font_data;
 mod screenshot_png;
 mod screenshot_svg;
 pub mod scroll;

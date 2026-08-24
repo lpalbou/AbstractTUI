@@ -368,6 +368,70 @@ pub fn ground_overlaps(theme_id: &str, t: &TokenSet, floor: f32) -> Vec<GroundOv
     out
 }
 
+/// Where a theme's ground-separation DECLARATION contradicts the colours
+/// it declared it about — one line per contradiction, empty when there
+/// is none.
+///
+/// ## The one contradiction that exists, and why only that one
+///
+/// A pair declared [`Distinct`](crate::render::color::PairIntent::Distinct)
+/// whose two grounds are BYTE-IDENTICAL. The author has said "these must
+/// read as different surfaces" about one surface. It has a determinate
+/// resolution — the colours are the artifact and the declaration is
+/// metadata about them, so the bytes win and the two share an entry —
+/// and until now that resolution happened in silence.
+///
+/// The mirror case is NOT a contradiction and is deliberately not
+/// reported: `Same` over two colours a mile apart asks for a merge that
+/// can never happen, because intent only releases a merge at a
+/// collision. It is inert, not wrong, and an author may reasonably
+/// declare it against a future re-tint of their own palette.
+///
+/// ## Why this is worth a function
+///
+/// `Distinct` changes no bytes: undeclared already keeps two grounds
+/// apart, so declaring it is a statement for the record rather than an
+/// instruction. That was reported as a cost when the three states were
+/// ruled (`decision:ground-separation-intent-is-declared-by-the-theme`),
+/// weighed, and kept. THIS is what it buys in exchange — a declaration
+/// that can be checked against the artifact. An author who writes
+/// `Distinct` and then tints both grounds to the same hex now hears
+/// about it instead of believing an edge is protected.
+///
+/// Unlike [`ground_overlaps`], this is not a taste judgement about how
+/// close two colours may be, so it does not need DESIGN to set a floor:
+/// the theme contradicts ITSELF, at any floor, and the author is the
+/// only one who can say which half they meant.
+pub fn declaration_contradictions(
+    theme_id: &str,
+    t: &TokenSet,
+    declaration: &[(TokenId, TokenId, crate::render::color::PairIntent)],
+) -> Vec<String> {
+    let g = t.grounds();
+    let color_of = |id: TokenId| g.iter().find(|(k, _)| *k == id).map(|(_, c)| *c);
+    declaration
+        .iter()
+        .filter(|(_, _, intent)| *intent == crate::render::color::PairIntent::Distinct)
+        .filter_map(|(a, b, _)| {
+            let (ca, cb) = (color_of(*a)?, color_of(*b)?);
+            // RGB only: the grounds are opaque by definition, and this is
+            // the same equality the separator resolves the case with.
+            (ca.r == cb.r && ca.g == cb.g && ca.b == cb.b).then(|| {
+                format!(
+                    "[{theme_id}] {} / {} are declared Distinct and are the same colour \
+                     (#{:02x}{:02x}{:02x}) — they will share one palette entry, because \
+                     at truecolor they already are one surface",
+                    a.name(),
+                    b.name(),
+                    ca.r,
+                    ca.g,
+                    ca.b
+                )
+            })
+        })
+        .collect()
+}
+
 /// An ink chosen for a ground, with the contrast it actually achieved.
 ///
 /// The ratio is returned rather than swallowed on purpose: on some

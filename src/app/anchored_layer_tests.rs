@@ -533,9 +533,15 @@ fn tip_rig(make: impl Fn(Scope, &Overlays, View) -> View + 'static) -> TipRig {
         })),
         enter: None,
         probe: false,
-        // Mode 1003: hover tips need motion reporting with no button
-        // held, which is exactly what `hover_ink` arms.
-        hover_ink: true,
+        // DELIBERATELY false. Mode 1003 — motion with no button held —
+        // is what a hover tip runs on, and every rig here used to arm
+        // it by hand. That is why no test could see the real hole: an
+        // app that mounts a tooltip and calls `App::run()` got
+        // `ButtonDrag`, so the tip opened on CLICK and never on hover.
+        // The tip declares its own need now
+        // (`Overlays::require_pointer_motion`), so leaving this off is
+        // what keeps that declaration load-bearing.
+        hover_ink: false,
         ..RunConfig::default()
     };
     let driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
@@ -567,6 +573,17 @@ impl TipRig {
     fn mouse_to(&mut self, x: i32) {
         self.term
             .push_input(format!("\x1b[<35;{};1M", x + 1).as_bytes());
+        self.settle();
+        flush_effects();
+    }
+
+    /// Keys through the REAL pipeline too — wire bytes into the
+    /// terminal, decoded by the same reader an app gets. The mouse
+    /// half of this rig learned the lesson already: a trigger that
+    /// only fires for a synthesised event is a trigger that never
+    /// fires.
+    fn keys(&mut self, bytes: &[u8]) {
+        self.term.push_input(bytes);
         self.settle();
         flush_effects();
     }
@@ -626,11 +643,11 @@ fn a_card_tip_mounts_a_tree_and_its_content_reaches_the_screen() {
 
     let kinds = rig.layer_kinds();
     assert!(
-        kinds.iter().any(|k| *k == "tree"),
+        kinds.contains(&"tree"),
         "a card must open a TREE layer, not a draw layer; got {kinds:?}"
     );
     assert!(
-        !kinds.iter().any(|k| *k == "draw"),
+        !kinds.contains(&"draw"),
         "a card must not fall back to the label's draw path: {kinds:?}"
     );
     assert!(
@@ -687,6 +704,635 @@ fn a_card_tip_does_not_open_when_the_pointer_left_before_the_delay() {
     assert!(
         !rig.screen().contains("must not appear"),
         "a stale timer opened a card after the pointer left:\n{}",
+        rig.screen()
+    );
+}
+
+/// Build a card whose content genuinely runs `rows` deep, so a card
+/// reported as truncated is one the viewport really could not fit.
+fn tall_card(rows: i32) -> TipContent {
+    TipContent::card(Size::new(24, rows), move |_cx| {
+        let mut col = Element::new().style(LayoutStyle::column());
+        for i in 0..rows {
+            col = col.child(text(format!("row {i}")));
+        }
+        col.build()
+    })
+}
+
+/// A card the viewport cannot fit must SAY it was cut.
+///
+/// This is the terminal's version of a scrollbar. A browser can clip a
+/// preview honestly because the scrollbar is visible evidence there is
+/// more; here a 40-row card cut to 33 looks exactly like a 33-row card,
+/// so the reader is shown less than there is and told nothing.
+/// Asserted on composed cells: a marker layer that opened and painted
+/// nothing would satisfy any store-shaped check.
+#[test]
+fn a_card_too_tall_for_the_viewport_says_how_much_it_hid() {
+    let mut rig = tip_rig(|cx, ov, target| {
+        Tooltip::attach_content(cx, ov, tall_card(40), Duration::ZERO, target)
+    });
+    rig.settle();
+    rig.mouse_to(0);
+    rig.fire_timers(Duration::ZERO);
+
+    let screen = rig.screen();
+    // VP is 34 rows and the anchor occupies the first, so the card is
+    // lent 33 and the marker displaces one of them: 8 rows unreachable.
+    assert!(
+        screen.contains("… 8 more"),
+        "a card cut from 40 rows to 33 reported nothing:\n{screen}"
+    );
+    assert!(
+        !screen.contains("row 39"),
+        "the last row cannot be on screen if the card was truncated:\n{screen}"
+    );
+}
+
+/// The other half, and the one that makes the guard mean something: a
+/// card that FITS must not wear the marker. Without this, a marker
+/// hardcoded to always paint passes the test above.
+#[test]
+fn a_card_that_fits_carries_no_truncation_marker() {
+    let mut rig = tip_rig(|cx, ov, target| {
+        Tooltip::attach_content(cx, ov, tall_card(3), Duration::ZERO, target)
+    });
+    rig.settle();
+    rig.mouse_to(0);
+    rig.fire_timers(Duration::ZERO);
+
+    let screen = rig.screen();
+    assert!(
+        screen.contains("row 2"),
+        "the card did not open at all, so the assertion below proves nothing:\n{screen}"
+    );
+    assert!(
+        !screen.contains("more"),
+        "a card that fits whole must not claim it hid rows:\n{screen}"
+    );
+}
+
+/// A rig whose anchor can MOVE without any mouse input: a leading
+/// spacer whose height is a signal, so setting it shifts the anchor row
+/// down exactly the way a list scrolling by a keystroke does.
+///
+/// Returns the rig and the shift signal. The distinction from
+/// [`tip_rig`] is the whole point — there the anchor is nailed to row 0,
+/// which is precisely the case where this class of bug cannot appear.
+/// The two handles [`scrolling_tip_rig`] publishes out of the mount
+/// scope: how far the anchor is pushed down, and the anchor's own ink.
+type TipHandles = (
+    crate::reactive::Signal<i32>,
+    crate::reactive::Signal<&'static str>,
+);
+
+fn scrolling_tip_rig(
+    make: impl Fn(Scope, &Overlays, View) -> View + 'static,
+) -> (TipRig, TipHandles) {
+    let mut term = CaptureTerm::new(VP);
+    let mut app = App::new(VP);
+    let overlays = app.overlays();
+    let ov = overlays.clone();
+    let out: Rc<RefCell<Option<TipHandles>>> = Rc::new(RefCell::new(None));
+    let sink = out.clone();
+    app.mount(move |cx| {
+        let shift = cx.signal(0i32);
+        // The anchor's own content, so a test can damage the anchor
+        // WITHOUT moving it — a reply-count chip ticking up.
+        let label = cx.signal("cite");
+        *sink.borrow_mut() = Some((shift, label));
+        let target = Element::new()
+            .style(LayoutStyle::line(1).w(8))
+            .child(crate::ui::dyn_view(LayoutStyle::default(), move || {
+                text(label.get())
+            }))
+            .build();
+        Element::new()
+            .style(
+                LayoutStyle::column()
+                    .width(Dimension::Percent(1.0))
+                    .height(Dimension::Percent(1.0)),
+            )
+            .child(
+                Element::new()
+                    .style_signal(move || LayoutStyle::default().w(1).h(shift.get()))
+                    .build(),
+            )
+            .child(make(cx, &ov, target))
+            .build()
+    })
+    .expect("mount");
+    let cfg = RunConfig {
+        caps: Some(Capabilities::with(|c| {
+            c.truecolor = true;
+            c.colors_256 = true;
+        })),
+        enter: None,
+        probe: false,
+        // Off on purpose — see `tip_rig`: the tooltip arms mode 1003
+        // itself, and an app flag here would hide it if that stopped.
+        hover_ink: false,
+        ..RunConfig::default()
+    };
+    let driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
+    let handles = out.borrow().expect("mount ran and published its signals");
+    (
+        TipRig {
+            app,
+            term,
+            driver,
+            overlays,
+        },
+        handles,
+    )
+}
+
+/// The anchor moves out from under an OPEN card with no mouse input at
+/// all — a feed scrolling by one keystroke — and the card must not be
+/// left pointing at a row it never described.
+///
+/// This is the terminal form of the browser bug agora-wui reported at
+/// `type-scale-and-hovercards#8`, and it is sharper here: their card
+/// sits 8px clear of its chip and dies to a *sampled* pointer crossing,
+/// whereas a TUI moves a whole row of content at once and never samples
+/// the pointer at all. Hover is recomputed from mouse REPORTS, so with
+/// no motion byte arriving there is nothing to synthesise a
+/// `MouseLeave` from: the tip's captured anchor silently stops being
+/// where the anchor is.
+///
+/// Falsified against the unguarded implementation, where the card stays
+/// open at its open-time coordinates.
+#[test]
+fn a_card_tip_closes_when_its_anchor_scrolls_out_from_under_it() {
+    let (mut rig, (shift, _label)) = scrolling_tip_rig(|cx, ov, target| {
+        Tooltip::attach_content(cx, ov, tall_card(3), Duration::ZERO, target)
+    });
+    rig.settle();
+    rig.mouse_to(0);
+    rig.fire_timers(Duration::ZERO);
+    assert!(
+        rig.screen().contains("row 2"),
+        "the card never opened, so the assertion below would pass vacuously:\n{}",
+        rig.screen()
+    );
+
+    // No mouse input: content moves under a stationary pointer.
+    shift.set(6);
+    flush_effects();
+    rig.settle();
+    rig.fire_timers(Duration::ZERO);
+
+    assert!(
+        !rig.screen().contains("row 2"),
+        "the anchor moved 6 rows and the card stayed at its open-time \
+         coordinates, describing a line that is no longer there:\n{}",
+        rig.screen()
+    );
+}
+
+/// The other half, and the one that makes the guard above mean
+/// something: an anchor that REPAINTS WITHOUT MOVING keeps its card.
+///
+/// The guard compares a draw-time rect against an event-time capture.
+/// Those are two different code paths into the same geometry, and if
+/// they ever disagree — a layer origin applied twice, a content box
+/// against a border box — every tip would die on its anchor's first
+/// repaint while the test above still passed, because it would be
+/// closing for the wrong reason.
+///
+/// So the anchor is damaged without being moved: a chip whose label
+/// ticks over at the same width, which is what a live reply count is.
+/// The card must survive it. The first assertion is what stops this
+/// being decoration — an earlier version of this test drove a no-op
+/// layout write instead, the anchor was never damaged, its draw closure
+/// never ran, and the test passed against a guard hacked to close
+/// unconditionally.
+#[test]
+fn a_card_tip_survives_its_anchor_repainting_in_place() {
+    let (mut rig, (_shift, label)) = scrolling_tip_rig(|cx, ov, target| {
+        Tooltip::attach_content(cx, ov, tall_card(3), Duration::ZERO, target)
+    });
+    rig.settle();
+    rig.mouse_to(0);
+    rig.fire_timers(Duration::ZERO);
+    assert!(rig.screen().contains("row 2"), "the card never opened");
+
+    // Same width, different ink: the anchor is damaged and repaints at
+    // exactly the rect it already had.
+    label.set("cit3");
+    flush_effects();
+    rig.settle();
+    rig.fire_timers(Duration::ZERO);
+
+    assert!(
+        rig.screen().contains("cit3"),
+        "the anchor never actually repainted, so the assertion below \
+         would prove nothing:\n{}",
+        rig.screen()
+    );
+    assert!(
+        rig.screen().contains("row 2"),
+        "the anchor repainted where it already was and the card closed \
+         anyway — the draw-time rect disagrees with the event-time \
+         capture:\n{}",
+        rig.screen()
+    );
+}
+
+/// A label wider than the viewport ellipsises rather than letting the
+/// canvas clip it. A clipped label ends on a real word and reads as the
+/// whole message — the same silent-truncation class as the card, on the
+/// other axis.
+#[test]
+fn a_label_too_wide_for_the_viewport_ends_in_an_ellipsis() {
+    let long = format!("{} END", "wide ".repeat(40));
+    let mut rig = tip_rig(move |cx, ov, target| {
+        Tooltip::attach(cx, ov, long.clone(), Duration::ZERO, target)
+    });
+    rig.settle();
+    rig.mouse_to(0);
+    rig.fire_timers(Duration::ZERO);
+
+    let screen = rig.screen();
+    assert!(
+        screen.contains('…'),
+        "a label 205 cells wide in a 110-cell viewport was cut with no marker:\n{screen}"
+    );
+    assert!(
+        !screen.contains("END"),
+        "the tail cannot be on screen if the label was truncated:\n{screen}"
+    );
+}
+
+// --- keyboard reach -------------------------------------------------
+//
+// A hover-only affordance is invisible to a keyboard user and to a
+// terminal with no mouse reporting at all, and it was invisible here:
+// the tip's trigger lived on a WRAPPER element, and focus transitions
+// are delivered target-only (`ui::focus`) while hover is delivered
+// per-node along the hovered path. So the wrapper could hear the mouse
+// and could never hear focus, whatever handler it carried.
+//
+// These drive Tab and Escape as WIRE BYTES with the pointer never
+// moved, so nothing here can pass on a hover that happens to be live.
+
+/// The tip's anchor is FOCUSABLE, and a second focusable follows it so
+/// Tab has somewhere to go.
+fn focusable_tip_rig(make: impl Fn(Scope, &Overlays, View) -> View + 'static) -> TipRig {
+    let mut term = CaptureTerm::new(VP);
+    let mut app = App::new(VP);
+    let overlays = app.overlays();
+    let ov = overlays.clone();
+    app.mount(move |cx| {
+        let target = Element::new()
+            .style(LayoutStyle::line(1).w(8))
+            .focusable()
+            .child(text("cite"))
+            .build();
+        Element::new()
+            .style(
+                LayoutStyle::column()
+                    .width(Dimension::Percent(1.0))
+                    .height(Dimension::Percent(1.0)),
+            )
+            .child(make(cx, &ov, target))
+            .child(
+                Element::new()
+                    .style(LayoutStyle::line(1).w(8))
+                    .focusable()
+                    .child(text("elsewhere"))
+                    .build(),
+            )
+            .build()
+    })
+    .expect("mount");
+    let cfg = RunConfig {
+        caps: Some(Capabilities::with(|c| {
+            c.truecolor = true;
+            c.colors_256 = true;
+        })),
+        enter: None,
+        probe: false,
+        // Off on purpose — see `tip_rig`: the tooltip arms mode 1003
+        // itself, and an app flag here would hide it if that stopped.
+        hover_ink: false,
+        ..RunConfig::default()
+    };
+    let driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
+    TipRig {
+        app,
+        term,
+        driver,
+        overlays,
+    }
+}
+
+/// THE guard for the field defect: **a tooltip opened on click and not
+/// on hover.**
+///
+/// `MouseEnter` is recomputed only from mouse REPORTS, and the default
+/// session posture (`MouseMode::ButtonDrag`) makes a terminal report
+/// motion only while a button is held. So an app that mounted a tooltip
+/// and called `App::run()` — doing nothing wrong — got a tip that
+/// appeared when you pressed the mouse down and never when you moved
+/// over the anchor. Every test rig here armed `hover_ink` by hand, so
+/// nothing on this side could see it; laurent found it by using the
+/// example.
+///
+/// Mounting a `Tooltip` now declares the need itself
+/// (`Overlays::require_pointer_motion`), and this asserts on the bytes
+/// the driver actually wrote to the terminal with `hover_ink` left
+/// FALSE. Delete the `require_pointer_motion` call in
+/// `Tooltip::attach_content` and this goes red on both halves.
+#[test]
+fn mounting_a_tooltip_arms_motion_reporting_without_the_app_asking() {
+    let mut term = CaptureTerm::new(VP);
+    let mut app = App::new(VP);
+    let overlays = app.overlays();
+    let ov = overlays.clone();
+    app.mount(move |cx| {
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(Tooltip::attach(
+                cx,
+                &ov,
+                "a tip",
+                Duration::from_millis(1),
+                Element::new()
+                    .style(LayoutStyle::line(1).w(8))
+                    .child(text("cite"))
+                    .build(),
+            ))
+            .build()
+    })
+    .expect("mount");
+    assert!(
+        overlays.pointer_motion_required(),
+        "mounting a Tooltip must declare that this app needs motion \
+         reports — nothing else will ask for them"
+    );
+    let _driver = Driver::new(
+        &mut app,
+        &mut term,
+        RunConfig {
+            probe: false,
+            // The app asked for NOTHING. That is the case that broke.
+            hover_ink: false,
+            ..RunConfig::default()
+        },
+    )
+    .expect("driver");
+    assert_eq!(
+        term.enter_options().expect("entered").mouse,
+        crate::term::MouseMode::AnyMotion,
+        "a tooltip app entered in ButtonDrag: the terminal only reports \
+         motion while a button is down, so the tip opens on CLICK"
+    );
+    let wrote = String::from_utf8_lossy(term.bytes()).into_owned();
+    assert!(
+        wrote.contains("[?1003h"),
+        "mode 1003 never reached the terminal, so no amount of hovering \
+         will produce a MouseEnter"
+    );
+}
+
+/// The other half of the same rule, so the fix above cannot become
+/// "everyone pays for 1003": an app with no motion-dependent widget
+/// must still enter in `ButtonDrag`.
+#[test]
+fn an_app_without_a_tooltip_still_pays_nothing_for_motion() {
+    let mut term = CaptureTerm::new(VP);
+    let mut app = App::new(VP);
+    let overlays = app.overlays();
+    app.mount(|_cx| {
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(text("no tips here"))
+            .build()
+    })
+    .expect("mount");
+    assert!(!overlays.pointer_motion_required());
+    let _driver = Driver::new(
+        &mut app,
+        &mut term,
+        RunConfig {
+            probe: false,
+            ..RunConfig::default()
+        },
+    )
+    .expect("driver");
+    assert_eq!(
+        term.enter_options().expect("entered").mouse,
+        crate::term::MouseMode::ButtonDrag,
+        "an app with no motion-dependent widget must not wake its event \
+         loop on every pointer cell"
+    );
+}
+
+/// The whole point: Tab reaches the anchor and the card opens, with the
+/// pointer never having moved.
+#[test]
+fn a_card_tip_opens_when_its_anchor_takes_focus() {
+    let mut rig = focusable_tip_rig(|cx, ov, target| {
+        Tooltip::attach_content(cx, ov, tall_card(3), Duration::ZERO, target)
+    });
+    rig.settle();
+    assert!(
+        !rig.screen().contains("row 2"),
+        "a dormant tip must paint nothing"
+    );
+
+    rig.keys(b"\t");
+    rig.fire_timers(Duration::ZERO);
+
+    assert!(
+        rig.screen().contains("row 2"),
+        "Tab focused the anchor and no tip appeared — the card is \
+         reachable by mouse only:\n{}",
+        rig.screen()
+    );
+}
+
+/// Tabbing on must take the tip with it, or the card outlives the
+/// reason it was shown and sits over the row the reader moved to.
+#[test]
+fn a_focus_opened_tip_closes_when_focus_moves_on() {
+    let mut rig = focusable_tip_rig(|cx, ov, target| {
+        Tooltip::attach_content(cx, ov, tall_card(3), Duration::ZERO, target)
+    });
+    rig.settle();
+    rig.keys(b"\t");
+    rig.fire_timers(Duration::ZERO);
+    assert!(
+        rig.screen().contains("row 2"),
+        "the tip never opened, so the assertion below would pass \
+         vacuously:\n{}",
+        rig.screen()
+    );
+
+    rig.keys(b"\t");
+    rig.fire_timers(Duration::ZERO);
+
+    assert!(
+        !rig.screen().contains("row 2"),
+        "focus moved to the next widget and the card stayed up:\n{}",
+        rig.screen()
+    );
+}
+
+/// Escape dismisses a tip the reader can see. The second half is the
+/// half that matters: an Escape arriving with NO tip open must pass
+/// through, or every anchor in the app becomes a place where Escape
+/// silently stops working for the dialog behind it.
+#[test]
+fn escape_dismisses_an_open_tip_and_passes_through_when_there_is_none() {
+    let seen: Rc<RefCell<u32>> = Rc::new(RefCell::new(0));
+    let counter = seen.clone();
+    let mut rig = focusable_tip_rig(move |cx, ov, target| {
+        let counter = counter.clone();
+        // Stands in for the app behind the anchor: anything that also
+        // wants Escape, on the path Escape bubbles up.
+        Element::new()
+            .on(crate::ui::Phase::Bubble, move |_ctx, ev| {
+                if matches!(ev, UiEvent::Key(k) if k.key == crate::ui::Key::Escape) {
+                    *counter.borrow_mut() += 1;
+                }
+            })
+            .child(Tooltip::attach_content(
+                cx,
+                ov,
+                tall_card(3),
+                Duration::ZERO,
+                target,
+            ))
+            .build()
+    });
+    rig.settle();
+    rig.keys(b"\t");
+    rig.fire_timers(Duration::ZERO);
+    assert!(
+        rig.screen().contains("row 2"),
+        "the tip never opened:\n{}",
+        rig.screen()
+    );
+
+    // CSI 27u, not a bare `\x1b`: a lone ESC byte is held for the
+    // reader's disambiguation window and only becomes the Esc KEY when
+    // that deadline passes, so a bare one either resolves late or gets
+    // eaten by the next test step. This spelling is unambiguous on the
+    // wire, which is what the assertion needs to be about the tip
+    // rather than about input timing.
+    rig.keys(b"\x1b[27u");
+    rig.fire_timers(Duration::ZERO);
+    assert!(
+        !rig.screen().contains("row 2"),
+        "Escape left the card up:\n{}",
+        rig.screen()
+    );
+    assert_eq!(
+        *seen.borrow(),
+        0,
+        "the Escape that dismissed the tip must be consumed, not also \
+         acted on by the app behind it"
+    );
+
+    // Second Escape, nothing open: it belongs to whatever is behind.
+    rig.keys(b"\x1b[27u");
+    rig.fire_timers(Duration::ZERO);
+    assert_eq!(
+        *seen.borrow(),
+        1,
+        "an Escape with no tip open was swallowed — the anchor has \
+         become a hole where Escape stops working"
+    );
+}
+
+/// The documented LIMIT, pinned so it stays a decision instead of
+/// becoming folklore: the trigger sits on the root of the view handed
+/// to `attach_content`, and focus is delivered target-only. An anchor
+/// that merely CONTAINS the focusable thing therefore gets no keyboard
+/// tip — attach to the focusable node itself.
+///
+/// The first assertion is what stops this being decoration: it fails if
+/// the descendant never actually took focus, in which case the absence
+/// below would prove nothing.
+#[test]
+fn a_focusable_descendant_of_the_anchor_does_not_trigger_the_tip() {
+    let mut term = CaptureTerm::new(VP);
+    let mut app = App::new(VP);
+    let overlays = app.overlays();
+    let ov = overlays.clone();
+    app.mount(move |cx| {
+        let focused = cx.signal(false);
+        // The anchor WRAPS the focusable rather than being it.
+        let target = Element::new()
+            .style(LayoutStyle::line(1).w(20))
+            .child(
+                Element::new()
+                    .style(LayoutStyle::line(1).w(20))
+                    .focusable()
+                    .focus_signal(focused)
+                    .child(crate::ui::dyn_view(LayoutStyle::default(), move || {
+                        text(if focused.get() {
+                            "INNER-FOCUSED"
+                        } else {
+                            "cite"
+                        })
+                    }))
+                    .build(),
+            )
+            .build();
+        Element::new()
+            .style(
+                LayoutStyle::column()
+                    .width(Dimension::Percent(1.0))
+                    .height(Dimension::Percent(1.0)),
+            )
+            .child(Tooltip::attach_content(
+                cx,
+                &ov,
+                tall_card(3),
+                Duration::ZERO,
+                target,
+            ))
+            .build()
+    })
+    .expect("mount");
+    let cfg = RunConfig {
+        caps: Some(Capabilities::with(|c| {
+            c.truecolor = true;
+            c.colors_256 = true;
+        })),
+        enter: None,
+        probe: false,
+        // Off on purpose — see `tip_rig`: the tooltip arms mode 1003
+        // itself, and an app flag here would hide it if that stopped.
+        hover_ink: false,
+        ..RunConfig::default()
+    };
+    let driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
+    let mut rig = TipRig {
+        app,
+        term,
+        driver,
+        overlays,
+    };
+    rig.settle();
+    rig.keys(b"\t");
+    rig.fire_timers(Duration::ZERO);
+
+    assert!(
+        rig.screen().contains("INNER-FOCUSED"),
+        "the descendant never took focus, so the assertion below would \
+         pass for the wrong reason:\n{}",
+        rig.screen()
+    );
+    assert!(
+        !rig.screen().contains("row 2"),
+        "a tip opened for a focus its listener cannot hear — either \
+         focus started bubbling or the trigger moved; whichever it is, \
+         the documented limit on `attach_content` is now wrong:\n{}",
         rig.screen()
     );
 }

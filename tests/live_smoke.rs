@@ -330,6 +330,175 @@ fn assert_clean(name: &str, r: &SmokeReport) {
 // One test per example: independent pass/fail, parallel-safe (each owns
 // its own PTY + process; the shared build happens under Once).
 
+/// Tab the hover-card demo through every chip, dismiss with Escape,
+/// then quit — the keyboard path end to end, with no mouse reporting
+/// involved at any point.
+///
+/// Escape is spelled CSI 27u rather than a bare `\x1b`: a lone ESC byte
+/// waits out the reader's disambiguation window, so it either resolves
+/// late or is swallowed by the next key sent.
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_hovercard() {
+    let r = smoke(
+        "hovercard",
+        Duration::from_millis(1500),
+        &[b"\t", b"\t", b"\t", b"\t", b"\t", b"\x1b[27u", b"s", b"q"],
+        Duration::from_secs(10),
+    );
+    assert_clean("hovercard", &r);
+}
+
+/// The MOUSE half, which nothing covered: point at a chip — no button,
+/// no click — and the card must open.
+///
+/// This is the shape laurent reported: *"the tooltip shows on click, but
+/// not on mouseover."* It was true, and it was an engine defect. Hover is
+/// recomputed only from mouse REPORTS, and the default session posture
+/// (`MouseMode::ButtonDrag`) has the terminal send motion only while a
+/// button is DOWN — so pressing produced a report, moving produced
+/// nothing, and the tip looked click-triggered.
+///
+/// **What this case can and cannot prove.** It INJECTS an SGR motion
+/// report (button 35 = motion, no button held), so it proves the app
+/// turns motion into an open card. It cannot prove the app ASKED the
+/// terminal to send motion in the first place — the bytes arrive whether
+/// or not mode 1003 was armed. That half is
+/// `anchored_layer_tests::mounting_a_tooltip_arms_motion_reporting_without_the_app_asking`,
+/// which asserts `[?1003h` reached the terminal. Two halves, two tests;
+/// neither alone would have caught it.
+///
+/// The coordinates are the chip's, one-based, from the example's own
+/// layout. If the layout moves, this fails — which is the right failure:
+/// the case is asserting that a reader pointing at the chip gets a card.
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_hovercard_opens_on_pointer_motion_with_no_button_held() {
+    let r = smoke(
+        "hovercard",
+        Duration::from_millis(1500),
+        // Motion onto the `#412` chip, then three unbound keys so the
+        // 250ms open delay elapses before the screen is captured.
+        &[b"\x1b[<35;58;3M", b"x", b"x", b"x", b"q"],
+        Duration::from_secs(10),
+    );
+    assert_clean("hovercard", &r);
+    if r.skipped.is_some() {
+        return;
+    }
+    assert!(
+        r.row_with("place_panel prefers below").is_some(),
+        "pointing at the chip left the card shut — the hover trigger is \
+         dead again, or the chip moved off (58,3). Screen:\n{}",
+        r.grid
+            .iter()
+            .map(|row| row.iter().map(|c| c.0.as_str()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
+/// Walk the big-text sweep and cycle all three axis keys under a real
+/// terminal. The keys are `s` symbols, `w` weight, `a` sampling — sent
+/// here in the spelling the example's own legend advertises, so a rename
+/// that moves a legend without moving its binding fails this rather than
+/// reaching an operator. (It reached one: the legend said `v`/`f` after
+/// the words had become symbols and weight.)
+///
+/// The arrows walk the sixteen-step scale sweep past its ends, which is
+/// also the wrap-around guard.
+///
+/// **The screen assertion is the point, and it is here because a clean
+/// exit is exactly what this example gave the operator while printing
+/// `clearly apart` over a row of white bars.** The readout carries two
+/// independent numbers per class now — the closest pair, and the worst
+/// character's fidelity loss — and the second is the one that was
+/// missing. A run that painted only the first would still exit 0.
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_bigtext() {
+    let r = smoke(
+        "bigtext",
+        Duration::from_millis(1500),
+        &[
+            b"\x1b[B", b"\x1b[B", b"\x1b[B", b"s", b"s", b"w", b"a", b"\x1b[A", b"q",
+        ],
+        Duration::from_secs(10),
+    );
+    assert_clean("bigtext", &r);
+    if r.skipped.is_some() {
+        return;
+    }
+    let screen = || {
+        r.grid
+            .iter()
+            .map(|row| row.iter().map(|c| c.0.as_str()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let row = r
+        .row_with("icons")
+        .unwrap_or_else(|| panic!("the readout lost its icons row. Screen:\n{}", screen()));
+    let text: String = r.grid[row].iter().map(|c| c.0.as_str()).collect();
+    // Both columns, on the row the reported screenshot was about. The
+    // shape column is a decimal, so `0.` is enough to tell it from the
+    // subpixel count beside it — and deleting that column takes this red
+    // rather than leaving a green run with half a readout.
+    assert!(
+        text.contains("0."),
+        "the icons row shows no fidelity loss — the shape column is the term the pairwise \
+         number was missing. Row: {text:?}\nScreen:\n{}",
+        screen()
+    );
+    assert!(
+        r.row_with("shape").is_some() && r.row_with("apart").is_some(),
+        "both column headers must be on screen; one of them alone is the readout that \
+         shipped the bug. Screen:\n{}",
+        screen()
+    );
+}
+
+/// Drive `RowSelect` under a real terminal: Tab takes the surface,
+/// arrows walk two-line rows past the bottom of the viewport (so
+/// ensure-visible has to scroll by CONTENT rows), then `m` moves the
+/// selected member's index under it and the selection has to follow the
+/// KEY rather than the slot.
+///
+/// The screen assertion is the point. `index N · key "tui"` is printed
+/// by the example's own status line, so a selection that silently
+/// reverted to index-following would come back as `key "newcomer-a"` —
+/// a green process exit would not have noticed.
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_roster() {
+    let r = smoke(
+        "roster",
+        Duration::from_millis(1500),
+        &[
+            b"\t", b"\x1b[B", b"\x1b[B", b"\x1b[B", b"\r", b"\x1b[A", b"m", b"q",
+        ],
+        Duration::from_secs(10),
+    );
+    assert_clean("roster", &r);
+    if r.skipped.is_some() {
+        return;
+    }
+    // Three downs then one up leaves `agora-wui` selected at index 2;
+    // `m` puts two arrivals in front of them, so the INDEX must be 4 and
+    // the KEY unchanged. ONE row carrying BOTH — `index 4` alone would
+    // also be satisfied by a selection that had drifted to a different
+    // member, and `agora-wui` alone is on screen either way.
+    assert!(
+        r.row_with("index 4 · key \"agora-wui\"").is_some(),
+        "the selection did not follow the key through the mutation. Screen:\n{}",
+        r.grid
+            .iter()
+            .map(|row| row.iter().map(|c| c.0.as_str()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
 #[test]
 #[ignore = "live: spawns real example processes under a PTY"]
 fn live_hello() {

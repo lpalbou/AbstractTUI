@@ -39,6 +39,7 @@ fn register_strict_refuses_text_equals_bg() {
             label: "Hostile".into(),
             dark: true,
             tokens,
+            ground_intent: Vec::new(),
         },
         RegisterMode::Strict,
     )
@@ -61,6 +62,7 @@ fn register_labeled_admits_but_reports_violations() {
             label: "Degraded".into(),
             dark: true,
             tokens,
+            ground_intent: Vec::new(),
         },
         RegisterMode::Labeled,
     )
@@ -88,6 +90,7 @@ fn register_rejects_reserved_and_invalid_ids() {
                 label: "Spoof".into(),
                 dark: true,
                 tokens: base_tokens(),
+                ground_intent: Vec::new(),
             },
             RegisterMode::Labeled, // reserved ids refuse in BOTH modes
         )
@@ -104,6 +107,7 @@ fn register_rejects_reserved_and_invalid_ids() {
                 label: "Bad id".into(),
                 dark: true,
                 tokens: base_tokens(),
+                ground_intent: Vec::new(),
             },
             RegisterMode::Strict,
         )
@@ -125,6 +129,7 @@ fn register_strict_refuses_indecisive_ground() {
             label: "Mid".into(),
             dark: true,
             tokens,
+            ground_intent: Vec::new(),
         },
         RegisterMode::Strict,
     );
@@ -146,6 +151,7 @@ fn register_wrong_polarity_declaration_caught() {
             label: "Liar".into(),
             dark: true, // lie
             tokens: light,
+            ground_intent: Vec::new(),
         },
         RegisterMode::Strict,
     );

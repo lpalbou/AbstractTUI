@@ -268,6 +268,43 @@ impl TokenSet {
         ]
     }
 
+    /// This ground's position in [`grounds`](TokenSet::grounds), or
+    /// `None` for a token that is not an opaque ground.
+    ///
+    /// The index is what [`render::color`](crate::render::color) speaks:
+    /// its declarations are positions in the color slice it was handed.
+    /// A theme states its intent in TOKENS, which is the only spelling
+    /// that survives — an index literal in a theme would silently mean
+    /// something else the day this list reorders.
+    pub fn ground_index(id: TokenId) -> Option<usize> {
+        // Sourced from the same list `grounds` returns, so the two cannot
+        // disagree about what a ground is or what order they are in.
+        let probe = TokenSet::default();
+        probe.grounds().iter().position(|(g, _)| *g == id)
+    }
+
+    /// Resolve a theme's token-pair separation intent into the index
+    /// pairs [`quantize_set_256_into_with`](
+    /// crate::render::color::quantize_set_256_into_with) takes.
+    ///
+    /// `Err(id)` names the first token that is not an opaque ground.
+    /// Refusing rather than skipping is the point: a dropped pair leaves
+    /// the author believing two grounds are declared when nothing carries
+    /// the declaration. [`register`](fn@crate::theme::register) applies this
+    /// so a runtime theme cannot reach the driver holding one.
+    pub fn resolve_ground_intent(
+        declaration: &[(TokenId, TokenId, crate::render::color::PairIntent)],
+    ) -> Result<Vec<(usize, usize, crate::render::color::PairIntent)>, TokenId> {
+        declaration
+            .iter()
+            .map(|&(a, b, intent)| {
+                let ia = TokenSet::ground_index(a).ok_or(a)?;
+                let ib = TokenSet::ground_index(b).ok_or(b)?;
+                Ok((ia, ib, intent))
+            })
+            .collect()
+    }
+
     /// Resolve a token by id.
     pub fn get(&self, id: TokenId) -> Rgba {
         match id {

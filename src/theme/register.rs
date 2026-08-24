@@ -43,10 +43,11 @@
 
 use std::sync::RwLock;
 
+use crate::render::color::PairIntent;
 use crate::theme::contrast::{audit, Violation};
 use crate::theme::registry::{hygiene_violations, themes, Theme};
 use crate::theme::seeds::UPSTREAM_ALIASES;
-use crate::theme::tokens::TokenSet;
+use crate::theme::tokens::{TokenId, TokenSet};
 
 /// A theme proposed for runtime registration. Owned strings: nothing leaks
 /// unless the candidate is accepted.
@@ -59,6 +60,20 @@ pub struct ThemeCandidate {
     /// Declared polarity; audited against the measured ground luminance.
     pub dark: bool,
     pub tokens: TokenSet,
+    /// **Which of this theme's grounds read as one surface** when the
+    /// 256-colour palette cannot hold them all apart — per pair, and
+    /// additive. An EMPTY vec is SILENCE: every pair falls to
+    /// elevation-wins and the theme renders exactly as it would without
+    /// this field, so `vec![]` is the correct thing to write when you
+    /// have no opinion. See [`Theme::ground_intent`].
+    ///
+    /// Both tokens of every pair must be opaque grounds
+    /// ([`TokenSet::grounds`]); anything else is refused with
+    /// [`RegisterError::NotAGround`] in BOTH modes. It is not an audit
+    /// finding to be labelled and shipped: a declaration naming a
+    /// non-ground protects nothing, and letting it through would leave
+    /// the author believing otherwise.
+    pub ground_intent: Vec<(TokenId, TokenId, PairIntent)>,
 }
 
 /// What to do when the audit finds violations.
@@ -92,6 +107,11 @@ pub enum RegisterError {
         violations: Vec<Violation>,
         hygiene: Vec<String>,
     },
+    /// `ground_intent` names a token that is not an opaque ground.
+    /// Refused in BOTH modes, unlike a contrast violation: a labelled
+    /// registration still renders, and a declaration over a non-ground
+    /// would silently protect nothing while the author believed it did.
+    NotAGround(TokenId),
 }
 
 impl std::fmt::Display for RegisterError {
@@ -121,6 +141,13 @@ impl std::fmt::Display for RegisterError {
                 }
                 Ok(())
             }
+            RegisterError::NotAGround(id) => write!(
+                f,
+                "ground_intent names '{}', which is not an opaque ground: \
+                 declare pairs of bg, surface, surface_raised, \
+                 selection_bg or shadow_ground",
+                id.name()
+            ),
         }
     }
 }
@@ -164,6 +191,11 @@ pub fn register(
         return Err(RegisterError::ReservedId(id.to_string()));
     }
 
+    // Before the audit, because this one is refused in both modes: a
+    // declaration over a non-ground carries no protection, and there is
+    // no useful thing to label it as.
+    TokenSet::resolve_ground_intent(&candidate.ground_intent).map_err(RegisterError::NotAGround)?;
+
     // Audit the candidate BEFORE anything leaks: rejected strict
     // registrations must cost zero permanent memory.
     let label = if candidate.label.trim().is_empty() {
@@ -178,9 +210,26 @@ pub fn register(
         label: "",
         dark: candidate.dark,
         tokens: candidate.tokens,
+        // `hygiene_violations` reads colors and polarity only. The
+        // declaration IS checked, by `declaration_contradictions` below
+        // — it takes the candidate's own `Vec` rather than riding this
+        // probe, because putting a `&'static` declaration here would
+        // mean leaking for a candidate that may be about to be refused.
+        ground_intent: &[],
     };
     let violations = audit(id, &candidate.tokens);
     let mut hygiene = hygiene_probe(id, &probe);
+    // A pair declared Distinct whose grounds are the same colour: the
+    // author has said "these must read as different surfaces" about one
+    // surface, and the bytes win. A hygiene finding rather than a hard
+    // error, unlike `NotAGround` — the theme still renders sensibly and
+    // the resolution is determinate, so `Labeled` mode surfacing it is
+    // the right severity.
+    hygiene.extend(crate::theme::contrast::declaration_contradictions(
+        id,
+        &candidate.tokens,
+        &candidate.ground_intent,
+    ));
     // The declared polarity must agree with the measured ground — a "dark"
     // theme on a white ground breaks downstream grouping (shadow strength,
     // image dithering, splash vignette).
@@ -217,6 +266,11 @@ pub fn register(
         if existing.label == label
             && existing.dark == candidate.dark
             && existing.tokens == candidate.tokens
+            // Intent is part of the theme's identity: two candidates
+            // with the same colors and different declarations render
+            // differently at 256, so returning the cached handle for the
+            // second would silently serve the first one's intent.
+            && existing.ground_intent == candidate.ground_intent
         {
             return Ok(Registration {
                 theme: existing,
@@ -230,6 +284,7 @@ pub fn register(
         label: Box::leak(label.into_boxed_str()),
         dark: candidate.dark,
         tokens: candidate.tokens,
+        ground_intent: Box::leak(candidate.ground_intent.into_boxed_slice()),
     }));
     USER_THEMES
         .write()
@@ -283,6 +338,7 @@ mod tests {
             label: format!("Test {id}"),
             dark: base.dark,
             tokens: base.tokens,
+            ground_intent: Vec::new(),
         }
     }
 

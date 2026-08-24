@@ -328,6 +328,128 @@ user-themable and no build-time decision can know what index 4 renders as.
 And separation of a foreground from its own background still wins over the
 ground assignment — text reading as its own background is the worse defect.
 
+#### When separating every ground is the wrong answer
+
+Giving every ground its own entry is right for a theme whose grounds are
+drawn apart, and wrong for one whose grounds are not. Seven built-in ground
+pairs come out of the assignment **more** separated at 256 colours than they
+are at truecolor — an edge the theme author never drew. Merging "close
+enough" grounds does not fix it: the same pair can be one an author left
+indistinct *and* one whose elevation the plain lookup collapses, so no rule
+over the two colour values is right about it.
+
+So the intent is declared, not inferred — **per pair, by the theme**. You
+state it once on the candidate and the driver does the rest:
+
+```rust
+use abstracttui::render::color::PairIntent;
+use abstracttui::theme::{register, RegisterMode, ThemeCandidate, TokenId};
+
+let candidate = ThemeCandidate {
+    id: "acme".into(),
+    label: "Acme".into(),
+    dark: true,
+    tokens,
+    // "These two grounds read as one surface — where the 256 palette
+    // has already forced them together, leave them there."
+    ground_intent: vec![(
+        TokenId::SurfaceRaised,
+        TokenId::SelectionBg,
+        PairIntent::Same,
+    )],
+};
+let theme = register(candidate, RegisterMode::Strict)?.theme;
+```
+
+That is the whole integration: `Driver::sync_palette_assignment` reads
+`Theme::ground_intent` off whichever theme is live, resolves it against
+`TokenSet::grounds`, and installs the resulting assignment. Nothing to call
+per frame and no assignment to build yourself.
+
+Pairs are named in **tokens, not indices** — an index would silently mean a
+different pair the day the ground list reorders. Both tokens must be opaque
+grounds; `register` refuses anything else with `RegisterError::NotAGround`,
+in *both* modes, because a declaration over `border` protects nothing while
+reading as though it does.
+
+Each pair has three states: `Same`, `Distinct`, and undeclared — the last
+being the absence of an entry, not a value you can write.
+
+`Distinct` changes no bytes: it is what silence already does. What it buys
+is a claim that can be **checked against the artifact**. Declare two grounds
+`Distinct` and then author them at the same hex and you have contradicted
+yourself — `register` reports it (refusing in `Strict`, labelling in
+`Labeled`), where before the two would quietly share an entry and you would
+go on believing the edge was protected. `theme::contrast::
+declaration_contradictions` is the same check, callable directly.
+
+The mirror case is deliberately *not* reported: `Same` over two colours a
+mile apart asks for a merge that can never happen, because intent only ever
+releases a merge at a collision. That is inert, not wrong, and you may
+reasonably declare it ahead of a re-tint of your own palette.
+
+`render::color::quantize_set_256_into_with` is the layer underneath, if you
+are building an assignment yourself rather than going through a theme:
+
+```rust
+use abstracttui::render::color::{quantize_set_256_into_with, GroundIntent, PairIntent};
+
+let mut idx = vec![0u8; grounds.len()];
+quantize_set_256_into_with(&grounds, GroundIntent::UNDECLARED, &mut idx);
+quantize_set_256_into_with(
+    &grounds,
+    GroundIntent::new(&[(0, 2, PairIntent::Same)]),
+    &mut idx,
+);
+```
+
+**Opting in cannot flip the default.** A pair you did not name behaves
+exactly as if you had no declaration at all, so naming one pair never moves
+another. An empty declaration, and one listing nothing but `Distinct`, are
+both byte-for-byte identical to `UNDECLARED` across all 26 built-in themes.
+There is no way to spell "merge everything I did not mention" — a theme
+should not be able to give away its elevation by omission.
+
+**Intent releases a merge; it never creates one.** `Same` lets two grounds
+share an entry *when they collide*. It never moves a ground that already
+had an entry of its own: forcing a collapse the palette did not ask for
+would invent the mirror of the defect this exists to fix.
+
+Across the registry, declaring all ten pairs `Same` — the maximal opt-in —
+closes three of the seven invented edges, at the cost of re-collapsing 15
+pairs the assignment keeps apart (one of them, `catppuccin-frappe
+bg/surface`, above the 1.10 report floor). That is the upper bound on both
+sides, and reaching it takes ten deliberate statements.
+
+The other four invented edges are **not** the assignment's: those grounds
+have different nearest entries already, so nothing displaced them and no
+declaration can reach them. They are a property of the xterm-256 lookup
+itself, survive with the whole set policy removed, and remain open.
+
+**Every built-in theme declares nothing**, and that is a decision, not an
+oversight: none of the 26 authors has been asked, so elevation wins for all
+of them and the shipped bytes are unchanged.
+
+**`extra_grounds` cannot carry intent, and that is also a decision.** The
+declaration covers the theme's five grounds only; consumer grounds join the
+set after them and no declaration names them. Stated rather than left to be
+discovered, because the mechanism above would otherwise imply it. The
+reasoning: a theme has five *named roles* whose colours may coincide, and a
+widget picks a role rather than a colour — so two roles landing on one hex
+is normal and the intent question is real. An app passes raw colours. If two
+of yours are the same colour they already share an entry (byte-identical
+colours always do); if they are different colours you chose deliberately,
+keeping them apart is what you asked for. And a panel meant to read as one
+surface with `surface` should *be* `t.surface`, not a minted near-match.
+If you have a case this reasoning misses, it is worth raising rather than
+working around.
+
+`cargo run --example grounds` walks the registry and shows this live — press
+`i` on `solarized-dark`, `one-light` or `abstract-midnight` and the app
+switches to a registered variant that declares the colliding pair, with the
+two grounds arriving as one colour. On the other 23 themes it says plainly
+that there is nothing to release.
+
 To ask the question about your own theme, `theme::contrast::ground_overlaps`
 returns a `GroundOverlap` for every pair of opaque grounds measuring below
 the floor you pass (`floors::GROUND_SEPARATION_REPORT`, 1.10, is the
@@ -347,6 +469,8 @@ let candidate = ThemeCandidate {
     label: "My Theme".into(),
     dark: true,                   // audited against measured luminance
     tokens: my_tokens,            // a full TokenSet
+    ground_intent: vec![],        // silence — see "When separating every
+                                  // ground is the wrong answer"
 };
 
 match register(candidate, RegisterMode::Strict) {

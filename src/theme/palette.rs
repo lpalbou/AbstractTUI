@@ -215,6 +215,12 @@ impl Palette {
             label: self.label.clone(),
             dark: self.dark,
             tokens: derive_tokens(&colors, self.dark),
+            // A `Palette` is twelve authored colors; it carries no
+            // statement about which grounds read as one surface, and
+            // deriving one from the colors is exactly the inference the
+            // ruling refused. Silence, which the caller may replace on
+            // the candidate before registering.
+            ground_intent: Vec::new(),
         })
     }
 }

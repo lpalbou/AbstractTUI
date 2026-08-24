@@ -301,3 +301,41 @@ fn app_c_themed_form_with_validation() {
         "form validation message never rendered:\n{frame}"
     );
 }
+
+/// The `gfx::bigtext` snippet in docs/api.md, compiled and run.
+///
+/// A documented example that nobody executes drifts silently, and this
+/// one carries two numbers a reader will budget layout against. Change
+/// the API or the spacing rule and this fails instead of the docs
+/// quietly becoming wrong.
+#[test]
+fn docs_api_md_bigtext_example_is_accurate() {
+    use abstracttui::gfx::bigtext::{self, GlyphScale};
+    use abstracttui::gfx::mosaic::MosaicMode;
+
+    let ink = Rgba::rgb(220, 220, 220);
+    // The colour drawn ONTO: the two-colour fits refuse transparency.
+    let ground = Rgba::rgb(20, 20, 24);
+
+    let size = bigtext::measure("AGORA", GlyphScale::FLOOR).unwrap();
+    assert_eq!((size.w, size.h), (24, 3));
+
+    let grid = bigtext::render("AGORA", GlyphScale::FLOOR, MosaicMode::Sextant, ink, ground)
+        .expect("Latin capitals are in the embedded font");
+    assert_eq!((grid.cols(), grid.rows()), (24, 3));
+
+    // The three limits the page states, as assertions rather than prose.
+    assert!(bigtext::render("Café", GlyphScale::FLOOR, MosaicMode::Sextant, ink, ground).is_err());
+    assert!(
+        bigtext::render(
+            "AGORA",
+            GlyphScale::FLOOR,
+            MosaicMode::Sextant,
+            ink,
+            Rgba::TRANSPARENT
+        )
+        .is_err(),
+        "the page says a transparent ground is refused for the two-colour fits"
+    );
+    assert_eq!(GlyphScale::square(2).cols, 4);
+}

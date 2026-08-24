@@ -258,6 +258,15 @@ impl Style {
     }
 
     /// Fill the parent on both axes (the "pane" default apps reach for).
+    ///
+    /// **Direction is ROW**, like every other `Style` that does not say
+    /// otherwise — this sets the two SIZES and nothing else. A pane that
+    /// stacks its children top to bottom wants
+    /// `Style::column().width(Dimension::Percent(1.0)).height(Dimension::Percent(1.0))`;
+    /// reaching for `fill()` and adding children in reading order lays
+    /// them out left to right, and with narrow content most of them
+    /// collapse to nothing rather than looking obviously wrong.
+    /// (`examples/hovercard.rs` shipped exactly that.)
     pub fn fill() -> Style {
         Style {
             width: Dimension::Percent(1.0),

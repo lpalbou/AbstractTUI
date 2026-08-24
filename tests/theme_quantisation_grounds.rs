@@ -47,6 +47,7 @@ use abstracttui::base::palette::XTERM_256;
 use abstracttui::base::{Rgba, Size};
 use abstracttui::render::color::{
     nearest_ansi16, nearest_xterm256, quantize_pair_256, quantize_set_256,
+    quantize_set_256_into_with, GroundIntent, PairIntent,
 };
 use abstracttui::render::{Cell, ColorDepth, FrameDiff, PresentCaps, Presenter, Style, Surface};
 use abstracttui::testing::{xterm_256, VtScreen};
@@ -1370,5 +1371,1204 @@ fn the_registry_ground_overlap_report_is_the_measured_size() {
         ground_overlaps("none", &abstracttui::theme::themes()[0].tokens, 1.0).is_empty(),
         "a floor of 1.0 must report nothing — contrast is never below 1.0, \
          so a hit here means the comparison is inverted"
+    );
+}
+
+// ---------------------------------------------------------------------
+// The ruling: ground separation intent is DECLARED by the theme.
+// `commons/decision:ground-separation-intent-is-declared-by-the-theme@2`,
+// claim:tui-separator-invents-distinctions-the-author-did-not-draw
+//
+// (A) a theme declares, PER PAIR, which of its grounds read as one
+// surface; (B) a pair it did not name keeps elevation-wins, which is
+// every pair of every built-in theme today. The declaration is ADDITIVE:
+// an unnamed pair falls to B exactly as if the theme carried no
+// declaration at all, so opting in cannot flip the default by omission —
+// that reading would silently convert an opting-in theme to the
+// merge-everything option the ruling rejected.
+//
+// The four tests below pin, in order: that the undeclared default moved
+// nothing; that opting in without naming a pair ALSO moves nothing (the
+// additivity guarantee, and the one an implementation is most likely to
+// get wrong); what naming every pair BUYS; and what it COSTS. The third
+// also carries a correction to this file's own account of the defect —
+// see its docstring.
+// ---------------------------------------------------------------------
+
+/// The five grounds of `theme`, assigned under `intent`.
+fn assign_grounds(tokens: &TokenSet, intent: GroundIntent) -> [u8; 5] {
+    let colors: Vec<Rgba> = tokens.grounds().iter().map(|(_, c)| *c).collect();
+    let mut out = [0u8; 5];
+    quantize_set_256_into_with(&colors, intent, &mut out);
+    out
+}
+
+/// All ten ground pairs declared with one intent — the maximal opt-in.
+/// With [`PairIntent::Same`] this is the strongest thing a theme can say
+/// and therefore the upper bound on what a declaration can do; with
+/// [`PairIntent::Distinct`] it is the loudest possible way of saying
+/// nothing.
+fn every_pair(intent: PairIntent) -> Vec<(usize, usize, PairIntent)> {
+    let mut out = Vec::new();
+    for i in 0..5 {
+        for j in (i + 1)..5 {
+            out.push((i, j, intent));
+        }
+    }
+    out
+}
+
+/// The ground indices every built-in theme resolved to BEFORE
+/// `GroundIntent` existed — a literal baseline, not a re-derivation.
+///
+/// **Why literal, and it is a correction to this file.** The first
+/// version of the guard below compared `quantize_set_256_into_with(...,
+/// UNDECLARED)` against `quantize_set_256(...)`. Both are the same
+/// implementation, so it pinned *the two entry points agree* while
+/// reading as *the bytes did not move*. Falsified by breaking the merge
+/// predicate so silence stopped separating: every theme's assignment
+/// changed for real, eight other tests went red, and that one stayed
+/// GREEN — because both of its sides moved together. A baseline computed
+/// from the thing it is a baseline for is not a baseline.
+const SHIPPED_GROUND_INDICES: &[(&str, [u8; 5])] = &[
+    ("abstract-dark", [234, 235, 23, 236, 233]),
+    ("abstract-light", [255, 231, 254, 218, 251]),
+    ("observer-night", [233, 235, 234, 237, 232]),
+    ("catppuccin-mocha", [235, 234, 236, 239, 233]),
+    ("catppuccin-macchiato", [235, 236, 237, 59, 234]),
+    ("catppuccin-frappe", [237, 236, 238, 60, 235]),
+    ("rose-pine", [234, 236, 235, 238, 233]),
+    ("rose-pine-moon", [235, 236, 237, 59, 233]),
+    ("tokyo-night", [234, 235, 239, 238, 233]),
+    ("nord", [236, 238, 239, 240, 234]),
+    ("one-dark", [236, 235, 237, 238, 234]),
+    ("dracula", [235, 237, 238, 59, 234]),
+    ("monokai", [235, 236, 237, 240, 234]),
+    ("gruvbox", [235, 237, 239, 58, 234]),
+    ("solarized-dark", [235, 236, 23, 237, 233]),
+    ("everforest-dark", [236, 237, 238, 239, 234]),
+    ("catppuccin-latte", [255, 254, 188, 183, 252]),
+    ("rose-pine-dawn", [255, 231, 254, 188, 252]),
+    ("one-light", [255, 231, 254, 153, 252]),
+    ("everforest-light", [230, 231, 253, 254, 188]),
+    ("solarized-light", [230, 254, 188, 152, 251]),
+    ("abstract-aurora", [233, 234, 235, 23, 232]),
+    ("abstract-paper", [255, 231, 254, 181, 251]),
+    ("abstract-ember", [233, 234, 235, 238, 232]),
+    ("abstract-midnight", [235, 233, 234, 238, 232]),
+    ("abstract-dawn", [255, 231, 254, 152, 251]),
+];
+
+/// **(B), the undeclared default.** Every built-in theme is silent, so
+/// every built-in theme must come out of the declaring code path with the
+/// bytes it had before that path existed — not "equivalent", identical.
+///
+/// This is the whole safety argument for shipping `GroundIntent` at all:
+/// the mechanism cannot move a theme whose author has not asked it to.
+/// So it is asserted against the literal pre-existing indices, and the
+/// plain entry point is checked against the same literals rather than
+/// against the declaring one — two independent claims, neither of which
+/// can be satisfied by both sides drifting together.
+///
+/// A red here is not a licence to regenerate the table. It means a
+/// built-in theme's rendered grounds changed at 256 colours; find out
+/// which and why first.
+#[test]
+fn the_undeclared_default_is_byte_for_byte_the_shipped_assignment() {
+    let ids: Vec<&str> = themes().iter().map(|t| t.id).collect();
+    let pinned: Vec<&str> = SHIPPED_GROUND_INDICES.iter().map(|(id, _)| *id).collect();
+    assert_eq!(
+        ids, pinned,
+        "the registry changed shape — the baseline covers every theme or \
+         it covers nothing"
+    );
+    for (t, (id, want)) in themes().iter().zip(SHIPPED_GROUND_INDICES) {
+        let g = t.tokens.grounds();
+        assert_eq!(t.id, *id);
+        assert_eq!(
+            quantize_set_256([g[0].1, g[1].1, g[2].1, g[3].1, g[4].1]),
+            *want,
+            "{id}: the plain assignment moved off the bytes that shipped"
+        );
+        assert_eq!(
+            assign_grounds(&t.tokens, GroundIntent::UNDECLARED),
+            *want,
+            "{id}: silence must be the behaviour that shipped"
+        );
+    }
+}
+
+/// **Opting in must not flip the default** — the ruling's `@2`
+/// correction, across the whole registry.
+///
+/// A theme that carries a declaration and names no pair, and a theme that
+/// declares all ten pairs `Distinct`, must both render byte-for-byte like
+/// a theme that never opted in. The failure this forbids is the one a
+/// single distinctness list makes almost inevitable: *field present but
+/// empty* reading as "no pair must stay distinct", which silently
+/// converts an author who opted in without thinking into the
+/// merge-everything option the ruling rejected.
+///
+/// Deliberately over all 26 themes rather than a constructed pair,
+/// because the guarantee is about the registry as shipped: no built-in
+/// may move the day a declaration field exists to be left empty.
+#[test]
+fn opting_in_without_naming_a_pair_changes_nothing_in_any_theme() {
+    let all_distinct = every_pair(PairIntent::Distinct);
+    for t in themes() {
+        let silent = assign_grounds(&t.tokens, GroundIntent::UNDECLARED);
+        assert_eq!(
+            assign_grounds(&t.tokens, GroundIntent::new(&[])),
+            silent,
+            "{}: an empty declaration moved a ground — 'opted in' must not \
+             mean 'merge whatever I did not mention'",
+            t.id
+        );
+        assert_eq!(
+            assign_grounds(&t.tokens, GroundIntent::new(&all_distinct)),
+            silent,
+            "{}: declaring every pair Distinct moved a ground — declaring \
+             the default is not supposed to be a change",
+            t.id
+        );
+    }
+}
+
+/// **(A), what a declaration buys — and the correction it forced.**
+///
+/// A theme that declares all ten of its ground pairs `Same` — the
+/// maximal opt-in, and the upper bound on what any declaration can do —
+/// lets its colliding grounds share an entry. That closes **three** of
+/// the seven invented edges. It cannot close the other four, and
+/// measuring WHY corrects this file's own account of the defect:
+///
+/// `gruvbox surface_raised/selection_bg`, `rose-pine-dawn` and
+/// `abstract-paper selection_bg/shadow_ground`, and `abstract-dawn
+/// selection_bg/shadow_ground` have DIFFERENT NATURAL ENTRIES. Nothing
+/// displaced them: `nearest_xterm256` alone lands them on entries further
+/// apart than the colours are, and the set assignment leaves both where
+/// they fell — under either intent. So `quantize_set_256` invented three
+/// of these seven edges; the palette lookup invented the other four, and
+/// would still invent them with the whole set policy deleted.
+///
+/// A declaration cannot reach them because merging only ever happens on a
+/// COLLISION. Making `Same` *force* two grounds onto one entry with no
+/// collision to resolve is a stronger verb than the one ruled, and it was
+/// PUT to DESIGN and REFUSED (`commons#259`): intent releases a merge and
+/// never creates one, because forcing a collapse invents the mirror of
+/// the defect this mechanism exists to end. The four are re-attributed to
+/// the palette lookup and left open, not absorbed here.
+#[test]
+fn a_declaration_closes_three_of_the_seven_invented_edges_and_the_palette_owns_the_rest() {
+    use abstracttui::theme::contrast::contrast_ratio;
+    let inverted = |intent: GroundIntent| -> Vec<String> {
+        let mut out = vec![];
+        for t in themes() {
+            let g = t.tokens.grounds();
+            let a = assign_grounds(&t.tokens, intent);
+            for i in 0..5 {
+                for j in (i + 1)..5 {
+                    let true_c = contrast_ratio(g[i].1, g[j].1);
+                    let q_c = contrast_ratio(XTERM_256[a[i] as usize], XTERM_256[a[j] as usize]);
+                    if true_c < 1.05 && q_c > true_c * 1.05 {
+                        out.push(format!("{} {}/{}", t.id, g[i].0.name(), g[j].0.name()));
+                    }
+                }
+            }
+        }
+        out
+    };
+    let all_same = every_pair(PairIntent::Same);
+    let silent = inverted(GroundIntent::UNDECLARED);
+    let declared = inverted(GroundIntent::new(&all_same));
+    assert_eq!(
+        silent.len(),
+        7,
+        "premise, and it agrees with the row: {silent:?}"
+    );
+    assert_eq!(
+        declared,
+        vec![
+            "gruvbox surface_raised/selection_bg",
+            "rose-pine-dawn selection_bg/shadow_ground",
+            "abstract-paper selection_bg/shadow_ground",
+            "abstract-dawn selection_bg/shadow_ground",
+        ],
+        "a declaration closes the three collision-borne edges and only those"
+    );
+
+    // And the four survivors are the palette lookup's, not the policy's:
+    // distinct natural entries, untouched by either intent.
+    for name in &declared {
+        let (id, pair) = name.split_once(' ').expect("id and pair");
+        let (an, bn) = pair.split_once('/').expect("two ground names");
+        let t = themes().iter().find(|t| t.id == id).expect("named theme");
+        let g = t.tokens.grounds();
+        let at = g
+            .iter()
+            .position(|(k, _)| k.name() == an)
+            .expect("ground a");
+        let bt = g
+            .iter()
+            .position(|(k, _)| k.name() == bn)
+            .expect("ground b");
+        let (na, nb) = (nearest_xterm256(g[at].1), nearest_xterm256(g[bt].1));
+        assert_ne!(
+            na, nb,
+            "{name}: no collision to merge — the edge is plain nearest's"
+        );
+        for intent in [GroundIntent::UNDECLARED, GroundIntent::new(&all_same)] {
+            let a = assign_grounds(&t.tokens, intent);
+            assert_eq!(
+                (a[at], a[bt]),
+                (na, nb),
+                "{name}: the set policy never moved either ground"
+            );
+        }
+    }
+}
+
+/// **What the maximal opt-in costs, so the trade is a number and not a
+/// hope — and note who now pays it.**
+///
+/// Declaring all ten pairs `Same` re-collapses 15 ground pairs that the
+/// undeclared assignment keeps apart: the elevation defect the set policy
+/// was written to fix, handed back deliberately because the author asked
+/// for it, pair by pair. One of them (`catppuccin-frappe bg/surface`) is
+/// authored above the 1.10 report floor, which is the loudest case an
+/// author reaching for the maximal opt-in should expect to see.
+///
+/// Under the FIRST cut of this mechanism these 15 were the cost of
+/// opting in AT ALL — a whole-theme `Declared(&[])` meant "merge
+/// everything I did not name", so a theme that added the field and
+/// listed nothing paid all 15 by omission. `commons#259` ruled that
+/// reading out: the declaration is additive, and reaching this number now
+/// takes ten deliberate statements. The measurement is kept because it
+/// still bounds what the mechanism can give away — see
+/// `opting_in_without_naming_a_pair_changes_nothing_in_any_theme` for the
+/// half that says nobody pays it by accident.
+///
+/// This is a MEASUREMENT of the registry as authored, not a contract: it
+/// moves when themes or grounds do, and it is here so it cannot move
+/// unnoticed.
+#[test]
+fn declaring_every_pair_same_re_collapses_fifteen_ground_pairs() {
+    use abstracttui::theme::contrast::contrast_ratio;
+    let all_same = every_pair(PairIntent::Same);
+    let mut lost = vec![];
+    for t in themes() {
+        let g = t.tokens.grounds();
+        let (u, d) = (
+            assign_grounds(&t.tokens, GroundIntent::UNDECLARED),
+            assign_grounds(&t.tokens, GroundIntent::new(&all_same)),
+        );
+        for i in 0..5 {
+            for j in (i + 1)..5 {
+                if u[i] != u[j] && d[i] == d[j] {
+                    lost.push((
+                        format!("{} {}/{}", t.id, g[i].0.name(), g[j].0.name()),
+                        contrast_ratio(g[i].1, g[j].1),
+                    ));
+                }
+            }
+        }
+    }
+    assert_eq!(
+        lost.len(),
+        15,
+        "the cost of the maximal opt-in changed: {lost:?}"
+    );
+    let loud: Vec<&str> = lost
+        .iter()
+        .filter(|(_, c)| *c >= 1.10)
+        .map(|(n, _)| n.as_str())
+        .collect();
+    assert_eq!(
+        loud,
+        vec!["catppuccin-frappe bg/surface"],
+        "the pairs given up above the report floor"
+    );
+}
+
+// ---------------------------------------------------------------------
+// Slice 2: the declaration reaches the DRIVER.
+//
+// Everything above proves the policy is right when it is handed an
+// intent. None of it proves an author can state one. A theme now
+// declares in TOKENS (`Theme::ground_intent`), `register` refuses a
+// declaration over a non-ground, and `Driver::sync_palette_assignment`
+// resolves it against `TokenSet::grounds` and hands it to the separator.
+//
+// The last test drives the real presenter into the VT model, because a
+// declaration that is correct in the type system and unreached by
+// `resolve_pen` is not a feature.
+// ---------------------------------------------------------------------
+
+/// **Every built-in is silent, and the field cannot quietly stop being
+/// silent.** The ruling says elevation wins where a theme has not
+/// spoken, and none of these 26 authors has been asked.
+///
+/// This is the guard that makes `SHIPPED_GROUND_INDICES` mean what it
+/// says: those literals are the bytes of a silent registry, so a
+/// built-in acquiring a declaration has to change this test first.
+#[test]
+fn every_built_in_theme_is_silent_about_ground_intent() {
+    let speaking: Vec<&str> = themes()
+        .iter()
+        .filter(|t| !t.ground_intent.is_empty())
+        .map(|t| t.id)
+        .collect();
+    assert!(
+        speaking.is_empty(),
+        "built-in themes declared ground intent: {speaking:?}. The ruling \
+         makes silence the default for every theme this crate ships — if a \
+         theme should now speak, that is a DESIGN decision and the shipped \
+         byte baseline moves with it."
+    );
+}
+
+/// `TokenSet::resolve_ground_intent` maps tokens to the positions the
+/// separator speaks, and REFUSES a token that is not a ground rather
+/// than dropping the pair.
+///
+/// Dropping is the failure this forbids: a skipped pair leaves the
+/// author believing two grounds are declared while nothing carries the
+/// declaration, and no call site ever throws.
+#[test]
+fn resolving_intent_maps_grounds_and_refuses_a_non_ground() {
+    use abstracttui::theme::{TokenId, TokenSet};
+    assert_eq!(
+        TokenSet::resolve_ground_intent(&[(
+            TokenId::SelectionBg,
+            TokenId::SurfaceRaised,
+            PairIntent::Same,
+        )]),
+        Ok(vec![(3, 2, PairIntent::Same)]),
+        "positions must be those of TokenSet::grounds, in its order"
+    );
+    // `border` is a stroke drawn ON a ground, not a ground — the exact
+    // near-miss an author would reach for.
+    assert_eq!(
+        TokenSet::resolve_ground_intent(&[(TokenId::Bg, TokenId::Border, PairIntent::Same)]),
+        Err(TokenId::Border)
+    );
+    assert_eq!(TokenSet::resolve_ground_intent(&[]), Ok(vec![]));
+}
+
+/// `register` refuses a non-ground declaration in BOTH modes.
+///
+/// `Labeled` exists so a user theme with a contrast miss still renders
+/// rather than stranding the user. That reasoning does not transfer: a
+/// labelled contrast finding is a theme that works and reads poorly, a
+/// labelled non-ground declaration is an author told their grounds are
+/// protected when nothing protects them.
+#[test]
+fn register_refuses_a_declaration_over_a_non_ground_in_both_modes() {
+    use abstracttui::theme::{
+        default_theme, register, RegisterError, RegisterMode, ThemeCandidate, TokenId,
+    };
+    for (n, mode) in [RegisterMode::Strict, RegisterMode::Labeled]
+        .into_iter()
+        .enumerate()
+    {
+        let base = default_theme();
+        let candidate = ThemeCandidate {
+            id: format!("gi-non-ground-{n}"),
+            label: "Non-ground declaration".into(),
+            dark: base.dark,
+            tokens: base.tokens,
+            ground_intent: vec![(TokenId::Bg, TokenId::Text, PairIntent::Same)],
+        };
+        match register(candidate, mode) {
+            Err(RegisterError::NotAGround(id)) => assert_eq!(id, TokenId::Text),
+            other => panic!("{mode:?} accepted a declaration over `text`: {other:?}"),
+        }
+    }
+    // And the same candidate registers once the declaration is clean, so
+    // the refusal is about the non-ground and not about the field.
+    let base = default_theme();
+    let ok = register(
+        ThemeCandidate {
+            id: "gi-non-ground-ok".into(),
+            label: "Clean declaration".into(),
+            dark: base.dark,
+            tokens: base.tokens,
+            ground_intent: vec![(TokenId::Bg, TokenId::Surface, PairIntent::Same)],
+        },
+        RegisterMode::Strict,
+    )
+    .expect("a declaration naming two real grounds is fine");
+    assert_eq!(ok.theme.ground_intent.len(), 1);
+}
+
+/// **The seam, through the REAL driver, on the wire.**
+///
+/// The tests above prove the parts: the separator honours an intent, the
+/// tokens resolve to indices, and `register` guards the field. None of
+/// them proves `Driver::sync_palette_assignment` ever ASKS the theme —
+/// a first draft of this test rebuilt the driver's three lines itself
+/// and would have passed with the driver hard-coded to `UNDECLARED`.
+/// That is the same defect this row found in its own baseline guard, so
+/// it drives a real `Driver` into a real terminal and reads the colours
+/// back off the screen instead.
+///
+/// The control is the same theme, same colours, registered WITHOUT the
+/// declaration: two colours on screen. Without that half this would pass
+/// on a theme whose grounds never collided in the first place.
+#[test]
+fn the_driver_carries_a_themes_declaration_all_the_way_to_the_terminal() {
+    use abstracttui::app::{App, Driver, RunConfig};
+    use abstracttui::base::Rect;
+    use abstracttui::layout::Style as LayoutStyle;
+    use abstracttui::term::Capabilities;
+    use abstracttui::testing::CaptureTerm;
+    use abstracttui::theme::{register, RegisterMode, ThemeCandidate, TokenId};
+    use abstracttui::ui::Element;
+
+    // solarized-dark is the headline case: `surface_raised` and
+    // `selection_bg` are authored at 1.018 — one colour to any eye — and
+    // the separator renders them at 1.518.
+    let base = abstracttui::theme::get("solarized-dark").expect("house port");
+    let (raised, sel) = (base.tokens.surface_raised, base.tokens.selection_bg);
+    assert_eq!(
+        nearest_xterm256(raised),
+        nearest_xterm256(sel),
+        "premise: these two collide, so there is a merge available to release"
+    );
+
+    let mk = |id: &str, intent: Vec<(TokenId, TokenId, PairIntent)>| {
+        register(
+            ThemeCandidate {
+                id: id.into(),
+                label: id.into(),
+                dark: base.dark,
+                tokens: base.tokens,
+                ground_intent: intent,
+            },
+            // Labeled: a byte-for-byte copy of a shipped theme, and this
+            // test is about intent rather than about its audit.
+            RegisterMode::Labeled,
+        )
+        .expect("registers")
+        .theme
+    };
+
+    /// Paint the two grounds side by side under `theme`, driven by a
+    /// real `Driver` at 256 colours, and read back what the terminal
+    /// shows. Nothing here touches `quantize_set_256` or
+    /// `resolve_ground_intent`: if the driver does not consult the
+    /// theme, this cannot see an intent.
+    fn on_screen(theme: &'static abstracttui::theme::Theme) -> (Option<Rgba>, Option<Rgba>) {
+        let size = Size::new(4, 1);
+        let mut term = CaptureTerm::new(size);
+        let mut app = App::new(size);
+        let (a, b) = (theme.tokens.surface_raised, theme.tokens.selection_bg);
+        app.mount(move |_| {
+            Element::new()
+                .style(LayoutStyle::fill())
+                .draw(move |canvas, rect| {
+                    canvas.fill(Rect::new(rect.x, rect.y, 1, 1), ' ', a, a);
+                    canvas.fill(Rect::new(rect.x + 1, rect.y, 1, 1), ' ', b, b);
+                })
+                .build()
+        })
+        .expect("mount");
+        abstracttui::app::set_theme(theme);
+        let mut driver = Driver::new(
+            &mut app,
+            &mut term,
+            RunConfig {
+                // 256 exactly: truecolor has no defect to fix, so the
+                // driver installs an empty assignment there and the
+                // declaration would be untestable.
+                caps: Some(Capabilities::with(|c| {
+                    c.colors_256 = true;
+                    c.unicode_ok = true;
+                })),
+                enter: None,
+                probe: false,
+                ..RunConfig::default()
+            },
+        )
+        .expect("enter");
+        for _ in 0..4 {
+            if driver.turn(&mut app, &mut term).expect("turn").idle {
+                break;
+            }
+        }
+        let screen = term.screen();
+        assert_eq!(screen.unknown_seq_count(), 0, "unmodeled bytes");
+        (
+            screen.cell(0, 0).expect("in bounds").paint.bg,
+            screen.cell(1, 0).expect("in bounds").paint.bg,
+        )
+    }
+
+    let (a, b) = on_screen(mk("gi-wire-silent", vec![]));
+    assert_ne!(
+        a, b,
+        "control: an undeclared theme still separates them through the \
+         driver — if this stops being true the declared case proves nothing"
+    );
+
+    let (a, b) = on_screen(mk(
+        "gi-wire-declared",
+        vec![(
+            TokenId::SurfaceRaised,
+            TokenId::SelectionBg,
+            PairIntent::Same,
+        )],
+    ));
+    assert_eq!(
+        a, b,
+        "the theme declared these two grounds Same and the terminal still \
+         shows an edge — Driver::sync_palette_assignment is not consulting \
+         Theme::ground_intent"
+    );
+    assert_eq!(
+        a,
+        Some(xterm_256(nearest_xterm256(raised))),
+        "and they share the entry the palette gave them, not a third one"
+    );
+}
+
+/// **What the byte-inert third state actually buys.**
+///
+/// `Distinct` changes no output: undeclared already keeps two grounds
+/// apart. That cost was reported when the three states were ruled and
+/// kept deliberately. This is the exchange — a declaration that can be
+/// checked against the artifact.
+///
+/// A theme declaring two grounds `Distinct` and then authoring them at
+/// the same hex has contradicted itself. The resolution is determinate
+/// (the colours are the artifact, so they share an entry), and before
+/// this it happened in silence, leaving the author believing an edge was
+/// protected.
+#[test]
+fn declaring_distinct_over_one_colour_is_reported_as_a_contradiction() {
+    use abstracttui::theme::contrast::declaration_contradictions;
+    use abstracttui::theme::{default_theme, TokenId};
+    let mut t = default_theme().tokens;
+    t.surface = t.bg;
+
+    let found = declaration_contradictions(
+        "probe",
+        &t,
+        &[(TokenId::Bg, TokenId::Surface, PairIntent::Distinct)],
+    );
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(
+        found[0].contains("bg") && found[0].contains("surface") && found[0].contains("Distinct"),
+        "the finding must name the pair and what was declared: {}",
+        found[0]
+    );
+
+    // The three near-misses that must NOT be reported.
+    assert!(
+        declaration_contradictions(
+            "probe",
+            &t,
+            &[(TokenId::Bg, TokenId::Surface, PairIntent::Same)]
+        )
+        .is_empty(),
+        "declaring one colour Same is agreement with the artifact, not a contradiction"
+    );
+    assert!(
+        declaration_contradictions(
+            "probe",
+            &default_theme().tokens,
+            &[(TokenId::Bg, TokenId::Surface, PairIntent::Distinct)]
+        )
+        .is_empty(),
+        "two genuinely different grounds declared Distinct is the normal case"
+    );
+    assert!(
+        declaration_contradictions(
+            "probe",
+            &default_theme().tokens,
+            &[(TokenId::Bg, TokenId::SelectionBg, PairIntent::Same)]
+        )
+        .is_empty(),
+        "Same over two far-apart colours is INERT, not wrong — it asks for a \
+         merge that can never happen, and an author may mean it against a \
+         future re-tint"
+    );
+}
+
+/// The contradiction reaches `register` as a hygiene finding — refusing
+/// in `Strict`, labelled in `Labeled`.
+///
+/// That severity is deliberate and differs from `NotAGround`: this theme
+/// still renders sensibly and the resolution is determinate, so a
+/// user-supplied theme should not be stranded over it. A declaration
+/// naming a non-ground has no sensible resolution at all.
+#[test]
+fn register_treats_a_self_contradicting_declaration_as_hygiene_not_a_hard_error() {
+    use abstracttui::theme::{
+        default_theme, register, RegisterError, RegisterMode, ThemeCandidate, TokenId,
+    };
+    let mut tokens = default_theme().tokens;
+    tokens.surface = tokens.bg;
+    let candidate = |id: &str| ThemeCandidate {
+        id: id.into(),
+        label: "Contradiction".into(),
+        dark: default_theme().dark,
+        tokens,
+        ground_intent: vec![(TokenId::Bg, TokenId::Surface, PairIntent::Distinct)],
+    };
+
+    match register(candidate("gi-contradiction-strict"), RegisterMode::Strict) {
+        Err(RegisterError::Rejected { hygiene, .. }) => assert!(
+            hygiene.iter().any(|h| h.contains("declared Distinct")),
+            "strict refused, but not for the contradiction: {hygiene:?}"
+        ),
+        other => panic!("strict accepted a self-contradicting declaration: {other:?}"),
+    }
+
+    let reg = register(candidate("gi-contradiction-labeled"), RegisterMode::Labeled)
+        .expect("labeled registers rather than stranding the author");
+    assert!(
+        reg.warnings.iter().any(|w| w.contains("declared Distinct")),
+        "labeled registered but swallowed the contradiction: {:?}",
+        reg.warnings
+    );
+}
+
+/// **The fact the whole ruling rests on, pinned at last.**
+///
+/// `no_single_colour_distance_threshold_can_separate_the_two_populations`
+/// pins the REFUTATION — that no threshold works. This pins the stronger
+/// and simpler thing underneath it: three specific pairs are
+/// simultaneously
+///
+///   (i)  an INVERSION — authored as one surface, rendered with an edge
+///        the separator invented; and
+///   (ii) a RESCUE — a pair plain nearest collapses and the assignment
+///        pulls apart.
+///
+/// A predicate over `(colour_a, colour_b)` is asked to both merge and
+/// separate the SAME two colours. It is not that the right threshold is
+/// hard to find; there is no function of the pair that can be right,
+/// which is why intent had to be declared rather than measured.
+///
+/// It is also not a coincidence that these are exactly the three
+/// collision-borne inversions: being in both populations REQUIRES a
+/// collision, since a rescue is only possible where nearest collapsed.
+/// The test asserts that identity rather than just listing three names.
+///
+/// Owed since before the ruling; the row carried it as prose that
+/// nothing checked.
+#[test]
+fn three_ground_pairs_are_an_inversion_and_a_rescue_at_once() {
+    use abstracttui::theme::contrast::contrast_ratio;
+    let mut both = Vec::new();
+    let mut collision_borne = Vec::new();
+    for t in themes() {
+        let g = t.tokens.grounds();
+        let assigned = quantize_set_256([g[0].1, g[1].1, g[2].1, g[3].1, g[4].1]);
+        for i in 0..5 {
+            for j in (i + 1)..5 {
+                let (na, nb) = (nearest_xterm256(g[i].1), nearest_xterm256(g[j].1));
+                let collides = na == nb;
+
+                // (i) inversion: authored as one surface, rendered apart.
+                let true_c = contrast_ratio(g[i].1, g[j].1);
+                let q_c = contrast_ratio(
+                    XTERM_256[assigned[i] as usize],
+                    XTERM_256[assigned[j] as usize],
+                );
+                let inversion = true_c < 1.05 && q_c > true_c * 1.05;
+
+                // (ii) rescue: plain nearest collapsed them, the set
+                // assignment pulled them apart.
+                let rescue = collides && assigned[i] != assigned[j];
+
+                let name = format!("{} {}/{}", t.id, g[i].0.name(), g[j].0.name());
+                if inversion && rescue {
+                    both.push(name.clone());
+                }
+                if inversion && collides {
+                    collision_borne.push(name);
+                }
+            }
+        }
+    }
+    assert_eq!(
+        both,
+        vec![
+            "solarized-dark surface_raised/selection_bg",
+            "one-light bg/surface",
+            "abstract-midnight bg/shadow_ground",
+        ],
+        "the set of pairs that are simultaneously an invented edge and a \
+         rescued elevation changed. This is the evidence that no predicate \
+         f(colour_a, colour_b) can be correct — it would have to merge and \
+         separate the same two colours — and it is what makes intent a \
+         DECLARATION rather than a measurement. EMPTY means the argument \
+         for the ruling no longer has a witness in this registry; say so on \
+         claim:tui-separator-invents-distinctions-the-author-did-not-draw \
+         before changing anything."
+    );
+    assert_eq!(
+        both, collision_borne,
+        "being in both populations must be EXACTLY the collision-borne \
+         inversions: a rescue is only possible where plain nearest \
+         collapsed, so an inversion that is in both without colliding \
+         would mean the rescue test is measuring something else"
+    );
+}
+
+// ---------------------------------------------------------------------
+// The FOUR edges no declaration can reach.
+// claim:tui-nearest-inverts-across-the-cube-ramp-boundary
+//
+// `GroundIntent` closed three of the seven invented edges. The other
+// four are not the set policy's: those grounds have different natural
+// entries, nothing displaced them, and they survive with the whole set
+// policy deleted. Intent cannot reach them because a merge only ever
+// happens at a collision and there is none.
+//
+// The two tests below characterize what they ARE, so the follow-on row
+// starts from a mechanism rather than from four theme names.
+// ---------------------------------------------------------------------
+
+/// Ground pairs an author drew as one surface that PLAIN
+/// `nearest_xterm256` — no set policy anywhere in the picture — renders
+/// further apart than they were authored.
+fn plain_nearest_inversions() -> Vec<(String, f32, f32, u8, u8)> {
+    use abstracttui::theme::contrast::contrast_ratio;
+    let mut out = Vec::new();
+    for t in themes() {
+        let g = t.tokens.grounds();
+        for i in 0..5 {
+            for j in (i + 1)..5 {
+                let true_c = contrast_ratio(g[i].1, g[j].1);
+                let (na, nb) = (nearest_xterm256(g[i].1), nearest_xterm256(g[j].1));
+                let q_c = contrast_ratio(XTERM_256[na as usize], XTERM_256[nb as usize]);
+                if true_c < 1.05 && q_c > true_c * 1.05 {
+                    out.push((
+                        format!("{} {}/{}", t.id, g[i].0.name(), g[j].0.name()),
+                        true_c,
+                        q_c,
+                        na,
+                        nb,
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The four, measured from the LOOKUP ALONE.
+///
+/// The existing `a_declaration_closes_three_of_the_seven...` derives this
+/// set as "what survives the maximal opt-in", which is true but states it
+/// in terms of the mechanism that cannot fix it. This computes it with
+/// `nearest_xterm256` and nothing else, so the claim "these are the
+/// palette lookup's, not the separator's" is asserted directly rather
+/// than inferred from a survival.
+#[test]
+fn four_ground_pairs_are_inverted_by_the_palette_lookup_alone() {
+    let found = plain_nearest_inversions();
+    let names: Vec<&str> = found.iter().map(|f| f.0.as_str()).collect();
+    assert_eq!(
+        names,
+        vec![
+            "gruvbox surface_raised/selection_bg",
+            "rose-pine-dawn selection_bg/shadow_ground",
+            "abstract-paper selection_bg/shadow_ground",
+            "abstract-dawn selection_bg/shadow_ground",
+        ],
+        "the set of pairs plain nearest inverts changed. These are the ones \
+         no ground declaration can reach — see \
+         claim:tui-nearest-inverts-across-the-cube-ramp-boundary."
+    );
+    // Worst amplification, so the size of the defect is a number and not
+    // an adjective: gruvbox renders 1.23x further apart than authored.
+    let worst = found.iter().map(|f| f.2 / f.1).fold(0.0f32, f32::max);
+    assert!(
+        (1.20..1.30).contains(&worst),
+        "worst amplification moved to {worst:.3} — it was 1.231 (gruvbox)"
+    );
+}
+
+/// **The mechanism, and it is narrower than "quantisation is lossy".**
+///
+/// xterm-256 is two lattices: the 6x6x6 colour CUBE (16..=231) and the
+/// 24-step grey RAMP (232..=255). `nearest_xterm256` picks whichever is
+/// closer by squared distance, and for a near-neutral colour that
+/// decision is a coin toss between two grids with different spacing.
+///
+/// Every one of the four inversions is a pair of near-identical grounds
+/// where one landed on the cube and the other on the ramp. Not one
+/// same-side pair inverts, anywhere in the registry. So the defect is
+/// not the coarseness of either lattice — it is the BOUNDARY between
+/// them: two colours a reader cannot tell apart get quantised against
+/// different grids and come out on entries the grids disagree about.
+///
+/// That matters because it says what a fix would have to be, and what it
+/// would NOT have to be. A general pair-aware nearest lookup is not
+/// required; keeping two near-identical colours on the SAME lattice
+/// would reach all four. Whether that trade is worth it (it moves one of
+/// the two off its own nearest entry) is the open question on the row.
+///
+/// The one split pair that does NOT invert is kept in the count on
+/// purpose: `one-light selection_bg/shadow_ground` splits cube/ramp and
+/// comes out slightly CLOSER (1.035 -> 1.027). Splitting is necessary
+/// for the defect, not sufficient — a fix that treats every split as a
+/// bug would move a pair that is fine.
+#[test]
+fn every_plain_nearest_inversion_straddles_the_cube_ramp_boundary() {
+    use abstracttui::theme::contrast::contrast_ratio;
+    /// The grey ramp is 232..=255; everything below is the colour cube.
+    fn on_ramp(entry: u8) -> bool {
+        entry >= 232
+    }
+
+    for (name, _, _, na, nb) in plain_nearest_inversions() {
+        assert_ne!(
+            on_ramp(na),
+            on_ramp(nb),
+            "{name}: an inversion that does NOT straddle the cube/ramp \
+             boundary ({na}/{nb}). The mechanism this row is built on is \
+             that near-identical colours quantised against DIFFERENT \
+             lattices come out disagreeing — a same-lattice inversion \
+             would mean there is a second, unexamined cause."
+        );
+    }
+
+    // And the converse half, which is the one that keeps the claim
+    // honest: no pair that stays on one lattice inverts at all.
+    let mut same_lattice_inversions = Vec::new();
+    let mut splits = 0;
+    for t in themes() {
+        let g = t.tokens.grounds();
+        for i in 0..5 {
+            for j in (i + 1)..5 {
+                let true_c = contrast_ratio(g[i].1, g[j].1);
+                if true_c >= 1.05 {
+                    continue;
+                }
+                let (na, nb) = (nearest_xterm256(g[i].1), nearest_xterm256(g[j].1));
+                let q_c = contrast_ratio(XTERM_256[na as usize], XTERM_256[nb as usize]);
+                if on_ramp(na) != on_ramp(nb) {
+                    splits += 1;
+                } else if q_c > true_c * 1.05 {
+                    same_lattice_inversions.push(format!(
+                        "{} {}/{}",
+                        t.id,
+                        g[i].0.name(),
+                        g[j].0.name()
+                    ));
+                }
+            }
+        }
+    }
+    assert!(
+        same_lattice_inversions.is_empty(),
+        "a near-identical pair inverted while staying on ONE lattice: \
+         {same_lattice_inversions:?}. The cube/ramp boundary is no longer \
+         the whole story and the row needs re-measuring."
+    );
+    assert_eq!(
+        splits, 5,
+        "five near-identical ground pairs straddle the boundary and four of \
+         them invert. Straddling is NECESSARY but not SUFFICIENT — the fifth \
+         (one-light selection_bg/shadow_ground) comes out closer, so a fix \
+         that treats every split as a defect would move a pair that is fine."
+    );
+}
+
+// ---------------------------------------------------------------------
+// And the fix that was RULED AVAILABLE and turns out not to exist.
+// claim:tui-nearest-inverts-across-the-cube-ramp-boundary
+//
+// delegate ruled at dm:delegate--tui#13 that a same-lattice snap is mine
+// to make: it collapses nothing (both grounds keep distinct entries — it
+// changes WHICH entry, not HOW MANY), so the commons#259 precedent
+// against forcing a merge does not reach it. The mechanism was left open
+// — "same-lattice snapping is one candidate; if measuring turns up a
+// better one that also keys on the outcome, take it".
+//
+// It was built, measured, and REMOVED. The tests below are what is left,
+// and they are the useful part: every candidate snap for every one of the
+// four pairs, with the reason each one fails. Nothing in `src/` changed.
+//
+// ## Why it fails, and the reason generalises past this palette
+//
+// **A ground is in FOUR relations, not one.** The ruling framed the
+// defect per PAIR, which is how it is measured and how it reads. But
+// moving a ground to satisfy one of its relations moves it against the
+// other three, and the four grounds it is not being snapped to do not get
+// a vote. `gruvbox` is the whole argument in one theme: the only snap
+// that cures `surface_raised`/`selection_bg` (1.238 -> 1.053) makes
+// `bg`/`surface_raised` 1.819 -> 2.370, `surface`/`surface_raised`
+// 1.367 -> 1.781 and `surface_raised`/`shadow_ground` 2.048 -> 2.669.
+// The theme's total ground-rendering error goes from 1.392 to 2.168. It
+// fixes one relation by breaking three, each by more than it fixed.
+//
+// That is the same shape as the error this row already made once and the
+// parent row made before it: a remedy that is correct about the thing it
+// looks at and wrong about the thing it does not. The guard against it is
+// the same too — measure the OUTCOME over the whole artifact, not the
+// mechanism over the case that motivated it.
+// ---------------------------------------------------------------------
+
+/// How wrong the whole theme's ground rendering is: every ground pair's
+/// rendered contrast against what the author drew, as an error >= 0.
+///
+/// A single number per assignment so a candidate snap can be judged on
+/// the set it lands in rather than on the pair that motivated it. Summed
+/// rather than maxed on purpose — a snap that halves the worst pair while
+/// worsening three others is not an improvement, and a max would call it
+/// one.
+fn ground_render_error(colors: &[Rgba; 5], idx: &[u8; 5]) -> f32 {
+    use abstracttui::theme::contrast::contrast_ratio;
+    let mut total = 0.0;
+    for i in 0..5 {
+        for j in (i + 1)..5 {
+            let authored = contrast_ratio(colors[i], colors[j]);
+            let rendered = contrast_ratio(XTERM_256[idx[i] as usize], XTERM_256[idx[j] as usize]);
+            total += (rendered / authored).max(authored / rendered) - 1.0;
+        }
+    }
+    total
+}
+
+/// Nearest entry to `c` on ONE of the two xterm-256 lattices — the cube
+/// (16..=231) or the grey ramp (232..=255). What a snap would pick.
+fn nearest_on_lattice(c: Rgba, ramp: bool) -> u8 {
+    let range = if ramp { 232..256 } else { 16..232 };
+    range
+        .map(|i| {
+            let e = XTERM_256[i];
+            let d = |x: u8, y: u8| {
+                let d = x as i32 - y as i32;
+                d * d
+            };
+            (d(c.r, e.r) + d(c.g, e.g) + d(c.b, e.b), i as u8)
+        })
+        .min()
+        .expect("both lattices are non-empty")
+        .1
+}
+
+/// Why one candidate snap was rejected, in the order the rules are
+/// applied. `Viable` means every rule passed — the case this row would
+/// have shipped.
+#[derive(Debug, PartialEq, Eq)]
+enum SnapVerdict {
+    /// The snapped entry IS the other ground's entry: a forced merge, and
+    /// that is the act `commons#259` refused. Not reachable by argument —
+    /// the palette simply has one entry for both colours on that lattice.
+    WouldMerge,
+    /// The pair still renders further apart than authored. A colour is
+    /// never taken off its own nearest entry for nothing.
+    DoesNotCure,
+    /// Right distance, wrong direction: the snapped entry inverts the
+    /// authored light/dark ordering, which is elevation upside down. The
+    /// same guarantee displacement already gives.
+    FlipsOrdering,
+    /// Cures the pair and wrecks the set — the theme's total ground
+    /// rendering error goes UP.
+    WorsensTheSet,
+    Viable,
+}
+
+/// Every same-lattice snap available for every near-identical ground pair
+/// the plain lookup inverts: `(pair, mover, from, to, verdict)`.
+///
+/// Both directions for each pair, not just the one an implementation
+/// would choose. Which ground "should" move is a policy question, and
+/// pinning only the preferred candidate would leave the other one able to
+/// become viable without anything going red.
+fn lattice_snap_candidates() -> Vec<(String, &'static str, u8, u8, SnapVerdict)> {
+    use abstracttui::theme::contrast::contrast_ratio;
+    let mut out = Vec::new();
+    for t in themes() {
+        let g = t.tokens.grounds();
+        let colors: [Rgba; 5] = core::array::from_fn(|k| g[k].1);
+        let natural: [u8; 5] = core::array::from_fn(|k| nearest_xterm256(colors[k]));
+        for i in 0..5 {
+            for j in (i + 1)..5 {
+                let authored = contrast_ratio(colors[i], colors[j]);
+                if authored >= 1.05 {
+                    continue;
+                }
+                let rendered = contrast_ratio(
+                    XTERM_256[natural[i] as usize],
+                    XTERM_256[natural[j] as usize],
+                );
+                if rendered <= authored * 1.05 {
+                    continue;
+                }
+                let base = ground_render_error(&colors, &natural);
+                for (m, a) in [(i, j), (j, i)] {
+                    let snapped = nearest_on_lattice(colors[m], natural[a] >= 232);
+                    let mut candidate = natural;
+                    candidate[m] = snapped;
+                    let paired =
+                        contrast_ratio(XTERM_256[snapped as usize], XTERM_256[natural[a] as usize]);
+                    let luma = |c: Rgba| 2126 * c.r as u32 + 7152 * c.g as u32 + 722 * c.b as u32;
+                    let verdict = if snapped == natural[a] {
+                        SnapVerdict::WouldMerge
+                    } else if paired > authored * 1.05 {
+                        SnapVerdict::DoesNotCure
+                    } else if (luma(colors[m]) >= luma(colors[a]))
+                        != (luma(XTERM_256[snapped as usize])
+                            >= luma(XTERM_256[natural[a] as usize]))
+                    {
+                        SnapVerdict::FlipsOrdering
+                    } else if ground_render_error(&colors, &candidate) >= base {
+                        SnapVerdict::WorsensTheSet
+                    } else {
+                        SnapVerdict::Viable
+                    };
+                    out.push((
+                        format!("{} {}/{}", t.id, g[i].0.name(), g[j].0.name()),
+                        g[m].0.name(),
+                        natural[m],
+                        snapped,
+                        verdict,
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// **The ruled fix does not exist, and here is every candidate.**
+///
+/// Eight candidate snaps — both directions of all four inverted pairs —
+/// and not one is viable. Two are barred by the ruling's own rule (the
+/// palette has a single entry for both colours on the shared lattice, so
+/// the "snap" is the forced merge `commons#259` refused). Three do not
+/// cure the pair they were built for. Two flip the authored light/dark
+/// ordering. One — `gruvbox` — cures its pair and makes three other
+/// relations in the same theme worse.
+///
+/// Pinned per candidate rather than as a count: a change that turns any
+/// one of these viable is a change this row should reopen for, and a
+/// count would hide which one moved.
+#[test]
+fn no_same_lattice_snap_repairs_a_cube_ramp_inversion() {
+    let found = lattice_snap_candidates();
+    let rendered: Vec<String> = found
+        .iter()
+        .map(|(pair, mover, from, to, verdict)| format!("{pair}: {mover} {from}->{to} {verdict:?}"))
+        .collect();
+    let expected = vec![
+        // The only candidate that cures its pair without merging or
+        // flipping — and it costs three other relations to do it.
+        "gruvbox surface_raised/selection_bg: surface_raised 239->59 WorsensTheSet",
+        "gruvbox surface_raised/selection_bg: selection_bg 58->238 DoesNotCure",
+        // Both of these pairs are so close that the shared lattice holds
+        // ONE entry for the two of them. There is no non-merging snap to
+        // reject on other grounds — the palette cannot represent the
+        // author's near-identity as two distinct entries at all.
+        "rose-pine-dawn selection_bg/shadow_ground: selection_bg 188->253 DoesNotCure",
+        "rose-pine-dawn selection_bg/shadow_ground: shadow_ground 252->188 WouldMerge",
+        "abstract-paper selection_bg/shadow_ground: selection_bg 181->251 WouldMerge",
+        "abstract-paper selection_bg/shadow_ground: shadow_ground 251->187 DoesNotCure",
+        "abstract-dawn selection_bg/shadow_ground: selection_bg 152->252 DoesNotCure",
+        "abstract-dawn selection_bg/shadow_ground: shadow_ground 251->188 FlipsOrdering",
+    ];
+    assert_eq!(
+        rendered, expected,
+        "the same-lattice snap candidates moved. Each line is a candidate \
+         and the FIRST rule it broke — a new line, a missing line, or a \
+         changed verdict all mean the refutation in \
+         claim:tui-nearest-inverts-across-the-cube-ramp-boundary needs \
+         re-measuring before anything is built on it."
+    );
+    let viable: Vec<&String> = rendered
+        .iter()
+        .zip(&found)
+        .filter(|(_, (_, _, _, _, v))| *v == SnapVerdict::Viable)
+        .map(|(line, _)| line)
+        .collect();
+    assert!(
+        viable.is_empty(),
+        "a same-lattice snap became viable: {viable:?}. That is the fix \
+         delegate ruled available at dm:delegate--tui#13 and measurement \
+         refuted — if one exists now, BUILD IT."
+    );
+}
+
+/// **The one candidate that cures its pair, priced.**
+///
+/// `gruvbox` is the case the per-pair framing gets wrong, so it is pinned
+/// with numbers rather than described. Snapping `surface_raised` off the
+/// grey ramp (239) onto the cube (59) beside `selection_bg` fixes the
+/// invented edge between those two and breaks the three other relations
+/// `surface_raised` is in.
+///
+/// This is the whole reason the row closes refuted instead of shipped: a
+/// ground is in four relations and a per-pair remedy only ever looks at
+/// one. Separate from the candidate table above because that table pins
+/// the VERDICT and this pins the PRICE — a future change could keep the
+/// verdict while moving the cost by an order of magnitude.
+#[test]
+fn the_only_curing_snap_breaks_three_relations_to_fix_one() {
+    use abstracttui::theme::contrast::contrast_ratio;
+    let t = themes()
+        .iter()
+        .find(|t| t.id == "gruvbox")
+        .expect("gruvbox ships");
+    let g = t.tokens.grounds();
+    let colors: [Rgba; 5] = core::array::from_fn(|k| g[k].1);
+    let natural: [u8; 5] = core::array::from_fn(|k| nearest_xterm256(colors[k]));
+    let (raised, selection) = (2, 3);
+    assert_eq!(
+        (g[raised].0.name(), g[selection].0.name()),
+        ("surface_raised", "selection_bg"),
+        "the ground order moved; the indices below name the wrong pair"
+    );
+    let mut snapped = natural;
+    snapped[raised] = nearest_on_lattice(colors[raised], false);
+    assert_eq!(
+        (natural[raised], snapped[raised]),
+        (239, 59),
+        "the snap no longer moves surface_raised from the ramp to cube 59"
+    );
+
+    let pair = |idx: &[u8; 5], a: usize, b: usize| {
+        contrast_ratio(XTERM_256[idx[a] as usize], XTERM_256[idx[b] as usize])
+    };
+    let authored = contrast_ratio(colors[raised], colors[selection]);
+    // What it buys: the invented edge is gone.
+    assert!(
+        (1.23..1.25).contains(&pair(&natural, raised, selection))
+            && pair(&snapped, raised, selection) < authored * 1.05,
+        "the snap no longer cures the pair it was built for: {:.3} -> {:.3} \
+         against an authored {authored:.3}",
+        pair(&natural, raised, selection),
+        pair(&snapped, raised, selection)
+    );
+    // What it costs: every other relation surface_raised is in.
+    for (other, was, now) in [(0, 1.819, 2.370), (1, 1.367, 1.781), (4, 2.048, 2.669)] {
+        let before = pair(&natural, raised.min(other), raised.max(other));
+        let after = pair(&snapped, raised.min(other), raised.max(other));
+        assert!(
+            (before - was).abs() < 0.01 && (after - now).abs() < 0.01,
+            "surface_raised/{} moved: {before:.3} -> {after:.3}, pinned {was} -> {now}",
+            g[other].0.name()
+        );
+        let authored_other = contrast_ratio(colors[raised], colors[other]);
+        assert!(
+            (after / authored_other) > (before / authored_other),
+            "surface_raised/{} no longer gets worse under the snap — the \
+             refutation rests on it doing so",
+            g[other].0.name()
+        );
+    }
+    assert!(
+        ground_render_error(&colors, &snapped) > ground_render_error(&colors, &natural),
+        "the snap stopped making gruvbox worse overall ({:.3} -> {:.3}); \
+         the fix may be back on the table",
+        ground_render_error(&colors, &natural),
+        ground_render_error(&colors, &snapped)
     );
 }

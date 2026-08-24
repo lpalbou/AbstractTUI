@@ -351,3 +351,127 @@ fn builder_writing_open_is_a_loud_bug() {
     open.set(Some("a".into()));
     let _ = settle(&mut tree, size);
 }
+
+/// Build a dock whose two drawers declare different widths, over a
+/// content pane narrow enough not to clamp either (see the sibling
+/// guard for what happens when it does).
+fn width_dock(size: Size) -> (crate::reactive::RootScope, UiTree, Signal<Option<String>>) {
+    let mut open_probe = None;
+    let (root, tree) = mount_widget(size, |cx| {
+        let t = default_theme().tokens;
+        let open = cx.signal(None);
+        open_probe = Some(open);
+        DrawerDock::new(crate::ui::text("x"))
+            .drawer("files", "Files", |_cx| crate::ui::text("file list body"))
+            .drawer("board", "Board", |_cx| crate::ui::text("leaderboard body"))
+            .drawer_width(28) // the board only
+            .open(open)
+            .panel_width(12) // everything else
+            .element(cx, &t)
+            .build()
+    });
+    (root, tree, open_probe.unwrap())
+}
+
+/// The panel's painted left seam, which is where the panel column
+/// starts. Measured off the SCREEN rather than off the field: the value
+/// passes through a `dyn_view_scoped` rebuild and a `Dimension::Cells`
+/// before it means anything, and the field being set proves none of it.
+fn seam_x(tree: &mut UiTree, size: Size) -> i32 {
+    render(tree, size)
+        .row_text(2)
+        .chars()
+        .position(|c| c == '\u{2502}')
+        .map(|x| x as i32)
+        .expect("an open panel paints a left seam")
+}
+
+/// **A per-drawer width reaches the solved panel, and only that
+/// drawer's.** One wide drawer beside a narrow sibling, in one dock.
+///
+/// Requested by @agora-tui: a leaderboard drawer needs five reputation
+/// columns plus rank, name and score, beside Members and Files panels
+/// that are fine narrow. `panel_width` is one value for the whole dock
+/// and the builder runs once, so it could not express that.
+#[test]
+fn a_per_drawer_width_overrides_the_dock_width_for_that_drawer_only() {
+    let size = Size::new(W, H);
+    let (_root, mut tree, open) = width_dock(size);
+
+    open.set(Some("files".into()));
+    let _ = settle(&mut tree, size);
+    let narrow = seam_x(&mut tree, size);
+
+    open.set(Some("board".into()));
+    let _ = settle(&mut tree, size);
+    let wide = seam_x(&mut tree, size);
+
+    assert_eq!(
+        narrow - wide,
+        28 - 12,
+        "the board declared 28 against the dock's 12, so their seams must differ by \
+         exactly 16 cells; they sit at {wide} (board) and {narrow} (files)"
+    );
+
+    // A per-drawer override that leaks into its siblings is worse than
+    // no override at all.
+    open.set(Some("files".into()));
+    let _ = settle(&mut tree, size);
+    assert_eq!(
+        seam_x(&mut tree, size),
+        narrow,
+        "re-opening the narrow drawer after the wide one kept the wide width"
+    );
+}
+
+/// **A declared panel width is a REQUEST, not a guarantee — the content
+/// pane clamps it.** True of `panel_width` since it shipped, and
+/// `drawer_width` inherits it exactly; pinned here because it was
+/// discovered by a guard rather than documented, and because a consumer
+/// sizing a panel to fit N columns will meet it in the field.
+///
+/// At 40 columns with a 17-cell content pane, a drawer asking for 28
+/// gets 23. The content pane will not shrink below the text it holds,
+/// so the panel takes what is left. Shrink the content and the SAME
+/// declaration is honoured exactly.
+#[test]
+fn a_declared_panel_width_is_clamped_by_what_the_content_pane_will_not_give_up() {
+    let size = Size::new(W, H);
+    let panel_for = |content: &'static str, declared: i32| {
+        let mut open_probe = None;
+        let (root, mut tree) = mount_widget(size, |cx| {
+            let t = default_theme().tokens;
+            let open = cx.signal(None);
+            open_probe = Some(open);
+            DrawerDock::new(crate::ui::text(content))
+                .drawer("files", "Files", |_cx| crate::ui::text("body"))
+                .open(open)
+                .panel_width(declared)
+                .element(cx, &t)
+                .build()
+        });
+        let open = open_probe.unwrap();
+        open.set(Some("files".into()));
+        let _ = settle(&mut tree, size);
+        let x = seam_x(&mut tree, size);
+        drop(root);
+        W - x
+    };
+
+    // Room to spare: the declaration is honoured to the cell. The +3 is
+    // the rail, which sits inside the measured span.
+    assert_eq!(
+        panel_for("x", 28),
+        28 + 3,
+        "with a one-cell content pane there is nothing to clamp against"
+    );
+    // The same declaration, against a content pane that needs 17 cells.
+    assert_eq!(
+        panel_for("main content pane", 28),
+        23 + 3,
+        "a 17-cell content pane must hold its width and clamp the panel to 23"
+    );
+    // And a modest request is unaffected either way — the clamp is a
+    // ceiling, not a scaling.
+    assert_eq!(panel_for("main content pane", 12), 12 + 3);
+}

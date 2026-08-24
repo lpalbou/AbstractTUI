@@ -40,6 +40,7 @@ pub mod page_host;
 pub mod progress;
 pub mod radio;
 pub mod richtext;
+pub mod row_select;
 pub mod scroll;
 /// The shared scroll-strip seam (geometry, hit test, inverse,
 /// paint) behind `Scroll`, `List`, `Table` and `FilePicker`.
@@ -73,6 +74,7 @@ pub use markdown::{FenceBlock, MarkdownView, MdRuleInk, MdRuleStyle, MdRuleWidth
 pub use progress::Progress;
 pub use radio::RadioGroup;
 pub use richtext::RichTextView;
+pub use row_select::RowSelect;
 pub use scroll::Scroll;
 pub use separator::Separator;
 pub use spinner::{Spinner, SpinnerKind};
@@ -186,7 +188,7 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 47] = [
+    const SOURCES: [(&str, &str); 48] = [
         ("mod.rs", include_str!("mod.rs")),
         ("animated_image.rs", include_str!("animated_image.rs")),
         ("audio_scope.rs", include_str!("audio_scope.rs")),
@@ -237,6 +239,7 @@ mod lint_tests {
         ("progress.rs", include_str!("progress.rs")),
         ("radio.rs", include_str!("radio.rs")),
         ("richtext.rs", include_str!("richtext.rs")),
+        ("row_select.rs", include_str!("row_select.rs")),
         ("scroll.rs", include_str!("scroll.rs")),
         // The shared scroll-strip seam: private shipped sibling,
         // listed by hand like feed_typeset.rs.

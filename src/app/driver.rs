@@ -122,6 +122,15 @@ pub struct RunConfig {
     /// It upgrades the mouse mode whether `enter` is derived or supplied,
     /// so turning hover ink on never costs you the kitty-keyboard
     /// auto-detection that a hand-built `EnterOptions` would.
+    ///
+    /// **You do not need it for a tooltip.** This flag is a WANT — ink
+    /// that is nicer to have; a widget that cannot function without
+    /// motion says so itself through
+    /// [`Overlays::require_pointer_motion`](super::Overlays::require_pointer_motion),
+    /// and mounting one arms 1003 with this left `false`. The
+    /// distinction is worth keeping: leaving the tip's need to an app
+    /// flag is what made `Tooltip` open on click and stay shut on
+    /// hover.
     pub hover_ink: bool,
     /// Fall back to the host clipboard (`pbcopy` / `wl-copy` / `xclip`)
     /// when the terminal does not advertise OSC 52.
@@ -215,10 +224,21 @@ pub struct Driver {
     /// is a ground it cannot keep distinct (`set_extra_grounds`).
     extra_grounds: Vec<crate::base::Rgba>,
     /// What the presenter's current palette assignment was built FROM:
-    /// the colors and the depth. The assignment is a pure function of
-    /// these, so re-deriving it is only necessary when they change —
-    /// which is what keeps `quantize_set_256` out of the frame path.
-    assignment_key: Option<(Vec<crate::base::Rgba>, ColorDepth)>,
+    /// the colors, the depth, and the live theme's separation intent.
+    /// The assignment is a pure function of these three, so re-deriving
+    /// it is only necessary when they change — which is what keeps
+    /// `quantize_set_256` out of the frame path.
+    ///
+    /// The intent is in the key rather than assumed constant because it
+    /// is NOT a function of the colors: two themes can carry identical
+    /// grounds and different declarations, and keying on colors alone
+    /// would serve the first one's assignment to the second.
+    #[allow(clippy::type_complexity)]
+    assignment_key: Option<(
+        Vec<crate::base::Rgba>,
+        ColorDepth,
+        Vec<(usize, usize, crate::render::color::PairIntent)>,
+    )>,
     /// All compositor layers (root at id 0 + app overlays) live in the
     /// shared overlay store; the driver borrows them per phase.
     pub(super) overlays: Overlays,
@@ -320,11 +340,14 @@ impl Driver {
             },
             ..EnterOptions::default()
         });
-        // Hover ink is the one reason to pay for mode 1003, so it is the
-        // one thing that arms it — applied after the override above so an
-        // app can opt in without hand-building `EnterOptions` (and so
-        // without forfeiting kitty auto-detection).
-        if cfg.hover_ink {
+        // Two ways to arm mode 1003, applied after the override above so
+        // either route keeps kitty auto-detection: the app ASKING for
+        // hover ink, and a mounted widget DECLARING it cannot work
+        // without motion (`Overlays::require_pointer_motion` — the
+        // tooltip's case, where the alternative was a tip that only
+        // opened on click). The tree is already mounted here: `App::run`
+        // is called after `App::mount`, so the declaration has landed.
+        if cfg.hover_ink || app.overlays().pointer_motion_required() {
             enter.mouse = MouseMode::AnyMotion;
         }
         term.enter(&enter)?;
@@ -627,7 +650,7 @@ impl Driver {
         // Same lockstep, same reason, for the 256-color ground
         // assignment — but this one is DERIVED rather than copied, so it
         // is cached on its inputs. See `sync_palette_assignment`.
-        self.sync_palette_assignment(&theme.tokens);
+        self.sync_palette_assignment(theme);
 
         // ---- phase L: layout (folds geometry damage into the ui set) ---
         app.tree().layout();
@@ -1145,38 +1168,66 @@ impl Driver {
     ///
     /// Keyed on the ground COLORS rather than a theme id on purpose: a
     /// consumer palette can change tokens without changing the id, and
-    /// the colors are what the assignment is actually a function of.
+    /// the colors are what the assignment is mostly a function of. The
+    /// theme's separation intent is the part that is NOT derivable from
+    /// them, so it rides the key as well.
+    ///
+    /// **This is the door the theme's `ground_intent` comes through.**
+    /// An author declares which of their grounds read as one surface
+    /// (`Theme::ground_intent`, in tokens) and it is resolved to indices
+    /// here, against the same `grounds()` order the colors are collected
+    /// in. Every built-in declares nothing, so this changes no output
+    /// until an app opts in.
+    ///
+    /// The intent covers the THEME's grounds only. Consumer grounds from
+    /// `set_extra_grounds` are appended after them and are never named
+    /// by it — a theme has no standing to say an app's panel fill reads
+    /// as one surface with anything, and it has never seen that colour.
     ///
     /// Only `Xterm256` gets an assignment. Truecolor has no defect to
     /// fix, and the 16 system registers are user-themable — no
     /// build-time decision can know what index 4 renders as — so both
     /// install the empty assignment, which is byte-for-byte the plain
     /// nearest path.
-    fn sync_palette_assignment(&mut self, tokens: &crate::theme::TokenSet) {
+    fn sync_palette_assignment(&mut self, theme: &crate::theme::Theme) {
         let depth = self.present_caps.color;
-        let grounds = tokens.grounds();
+        let grounds = theme.tokens.grounds();
         let inputs = || {
             grounds
                 .iter()
                 .map(|(_, c)| *c)
                 .chain(self.extra_grounds.iter().copied())
         };
-        if let Some((cached, cached_depth)) = &self.assignment_key {
+        // `register` refuses a declaration naming a non-ground, and
+        // `every_built_in_theme_is_silent_about_ground_intent` covers the
+        // other producer, so an unresolvable one here means a Theme was
+        // constructed past both — a bug worth hearing about rather than
+        // a pair to drop on the floor.
+        let pairs = crate::theme::TokenSet::resolve_ground_intent(theme.ground_intent)
+            .expect("Theme::ground_intent names only opaque grounds (register enforces it)");
+        if let Some((cached, cached_depth, cached_pairs)) = &self.assignment_key {
             let cached: &[crate::base::Rgba] = cached;
-            if *cached_depth == depth && cached.iter().copied().eq(inputs()) {
+            if *cached_depth == depth
+                && *cached_pairs == pairs
+                && cached.iter().copied().eq(inputs())
+            {
                 return;
             }
         }
         let colors: Vec<crate::base::Rgba> = inputs().collect();
         let assignment: Vec<(crate::base::Rgba, u8)> = if depth == ColorDepth::Xterm256 {
             let mut idx = vec![0u8; colors.len()];
-            crate::render::color::quantize_set_256_into(&colors, &mut idx);
+            crate::render::color::quantize_set_256_into_with(
+                &colors,
+                crate::render::color::GroundIntent::new(&pairs),
+                &mut idx,
+            );
             colors.iter().copied().zip(idx).collect()
         } else {
             Vec::new()
         };
         self.presenter.set_palette_assignment(&assignment);
-        self.assignment_key = Some((colors, depth));
+        self.assignment_key = Some((colors, depth, pairs));
     }
 
     /// Tier-2 verb, immediate form — for embedders driving their own

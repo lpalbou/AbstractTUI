@@ -336,6 +336,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
 - **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, wheel scrolling (the window moves, the caret stays; any edit re-attaches), and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
 - **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`, bindable `selection`/`offset_y`, hover ink. Removable rows in one call (`on_remove`), or the general trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), timed double-click on the body (`on_row_double_click`), and non-selecting right-click/Shift+F10 row context requests (`on_context_menu`) that pair with `ContextMenu`. Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
+- **RowSelect** — `List`'s keyboard over rows the engine does NOT render: wrap a `Scroll` of arbitrary (multi-line) `Element`s and it gains arrows, Home/End, Page keys, click-to-select, Enter/Space activation, ensure-visible by CONTENT rows, and sticky selection by key. The rows stay yours; the selection core is literally `List`'s (see [its own section](#rowselect--keyboard-selection-over-rows-you-render)).
 - **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful. A content-sized feed carries an intrinsic measure, so `Scroll::new(Feed::new(&state).view(cx))` scrolls the true extent from the first frame.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, hover ink, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
@@ -647,6 +648,66 @@ List::new(names)
 
 See `cargo run --example presence_board` and docs/faq.md § "scrollable
 rich list".
+
+### RowSelect — keyboard selection over rows you render
+
+`List` renders its own rows and they are **one line each**: an item's
+extra rows reserve SPACE, and wrapped multi-row item CONTENT is not
+planned. A row that is genuinely two lines — a name above a mission, a
+title above a path — has to be your own tree in a `Scroll`, and that
+used to cost the keyboard.
+
+[`RowSelect`](crate::widgets::RowSelect) is the keyboard without the
+rendering. It WRAPS your content and drives the same selection core
+`List` drives, so the two cannot drift apart.
+
+```rust,ignore
+let sel = cx.signal(0usize);          // your row builder reads this
+let sel_key = cx.signal(String::new());
+let offset = cx.signal(0i32);         // SHARED with the Scroll
+
+let scroll = Scroll::new(my_two_line_rows(members.clone(), sel))
+    .offset_y(offset)
+    .view(cx);
+
+RowSelect::new(members.iter().map(|m| m.id))  // one stable key per row
+    .row_heights(|_| 2)                       // rows in CELL ROWS
+    .selection(sel)
+    .selection_key(sel_key)                   // sticky across mutations
+    .offset_y(offset)
+    .on_activate(move |i| open(i))
+    .wrap(cx, scroll)
+    .build()
+```
+
+**What it assumes.** Row `i` occupies content rows
+`[prefix[i], prefix[i+1])` from `row_heights` (default 1) — what a
+column of fixed-height children inside a `Scroll` lays out. Both
+ensure-visible and click hit-testing key off it, so declare the height
+you actually gave the row.
+
+**What it takes over.** Navigation keys are claimed in the CAPTURE
+phase, before the content sees them, because the `Scroll` inside would
+otherwise scroll on the same arrows. Unmodified
+`Up`/`Down`/`PageUp`/`PageDown`/`Home`/`End`, and `Enter`/`Space` when
+`on_activate` is bound, belong to the RowSelect for its whole subtree —
+**do not put a text editor inside a selectable row.** Modified chords
+pass through untouched, and the wheel and the scrollbar stay the
+`Scroll`'s.
+
+**Tab stops.** The wrapper is focusable by default so the keyboard
+reaches it even when nothing inside can hold focus. A `Scroll` is also
+focusable, so the canonical composition has two tab stops that behave
+identically. `focusable(false)` gives you exactly one when the content
+already carries it.
+
+**Sticky selection is the half worth testing.** With `selection_key`
+bound, a rebuild re-finds the key's CURRENT index — a mutation that
+moves the selected row keeps that row selected. When the key is gone
+(the row was removed) the SLOT is held, clamped: the next row down.
+
+See `cargo run --example roster` — press `m` and watch the index move
+while the key does not.
 
 ### Table — selection vs activation
 
@@ -1250,9 +1311,10 @@ tree above the whole live stack with `DismissReason`-labeled endings:
 commit, Escape, outside press, anchor scope death, and viewport
 resize — a resize stales both the solved placement and the captured
 anchor, so an open popup closes rather than float at stale
-coordinates) and the TOOLTIP mode (`Tooltip::attach`, a hover-timed
-passive label) ship beside it on the same placement engine — the
-select family below rides the owned mode.
+coordinates) and the TOOLTIP mode (`Tooltip::attach`, a delay-timed
+passive tip opened by hover OR by the anchor taking focus) ship beside
+it on the same placement engine — the select family below rides the
+owned mode.
 
 ### Select / Combobox / MultiSelect — the choice controls
 
@@ -1651,9 +1713,34 @@ Around the core loop the module provides:
   PASSIVE layer (never focused — keys stay with the anchor's owner;
   `Completion` builds the caret-anchored dropdown on it), `Popup` is the
   OWNED modal tree above the whole live stack with `DismissReason`-named
-  endings (the Select family rides it), and `Tooltip` is the hover-timed
-  passive label. All three close with their opener's scope (see the
-  widgets section for the completion and select details).
+  endings (the Select family rides it), and `Tooltip` is the delay-timed
+  passive tip. A tip carries either content shape: `TipContent::Label` is
+  one line of plain text on a draw layer with no tree, and
+  `TipContent::card(size, build)` mounts a widget subtree, which is what a
+  rich preview card needs. A card larger than the space the viewport can
+  lend is marked rather than silently cut — a truncated card gets a
+  `… N more` row and an over-wide label ends in an ellipsis. A tip opens
+  on hover OR on its ANCHOR taking focus, closes on `MouseLeave`,
+  `FocusOut` or the anchor moving under it, and `Escape` dismisses an
+  open one — consumed only then, so an Escape with no tip up still
+  reaches the dialog behind it. **The keyboard trigger sits on the ROOT
+  of the view you pass and nowhere deeper**: focus transitions are
+  delivered target-only while hover is delivered per-node along the
+  hovered path, so `Tooltip::attach(cx, ov, "…", d, Button::new(…))`
+  gets Tab and an anchor that merely *contains* the focusable does not.
+  The engine will not make your anchor focusable for you — that would
+  insert a tab stop into your traversal order, which is the app's call.
+  **You do not have to arm mouse motion for a tip.** Hover is recomputed
+  only from mouse reports and the default session posture reports motion
+  only while a button is held, which used to make a tooltip open on
+  CLICK and stay shut on hover in any app that just called `App::run()`.
+  Mounting a `Tooltip` now declares the need
+  (`Overlays::require_pointer_motion`) and the driver arms mode 1003 for
+  it; `RunConfig::hover_ink` remains what it always was — an app opting
+  into hover INK it merely wants. An app with no motion-dependent widget
+  still pays nothing. `cargo run --example hovercard` walks all of it. All three
+  close with their opener's scope (see the widgets section for the
+  completion and select details).
 - **Hooks** — `use_theme(cx)` (the app-level theme signal), `use_viewport(cx)`
   (terminal size as a signal), `use_startup_notices(cx)` (labeled startup
   degradations as a reactive list), and `use_caps(cx)` — the driver's LIVE
@@ -2580,6 +2667,190 @@ assert_eq!(cells.len(), 8 * 4);
   kitty transmits once and re-places on move; iTerm2 and sixel honestly
   re-emit. Bytes reach the terminal through the presenter, and tmux
   passthrough wrapping applies automatically when capabilities prove it.
+
+## gfx::bigtext — text and icons several cells tall
+
+A terminal has one font size and no API makes a cell taller, so a bigger
+glyph means spending more cells and subdividing them with mosaic
+characters. `gfx::bigtext` rasterizes a string through the engine's
+embedded 8x16 font and hands the result to `gfx::mosaic`, so the four
+vocabularies and the capability ladder you already use for images apply
+unchanged — there is no second encoder and no extra probe.
+
+```rust
+use abstracttui::base::Rgba;
+use abstracttui::gfx::bigtext::{self, GlyphScale};
+use abstracttui::gfx::mosaic::MosaicMode;
+
+let ink = Rgba::rgb(220, 220, 220);
+// The colour you are drawing ONTO. Sextant and quadrant fit two colours
+// per cell, so a transparent ground is refused rather than rendered blank.
+let ground = Rgba::rgb(20, 20, 24);
+
+// Budget the space before you commit layout.
+let size = bigtext::measure("AGORA", GlyphScale::FLOOR).unwrap();
+assert_eq!((size.w, size.h), (24, 3));
+
+// `render` returns Err for a character the font has no glyph for.
+let grid = bigtext::render("AGORA", GlyphScale::FLOOR, MosaicMode::Sextant, ink, ground)
+    .expect("Latin capitals are in the embedded font");
+assert_eq!((grid.cols(), grid.rows()), (24, 3));
+// `grid.cell_patches(origin)` yields (point, char, fg, bg) — the same shape
+// the image path blits.
+```
+
+**Choosing a scale — ask, do not assume.** A `GlyphScale` is cells per
+character, and how small you can go depends on three things at once: WHAT
+you are drawing, WHICH mosaic symbols you are drawing it in, and how much
+margin you want. `bigtext::smallest_clear(mode, content)` answers all
+three by measuring; `bigtext::legibility(&style, content)` grades a scale
+you already have, and `bigtext::closest_pair(&style, content)` hands back
+the raw number (`0` = the renderer produced the same picture twice) so you
+can set your own bar.
+
+`Content` is the parameter that matters most: `Uppercase`, `Text`
+(lowercase and digits — the strict one) and `Icons` bottom out at
+*different* sizes. At 2x2 in braille the closest lowercase pair is 1
+subpixel apart and the closest icon pair is 5, which is more room than
+3x3 gives uppercase. There is no single floor, and the earlier
+`has_margin()` — a rectangle test against one constant, blind to both
+content and mode — has been removed. It refused 4x2 for having two rows
+while offering 3x3, which measures strictly worse: same uppercase margin,
+one row MORE, and two lowercase characters rendered identically.
+
+The named scales are conveniences over that measurement, and each says
+what it is measured to be:
+
+| constant | cells | measured |
+|---|---|---|
+| `GlyphScale::COMPACT` | 4x2 | cheapest that reads for mixed text; beats `TIGHT` for a row less |
+| `GlyphScale::COMPACT_WIDE` | 6x2 | clears on the numbers, **out of the aspect band** — kept as the worked example of why the band exists |
+| `GlyphScale::FLOOR` | 4x3 | clear for everything in braille; **marginal for mixed text in sextant** |
+| `GlyphScale::TIGHT` | 3x3 | uppercase only — mixed text collides |
+
+Read the `FLOOR` row twice: sextants are what this module tells you to
+prefer for text, and at 4x3 mixed text there measures 3 subpixels — under
+the bar. `smallest_clear(MosaicMode::Sextant, Content::Text)` returns
+`4x4`.
+
+**Two ways to be unreadable, and pairwise distance sees one of them.**
+`closest_pair` answers *are these two characters different*. It cannot
+answer *is either one still itself*, and at small sizes those come apart:
+`●` and `◆` at 6x2 braille measure 16 subpixels apart and both render as
+the same white bar.
+
+So there is a second measurement. `bigtext::fidelity_loss(c, &style)`
+compares what the renderer draws against the same glyph drawn at its
+NATURAL proportions in the same footprint — 0.0 is a perfect match — and
+`bigtext::least_faithful(&style, content)` reports the worst character of
+a class, measured inside the class's own run. Over `FIDELITY_MAX` (0.35),
+`legibility` returns `Legibility::Distorted` however far apart the pair
+measures. `Distorted` orders BELOW `Marginal`: a tight pair is one a
+careful reader can still resolve, a stretched glyph is not.
+
+The two failures want different fixes, which is why they are different
+verdicts — a collision wants MORE cells, a distortion wants the same
+cells rebalanced between columns and rows.
+
+**The aspect band, the other half.** The font's glyphs are 8x16 and a
+cell is about 1:2, so against the full glyph box a `cols x rows` scale is
+undistorted when `cols == rows` — and a square *footprint*
+(`cols == 2 * rows`, what `GlyphScale::square(rows)` gives you) is already
+a 2x horizontal stretch. `smallest_clear` searches only within
+`MAX_STRETCH` (2x) of that in either direction, and
+`GlyphScale::within_aspect_band()` is that test as an API.
+
+**Neither term is redundant, and the band is the coarser one.** It is
+referenced to the full 8x16 box, which the renderer never draws — the
+vertical crop below means the true undistorted point moves with the
+content. So the band passes `2x3` braille icons (a two-and-a-half times
+vertical stretch) and refuses `6x2` icons that measure inside
+`FIDELITY_MAX`. `legibility` applies both.
+
+The band governs what the search OFFERS, not what you may draw —
+`COMPACT_WIDE` is still constructible and still fine for uppercase, which
+has no round strokes to lose.
+
+Two consequences worth knowing:
+
+- **Widening the columns found scales that were never reachable.**
+  `MosaicMode::HalfBlock` now clears at 6x5 (uppercase), 7x5 (mixed text)
+  and 5x3 (icons). This page used to say no scale cleared for halfblock at
+  all; that was a fact about a search which stopped at six columns, stated
+  as a fact about the terminal — and for uppercase and icons it was not
+  even that, since both were already inside the old ceiling and nobody had
+  checked.
+- **Every `square(rows)` sits exactly on the band's wide edge**, since
+  that edge *is* `cols == 2 * rows`. `square(2)` is a 4x2 badge — the size
+  a LONE icon wants, and measured, not the size a ROW of them wants:
+  braille clears at 4x2 and sextant does not (0.36 loss, `Distorted`;
+  its answer is 3x2). A row of icons crops as one run, so the box is the
+  union of `⚠ ☑ → ●` and taller than any single icon, which makes four
+  columns a stretch. `square(1)` is in band and still a bad idea for a
+  row of icons — 2x1 puts the closest icon pair 1 subpixel apart in
+  braille and 0 in quadrant, which the band cannot help with, because
+  aspect and legibility are two different questions and this module now
+  asks both.
+
+**Choosing a vocabulary.** `mode` is yours to pass, and the trade differs
+from the image case. Braille has the most subpixels per cell but terminals
+draw its dots with gaps, so a letter reads as a constellation; sextants are
+solid ink at a lower density and usually read better as type. Prefer
+`MosaicMode::Sextant` for text where the font carries the Unicode 13
+sextants, and `MosaicMode::auto(&caps)` when you want the probed default.
+
+**Ground must be opaque for the two-colour fits.** `MosaicMode::Quadrant`
+and `MosaicMode::Sextant` pick their glyph by fitting ink and ground
+against each other, and a transparent subpixel does not vote — so a
+transparent ground leaves the fit nothing to weigh and every cell comes
+back blank. Pass the colour you are drawing *onto*.
+`render`/`render_with` return `BigTextError::TransparentGround` rather
+than a correctly-sized empty grid, because that grid looks like a working
+call. `Braille` and `HalfBlock` threshold by luminance and carry
+transparency fine.
+
+**Weight and sampling.** `BigTextStyle` carries the two remaining axes for
+callers that want them; `render`/`rasterize` take the defaults, and
+`render_with`/`rasterize_with` take the struct.
+
+```rust
+use abstracttui::gfx::bigtext::{BigTextStyle, GlyphWeight, Sampling};
+
+let style = BigTextStyle::new(GlyphScale::FLOOR, MosaicMode::Sextant)
+    .sampling(Sampling::Nearest)
+    .weight(GlyphWeight::Bold);
+```
+
+`Sampling::AreaAverage` (the default) weights each source pixel by how
+much of it the target covers, which keeps thin strokes and leaves letters
+further apart — at 4x3 the closest pair is 8 subpixels rather than 4.
+`Sampling::Nearest` takes one source pixel per target: harder edges, and
+that margin halves. Solid display type at three rows often looks better
+point sampled; a run of arbitrary text needs the margin.
+
+`GlyphWeight::Bold` is a synthetic weight — the crate carries one font, so
+this is the CSS `font-weight` axis rather than a family choice, and it
+dilates the glyphs one pixel the way a terminal has always faked a bold
+face. It raises pairwise distinctness at 3x3 and changes nothing from four
+rows up, but the gain is partly mechanical (dilation adds ink to every
+glyph) and at three rows it can close a counter. Treat it as a weight to
+choose, not an improvement to apply by default.
+
+**Limits, stated plainly.** The embedded font carries 164 glyphs — Latin
+letters, digits and common punctuation — and no accented forms, so `é`,
+`à` and `ñ` return `BigTextError::UnsupportedChar` naming the character
+rather than being dropped. The vertical crop that recovers ascender space
+is applied across the whole string so the baseline and relative letter
+heights survive; a string containing a descender therefore needs more rows
+than one without, and mixed case reads weaker than capitals at the same
+scale.
+
+`cargo run --example bigtext` walks a sixteen-step size sweep (width first
+at three rows, then height per width) and cycles symbols (`s`), weight
+(`w`) and sampling (`a`) from the keyboard, printing the closest letter
+pair under each
+combination — the only place these questions can actually be settled is
+your terminal in your font.
 
 ## three — 3D models
 

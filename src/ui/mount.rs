@@ -24,6 +24,103 @@ use crate::reactive::{request_frame, untrack, Scope};
 use super::tree::{Inst, InstPayload, TreeCore, ViewId};
 use super::view::{View, ViewNode};
 
+/// A two-slot measurement cache for ONE text leaf, keyed on available
+/// width alone.
+///
+/// # Why this exists
+///
+/// Measuring a text leaf is the engine's dominant frame cost — 91-97% of
+/// a solve at 400 rows — and the solver asks the same leaf the same
+/// question several times per frame. Not twice: **`1 + the number of
+/// `Auto`-sized ancestors above it**, because each one recurses through
+/// `intrinsic_size` to find its own basis. Every wrapper `Element`
+/// between a card and its text therefore re-measures the whole subtree
+/// beneath it. `text::measure` costs ~2 µs for a 22-column list row and
+/// ~6 µs at 48 columns, super-linearly, because `wrap` allocates a
+/// `Vec<String>` and a `String` per line.
+///
+/// # Why the key is width ALONE, with no content in it
+///
+/// The obvious key is `(content, width)`, and content in it would be
+/// pure cost. `TextView::content` is an owned `String` fixed at mount,
+/// and reactive text does not mutate it — it goes through `ViewNode::Dyn`,
+/// which disposes the node and mounts a fresh one with a fresh closure.
+/// **Content is a constant of the node**, so a per-node cache has
+/// already keyed on it by existing.
+///
+/// Width is normalised because `text::measure` folds every `avail.w <= 0`
+/// into one unconstrained query; storing them separately would keep N
+/// entries for one answer.
+///
+/// # Why TWO slots
+///
+/// One slot is 100% hit in a plain `column`, and only 33% in a `row`,
+/// `grid`, `wrap` or non-`Stretch` shape, where a leaf legitimately sees
+/// two widths per solve — its basis at the full content width, then the
+/// width actually distributed to it. One slot thrashes between them and
+/// gives back most of the win.
+///
+/// # Why this is NOT at the `node.measure` boundary
+///
+/// It would be a bug there. `MeasureFn`'s doc says callbacks must be
+/// pure and two in this crate are not: `widgets::feed`'s callback
+/// re-typesets shared state and calls `schedule_geometry_sync()`, which
+/// is what keeps the public `FeedState::total_rows` signal honest —
+/// caching it silently re-introduces the stale-extent bug that seam was
+/// added to fix — and `widgets::markdown`'s stats and reads image files
+/// on every call. A memo may only wrap a callback whose purity is a
+/// property of THIS code, which is why it lives inside the one closure
+/// this module owns.
+pub(crate) struct WidthMemo {
+    /// `(normalised width, answer)`. `i32::MIN` marks an empty slot: a
+    /// normalised width is never negative, so no real query collides
+    /// with it.
+    slots: std::cell::Cell<[(i32, Size); 2]>,
+    /// Which slot the next miss overwrites. Round-robin over two entries
+    /// — an LRU bit would cost more to maintain than it can save here.
+    next: std::cell::Cell<usize>,
+}
+
+impl WidthMemo {
+    const EMPTY: i32 = i32::MIN;
+
+    pub(crate) fn new() -> Self {
+        WidthMemo {
+            slots: std::cell::Cell::new([(Self::EMPTY, Size::ZERO); 2]),
+            next: std::cell::Cell::new(0),
+        }
+    }
+
+    /// Every `avail.w <= 0` is the same question to `text::measure`
+    /// (they all become `UNBOUNDED_WIDTH`), so they are the same key.
+    pub(crate) fn normalise(w: i32) -> i32 {
+        if w <= 0 {
+            0
+        } else {
+            w
+        }
+    }
+
+    /// The answer for `width`, computing it with `compute` only on a
+    /// miss.
+    pub(crate) fn get_or(&self, width: i32, compute: impl FnOnce(i32) -> Size) -> Size {
+        let key = Self::normalise(width);
+        let slots = self.slots.get();
+        for (k, v) in slots.iter() {
+            if *k == key {
+                return *v;
+            }
+        }
+        let value = compute(width);
+        let mut slots = slots;
+        let victim = self.next.get();
+        slots[victim] = (key, value);
+        self.slots.set(slots);
+        self.next.set((victim + 1) % slots.len());
+        value
+    }
+}
+
 /// Recursively mount a blueprint under `parent`. Borrows of the core are
 /// short bursts — never held across child mounts or reactive calls.
 pub(super) fn mount_view(
@@ -141,9 +238,19 @@ pub(super) fn mount_view(
             // wrapping), so a multi-line leaf reports its true block
             // size instead of one enormous line (the RT3-4 repro's inner
             // content collapsed a sibling through exactly that).
+            //
+            // Memoized per leaf on width: `measured` is fixed for this
+            // node's whole life (reactive text re-mounts through `Dyn`
+            // rather than mutating), and the solver asks the same
+            // question once per Auto-sized ancestor. See `WidthMemo`.
+            let memo = WidthMemo::new();
             let layout = c.layout.add_leaf(
                 t.style,
-                Box::new(move |avail: Size| crate::text::measure(&measured, avail)),
+                Box::new(move |avail: Size| {
+                    memo.get_or(avail.w, |w| {
+                        crate::text::measure(&measured, Size::new(w, avail.h))
+                    })
+                }),
             );
             let id = ViewId(c.insts.insert(Inst {
                 parent,

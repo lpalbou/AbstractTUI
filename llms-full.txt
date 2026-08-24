@@ -333,7 +333,7 @@ native library to install and no GPU requirement.
 Building against a working copy instead of a release — `[patch.crates-io]`
 pointing at a `path`, which is how a sibling app tracks the engine — has one
 rule that is not obvious: **pin the version requirement to the exact version
-the checkout carries** (`abstracttui = "0.5.0"`, not `"0.5"`). A patch whose
+the checkout carries** (`abstracttui = "0.6.0"`, not `"0.6"`). A patch whose
 version falls outside your requirement is not an error; cargo ignores it and
 resolves from crates.io instead, so you build against a published version
 while believing you build against your tree. The symptom and a check that
@@ -2317,9 +2317,10 @@ tree above the whole live stack with `DismissReason`-labeled endings:
 commit, Escape, outside press, anchor scope death, and viewport
 resize — a resize stales both the solved placement and the captured
 anchor, so an open popup closes rather than float at stale
-coordinates) and the TOOLTIP mode (`Tooltip::attach`, a hover-timed
-passive label) ship beside it on the same placement engine — the
-select family below rides the owned mode.
+coordinates) and the TOOLTIP mode (`Tooltip::attach`, a delay-timed
+passive tip opened by hover OR by the anchor taking focus) ship beside
+it on the same placement engine — the select family below rides the
+owned mode.
 
 ### Select / Combobox / MultiSelect — the choice controls
 
@@ -2718,9 +2719,34 @@ Around the core loop the module provides:
   PASSIVE layer (never focused — keys stay with the anchor's owner;
   `Completion` builds the caret-anchored dropdown on it), `Popup` is the
   OWNED modal tree above the whole live stack with `DismissReason`-named
-  endings (the Select family rides it), and `Tooltip` is the hover-timed
-  passive label. All three close with their opener's scope (see the
-  widgets section for the completion and select details).
+  endings (the Select family rides it), and `Tooltip` is the delay-timed
+  passive tip. A tip carries either content shape: `TipContent::Label` is
+  one line of plain text on a draw layer with no tree, and
+  `TipContent::card(size, build)` mounts a widget subtree, which is what a
+  rich preview card needs. A card larger than the space the viewport can
+  lend is marked rather than silently cut — a truncated card gets a
+  `… N more` row and an over-wide label ends in an ellipsis. A tip opens
+  on hover OR on its ANCHOR taking focus, closes on `MouseLeave`,
+  `FocusOut` or the anchor moving under it, and `Escape` dismisses an
+  open one — consumed only then, so an Escape with no tip up still
+  reaches the dialog behind it. **The keyboard trigger sits on the ROOT
+  of the view you pass and nowhere deeper**: focus transitions are
+  delivered target-only while hover is delivered per-node along the
+  hovered path, so `Tooltip::attach(cx, ov, "…", d, Button::new(…))`
+  gets Tab and an anchor that merely *contains* the focusable does not.
+  The engine will not make your anchor focusable for you — that would
+  insert a tab stop into your traversal order, which is the app's call.
+  **You do not have to arm mouse motion for a tip.** Hover is recomputed
+  only from mouse reports and the default session posture reports motion
+  only while a button is held, which used to make a tooltip open on
+  CLICK and stay shut on hover in any app that just called `App::run()`.
+  Mounting a `Tooltip` now declares the need
+  (`Overlays::require_pointer_motion`) and the driver arms mode 1003 for
+  it; `RunConfig::hover_ink` remains what it always was — an app opting
+  into hover INK it merely wants. An app with no motion-dependent widget
+  still pays nothing. `cargo run --example hovercard` walks all of it. All three
+  close with their opener's scope (see the widgets section for the
+  completion and select details).
 - **Hooks** — `use_theme(cx)` (the app-level theme signal), `use_viewport(cx)`
   (terminal size as a signal), `use_startup_notices(cx)` (labeled startup
   degradations as a reactive list), and `use_caps(cx)` — the driver's LIVE
@@ -3648,6 +3674,190 @@ assert_eq!(cells.len(), 8 * 4);
   re-emit. Bytes reach the terminal through the presenter, and tmux
   passthrough wrapping applies automatically when capabilities prove it.
 
+## gfx::bigtext — text and icons several cells tall
+
+A terminal has one font size and no API makes a cell taller, so a bigger
+glyph means spending more cells and subdividing them with mosaic
+characters. `gfx::bigtext` rasterizes a string through the engine's
+embedded 8x16 font and hands the result to `gfx::mosaic`, so the four
+vocabularies and the capability ladder you already use for images apply
+unchanged — there is no second encoder and no extra probe.
+
+```rust
+use abstracttui::base::Rgba;
+use abstracttui::gfx::bigtext::{self, GlyphScale};
+use abstracttui::gfx::mosaic::MosaicMode;
+
+let ink = Rgba::rgb(220, 220, 220);
+// The colour you are drawing ONTO. Sextant and quadrant fit two colours
+// per cell, so a transparent ground is refused rather than rendered blank.
+let ground = Rgba::rgb(20, 20, 24);
+
+// Budget the space before you commit layout.
+let size = bigtext::measure("AGORA", GlyphScale::FLOOR).unwrap();
+assert_eq!((size.w, size.h), (24, 3));
+
+// `render` returns Err for a character the font has no glyph for.
+let grid = bigtext::render("AGORA", GlyphScale::FLOOR, MosaicMode::Sextant, ink, ground)
+    .expect("Latin capitals are in the embedded font");
+assert_eq!((grid.cols(), grid.rows()), (24, 3));
+// `grid.cell_patches(origin)` yields (point, char, fg, bg) — the same shape
+// the image path blits.
+```
+
+**Choosing a scale — ask, do not assume.** A `GlyphScale` is cells per
+character, and how small you can go depends on three things at once: WHAT
+you are drawing, WHICH mosaic symbols you are drawing it in, and how much
+margin you want. `bigtext::smallest_clear(mode, content)` answers all
+three by measuring; `bigtext::legibility(&style, content)` grades a scale
+you already have, and `bigtext::closest_pair(&style, content)` hands back
+the raw number (`0` = the renderer produced the same picture twice) so you
+can set your own bar.
+
+`Content` is the parameter that matters most: `Uppercase`, `Text`
+(lowercase and digits — the strict one) and `Icons` bottom out at
+*different* sizes. At 2x2 in braille the closest lowercase pair is 1
+subpixel apart and the closest icon pair is 5, which is more room than
+3x3 gives uppercase. There is no single floor, and the earlier
+`has_margin()` — a rectangle test against one constant, blind to both
+content and mode — has been removed. It refused 4x2 for having two rows
+while offering 3x3, which measures strictly worse: same uppercase margin,
+one row MORE, and two lowercase characters rendered identically.
+
+The named scales are conveniences over that measurement, and each says
+what it is measured to be:
+
+| constant | cells | measured |
+|---|---|---|
+| `GlyphScale::COMPACT` | 4x2 | cheapest that reads for mixed text; beats `TIGHT` for a row less |
+| `GlyphScale::COMPACT_WIDE` | 6x2 | clears on the numbers, **out of the aspect band** — kept as the worked example of why the band exists |
+| `GlyphScale::FLOOR` | 4x3 | clear for everything in braille; **marginal for mixed text in sextant** |
+| `GlyphScale::TIGHT` | 3x3 | uppercase only — mixed text collides |
+
+Read the `FLOOR` row twice: sextants are what this module tells you to
+prefer for text, and at 4x3 mixed text there measures 3 subpixels — under
+the bar. `smallest_clear(MosaicMode::Sextant, Content::Text)` returns
+`4x4`.
+
+**Two ways to be unreadable, and pairwise distance sees one of them.**
+`closest_pair` answers *are these two characters different*. It cannot
+answer *is either one still itself*, and at small sizes those come apart:
+`●` and `◆` at 6x2 braille measure 16 subpixels apart and both render as
+the same white bar.
+
+So there is a second measurement. `bigtext::fidelity_loss(c, &style)`
+compares what the renderer draws against the same glyph drawn at its
+NATURAL proportions in the same footprint — 0.0 is a perfect match — and
+`bigtext::least_faithful(&style, content)` reports the worst character of
+a class, measured inside the class's own run. Over `FIDELITY_MAX` (0.35),
+`legibility` returns `Legibility::Distorted` however far apart the pair
+measures. `Distorted` orders BELOW `Marginal`: a tight pair is one a
+careful reader can still resolve, a stretched glyph is not.
+
+The two failures want different fixes, which is why they are different
+verdicts — a collision wants MORE cells, a distortion wants the same
+cells rebalanced between columns and rows.
+
+**The aspect band, the other half.** The font's glyphs are 8x16 and a
+cell is about 1:2, so against the full glyph box a `cols x rows` scale is
+undistorted when `cols == rows` — and a square *footprint*
+(`cols == 2 * rows`, what `GlyphScale::square(rows)` gives you) is already
+a 2x horizontal stretch. `smallest_clear` searches only within
+`MAX_STRETCH` (2x) of that in either direction, and
+`GlyphScale::within_aspect_band()` is that test as an API.
+
+**Neither term is redundant, and the band is the coarser one.** It is
+referenced to the full 8x16 box, which the renderer never draws — the
+vertical crop below means the true undistorted point moves with the
+content. So the band passes `2x3` braille icons (a two-and-a-half times
+vertical stretch) and refuses `6x2` icons that measure inside
+`FIDELITY_MAX`. `legibility` applies both.
+
+The band governs what the search OFFERS, not what you may draw —
+`COMPACT_WIDE` is still constructible and still fine for uppercase, which
+has no round strokes to lose.
+
+Two consequences worth knowing:
+
+- **Widening the columns found scales that were never reachable.**
+  `MosaicMode::HalfBlock` now clears at 6x5 (uppercase), 7x5 (mixed text)
+  and 5x3 (icons). This page used to say no scale cleared for halfblock at
+  all; that was a fact about a search which stopped at six columns, stated
+  as a fact about the terminal — and for uppercase and icons it was not
+  even that, since both were already inside the old ceiling and nobody had
+  checked.
+- **Every `square(rows)` sits exactly on the band's wide edge**, since
+  that edge *is* `cols == 2 * rows`. `square(2)` is a 4x2 badge — the size
+  a LONE icon wants, and measured, not the size a ROW of them wants:
+  braille clears at 4x2 and sextant does not (0.36 loss, `Distorted`;
+  its answer is 3x2). A row of icons crops as one run, so the box is the
+  union of `⚠ ☑ → ●` and taller than any single icon, which makes four
+  columns a stretch. `square(1)` is in band and still a bad idea for a
+  row of icons — 2x1 puts the closest icon pair 1 subpixel apart in
+  braille and 0 in quadrant, which the band cannot help with, because
+  aspect and legibility are two different questions and this module now
+  asks both.
+
+**Choosing a vocabulary.** `mode` is yours to pass, and the trade differs
+from the image case. Braille has the most subpixels per cell but terminals
+draw its dots with gaps, so a letter reads as a constellation; sextants are
+solid ink at a lower density and usually read better as type. Prefer
+`MosaicMode::Sextant` for text where the font carries the Unicode 13
+sextants, and `MosaicMode::auto(&caps)` when you want the probed default.
+
+**Ground must be opaque for the two-colour fits.** `MosaicMode::Quadrant`
+and `MosaicMode::Sextant` pick their glyph by fitting ink and ground
+against each other, and a transparent subpixel does not vote — so a
+transparent ground leaves the fit nothing to weigh and every cell comes
+back blank. Pass the colour you are drawing *onto*.
+`render`/`render_with` return `BigTextError::TransparentGround` rather
+than a correctly-sized empty grid, because that grid looks like a working
+call. `Braille` and `HalfBlock` threshold by luminance and carry
+transparency fine.
+
+**Weight and sampling.** `BigTextStyle` carries the two remaining axes for
+callers that want them; `render`/`rasterize` take the defaults, and
+`render_with`/`rasterize_with` take the struct.
+
+```rust
+use abstracttui::gfx::bigtext::{BigTextStyle, GlyphWeight, Sampling};
+
+let style = BigTextStyle::new(GlyphScale::FLOOR, MosaicMode::Sextant)
+    .sampling(Sampling::Nearest)
+    .weight(GlyphWeight::Bold);
+```
+
+`Sampling::AreaAverage` (the default) weights each source pixel by how
+much of it the target covers, which keeps thin strokes and leaves letters
+further apart — at 4x3 the closest pair is 8 subpixels rather than 4.
+`Sampling::Nearest` takes one source pixel per target: harder edges, and
+that margin halves. Solid display type at three rows often looks better
+point sampled; a run of arbitrary text needs the margin.
+
+`GlyphWeight::Bold` is a synthetic weight — the crate carries one font, so
+this is the CSS `font-weight` axis rather than a family choice, and it
+dilates the glyphs one pixel the way a terminal has always faked a bold
+face. It raises pairwise distinctness at 3x3 and changes nothing from four
+rows up, but the gain is partly mechanical (dilation adds ink to every
+glyph) and at three rows it can close a counter. Treat it as a weight to
+choose, not an improvement to apply by default.
+
+**Limits, stated plainly.** The embedded font carries 164 glyphs — Latin
+letters, digits and common punctuation — and no accented forms, so `é`,
+`à` and `ñ` return `BigTextError::UnsupportedChar` naming the character
+rather than being dropped. The vertical crop that recovers ascender space
+is applied across the whole string so the baseline and relative letter
+heights survive; a string containing a descender therefore needs more rows
+than one without, and mixed case reads weaker than capitals at the same
+scale.
+
+`cargo run --example bigtext` walks a sixteen-step size sweep (width first
+at three rows, then height per width) and cycles symbols (`s`), weight
+(`w`) and sampling (`a`) from the keyboard, printing the closest letter
+pair under each
+combination — the only place these questions can actually be settled is
+your terminal in your font.
+
 ## three — 3D models
 
 `three::quick_view(path)` is the five-line hello: load a GLB, get a camera
@@ -4288,6 +4498,128 @@ user-themable and no build-time decision can know what index 4 renders as.
 And separation of a foreground from its own background still wins over the
 ground assignment — text reading as its own background is the worse defect.
 
+#### When separating every ground is the wrong answer
+
+Giving every ground its own entry is right for a theme whose grounds are
+drawn apart, and wrong for one whose grounds are not. Seven built-in ground
+pairs come out of the assignment **more** separated at 256 colours than they
+are at truecolor — an edge the theme author never drew. Merging "close
+enough" grounds does not fix it: the same pair can be one an author left
+indistinct *and* one whose elevation the plain lookup collapses, so no rule
+over the two colour values is right about it.
+
+So the intent is declared, not inferred — **per pair, by the theme**. You
+state it once on the candidate and the driver does the rest:
+
+```rust
+use abstracttui::render::color::PairIntent;
+use abstracttui::theme::{register, RegisterMode, ThemeCandidate, TokenId};
+
+let candidate = ThemeCandidate {
+    id: "acme".into(),
+    label: "Acme".into(),
+    dark: true,
+    tokens,
+    // "These two grounds read as one surface — where the 256 palette
+    // has already forced them together, leave them there."
+    ground_intent: vec![(
+        TokenId::SurfaceRaised,
+        TokenId::SelectionBg,
+        PairIntent::Same,
+    )],
+};
+let theme = register(candidate, RegisterMode::Strict)?.theme;
+```
+
+That is the whole integration: `Driver::sync_palette_assignment` reads
+`Theme::ground_intent` off whichever theme is live, resolves it against
+`TokenSet::grounds`, and installs the resulting assignment. Nothing to call
+per frame and no assignment to build yourself.
+
+Pairs are named in **tokens, not indices** — an index would silently mean a
+different pair the day the ground list reorders. Both tokens must be opaque
+grounds; `register` refuses anything else with `RegisterError::NotAGround`,
+in *both* modes, because a declaration over `border` protects nothing while
+reading as though it does.
+
+Each pair has three states: `Same`, `Distinct`, and undeclared — the last
+being the absence of an entry, not a value you can write.
+
+`Distinct` changes no bytes: it is what silence already does. What it buys
+is a claim that can be **checked against the artifact**. Declare two grounds
+`Distinct` and then author them at the same hex and you have contradicted
+yourself — `register` reports it (refusing in `Strict`, labelling in
+`Labeled`), where before the two would quietly share an entry and you would
+go on believing the edge was protected. `theme::contrast::
+declaration_contradictions` is the same check, callable directly.
+
+The mirror case is deliberately *not* reported: `Same` over two colours a
+mile apart asks for a merge that can never happen, because intent only ever
+releases a merge at a collision. That is inert, not wrong, and you may
+reasonably declare it ahead of a re-tint of your own palette.
+
+`render::color::quantize_set_256_into_with` is the layer underneath, if you
+are building an assignment yourself rather than going through a theme:
+
+```rust
+use abstracttui::render::color::{quantize_set_256_into_with, GroundIntent, PairIntent};
+
+let mut idx = vec![0u8; grounds.len()];
+quantize_set_256_into_with(&grounds, GroundIntent::UNDECLARED, &mut idx);
+quantize_set_256_into_with(
+    &grounds,
+    GroundIntent::new(&[(0, 2, PairIntent::Same)]),
+    &mut idx,
+);
+```
+
+**Opting in cannot flip the default.** A pair you did not name behaves
+exactly as if you had no declaration at all, so naming one pair never moves
+another. An empty declaration, and one listing nothing but `Distinct`, are
+both byte-for-byte identical to `UNDECLARED` across all 26 built-in themes.
+There is no way to spell "merge everything I did not mention" — a theme
+should not be able to give away its elevation by omission.
+
+**Intent releases a merge; it never creates one.** `Same` lets two grounds
+share an entry *when they collide*. It never moves a ground that already
+had an entry of its own: forcing a collapse the palette did not ask for
+would invent the mirror of the defect this exists to fix.
+
+Across the registry, declaring all ten pairs `Same` — the maximal opt-in —
+closes three of the seven invented edges, at the cost of re-collapsing 15
+pairs the assignment keeps apart (one of them, `catppuccin-frappe
+bg/surface`, above the 1.10 report floor). That is the upper bound on both
+sides, and reaching it takes ten deliberate statements.
+
+The other four invented edges are **not** the assignment's: those grounds
+have different nearest entries already, so nothing displaced them and no
+declaration can reach them. They are a property of the xterm-256 lookup
+itself, survive with the whole set policy removed, and remain open.
+
+**Every built-in theme declares nothing**, and that is a decision, not an
+oversight: none of the 26 authors has been asked, so elevation wins for all
+of them and the shipped bytes are unchanged.
+
+**`extra_grounds` cannot carry intent, and that is also a decision.** The
+declaration covers the theme's five grounds only; consumer grounds join the
+set after them and no declaration names them. Stated rather than left to be
+discovered, because the mechanism above would otherwise imply it. The
+reasoning: a theme has five *named roles* whose colours may coincide, and a
+widget picks a role rather than a colour — so two roles landing on one hex
+is normal and the intent question is real. An app passes raw colours. If two
+of yours are the same colour they already share an entry (byte-identical
+colours always do); if they are different colours you chose deliberately,
+keeping them apart is what you asked for. And a panel meant to read as one
+surface with `surface` should *be* `t.surface`, not a minted near-match.
+If you have a case this reasoning misses, it is worth raising rather than
+working around.
+
+`cargo run --example grounds` walks the registry and shows this live — press
+`i` on `solarized-dark`, `one-light` or `abstract-midnight` and the app
+switches to a registered variant that declares the colliding pair, with the
+two grounds arriving as one colour. On the other 23 themes it says plainly
+that there is nothing to release.
+
 To ask the question about your own theme, `theme::contrast::ground_overlaps`
 returns a `GroundOverlap` for every pair of opaque grounds measuring below
 the floor you pass (`floors::GROUND_SEPARATION_REPORT`, 1.10, is the
@@ -4307,6 +4639,8 @@ let candidate = ThemeCandidate {
     label: "My Theme".into(),
     dark: true,                   // audited against measured luminance
     tokens: my_tokens,            // a full TokenSet
+    ground_intent: vec![],        // silence — see "When separating every
+                                  // ground is the wrong answer"
 };
 
 match register(candidate, RegisterMode::Strict) {
@@ -4691,6 +5025,55 @@ The full surface (dot-space model, primitives, the cell-color rule) is
 node-and-edge diagrams, prefer the `abstracttui-graph` /
 `abstracttui-mermaid` crates over hand-stroking
 ([graphs-and-diagrams.md](graphs-and-diagrams.md)).
+
+### Not an image: text drawn several cells tall
+
+`gfx::bigtext` rides the same mosaic encoder described above, but its
+source is the engine's embedded 8x16 font rather than a decoded picture.
+It exists because a terminal has one font size: a bigger glyph means
+spending more cells and subdividing them, so a banner heading or an
+oversized icon is a rasterization problem, not a typography one.
+
+Because it reuses the encoder, the capability ladder and every mosaic
+mode apply unchanged — but the best mode differs from the image case.
+Braille packs the most subpixels per cell and terminals draw its dots
+with visible gaps, which reads well for photographs and poorly for
+letterforms; sextants are solid ink at 2x3 and usually read better as
+type.
+
+Two rules the surface makes explicit, both easy to get wrong by
+guessing: how small you can go is a MEASUREMENT and not a constant —
+`bigtext::smallest_clear(mode, content)` takes it, because uppercase,
+mixed text and icons bottom out at different sizes and the mosaic mode
+moves all three — and a square icon needs twice as many columns as rows
+because a cell is about 1:2, which `GlyphScale::square(rows)` does for
+you. The sharp edge worth knowing before you pick: `GlyphScale::FLOOR`
+(4x3) is clear for everything in braille and only MARGINAL for mixed
+text in sextant, the mode this page just told you to prefer for type;
+`smallest_clear` sends you to 4x4 there.
+
+The second edge is the one that produced a bug report, and it took two
+fixes. Pairwise distance measures whether two rasterizations DIFFER, and
+more columns always buys more difference — so a cheapest-clear search
+with no bound walks to the widest scale it can and calls it best. It used
+to return 6x2 for braille text, where a filled `●` reduces to six
+near-solid cells and looks like a white bar; the measure was right that
+one bar differs from the next by 16 subpixels and had no way to notice
+that neither was its glyph any more.
+
+The search is now bounded to twice the glyph's natural aspect in either
+direction (`GlyphScale::within_aspect_band`), which also lets it reach
+past six columns: `MosaicMode::HalfBlock` clears at 7x5 for mixed text,
+and this page used to say it never cleared at all. **And `legibility`
+now measures the shape as well as the distance** —
+`bigtext::fidelity_loss` compares what is drawn against the same glyph
+at its natural proportions, so a scale you name yourself is graded
+honestly too: 6x2 comes back `Legibility::Distorted`, not `Clear`. The
+full surface, its
+limits (no accented glyphs) and the measurements behind the floor are in
+[api.md § gfx::bigtext](api.md#gfxbigtext--text-and-icons-several-cells-tall);
+`cargo run --example bigtext` shows every scale and vocabulary on your
+own terminal.
 
 ## 3D end-to-end
 
@@ -6379,6 +6762,16 @@ app.run_with(RunConfig {
 })
 ```
 
+**Tooltips are the exception, and you do not have to set anything.** A
+`Tooltip` cannot work at all without motion — its whole contract is
+hover, delay, show — so mounting one declares the need itself
+(`Overlays::require_pointer_motion`) and the driver arms 1003 with
+`hover_ink` left `false`. Before that, an app that mounted a tooltip and
+called `App::run()` got a tip that opened when you PRESSED the mouse and
+stayed shut when you moved over the anchor. If you see that symptom on
+your own hover-driven widget, the fix is to declare the need the same
+way rather than to document a flag.
+
 It is off by default because 1003 sends a report for every pointer cell
 crossed, which wakes the event loop of apps that have no hover visuals to
 paint — noticeably so over SSH or tmux. Set it when your UI reacts to
@@ -6410,17 +6803,17 @@ rule_style`) or, worse, nothing fails at all and your frame-reading tests
 keep passing against a renderer you are not shipping.
 
 **Cause**: a patch whose version falls outside your dependency requirement
-is **not an error — it is ignored**. `abstracttui = "0.4.0"` means
-`^0.4.0`; once the checkout is 0.5.0 the patch no longer satisfies it, so
+is **not an error — it is ignored**. `abstracttui = "0.5.0"` means
+`^0.5.0`; once the checkout is 0.6.0 the patch no longer satisfies it, so
 cargo drops the patch, resolves the requirement from crates.io instead,
-and rewrites `Cargo.lock` to the published `0.4.1`. Resolution *fails*
+and rewrites `Cargo.lock` to the published `0.5.0`. Resolution *fails*
 only when nothing published satisfies the requirement either — which is
 exactly the case that stops arising once a crate has a release history.
 
 Cargo does say so, on every resolve:
 
 ```text
-warning: patch `abstracttui v0.5.0 (/…/abstracttui)` was not used in the crate graph
+warning: patch `abstracttui v0.6.0 (/…/abstracttui)` was not used in the crate graph
 ```
 
 but it is a warning: the resolve exits 0, and it scrolls past in CI output
@@ -6431,11 +6824,11 @@ the wrong engine without a word.
 carries, and re-pin when the checkout bumps:
 
 ```toml
-abstracttui = "0.5.0"   # tracks the patch below on purpose; re-pin each minor
+abstracttui = "0.6.0"   # tracks the patch below on purpose; re-pin each minor
 ```
 
-A family requirement (`"0.5"`) re-arms the trap at the next minor: 0.6.0
-in the tree, 0.5.x on the registry, and the graph resolves to the registry
+A family requirement (`"0.6"`) re-arms the trap at the next minor: 0.7.0
+in the tree, 0.6.x on the registry, and the graph resolves to the registry
 silently.
 
 Then make it fail loudly, because a pin you have to remember to update is
@@ -6447,17 +6840,17 @@ cargo tree -i abstracttui | head -1 | grep -q '^abstracttui v[^ ]* (' \
 ```
 
 `cargo tree -i` prints the resolved package with its source: a patched
-build reads `abstracttui v0.5.0 (/path/to/abstracttui)`, an unpatched one
-reads `abstracttui v0.4.1` with no path. The check is red when the crate
+build reads `abstracttui v0.6.0 (/path/to/abstracttui)`, an unpatched one
+reads `abstracttui v0.5.0` with no path. The check is red when the crate
 is absent from the graph too, so it cannot pass by finding nothing.
 
 **Do not test this by grepping `Cargo.lock`.** The unused patch is still
 recorded there: in the failing case the lock holds *two* `abstracttui`
-entries — 0.4.1 from the registry and 0.5.0 from the path — and only the
+entries — 0.5.0 from the registry and 0.6.0 from the path — and only the
 first is built. The machine-readable form of the same check is the resolve
 node id in `cargo metadata --format-version 1`, which reads
-`path+file:///…#0.5.0` when the patch applied and
-`registry+…#abstracttui@0.4.1` when it did not.
+`path+file:///…#0.6.0` when the patch applied and
+`registry+…#abstracttui@0.5.0` when it did not.
 ===== PACKAGE FACTS =====
 
 - Crate: `abstracttui` 0.5.0 (Rust, edition 2021). First public release: 2026-07-21

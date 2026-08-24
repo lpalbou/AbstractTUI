@@ -87,6 +87,9 @@ struct DrawerDef {
     title: String,
     badge: Option<BadgeFn>,
     build: DrawerBuilder,
+    /// Overrides the dock-wide `panel_width` while THIS drawer is open.
+    /// `None` = use the dock's value.
+    width: Option<i32>,
 }
 
 /// The right-edge drawer rail + docked panel. See the [module
@@ -135,7 +138,48 @@ impl DrawerDock {
             title: title.into(),
             badge: None,
             build: Box::new(build),
+            width: None,
         });
+        self
+    }
+
+    /// Widen (or narrow) the LAST added drawer's panel, overriding the
+    /// dock-wide [`panel_width`](Self::panel_width) while that drawer is
+    /// open. Same floor of 8 cells.
+    ///
+    /// The panel is rebuilt whenever the open drawer changes, so this
+    /// resolves per open drawer rather than once for the dock — which is
+    /// what `panel_width` alone could not express.
+    ///
+    /// Requested by a consumer whose leaderboard drawer needs five
+    /// reputation columns plus rank, name and score, beside Members and
+    /// Files panels that are fine narrow. Their fallback was compressing
+    /// to two-character cells, which shows the numbers and is not the
+    /// same panel.
+    ///
+    /// It attaches to the last `.drawer(..)` exactly like
+    /// [`drawer_badge`](Self::drawer_badge), for the same reason: the
+    /// value belongs to one drawer, and a `|id| -> width` closure would
+    /// make the caller re-state ids the builder already knows.
+    ///
+    /// ```
+    /// # use abstracttui::widgets::DrawerDock;
+    /// # use abstracttui::ui::Element;
+    /// DrawerDock::new(Element::new().build())
+    ///     .drawer("members", "Members", |_| Element::new().build())
+    ///     .drawer("board", "Leaderboard", |_| Element::new().build())
+    ///     .drawer_width(64) // the board only
+    ///     .panel_width(32); // everything else
+    /// ```
+    pub fn drawer_width(mut self, w: i32) -> DrawerDock {
+        debug_assert!(
+            !self.drawers.is_empty(),
+            "DrawerDock::drawer_width attaches to the LAST added drawer — \
+             call it after `.drawer(..)`, never before the first one",
+        );
+        if let Some(last) = self.drawers.last_mut() {
+            last.width = Some(w.max(8));
+        }
         self
     }
 
@@ -252,6 +296,7 @@ impl DrawerDock {
                         .build();
                 };
                 let title = def.title.clone();
+                let width = def.width.unwrap_or(panel_width);
                 let body = (def.build)(gcx);
                 drop(defs);
                 // A builder that writes `open` SYNCHRONOUSLY writes a
@@ -336,7 +381,7 @@ impl DrawerDock {
                 Element::new()
                     .style(
                         LayoutStyle::column()
-                            .width(Dimension::Cells(panel_width))
+                            .width(Dimension::Cells(width))
                             .height(Dimension::Percent(1.0)),
                     )
                     // Ground fill + chrome, before children paint:

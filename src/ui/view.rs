@@ -84,6 +84,37 @@ impl View {
             ViewNode::Dyn(d) => f(&mut d.style),
         }
     }
+
+    /// Push a handler onto this blueprint's ROOT element, reporting
+    /// whether there was one to push onto: a text leaf and a `Dyn`
+    /// region are not elements and cannot carry handlers.
+    ///
+    /// The one thing this exists for, and the reason it is not a public
+    /// decorator: focus transitions are delivered TARGET-ONLY
+    /// (`ui::focus`), while hover is delivered per-node along the
+    /// hovered PATH. So a wrapper that puts a caller's view inside an
+    /// outer element hears `MouseEnter` for that subtree and can NEVER
+    /// hear `FocusIn` for it. A wrapper that wants both has to install
+    /// the focus half on the node that actually takes focus, which is
+    /// the caller's own root — see `app::anchored::Tooltip`.
+    ///
+    /// The limit this carries, which callers must document rather than
+    /// hedge: the handler lands on the root and NOWHERE ELSE. A
+    /// focusable DESCENDANT of that root is a different node, so it
+    /// takes focus without this listener hearing it. An anchor whose
+    /// root is a text leaf or a `Dyn` gets no listener at all.
+    pub(crate) fn on_root(
+        &mut self,
+        phase: Phase,
+        f: impl FnMut(&mut EventCtx, &UiEvent) + 'static,
+    ) {
+        if let ViewNode::Element(el) = &mut self.0 {
+            el.handlers.push(Handler {
+                phase,
+                run: Box::new(f),
+            });
+        }
+    }
 }
 
 pub struct TextView {

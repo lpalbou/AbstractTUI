@@ -59,7 +59,7 @@ use crate::base::Rgba;
 use crate::theme::contrast::floors;
 use crate::theme::derive::{mix, mix_until_contrast, tint_until_readable};
 use crate::theme::seeds::{ThemeSeed, SEEDS, UPSTREAM_ALIASES};
-use crate::theme::tokens::TokenSet;
+use crate::theme::tokens::{TokenId, TokenSet};
 
 /// A registered theme: identity, polarity, resolved tokens.
 #[derive(Clone, Debug, PartialEq)]
@@ -72,6 +72,28 @@ pub struct Theme {
     pub dark: bool,
     /// The resolved palette.
     pub tokens: TokenSet,
+    /// **What this theme says about which of its grounds read as one
+    /// surface** when the palette cannot hold them all apart at 256
+    /// colours. Per pair, additive, and empty for every built-in.
+    ///
+    /// The driver resolves this against
+    /// [`TokenSet::grounds`](crate::theme::TokenSet::grounds) and hands
+    /// it to the separator, so an author states intent once here instead
+    /// of computing an assignment and installing it themselves.
+    ///
+    /// **Empty is not a value, it is silence** — a pair nobody named
+    /// falls to elevation-wins, exactly as if this field did not exist.
+    /// Declaring nothing therefore renders byte-for-byte like a theme
+    /// that never opted in, and there is no spelling of "merge whatever
+    /// I did not mention". See
+    /// [`GroundIntent`](crate::render::color::GroundIntent) for the rule
+    /// and `decision:ground-separation-intent-is-declared-by-the-theme`
+    /// for the ruling.
+    ///
+    /// Both tokens of a pair must be opaque grounds;
+    /// [`register`](fn@crate::theme::register) refuses a candidate whose
+    /// declaration names anything else.
+    pub ground_intent: &'static [(TokenId, TokenId, crate::render::color::PairIntent)],
 }
 
 impl Theme {
@@ -359,6 +381,12 @@ fn build(seed: &ThemeSeed) -> Theme {
         label: seed.label,
         dark: seed.dark,
         tokens: derive_tokens(&colors, seed.dark),
+        // Every built-in is SILENT, by ruling: elevation wins where a
+        // theme has not spoken, and none of these 26 authors has been
+        // asked. `every_built_in_theme_is_silent_about_ground_intent`
+        // pins it against the whole registry rather than against this
+        // one line.
+        ground_intent: &[],
     }
 }
 

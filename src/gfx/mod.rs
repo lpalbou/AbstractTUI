@@ -16,6 +16,7 @@
 pub mod anim;
 pub mod apng;
 pub mod base64;
+pub mod bigtext;
 pub mod bitmap;
 pub mod decode;
 pub mod dither;
@@ -43,6 +44,7 @@ mod mosaic_quality_tests;
 mod png_test_encoder;
 
 pub use anim::{decode_animation, sniff_animation, Animation, AnimationFormat, Frame};
+pub use bigtext::{BigTextError, BigTextStyle, GlyphScale, GlyphWeight, Sampling};
 pub use bitmap::Bitmap;
 pub use decode::{decode_image, sniff_format, ImageFormat};
 pub use mosaic::{

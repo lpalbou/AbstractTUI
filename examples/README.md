@@ -28,10 +28,12 @@ the previous one:
 | 3 · layout | `grid.rs` | track grids (`fr`/cells/percent/auto), spans, live reflow |
 | 4 · interaction | `activate.rs` | selection vs activation on `List` and `Table`; double-click, honestly |
 | 4 · interaction | `presence_board.rs` | rich list rows + trailing × accessory + timed double-click body (chat sidebar pattern) |
+| 4 · interaction | `roster.rs` | `RowSelect`: the keyboard over TWO-LINE rows the engine does not render — press `m` and watch the index move while the sticky key does not |
 | 4 · interaction | `interaction_affordances.rs` | hover ink, removable rows, live filtering, nested scroll wheel bubbling |
 | 4 · interaction | `scrollbar.rs` | the shared scroll strip: grab the thumb, drag it, teleport from the track — `Scroll`, `List` and `Table` side by side |
 | 4 · interaction | `drawer_dock.rs` | the right-edge drawer rail (`DrawerDock`): docked panels, full collapse, badge dots |
 | 4 · interaction | `decide.rs` | the modal decision gate (`ChoicePrompt`): confirmations, multi-pick, chains |
+| 4 · interaction | `hovercard.rs` | `Tooltip` and rich hover cards on citation chips — reachable by hover AND by Tab, dismissed by Escape, with the `… N more` marker on a card the viewport cannot fit |
 | 5 · content + live data | `feed.rs` | background threads → bounded ingestion → `Feed` with follow-tail |
 | 5 · content + live data | `transcript.rs` | streaming markdown chat: tables render live, composer with completion |
 | 5 · content + live data | `attachments.rs` | file attachments: terminal drops classified out of pastes into chips, `FilePicker` in a modal |
@@ -43,6 +45,7 @@ the previous one:
 | 6 · the app shell | `dashboard/` | the flagship capstone: charts, log tail, sortable table, toasts, modal, pane nav |
 | 7 · graphics + 3D | `images.rs` | four mosaic families, dithering, pixel-protocol placement |
 | 7 · graphics + 3D | `animation.rs` | animated GIF/APNG played in cells — and video refused by name |
+| 7 · graphics + 3D | `bigtext.rs` | text and icons several cells tall: the measured 4x3 legibility floor, the four vocabularies, and the 1:2 cell aspect that makes a "6x6" icon stretched rather than big |
 | 7 · graphics + 3D | `effects.rs` | compositor layers wearing cell shaders; transforms, toasts |
 | 7 · graphics + 3D | `splash.rs` | the 2-second boot identity, 3D or 2D through one player |
 | 7 · graphics + 3D | `viewer3d.rs` | orbit a GLB with textures, animation, measured fps |

@@ -92,6 +92,7 @@ use crate::render::{Attrs, Style};
 use crate::theme::TokenSet;
 use crate::ui::{dyn_view, Element, EventCtx, Key, Mods, MouseButton, MouseKind, Phase, UiEvent};
 use crate::widgets::richtext::draw_rich_lines;
+use crate::widgets::row_select;
 use crate::widgets::scrollbar;
 
 type HeightFn = Box<dyn Fn(usize, &str) -> i32>;
@@ -235,23 +236,6 @@ fn resolve_hit(
             ListHitZone::Body
         },
     ))
-}
-
-/// Scroll `offset` the least amount that brings item `idx` fully into a
-/// `view_h`-row viewport. Shared by keyboard/click selection and the
-/// `scroll_to` command so the two can never drift apart.
-fn ensure_visible(offset: Signal<i32>, prefix: &[i32], idx: usize, view_h: i32, total_rows: i32) {
-    let top = prefix[idx];
-    let bottom = prefix[idx + 1];
-    offset.update(|o| {
-        if top < *o {
-            *o = top;
-        }
-        if view_h > 0 && bottom > *o + view_h {
-            *o = bottom - view_h;
-        }
-        *o = (*o).clamp(0, (total_rows - view_h.max(1)).max(0));
-    });
 }
 
 /// A virtualized, selectable vertical list — the picker surface.
@@ -505,22 +489,11 @@ impl List {
         let len = items.len();
         // Prefix sums over item heights: prefix[i] = first content row
         // of item i; prefix[len] = total rows. Uniform lists get the
-        // identity prefix — ONE windowing code path.
-        let prefix: Rc<Vec<i32>> = Rc::new({
-            let mut out = Vec::with_capacity(len + 1);
-            let mut acc = 0i32;
-            out.push(0);
-            for (i, item) in items.iter().enumerate() {
-                let h = self
-                    .heights
-                    .as_ref()
-                    .map(|f| f(i, item).max(1))
-                    .unwrap_or(1);
-                acc += h;
-                out.push(acc);
-            }
-            out
-        });
+        // identity prefix — ONE windowing code path. (Shared with
+        // `RowSelect` — `widgets::row_select` owns the selection core.)
+        let prefix: Rc<Vec<i32>> = Rc::new(row_select::prefix_sums(len, |i| {
+            self.heights.as_ref().map(|f| f(i, &items[i])).unwrap_or(1)
+        }));
         let total_rows = *prefix.last().unwrap_or(&0);
 
         let selection = self.selection.unwrap_or_else(|| cx.signal(0usize));
@@ -543,37 +516,27 @@ impl List {
                     .collect::<Vec<_>>(),
             )
         });
-        // Settle selection against THIS build's items. Rows can vanish
-        // between builds (a dismiss ✕, a filter, a server push), and a
-        // selection naming a row that no longer exists is a real defect:
-        // nothing highlights, `access_value` announces a phantom row to
-        // a screen reader, and the first arrow key moves the wrong way.
-        // So the index is always re-derived and always in range.
-        if len > 0 {
-            let by_key = self
-                .selection_key
-                .zip(keys.as_ref())
-                .and_then(|(sig, keys)| {
-                    let wanted = sig.get_untracked();
-                    keys.iter().position(|k| *k == wanted)
-                });
-            // The key is gone (or there is none): hold the SLOT, clamped.
-            // Removing a row leaves the next one selected, and removing
-            // the last leaves the new last — the expected list behavior.
-            let idx = by_key.unwrap_or_else(|| selection.get_untracked().min(len - 1));
-            selection.set_if_changed(idx);
-            if let (Some(sig), Some(keys)) = (self.selection_key, keys.as_ref()) {
-                sig.set_if_changed(keys[idx].clone());
-            }
-        }
-        let selection_key = self.selection_key;
-        let keys_for_select = keys.clone();
-
         // First visible CONTENT ROW. A bound offset survives rebuilds
         // (see `offset_y`) — but the items it points into may have
         // shrunk since it was written, so clamp it here for the same
-        // reason selection is settled above: no viewport past the end.
+        // reason selection is settled below: no viewport past the end.
         let offset = self.offset_y.unwrap_or_else(|| cx.signal(0i32));
+
+        // The SELECTION CORE, shared with `RowSelect` (which drives the
+        // same model over rows it does not render): settle-on-rebuild,
+        // sticky-by-key, ensure-visible, and the select transition.
+        let model = row_select::SelectionModel {
+            len,
+            keys: keys.clone(),
+            prefix: prefix.clone(),
+            selection,
+            selection_key: self.selection_key,
+            offset,
+        };
+        // Settle selection against THIS build's items — see
+        // `SelectionModel::settle` for why a stale index is a real
+        // defect and not merely untidy.
+        model.settle();
         if self.offset_y.is_some() {
             offset.update(|o| *o = (*o).clamp(0, (total_rows - 1).max(0)));
         }
@@ -640,30 +603,17 @@ impl List {
             .layout
             .unwrap_or_else(|| LayoutStyle::default().grow(1.0));
 
-        let prefix_for_select = prefix.clone();
         let select = {
             let on_select = on_select.clone();
+            let model = model.clone();
             move |target: usize, view_h: i32| {
-                if len == 0 {
-                    return; // nothing to select (prefix has no item span)
-                }
-                let target = target.min(len - 1);
-                let changed = selection.get_untracked() != target;
-                if changed {
-                    selection.set(target);
-                    if let (Some(key_sig), Some(keys)) = (selection_key, keys_for_select.as_ref()) {
-                        if let Some(k) = keys.get(target) {
-                            key_sig.set(k.clone());
-                        }
-                    }
-                }
-                // ensure-visible on CONTENT ROWS (variable heights).
-                // ALL widget bookkeeping lands BEFORE the user callback
-                // (0250 ruling clause 4, disposal-safety law): a
-                // callback that disposes this List's scope must find no
-                // widget code left to run on dead signals.
-                ensure_visible(offset, &prefix_for_select, target, view_h, total_rows);
-                if changed {
+                // The model writes selection, the sticky key, and the
+                // ensure-visible offset — ALL widget bookkeeping lands
+                // BEFORE the user callback (0250 ruling clause 4,
+                // disposal-safety law): a callback that disposes this
+                // List's scope must find no widget code left to run on
+                // dead signals.
+                if model.select(target, view_h) {
                     // Held borrow across `f`: safe — dispatch-only slot
                     // (the SharedCallback held-borrow contract).
                     if let Some(f) = on_select.borrow_mut().as_mut() {
@@ -675,7 +625,7 @@ impl List {
 
         // scroll_to command signal: consume Some(idx) into an offset.
         if let Some(request) = self.scroll_to {
-            let prefix_for_scroll = prefix.clone();
+            let model = model.clone();
             cx.effect_labeled("list-scroll-to", move || {
                 let Some(idx) = request.get() else {
                     return;
@@ -688,8 +638,7 @@ impl List {
                 if vh <= 0 {
                     return; // hold the request until the probe measures
                 }
-                let idx = idx.min(len - 1);
-                ensure_visible(offset, &prefix_for_scroll, idx, vh, total_rows);
+                model.ensure_visible(idx.min(len - 1), vh);
                 request.set(None); // consumed (one extra no-op run)
             });
         }
@@ -707,6 +656,7 @@ impl List {
         let accessory_w_handler = accessory_w;
         let cells_handler = accessory_cells.clone();
         let hover_handler = hover;
+        let model_handler = model.clone();
         let handler = move |ctx: &mut EventCtx, ev: &UiEvent| {
             let rect = ctx.current_rect();
             let h = rect.h.max(1);
@@ -734,7 +684,7 @@ impl List {
                             return;
                         }
                         let idx = selection.get_untracked().min(len - 1);
-                        ensure_visible(offset, &prefix_for_handler, idx, h, total_rows);
+                        model_handler.ensure_visible(idx, h);
                         let cols = list_columns(rect.w, total_rows > h, accessory_w_handler);
                         let first = offset.get_untracked();
                         let y = (rect.y + prefix_for_handler[idx] - first)
@@ -772,15 +722,9 @@ impl List {
                         return;
                     }
                     let cur = selection.get_untracked();
-                    let page = (h as usize).max(1);
-                    let target = match k.key {
-                        Key::Up => cur.saturating_sub(1),
-                        Key::Down => cur + 1,
-                        Key::PageUp => cur.saturating_sub(page),
-                        Key::PageDown => cur + page,
-                        Key::Home => 0,
-                        Key::End => len.saturating_sub(1),
-                        _ => return,
+                    let Some(target) = row_select::nav_target(k.key, cur, len, (h as usize).max(1))
+                    else {
+                        return;
                     };
                     select(target, h);
                     ctx.stop_propagation();

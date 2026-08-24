@@ -154,7 +154,7 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, **0.5.0** (2026-08-23) the current one.
+  (2026-07-21) is the first public release, **0.6.0** (2026-08-24) the current one.
   The extension family is at `abstracttui-graph` 0.4.0 and
   `abstracttui-mermaid` 0.4.0, each with its own changelog under `extensions/`.
 - [Contributing](CONTRIBUTING.md): Building, the test suite (~2,435 core tests; ~2,600
@@ -178,14 +178,14 @@
 - [src/lib.rs](src/lib.rs): Crate root with the layer map — `base`, `term`, `input`,
   `render`, `text`, `anim`, `reactive`, `layout`, `ui`, `canvas`, `widgets`, `gfx`,
   `three`, `theme`, `app`, `boot`, `testing`.
-- [examples/](examples/README.md): The catalog of the 32 runnable examples,
+- [examples/](examples/README.md): The catalog of the 35 runnable examples,
   ordered as a learning path —
   `hello`,
   `widgets`, `components`, `gallery`, `themes`, `grounds`, `grid`, `activate`,
   `presence_board`,
   `scrollbar`, `decide`, `feed`,
   `transcript`, `attachments`, `reader`, `voice_mock`, `shell`, `drawers`, `dashboard`,
-  `images`, `animation`,
+  `images`, `animation`, `bigtext`,
   `effects`, `splash`, `viewer3d`,
   `screenshot`, `caps`, `capture` — plus the extension-crate examples
   (`workflow`/`network` in `extensions/graph`, `mermaid`/`mermaid_doc` in

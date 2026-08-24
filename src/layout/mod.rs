@@ -668,6 +668,258 @@ mod tests {
         assert_eq!(tree.rect(card).h, 6);
     }
 
+    /// Solve a scroll column of `rows` measured leaves into a viewport
+    /// `visible` rows tall, and answer how many leaves the solver asked
+    /// to measure themselves.
+    fn measures_for(rows: i32, visible: i32) -> usize {
+        let asked = Rc::new(RefCell::new(0usize));
+        let mut tree = LayoutTree::new();
+        let root = tree.add(Style::column().scroll());
+        for _ in 0..rows {
+            let counter = Rc::clone(&asked);
+            let leaf = tree.add_leaf(
+                Style::default(),
+                Box::new(move |_avail: Size| {
+                    *counter.borrow_mut() += 1;
+                    Size::new(20, 1)
+                }),
+            );
+            tree.add_child(root, leaf);
+        }
+        solve(&mut tree, root, Rect::new(0, 0, 40, visible));
+        let n = *asked.borrow();
+        n
+    }
+
+    #[test]
+    fn layout_cost_follows_retained_rows_not_visible_ones() {
+        // The cost model behind the "scrolling a long feed is slow"
+        // class of complaint, measured rather than asserted. Paint
+        // culls off-screen nodes (`ui/draw.rs` skips a rect that does
+        // not intersect the clip); LAYOUT deliberately does not —
+        // `Overflow`'s own doc says "layout itself NEVER clips (solved
+        // rects stay truthful)". So a scroll container pays for every
+        // row it RETAINS, however few it SHOWS, and `scroll()` buys
+        // nothing here: it is draw/hit metadata, not a solver hint.
+        //
+        // This guard exists to be the number that decision is made on,
+        // and to go RED the day the solver learns to skip rows outside
+        // its container — which is what makes it a measurement and not
+        // a restatement of the doc comment.
+        let tall_short_viewport = measures_for(400, 10);
+        let tall_full_viewport = measures_for(400, 400);
+        let short = measures_for(10, 10);
+
+        // Non-vacuity first: the counter tracks real children, so a
+        // later `0` or a constant cannot pass as a finding.
+        assert_eq!(
+            short, 10,
+            "ten visible rows must cost ten measures, or this counter \
+             is measuring nothing"
+        );
+        assert_eq!(
+            tall_short_viewport, 400,
+            "a 400-row scroll column showing 10 rows still measured \
+             {tall_short_viewport} leaves"
+        );
+        assert_eq!(
+            tall_short_viewport, tall_full_viewport,
+            "shrinking the viewport 40x changed the solver's work from \
+             {tall_full_viewport} to {tall_short_viewport} measures — if \
+             this ever differs, layout has started culling and the \
+             comment above is stale"
+        );
+    }
+
+    #[test]
+    fn a_leaf_in_a_content_sized_card_is_measured_more_than_once_per_solve() {
+        // Where the per-row cost actually goes.
+        //
+        // This comment used to say "one intrinsic pass + one placement
+        // pass". The NUMBER was right and the mechanism was not, which
+        // made it teach the wrong cost model — worth correcting rather
+        // than leaving, because the model is what a caller uses to
+        // decide how to nest.
+        //
+        // Both calls here are BASIS-path calls, from two successive
+        // Auto-sized ancestors: each one recurses through
+        // `intrinsic_size` to find its own content size, and each
+        // recursion reaches the leaf. The placement re-measure the old
+        // comment named is real (`solve.rs`, the `cross_size` fold) but
+        // it sits behind `match align { Stretch => cross_avail, _ =>
+        // intrinsic_size(..) }`, and `Align::Stretch` is the DEFAULT —
+        // so it does not fire in this shape at all. Give the card
+        // `align_items(Start)` and the count here goes to 3.
+        //
+        // The real model is therefore: **1 + the number of Auto-sized
+        // ancestors between the leaf and the root**, pinned across
+        // depths in
+        // `ui::tests::the_solver_asks_once_per_auto_ancestor_which_is_what_makes_the_memo_worth_having`.
+        // Every wrapper `Element` between a card and its text re-measures
+        // the whole subtree beneath it. For a real `ViewNode::Text` that
+        // callback is `text::measure`, wrap-aware and not cheap (see
+        // `solve_cost_table`: 48x the box arithmetic around it).
+        //
+        // This stays at 2 after the per-leaf memo landed, and that is
+        // correct rather than a miss: the memo lives in `ui::mount`'s
+        // text-leaf closure, so a raw `LayoutTree` built here has none.
+        // What this guard measures is the SOLVER's demand; what the memo
+        // changes is how much of that demand reaches `text::measure`.
+        let asked = Rc::new(RefCell::new(0usize));
+        let counter = Rc::clone(&asked);
+        let mut tree = LayoutTree::new();
+        let root = tree.add(Style::column().scroll());
+        // No explicit height: the card must ask its child how tall it
+        // is, which is what a feed row looks like.
+        let card = tree.add(Style::column().padding(Edges::all(1)).clip());
+        let body = tree.add_leaf(
+            Style::default(),
+            Box::new(move |_avail: Size| {
+                *counter.borrow_mut() += 1;
+                Size::new(60, 2)
+            }),
+        );
+        tree.add_child(root, card);
+        tree.add_child(card, body);
+        solve(&mut tree, root, Rect::new(0, 0, 80, 40));
+
+        let per_solve = *asked.borrow();
+        assert!(
+            per_solve > 0,
+            "the leaf was never measured, so this counts nothing"
+        );
+        assert_eq!(
+            per_solve, 2,
+            "two Auto-sized ancestors (root and card) means two basis-path \
+             measures of this leaf; it is now {per_solve}. If this rose, \
+             every text leaf under this shape got more expensive; if it \
+             fell to 1, a pass was removed and solve_cost_table should be \
+             re-run"
+        );
+
+        // The placement re-measure the old comment credited these two
+        // calls to. It is real, and it is a THIRD call — so naming it as
+        // one of the two above was wrong on its own terms.
+        let asked = Rc::new(RefCell::new(0usize));
+        let counter = Rc::clone(&asked);
+        let mut tree = LayoutTree::new();
+        let root = tree.add(Style::column().scroll());
+        let card = tree.add(
+            Style::column()
+                .padding(Edges::all(1))
+                .align_items(Align::Start)
+                .clip(),
+        );
+        let body = tree.add_leaf(
+            Style::default(),
+            Box::new(move |_avail: Size| {
+                *counter.borrow_mut() += 1;
+                Size::new(60, 2)
+            }),
+        );
+        tree.add_child(root, card);
+        tree.add_child(card, body);
+        solve(&mut tree, root, Rect::new(0, 0, 80, 40));
+        assert_eq!(
+            *asked.borrow(),
+            3,
+            "with a non-Stretch align the cross-axis re-measure fires and adds a THIRD \
+             call. If this equals the Stretch count, that fold has stopped running and \
+             the model above is wrong again"
+        );
+    }
+
+    /// The magnitude behind the guard above, reproducible with
+    /// `cargo test --release --lib solve_cost_table -- --ignored
+    /// --nocapture`.
+    ///
+    /// This is an INSTRUMENT, not a guard: wall clock cannot be
+    /// asserted on without flaking, so the falsifiable claim lives in
+    /// `layout_cost_follows_retained_rows_not_visible_ones` and this
+    /// only prints what that shape costs. It is in the tree rather
+    /// than in a message so the number can be re-measured on the
+    /// machine that doubts it, which a quoted millisecond cannot be.
+    ///
+    /// Each row is three nodes — a clipped card with padding wrapping a
+    /// title and a body leaf — because a one-leaf row understates a
+    /// real feed and would make the engine look cheaper than it is.
+    ///
+    /// It prints TWO columns, and the split is the whole point. A leaf
+    /// answering a constant isolates the solver's own box arithmetic;
+    /// a leaf answering through `text::measure` — the engine's one
+    /// width authority, and what every real `ViewNode::Text` gets in
+    /// `ui/mount.rs` — carries wrap-aware measurement with it. Timing
+    /// only the first would attribute the whole per-row cost to the
+    /// solver, which is exactly the mistake this instrument exists to
+    /// prevent.
+    #[test]
+    #[ignore = "timing instrument; run --release with --nocapture"]
+    fn solve_cost_table() {
+        const BODY: &str = "the seam you flagged is real and the transit guard \
+                            I mentioned is in the same file, a few lines below \
+                            the one you quoted back at me";
+
+        fn build(rows: i32, real_text: bool) -> (LayoutTree, LayoutId) {
+            let mut tree = LayoutTree::new();
+            let root = tree.add(Style::column().scroll());
+            for _ in 0..rows {
+                let card = tree.add(Style::column().padding(Edges::all(1)).clip());
+                let (title, body) = if real_text {
+                    (
+                        tree.add_leaf(
+                            Style::default(),
+                            Box::new(|avail| crate::text::measure("agora-tui", avail)),
+                        ),
+                        tree.add_leaf(
+                            Style::default(),
+                            Box::new(|avail| crate::text::measure(BODY, avail)),
+                        ),
+                    )
+                } else {
+                    (
+                        tree.add_leaf(Style::default(), Box::new(|_| Size::new(9, 1))),
+                        tree.add_leaf(Style::default(), Box::new(|_| Size::new(60, 2))),
+                    )
+                };
+                tree.add_child(root, card);
+                tree.add_child(card, title);
+                tree.add_child(card, body);
+            }
+            (tree, root)
+        }
+
+        fn time_solve(rows: i32, real_text: bool) -> (usize, std::time::Duration) {
+            let viewport = Rect::new(0, 0, 80, 40);
+            let (mut tree, root) = build(rows, real_text);
+            // One warm solve first: the first pass over a fresh tree
+            // pays allocation the steady state does not.
+            solve(&mut tree, root, viewport);
+            let start = std::time::Instant::now();
+            for _ in 0..10 {
+                // Dirty the root so each pass is a real re-solve and
+                // not an incremental no-op.
+                tree.set_style(root, Style::column().scroll());
+                solve(&mut tree, root, viewport);
+            }
+            (tree.len(), start.elapsed() / 10)
+        }
+
+        println!("viewport 80x40, every row retained, 10 re-solves averaged");
+        println!("rows  nodes   box arithmetic   with text::measure");
+        let mut widest = std::time::Duration::ZERO;
+        for rows in [50, 100, 200, 400, 800] {
+            let (nodes, bare) = time_solve(rows, false);
+            let (_, texty) = time_solve(rows, true);
+            println!("{rows:4}  {nodes:5}   {bare:>14?}   {texty:>18?}");
+            widest = widest.max(texty);
+        }
+        assert!(
+            widest > std::time::Duration::ZERO,
+            "the largest solve took no measurable time, so this \
+             instrument measured nothing"
+        );
+    }
+
     #[test]
     fn removal_invalidates_subtree_ids() {
         let mut tree = LayoutTree::new();
