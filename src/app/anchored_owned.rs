@@ -363,23 +363,87 @@ struct TipState {
     /// Bumped by every enter/leave: a due one-shot from a stale
     /// generation must not open (leave-before-due).
     generation: u64,
-    layer: Option<LayerHandle>,
+    open: Option<OpenTip>,
     anchor: Rect,
+}
+
+struct OpenTip {
+    layer: LayerHandle,
+    /// Rich cards own a child reactive scope; plain labels do not
+    /// mount a tree and therefore have nothing to dispose.
+    scope: Option<Scope>,
 }
 
 impl TipState {
     fn close(&mut self) {
         self.generation += 1;
-        if let Some(layer) = self.layer.take() {
-            layer.remove();
+        if let Some(open) = self.open.take() {
+            open.layer.remove();
+            if let Some(scope) = open.scope {
+                scope.dispose();
+            }
+        }
+    }
+}
+
+/// What a hover tip shows.
+///
+/// The two variants are two different ROUTING costs, not two styles.
+/// A [`Label`](TipContent::Label) is a `layer_draw` with no tree, no
+/// focus and no handlers — the original tooltip, unchanged. A
+/// [`Card`](TipContent::Card) mounts a PASSIVE tree layer so the tip
+/// can be an arbitrary widget subtree (a cited message's header,
+/// title and body). Passive means keys stay with the anchor owner and
+/// the card's content must not contain focusable elements — the
+/// non-modal contract in [`super::AnchoredPanel`].
+///
+/// The card states its own `size` because `place_panel` takes the
+/// content extent as an INPUT: geometry is solved before the tree
+/// exists, so the caller says how much room to ask for and the
+/// solver clamps it to what the viewport can lend.
+#[derive(Clone)]
+pub enum TipContent {
+    /// One line of plain text. Zero-tree path.
+    Label(String),
+    /// A widget subtree, built lazily at show time so a dormant tip
+    /// costs nothing.
+    Card {
+        /// Desired extent in cells. `place_panel` may lend less.
+        size: Size,
+        /// Built once per show, in the layer's own scope.
+        build: Rc<dyn Fn(Scope) -> View>,
+    },
+}
+
+impl TipContent {
+    /// A card from a view builder, sized in cells.
+    pub fn card(size: Size, build: impl Fn(Scope) -> View + 'static) -> TipContent {
+        TipContent::Card {
+            size,
+            build: Rc::new(build),
+        }
+    }
+}
+
+impl std::fmt::Debug for TipContent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TipContent::Label(t) => f.debug_tuple("Label").field(t).finish(),
+            TipContent::Card { size, .. } => f.debug_struct("Card").field("size", size).finish(),
         }
     }
 }
 
 /// TOOLTIP mode (0500 routing mode 3): a hover-timed, non-interactive
-/// label — a `layer_draw` above the live stack, no tree, no focus, no
-/// handlers. Zero cost while dormant (one one-shot timer arms per
-/// hover; nothing wakes until due).
+/// tip — above the live stack, never focused. Zero cost while dormant
+/// (one one-shot timer arms per hover; nothing wakes until due).
+///
+/// A [`TipContent::Label`] rides a `layer_draw` with no tree at all; a
+/// [`TipContent::Card`] rides a passive tree layer. Both share ONE
+/// trigger implementation — the generation counter that defeats
+/// leave-before-due, the anchor-unmount cleanup, and the `place_panel`
+/// geometry — because two copies of that logic is two places for the
+/// stale-timer bug to come back.
 pub struct Tooltip;
 
 impl Tooltip {
@@ -395,11 +459,27 @@ impl Tooltip {
         delay: Duration,
         view: View,
     ) -> View {
-        let text = text.into();
+        Tooltip::attach_content(cx, overlays, TipContent::Label(text.into()), delay, view)
+    }
+
+    /// [`Tooltip::attach`] with rich content: the same hover trigger,
+    /// showing whatever [`TipContent`] describes.
+    ///
+    /// Every contract of `attach` holds unchanged — hover delay,
+    /// hide on `MouseLeave`, close on anchor unmount, screen-space
+    /// anchor capture, nothing woken until the timer is due.
+    pub fn attach_content(
+        cx: Scope,
+        overlays: &Overlays,
+        content: TipContent,
+        delay: Duration,
+        view: View,
+    ) -> View {
+        let text = content;
         let overlays = overlays.clone();
         let state = Rc::new(RefCell::new(TipState {
             generation: 0,
-            layer: None,
+            open: None,
             anchor: Rect::ZERO,
         }));
         {
@@ -431,13 +511,13 @@ impl Tooltip {
                     after(delay, move || {
                         let anchor = {
                             let s = state.borrow();
-                            if s.generation != generation || s.layer.is_some() {
+                            if s.generation != generation || s.open.is_some() {
                                 return; // left (or re-shown) meanwhile
                             }
                             s.anchor
                         };
-                        let layer = show_tip(&overlays, anchor, &text);
-                        state.borrow_mut().layer = layer;
+                        let open = show_tip(&overlays, cx, anchor, &text);
+                        state.borrow_mut().open = open;
                     });
                 }
                 UiEvent::MouseLeave => state.borrow_mut().close(),
@@ -456,33 +536,56 @@ impl Tooltip {
     }
 }
 
-/// Paint one tip label on a draw layer at `top_z() + 1`. Returns None
-/// when no row fits (the honest place_panel outcome).
-fn show_tip(overlays: &Overlays, anchor: Rect, text: &str) -> Option<LayerHandle> {
+/// Show one tip at `top_z() + 1`. Returns None when nothing fits (the
+/// honest place_panel outcome).
+///
+/// Both variants solve the SAME geometry and differ only in what they
+/// mount into it: a label paints on a draw layer, a card mounts a
+/// passive tree.
+fn show_tip(overlays: &Overlays, cx: Scope, anchor: Rect, content: &TipContent) -> Option<OpenTip> {
     let viewport = current_viewport();
-    let content = Size::new(crate::text::width(text) + 2, 1);
+    let want = match content {
+        TipContent::Label(text) => Size::new(crate::text::width(text) + 2, 1),
+        TipContent::Card { size, .. } => *size,
+    };
     let rect = place_panel(
         viewport,
         anchor,
-        content,
+        want,
         PanelWidth::Content {
-            min: content.w.min(3),
-            max: content.w,
+            min: want.w.min(3),
+            max: want.w,
         },
     );
     if rect.h <= 0 || rect.w <= 0 {
         return None;
     }
-    let tokens = &current_theme().tokens;
-    let ink = tokens.text;
-    let ground = tokens.surface_raised;
-    let text = text.to_string();
-    let layer = overlays.layer_draw(overlays.top_z() + 1, rect, move |canvas, rect| {
-        let style = Style::new().fg(ink).bg(ground);
-        canvas.fill_styled(rect, ' ', &style);
-        canvas.print_styled(crate::base::Point::new(rect.x + 1, rect.y), &text, &style);
-    });
-    Some(layer)
+    let z = overlays.top_z() + 1;
+    match content {
+        TipContent::Label(text) => {
+            let tokens = &current_theme().tokens;
+            let ink = tokens.text;
+            let ground = tokens.surface_raised;
+            let text = text.to_string();
+            let layer = overlays.layer_draw(z, rect, move |canvas, rect| {
+                let style = Style::new().fg(ink).bg(ground);
+                canvas.fill_styled(rect, ' ', &style);
+                canvas.print_styled(crate::base::Point::new(rect.x + 1, rect.y), &text, &style);
+            });
+            Some(OpenTip { layer, scope: None })
+        }
+        // `modal: false` is the whole routing contract: keys stay with
+        // the anchor owner and the tip is never focused.
+        TipContent::Card { build, .. } => {
+            let scope = cx.child();
+            let view = build(scope);
+            let layer = overlays.layer_tree(z, rect, false, scope, view);
+            Some(OpenTip {
+                layer,
+                scope: Some(scope),
+            })
+        }
+    }
 }
 
 #[cfg(test)]

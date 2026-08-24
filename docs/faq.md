@@ -358,6 +358,24 @@ and pixel-precision reporting where the terminal verifiably supports it —
 raw pixel coordinates ride alongside cell coordinates only when pixel
 reporting is actually active, never posing as cells.
 
+`List::on_context_menu` exposes a right-button row gesture without changing
+selection or activating the row. Pair its screen-space `ListContext` with
+`ContextMenu` for an owned action menu; Shift+F10 provides the keyboard path.
+
+## Can drawer labels use text rotated by 90 degrees?
+
+Not as terminal text. A terminal screen is a grid of cells containing
+grapheme clusters and styling attributes; ANSI/SGR has no glyph-rotation or
+vertical-writing command. `DrawerDock` uses the portable representation: one
+grapheme cluster per row, with the complete horizontal title retained as the
+tab's semantic label.
+
+A pre-rendered rotated bitmap can be displayed through a graphics channel,
+but it is image artwork rather than text: it is not searchable or selectable,
+requires a font rasterization step outside `DrawerDock`, and may degrade to a
+mosaic on terminals without a pixel protocol. AbstractTUI therefore does not
+offer a `rotated text` flag that silently changes those semantics.
+
 ## How do I let users pick a theme?
 
 The one-line answer is `ThemeSwitcher` (in the prelude): mount

@@ -71,14 +71,16 @@
   the widget catalog (the shared scrollbar — grab the thumb, drag it row for row,
   teleport from bare track, `Scroll::scrollbar_width` for the gutter;
   `List` and `Table` selection-vs-activation, `List` removable
-  rows (`on_remove`), row accessories, hover ink, bindable `selection`/`offset_y`
+  rows (`on_remove`), row accessories, right-click/Shift+F10 row context requests
+  paired with the reusable owned `ContextMenu`, hover ink, bindable `selection`/`offset_y`
   and `on_row_double_click`, masked `TextInput`, Codex-compatible word/line navigation
   and word-delete chords in both text widgets, and `scroll::freeze_follow_tail` for
   copy-safe streaming selection,
   diff-aware `CodeView`,
   `Feed` streaming/rich lines/sync/selection-by-key, chart history rings with time axes,
   `Meter`/`AudioScope` levels, the `PageHost` page-level tab host, the `DrawerDock`
-  right-edge drawer rail (docked panels, full collapse, badge dots), the `Block`
+  right-edge drawer rail (docked panels, full collapse, badge dots, semantic keyboard
+  tabs, and portable stacked graphemes rather than unsupported rotated terminal text), the `Block`
   close affordance `on_close`), the widget
   disposal-safety law, the file-attachment surfaces (`Element::on_paste` capture hook,
   `TextInput`/`TextArea`

@@ -88,6 +88,39 @@ fn collapsed_is_content_plus_rail_only() {
 }
 
 #[test]
+fn tabs_keep_full_semantic_labels_and_support_keyboard_toggle() {
+    let size = Size::new(W, H);
+    let (root, mut tree, open, _files, _chat) = dock(size);
+    let access = tree.accessibility_tree();
+    assert!(access
+        .entries
+        .iter()
+        .any(|entry| entry.role == Role::Tabs && entry.label == "drawers"));
+    let labels: Vec<&str> = access
+        .entries
+        .iter()
+        .filter(|entry| entry.role == Role::Tab)
+        .map(|entry| entry.label.as_str())
+        .collect();
+    assert_eq!(labels, ["Files", "Chat"]);
+
+    key(&mut tree, Key::Tab); // focus Files
+    let focused = tree
+        .accessibility_tree()
+        .focused()
+        .map(|entry| (entry.role, entry.label.clone()));
+    assert_eq!(focused, Some((Role::Tab, "Files".into())));
+    key(&mut tree, Key::Enter);
+    let _ = settle(&mut tree, size);
+    assert_eq!(open.get_untracked().as_deref(), Some("files"));
+
+    key(&mut tree, Key::Char(' ')); // active tab toggles closed
+    let _ = settle(&mut tree, size);
+    assert_eq!(open.get_untracked(), None);
+    root.dispose();
+}
+
+#[test]
 fn tab_click_opens_active_click_collapses() {
     let size = Size::new(W, H);
     let (root, mut tree, open, files, _chat) = dock(size);

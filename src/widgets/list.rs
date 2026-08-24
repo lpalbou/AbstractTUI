@@ -28,6 +28,14 @@
 //! beside it. Rich labels ride
 //! [`List::rich_items`] (styled spans on the body column only).
 //!
+//! Row context actions are a separate, non-selecting gesture:
+//! [`List::on_context_menu`] fires on a secondary-button press over an
+//! item and reports the item index plus screen-space pointer/row geometry
+//! in [`ListContext`]. The List deliberately does not import the app
+//! overlay layer; pass that event to
+//! [`ContextMenu`](crate::app::ContextMenu) when the app wants an owned,
+//! keyboard-accessible menu.
+//!
 //! Disposal-safety law (ruling clause 4): the List completes ALL of its
 //! own bookkeeping (selection write, sticky-key write, ensure-visible
 //! scrolling) BEFORE any user callback runs, so a callback may dispose
@@ -82,7 +90,7 @@ use crate::reactive::{Scope, Signal};
 use crate::render::rich::RichText;
 use crate::render::{Attrs, Style};
 use crate::theme::TokenSet;
-use crate::ui::{dyn_view, Element, EventCtx, Key, MouseButton, MouseKind, Phase, UiEvent};
+use crate::ui::{dyn_view, Element, EventCtx, Key, Mods, MouseButton, MouseKind, Phase, UiEvent};
 use crate::widgets::richtext::draw_rich_lines;
 use crate::widgets::scrollbar;
 
@@ -125,6 +133,48 @@ enum ListHit {
 /// against the (build-fixed) accessory width. Hit-testing and painting
 /// then borrow — neither allocates, so hover motion is free.
 type AccessoryCells = Rc<Vec<Option<(String, i32)>>>;
+
+/// A secondary-button press over a List item.
+///
+/// Both coordinates are in SCREEN cells, including when the List lives
+/// inside a positioned overlay. `screen_row` is the visible portion of
+/// the item, excluding the scrollbar; anchor a popup at
+/// `screen_position` and use `index` to build row-specific actions.
+/// The gesture does not move selection and never activates the row.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct ListContext {
+    pub index: usize,
+    pub screen_position: Point,
+    pub screen_row: Rect,
+    pub mods: Mods,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn list_context(
+    index: usize,
+    position: Point,
+    rect: Rect,
+    cols: ListColumns,
+    offset: i32,
+    prefix: &[i32],
+    layer_origin: Point,
+    mods: Mods,
+) -> ListContext {
+    let top = (rect.y + prefix[index] - offset).max(rect.y);
+    let bottom = (rect.y + prefix[index + 1] - offset).min(rect.bottom());
+    ListContext {
+        index,
+        screen_position: Point::new(position.x + layer_origin.x, position.y + layer_origin.y),
+        screen_row: Rect::new(
+            rect.x + layer_origin.x,
+            top + layer_origin.y,
+            cols.body_w + cols.accessory_w,
+            (bottom - top).max(0),
+        ),
+        mods,
+    }
+}
 
 fn list_columns(viewport_w: i32, show_bar: bool, accessory_w: i32) -> ListColumns {
     let bar_w = i32::from(show_bar);
@@ -230,6 +280,7 @@ pub struct List {
     on_accessory_click: Option<Box<dyn FnMut(usize)>>,
     on_remove: Option<Box<dyn FnMut(usize)>>,
     on_row_double_click: Option<Box<dyn FnMut(usize)>>,
+    on_context_menu: Option<Box<dyn FnMut(ListContext)>>,
     rich_items: Option<Vec<RichText>>,
 }
 
@@ -264,6 +315,7 @@ impl List {
             on_accessory_click: None,
             on_remove: None,
             on_row_double_click: None,
+            on_context_menu: None,
             rich_items: None,
         }
     }
@@ -407,6 +459,21 @@ impl List {
         self
     }
 
+    /// Secondary-button action request for an item. Fires on
+    /// `MouseButton::Right` DOWN over either the row body or its
+    /// accessory, never over empty space or the scrollbar. The callback
+    /// receives screen-space geometry suitable for an anchored popup.
+    ///
+    /// This gesture does not move selection, call `on_select`, or call
+    /// `on_activate`. When unbound, right presses continue bubbling.
+    /// Pair it with [`ContextMenu`](crate::app::ContextMenu) for the
+    /// standard owned menu surface. Shift+F10 invokes the same callback
+    /// for the selected row and first scrolls that row into view.
+    pub fn on_context_menu(mut self, f: impl FnMut(ListContext) + 'static) -> List {
+        self.on_context_menu = Some(Box::new(f));
+        self
+    }
+
     /// Per-row rich labels (same length as `items`). Body column only;
     /// accessories stay plain text. Replaces the plain string on the
     /// first visible row of each item.
@@ -516,6 +583,8 @@ impl List {
             Rc::new(RefCell::new(self.on_activate));
         let on_row_double_click: crate::widgets::SharedCallback<usize> =
             Rc::new(RefCell::new(self.on_row_double_click));
+        let on_context_menu: crate::widgets::SharedCallback<ListContext> =
+            Rc::new(RefCell::new(self.on_context_menu));
 
         // `on_remove` is `row_accessory` + `accessory_width` +
         // `on_accessory_click` with the dismiss glyph filled in; an
@@ -634,6 +703,7 @@ impl List {
         let activate = on_activate;
         let accessory_click = on_accessory_click;
         let row_double_click = on_row_double_click;
+        let context_menu = on_context_menu;
         let accessory_w_handler = accessory_w;
         let cells_handler = accessory_cells.clone();
         let hover_handler = hover;
@@ -656,6 +726,35 @@ impl List {
                     hover_handler.set_if_changed(None);
                 }
                 UiEvent::Key(k) => {
+                    // The portable keyboard equivalent of a secondary
+                    // press. Modified function keys are distinct on the
+                    // baseline terminal wire; a physical Menu key is not.
+                    if k.key == Key::F(10) && k.mods == Mods::SHIFT {
+                        if len == 0 || context_menu.borrow().is_none() {
+                            return;
+                        }
+                        let idx = selection.get_untracked().min(len - 1);
+                        ensure_visible(offset, &prefix_for_handler, idx, h, total_rows);
+                        let cols = list_columns(rect.w, total_rows > h, accessory_w_handler);
+                        let first = offset.get_untracked();
+                        let y = (rect.y + prefix_for_handler[idx] - first)
+                            .clamp(rect.y, rect.bottom().saturating_sub(1));
+                        let event = list_context(
+                            idx,
+                            Point::new(rect.x, y),
+                            rect,
+                            cols,
+                            first,
+                            &prefix_for_handler,
+                            ctx.layer_origin(),
+                            k.mods,
+                        );
+                        ctx.stop_propagation();
+                        if let Some(f) = context_menu.borrow_mut().as_mut() {
+                            f(event);
+                        }
+                        return;
+                    }
                     // Activation keys (0250 ruling clause 2): Enter
                     // always; Space too, because a List has no toggle
                     // meaning. Consumed ONLY when a callback is bound —
@@ -766,6 +865,31 @@ impl List {
                             }
                         }
                         ctx.stop_propagation();
+                    }
+                    MouseKind::Down(MouseButton::Right) => {
+                        let Some(ListHit::Row(idx, _)) = hit_at(m.pos) else {
+                            return;
+                        };
+                        // An unbound List does not claim the terminal's
+                        // secondary-button gesture. This lets an ancestor
+                        // provide a broader surface menu.
+                        let mut slot = context_menu.borrow_mut();
+                        let Some(f) = slot.as_mut() else { return };
+                        let cols = list_columns(rect.w, total_rows > h, accessory_w_handler);
+                        let event = list_context(
+                            idx,
+                            m.pos,
+                            rect,
+                            cols,
+                            offset.get_untracked(),
+                            &prefix_for_handler,
+                            ctx.layer_origin(),
+                            m.mods,
+                        );
+                        // All widget work ends before user code: the
+                        // callback may synchronously dispose this List.
+                        ctx.stop_propagation();
+                        f(event);
                     }
                     _ => {}
                 },

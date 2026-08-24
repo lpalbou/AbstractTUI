@@ -25,7 +25,7 @@ use crate::layout::{Dimension, Style as LayoutStyle};
 use crate::reactive::{create_root, flush_effects, run_due_timers, Scope};
 use crate::term::Capabilities;
 use crate::testing::CaptureTerm;
-use crate::ui::{text, Element, MouseEvent, MouseKind, UiEvent};
+use crate::ui::{text, Element, MouseEvent, MouseKind, UiEvent, View};
 use crate::widgets::{TextArea, TextAreaState};
 
 use super::super::driver::{Driver, RunConfig};
@@ -33,7 +33,7 @@ use super::super::overlays::{OverlayContent, Overlays};
 use super::super::popups::{Modal, MODAL_Z};
 use super::super::select::{Combobox, MultiSelect, Select, SelectOption};
 use super::super::App;
-use super::{Completion, CompletionCandidate, Tooltip};
+use super::{Completion, CompletionCandidate, TipContent, Tooltip};
 
 const VP: Size = Size::new(110, 34);
 
@@ -488,4 +488,205 @@ fn tooltip_inside_positioned_overlay_places_tip_at_screen_position() {
          not its layer-local row; got {tip:?}"
     );
     root.dispose();
+}
+
+// ---------------------------------------------------------------------
+// TipContent::Card — the rich hover preview (laurent, dm:laurent--tui#19)
+// ---------------------------------------------------------------------
+
+/// A real App + Driver + CaptureTerm whose ROOT is a tip-wrapped
+/// target, so the assertions can read composed cells. Overlay
+/// composition lives in the driver, so a hand-rolled `Overlays` cannot
+/// answer "what does the user see" — and that is the only question
+/// worth asking of a hover card.
+struct TipRig {
+    app: App,
+    term: CaptureTerm,
+    driver: Driver,
+    overlays: Overlays,
+}
+
+fn tip_rig(make: impl Fn(Scope, &Overlays, View) -> View + 'static) -> TipRig {
+    let mut term = CaptureTerm::new(VP);
+    let mut app = App::new(VP);
+    let overlays = app.overlays();
+    let ov = overlays.clone();
+    app.mount(move |cx| {
+        let target = Element::new()
+            .style(LayoutStyle::line(1).w(8))
+            .child(text("cite"))
+            .build();
+        Element::new()
+            .style(
+                LayoutStyle::column()
+                    .width(Dimension::Percent(1.0))
+                    .height(Dimension::Percent(1.0)),
+            )
+            .child(make(cx, &ov, target))
+            .build()
+    })
+    .expect("mount");
+    let cfg = RunConfig {
+        caps: Some(Capabilities::with(|c| {
+            c.truecolor = true;
+            c.colors_256 = true;
+        })),
+        enter: None,
+        probe: false,
+        // Mode 1003: hover tips need motion reporting with no button
+        // held, which is exactly what `hover_ink` arms.
+        hover_ink: true,
+        ..RunConfig::default()
+    };
+    let driver = Driver::new(&mut app, &mut term, cfg).expect("driver");
+    TipRig {
+        app,
+        term,
+        driver,
+        overlays,
+    }
+}
+
+impl TipRig {
+    fn settle(&mut self) {
+        for _ in 0..64 {
+            if self
+                .driver
+                .turn(&mut self.app, &mut self.term)
+                .expect("turn")
+                .idle
+            {
+                break;
+            }
+        }
+    }
+
+    /// Move the pointer through the REAL pipeline: SGR 1006 motion
+    /// bytes into the terminal, not a hand-built UiEvent. A tip that
+    /// only opens for a synthesised event is a tip that never opens.
+    fn mouse_to(&mut self, x: i32) {
+        self.term
+            .push_input(format!("\x1b[<35;{};1M", x + 1).as_bytes());
+        self.settle();
+        flush_effects();
+    }
+
+    fn fire_timers(&mut self, after: Duration) {
+        run_due_timers(Instant::now() + after);
+        flush_effects();
+        self.settle();
+    }
+
+    fn screen(&self) -> String {
+        self.term.screen().to_text()
+    }
+
+    fn layer_kinds(&self) -> Vec<&'static str> {
+        let store = self.overlays.store().borrow();
+        store
+            .meta
+            .iter()
+            .map(|m| match &m.content {
+                OverlayContent::Tree { .. } => "tree",
+                OverlayContent::Draw { .. } => "draw",
+                _ => "other",
+            })
+            .collect()
+    }
+}
+
+/// The point of the whole feature: a card tip mounts a TREE and its
+/// widget content actually reaches the screen. Asserted on composed
+/// cells rather than on the overlay store, because a layer that opened
+/// and painted nothing satisfies every store-shaped check.
+#[test]
+fn a_card_tip_mounts_a_tree_and_its_content_reaches_the_screen() {
+    let mut rig = tip_rig(|cx, ov, target| {
+        Tooltip::attach_content(
+            cx,
+            ov,
+            TipContent::card(Size::new(24, 3), |_cx| {
+                Element::new()
+                    .style(LayoutStyle::column())
+                    .child(text("cited body"))
+                    .build()
+            }),
+            Duration::ZERO,
+            target,
+        )
+    });
+    rig.settle();
+    assert!(
+        !rig.screen().contains("cited body"),
+        "a dormant tip must paint nothing"
+    );
+
+    rig.mouse_to(0);
+    rig.fire_timers(Duration::ZERO);
+
+    let kinds = rig.layer_kinds();
+    assert!(
+        kinds.iter().any(|k| *k == "tree"),
+        "a card must open a TREE layer, not a draw layer; got {kinds:?}"
+    );
+    assert!(
+        !kinds.iter().any(|k| *k == "draw"),
+        "a card must not fall back to the label's draw path: {kinds:?}"
+    );
+    assert!(
+        rig.screen().contains("cited body"),
+        "the card's widget content never reached the screen:\n{}",
+        rig.screen()
+    );
+}
+
+/// The published API is unchanged by the widening: a label tip still
+/// takes the zero-tree draw path. `attach` now routes through
+/// `attach_content`, so this is the regression guard on that hop.
+#[test]
+fn a_label_tip_still_takes_the_zero_tree_draw_path() {
+    let mut rig =
+        tip_rig(|cx, ov, target| Tooltip::attach(cx, ov, "plain tip", Duration::ZERO, target));
+    rig.settle();
+    rig.mouse_to(0);
+    rig.fire_timers(Duration::ZERO);
+
+    let kinds = rig.layer_kinds();
+    assert_eq!(
+        kinds.iter().filter(|k| **k == "draw").count(),
+        1,
+        "the label path must stay exactly one draw layer; got {kinds:?}"
+    );
+    assert!(
+        rig.screen().contains("plain tip"),
+        "the label never painted:\n{}",
+        rig.screen()
+    );
+}
+
+/// Leave-before-due must defeat a card exactly as it defeats a label.
+/// The generation counter is SHARED between the two paths, and this
+/// says so by measurement rather than trusting that sharing the code
+/// shared the behaviour.
+#[test]
+fn a_card_tip_does_not_open_when_the_pointer_left_before_the_delay() {
+    let mut rig = tip_rig(|cx, ov, target| {
+        Tooltip::attach_content(
+            cx,
+            ov,
+            TipContent::card(Size::new(20, 3), |_cx| text("must not appear")),
+            Duration::from_millis(50),
+            target,
+        )
+    });
+    rig.settle();
+    rig.mouse_to(0); // enter: arms the one-shot
+    rig.mouse_to(60); // leave before it is due
+    rig.fire_timers(Duration::from_millis(100));
+
+    assert!(
+        !rig.screen().contains("must not appear"),
+        "a stale timer opened a card after the pointer left:\n{}",
+        rig.screen()
+    );
 }

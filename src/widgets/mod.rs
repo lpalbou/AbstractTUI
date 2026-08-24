@@ -67,7 +67,7 @@ pub use feed::{CustomBlock, Feed, FeedBlock, FeedItem, FeedState};
 pub use grid::Grid;
 pub use image::{Image, ImageAlign, ImageFit};
 pub use input::TextInput;
-pub use list::List;
+pub use list::{List, ListContext};
 pub use logo::Logo;
 pub use markdown::{FenceBlock, MarkdownView, MdRuleInk, MdRuleStyle, MdRuleWidth};
 pub use progress::Progress;

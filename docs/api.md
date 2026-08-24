@@ -335,12 +335,12 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
 - **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, wheel scrolling (the window moves, the caret stays; any edit re-attaches), and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
-- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`, bindable `selection`/`offset_y`, hover ink. Removable rows in one call (`on_remove`), or the general trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), and timed double-click on the body (`on_row_double_click`). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
+- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`, bindable `selection`/`offset_y`, hover ink. Removable rows in one call (`on_remove`), or the general trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), timed double-click on the body (`on_row_double_click`), and non-selecting right-click/Shift+F10 row context requests (`on_context_menu`) that pair with `ContextMenu`. Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
 - **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful. A content-sized feed carries an intrinsic measure, so `Scroll::new(Feed::new(&state).view(cx))` scrolls the true extent from the first frame.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, hover ink, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
 - **PageHost** — the page-level tab host: N FULL pages behind one themed tab bar, exactly one mounted (see [its own section](#widgetspagehost--the-page-level-tab-host) below).
-- **DrawerDock** — the right-edge drawer rail: always-visible vertical tabs, each fronting a docked side panel — at most one open, fully collapsed to the bare rail otherwise, with reactive badge dots (see [its own section](#widgetsdrawerdock--the-right-edge-drawer-rail) below).
+- **DrawerDock** — the right-edge drawer rail: always-visible semantic keyboard tabs rendered portably as stacked graphemes, each fronting a docked side panel — at most one open, fully collapsed to the bare rail otherwise, with reactive badge dots (see [its own section](#widgetsdrawerdock--the-right-edge-drawer-rail) below).
 - **Disclosure** — the fold/unfold card: a one-row title header (glyph + truncating title + muted detail slot) that expands a body in place. Click or Enter/Space toggles; `max_body_rows` caps the body behind a scrollbar; state is widget-internal (`initially_folded`) or app-owned (`folded(Signal<bool>)`).
 - **FilePicker** — directory browser for modals and attach flows: breadcrumb header, type-to-filter input, entry rows with kind glyphs and an optional size column, opt-in multi-select, `on_pick(Vec<String>)`; entries come from the pluggable `FileSource` seam (see [the file-attachments section](#file-attachments--paste-intercept-drop-classifier-filepicker) below).
 - **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override) and can be read back through `extent_signal`; `follow_tail` binds the pinned-to-bottom idiom; `scrollbar_auto_hide` hides the bar while content fits, and `scrollbar_width` widens its reserved gutter.
@@ -531,6 +531,48 @@ scrollbar-column presses belong to the bar (see
 [The scrollbar](#the-scrollbar), which every scrolling widget shares). Styled body labels ride
 [`List::rich_items`](crate::widgets::List::rich_items) (same length as
 `items`; accessories stay plain text).
+
+**Row context actions.**
+[`List::on_context_menu`](crate::widgets::List::on_context_menu) reports a
+secondary-button press over an item as a
+[`ListContext`](crate::widgets::ListContext). The event carries the row index,
+the pointer cell, and the visible row rect in **screen coordinates**, so the
+same code works inside a root view, modal, or drawer. Shift+F10 invokes the
+callback for the selected row and first scrolls it into view.
+
+The gesture is deliberately separate from selection and activation:
+right-clicking an unselected row does not call `on_select`, `on_activate`, or
+an accessory callback. Use the reported index to resolve a stable item id,
+then build a [`ContextMenu`](crate::app::ContextMenu) for that item:
+
+```rust
+use abstracttui::prelude::*;
+use std::rc::Rc;
+
+fn seats(cx: Scope, names: Vec<String>, ids: Vec<String>) -> View {
+    let ids = Rc::new(ids);
+    List::new(names)
+        .on_context_menu(move |event| {
+            let Some(seat_id) = ids.get(event.index).cloned() else { return };
+            ContextMenu::new([
+                ContextMenuItem::new("promote", "Promote"),
+                ContextMenuItem::new("demote", "Demote").disabled(false),
+                ContextMenuItem::new("mission", "Assign mission").hint("A"),
+            ])
+            .access_label(format!("{seat_id} actions"))
+            .on_action(move |action| apply_seat_action(&seat_id, action))
+            .open(cx, event.screen_position);
+        })
+        .view(cx)
+}
+```
+
+`ContextMenu` is an owned popup: Up/Down/Home/End/Page keys move the
+highlight while skipping disabled actions; Enter or Space commits; a left
+press commits a row; Escape, an outside press, anchor disposal, or resize
+dismisses without running an action. The popup closes before `on_action`
+runs, so the callback may dispose the opener or open a replacement safely.
+Empty and fully disabled menus do not open.
 
 **Hover ink.** Ink marks the hot ROW, bold marks the hot ZONE: the row
 under the pointer takes accent ink, and whichever of body/accessory the
@@ -1340,6 +1382,17 @@ The contract, stated plainly:
   from screen; debug builds assert. Keep tab titles short: the rail
   renders tabs top-down at fixed height, and a tab past the viewport
   bottom is clipped and unreachable by mouse.
+- **Rail labels are stacked text, not rotated text.** Terminal cells carry a
+  grapheme and styling attributes but no 90-degree transform or vertical
+  writing mode. `DrawerDock` therefore prints one grapheme cluster per row
+  and exposes the full title as the tab's semantic label. A caller can display
+  a pre-rendered rotated bitmap elsewhere, but that is image artwork rather
+  than portable, searchable terminal text and is not a `DrawerDock` label
+  mode.
+- **Tabs are keyboard-operable and semantic.** Tab/Shift+Tab focuses the
+  rail's `Role::Tab` nodes; Enter or Space performs the same toggle as a left
+  click. The semantic tree retains each full title even though the visible
+  rail uses stacked graphemes.
 - **`open` is the API.** A `Signal<Option<String>>` of the drawer id.
   The dock renders and mutates it; the app may write it any time —
   external writes switch panels without firing `on_change`, dock-driven

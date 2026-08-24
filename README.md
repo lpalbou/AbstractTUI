@@ -44,7 +44,8 @@ through ordinary reactivity.*
   `Combobox` / `MultiSelect` over anchored popups that layer above modals),
   lists and sortable tables with distinct selection and activation events
   (single click selects; Enter or double-click activates; lists also support
-  trailing accessory columns and rich row labels — see `presence_board`),
+  trailing accessory columns, rich row labels, and row context requests that
+  open reusable keyboard-accessible `ContextMenu` popups — see `presence_board`),
   tabs, checkboxes, radio groups, scroll regions, panels (closable via an
   opt-in title-row ✕), a directory `FilePicker`, badges, progress
   bars, spinners, modals, toasts, tooltips — plus the app-shell trio:
@@ -52,7 +53,7 @@ through ordinary reactivity.*
   chords, reactive tab badges, overflow windowing), `Drawer`
   (edge-anchored overlay panels, modal or glanceable, sliding from any
   edge) and `DrawerDock` (a right-edge rail of always-visible vertical
-  tabs fronting docked side panels — one open at a time, fully
+  tabs, rendered portably as stacked graphemes, fronting docked side panels — one open at a time, fully
   collapsed otherwise, reactive badge dots) — arranged by a flexbox-style solver
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).

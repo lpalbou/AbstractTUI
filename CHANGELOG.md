@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- widgets, app: `List::on_context_menu` reports a secondary-button row
+  request in screen coordinates, with Shift+F10 as the keyboard equivalent.
+  The reusable `ContextMenu` popup supplies disabled actions, keyboard
+  navigation, viewport-aware placement, semantic Menu/MenuItem roles, and
+  close-before-action callbacks. Right-clicking a row does not implicitly
+  select or activate it.
+
+- widgets: `DrawerDock` rail tabs expose their full titles through semantic
+  Tabs/Tab nodes and support Enter/Space activation from keyboard focus.
+
+### Documentation
+
+- State the terminal rendering boundary for drawer labels: portable text can
+  stack grapheme clusters vertically, but terminal cells cannot rotate glyphs
+  by 90 degrees. A rotated bitmap is artwork rather than semantic terminal
+  text.
+
 ## [0.5.0] - 2026-08-23
 
 A minor bump because one addition is technically breaking (below); the
@@ -1602,8 +1621,7 @@ not do. Use `0.3.0`.
 
 ### Fixed
 
-- ui: the FUSION class (gateway-console field incident 2026-07-24) —
-  a node crushed to ZERO AREA by flex overflow pressure no longer runs
+- ui: a node crushed to ZERO AREA by flex overflow pressure no longer runs
   its draw closure with the degenerate rect. Empty rects never
   intersect anything, so they fell through the paint cull and a
   hand-rolled closure that clips on one axis only (a title bar
@@ -2626,11 +2644,9 @@ not do. Use `0.3.0`.
   absolute CUP and its first SGR is reset-based (backlog 0298, P0). The
   poison already re-emitted every CELL, but the first run was still
   PLACED by relative motion from the pre-resize parked cursor — a ghost
-  after an emulator reflow moves the physical cursor (macOS Terminal's
-  bottom-anchored growth in the field incident), which offset the run
-  and left a stale band of the previous frame on screen (live report:
-  stale header band above the live frame after a workflow-picker close
-  around a resize). The splash player (`boot::player`) already
+  when an emulator reflow moves the physical cursor during bottom-anchored
+  growth, which offset the run and left a stale band of the previous frame
+  on screen. The splash player (`boot::player`) already
   invalidated on resize; the driver now upholds the same rule. New
   acceptance suite `tests/adv_resize_modal.rs`: every
   {resize↑↓←→, modal close} interleaving — including both in one turn —

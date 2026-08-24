@@ -85,6 +85,157 @@ fn click_selects_by_visible_row_and_wheel_scrolls() {
 }
 
 #[test]
+fn right_press_reports_scrolled_variable_height_row_without_selecting_or_activating() {
+    let t = default_theme().tokens;
+    let contexts: Rc<RefCell<Vec<ListContext>>> = Default::default();
+    let selects: Rc<RefCell<Vec<usize>>> = Default::default();
+    let activates: Rc<RefCell<Vec<usize>>> = Default::default();
+    let accessories: Rc<RefCell<Vec<usize>>> = Default::default();
+    let c = contexts.clone();
+    let s = selects.clone();
+    let a = activates.clone();
+    let x = accessories.clone();
+    let mut probes = None;
+    let (_root, mut tree) = mount_widget(Size::new(14, 4), |cx| {
+        let selection = cx.signal(0usize);
+        let offset = cx.signal(2i32);
+        probes = Some((selection, offset));
+        List::of((0..8).map(|i| format!("row {i}")))
+            .selection(selection)
+            .offset_y(offset)
+            .item_heights(|i, _| if i % 2 == 0 { 2 } else { 1 })
+            .row_accessory(|_, _| Some("…".into()))
+            .on_select(move |i| s.borrow_mut().push(i))
+            .on_activate(move |i| a.borrow_mut().push(i))
+            .on_accessory_click(move |i| x.borrow_mut().push(i))
+            .on_context_menu(move |event| c.borrow_mut().push(event))
+            .element(cx, &t)
+            .build()
+    });
+    let (selection, offset) = probes.expect("signals");
+    tree.layout();
+
+    // Content row = offset 2 + local y 1 = 3, which is item 2's first
+    // row under heights [2,1,2,...]. Right Up must not duplicate.
+    assert!(mouse(&mut tree, MouseKind::Down(MouseButton::Right), 2, 1));
+    assert!(!mouse(&mut tree, MouseKind::Up(MouseButton::Right), 2, 1));
+    assert_eq!(contexts.borrow().len(), 1);
+    assert_eq!(contexts.borrow()[0].index, 2);
+    assert_eq!(contexts.borrow()[0].screen_position, Point::new(2, 1));
+    assert_eq!(selection.get_untracked(), 0);
+    assert_eq!(offset.get_untracked(), 2);
+    assert!(selects.borrow().is_empty());
+    assert!(activates.borrow().is_empty());
+    assert!(accessories.borrow().is_empty());
+}
+
+#[test]
+fn context_press_uses_screen_space_and_shift_f10_targets_selection() {
+    let t = default_theme().tokens;
+    let contexts: Rc<RefCell<Vec<ListContext>>> = Default::default();
+    let c = contexts.clone();
+    let mut selection_probe = None;
+    let (_root, mut tree) = mount_widget(Size::new(12, 4), |cx| {
+        let selection = cx.signal(2usize);
+        selection_probe = Some(selection);
+        List::of(["zero", "one", "two", "three"])
+            .selection(selection)
+            .on_context_menu(move |event| c.borrow_mut().push(event))
+            .element(cx, &t)
+            .build()
+    });
+    let selection = selection_probe.expect("selection");
+    tree.set_layer_origin(Point::new(20, 7));
+    tree.layout();
+
+    mouse(&mut tree, MouseKind::Down(MouseButton::Right), 2, 1);
+    assert_eq!(contexts.borrow()[0].index, 1);
+    assert_eq!(contexts.borrow()[0].screen_position, Point::new(22, 8));
+    assert_eq!(contexts.borrow()[0].screen_row, Rect::new(20, 8, 12, 1));
+    assert_eq!(selection.get_untracked(), 2, "right press did not select");
+
+    key(&mut tree, Key::Tab);
+    tree.dispatch(&UiEvent::Key(crate::ui::KeyEvent::new(
+        Key::F(10),
+        Mods::SHIFT,
+    )));
+    assert_eq!(contexts.borrow().len(), 2);
+    assert_eq!(contexts.borrow()[1].index, 2);
+    assert_eq!(contexts.borrow()[1].screen_position, Point::new(20, 9));
+    assert_eq!(contexts.borrow()[1].mods, Mods::SHIFT);
+}
+
+#[test]
+fn context_callback_claims_only_right_down_on_an_item() {
+    let t = default_theme().tokens;
+    let contexts: Rc<RefCell<Vec<usize>>> = Default::default();
+    let c = contexts.clone();
+    let (_root, mut bound) = mount_widget(Size::new(10, 4), |cx| {
+        List::of(["one", "two"])
+            .on_context_menu(move |event| c.borrow_mut().push(event.index))
+            .element(cx, &t)
+            .build()
+    });
+    bound.layout();
+    assert!(!mouse(
+        &mut bound,
+        MouseKind::Down(MouseButton::Right),
+        2,
+        3
+    ));
+    mouse(&mut bound, MouseKind::Down(MouseButton::Left), 2, 0);
+    assert!(contexts.borrow().is_empty());
+
+    // With overflow, the final column is the scrollbar rather than a row.
+    let c2 = contexts.clone();
+    let (_root2, mut scrolled) = mount_widget(Size::new(10, 2), |cx| {
+        List::of((0..8).map(|i| format!("row {i}")))
+            .on_context_menu(move |event| c2.borrow_mut().push(event.index))
+            .element(cx, &t)
+            .build()
+    });
+    scrolled.layout();
+    assert!(!mouse(
+        &mut scrolled,
+        MouseKind::Down(MouseButton::Right),
+        9,
+        0
+    ));
+
+    // An unbound list leaves the gesture for an ancestor surface.
+    let (_root3, mut unbound) = mount_widget(Size::new(10, 2), |cx| {
+        List::of(["one", "two"]).element(cx, &t).build()
+    });
+    unbound.layout();
+    assert!(!mouse(
+        &mut unbound,
+        MouseKind::Down(MouseButton::Right),
+        2,
+        0
+    ));
+    key(&mut unbound, Key::Tab);
+    assert!(!unbound.dispatch(&UiEvent::Key(crate::ui::KeyEvent::new(
+        Key::F(10),
+        Mods::SHIFT,
+    ))));
+
+    let empty_contexts: Rc<RefCell<Vec<usize>>> = Default::default();
+    let ec = empty_contexts.clone();
+    let (_root4, mut empty) = mount_widget(Size::new(10, 2), |cx| {
+        List::of([] as [&str; 0])
+            .on_context_menu(move |event| ec.borrow_mut().push(event.index))
+            .element(cx, &t)
+            .build()
+    });
+    key(&mut empty, Key::Tab);
+    assert!(!empty.dispatch(&UiEvent::Key(crate::ui::KeyEvent::new(
+        Key::F(10),
+        Mods::SHIFT,
+    ))));
+    assert!(empty_contexts.borrow().is_empty());
+}
+
+#[test]
 fn selection_key_survives_data_mutation_rebuild() {
     // STICKY SELECTION (cycle 7): the key signal re-finds its item's
     // NEW index after items shift — a rebuild with an inserted row
