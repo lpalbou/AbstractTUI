@@ -949,6 +949,31 @@ fn scrolled_column(size: Size, rows: i32) -> (App, Rc<RefCell<Option<Signal<i32>
     (app, wire)
 }
 
+/// Same column, but with `scrollbar_auto_hide(true)` — the only build
+/// under which fitting content leaves NO bar on screen.
+///
+/// It exists because the plain helper above does not produce one.
+/// `scrollbar_auto_hide` defaults to **false**, so `scrolled_column`
+/// with fitting content paints a persistent rail; a test that wants a
+/// genuinely invisible strip has to ask for it. See
+/// `an_invisible_bar_does_not_eat_a_selection`, which described an
+/// auto-hidden bar while building a visible one.
+fn scrolled_column_auto_hide(size: Size, rows: i32) -> App {
+    let mut app = App::new(size);
+    app.mount(move |cx| {
+        let mut col = Element::new().style(LayoutStyle::column());
+        for i in 0..rows {
+            col = col.child(text(format!("item-{i:02}")));
+        }
+        Scroll::new(col.build())
+            .offset_y(cx.signal(0i32))
+            .scrollbar_auto_hide(true)
+            .view(cx)
+    })
+    .unwrap();
+    app
+}
+
 /// Any cell wearing the selection ink anywhere on screen.
 fn any_highlight(term: &CaptureTerm, size: Size) -> bool {
     let sel_bg = current_theme().tokens.get(TokenId::SelectionBg);
@@ -1165,11 +1190,25 @@ fn a_selection_that_crosses_the_strip_keeps_selecting() {
 /// invisible target must not eat a gesture either way: it does not
 /// steer the offset (`scroll.rs` already refuses), and it must not
 /// suppress a selection that starts on it.
+///
+/// FIXTURE REPAIRED. This test described an auto-hidden bar and built a
+/// PLAIN one — `scrollbar_auto_hide` defaults to false, so its fitting
+/// content painted a persistent rail. It passed anyway, because the
+/// strip's `drag_zone` carried an extra `overflows()` gate that declined
+/// the visible bar. That gate was the operator's twice-reported
+/// drag-selects-text defect, so this test was green *because of* the bug
+/// it looked like it was guarding against — its name was right and its
+/// fixture was not. It now builds the bar it describes.
+///
+/// Its opposite number — a VISIBLE bar over fitting content, which must
+/// now own the drag — is `tests/scroll_visible_bar_owns_drag.rs`. The two
+/// together are the real contract: the zone tracks visibility.
 #[test]
 fn an_invisible_bar_does_not_eat_a_selection() {
     let size = Size::new(30, 10);
-    // Four rows in a ten-row viewport: nothing overflows, no thumb.
-    let (mut app, _wire) = scrolled_column(size, 4);
+    // Four rows in a ten-row viewport: nothing overflows, and auto-hide
+    // means the strip is genuinely blanked rather than merely inert.
+    let mut app = scrolled_column_auto_hide(size, 4);
     let mut term = CaptureTerm::new(size);
     let mut driver = Driver::new(&mut app, &mut term, cfg()).unwrap();
     selection().set_enabled(true);

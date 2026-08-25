@@ -245,6 +245,18 @@ tag.
 
 ### Fixed
 
+- widgets: **dragging the scrollbar selected text instead of scrolling.**
+  `scrollbar_auto_hide` defaults to `false`, so a `Scroll` whose content
+  fits its viewport still paints a rail. The strip claimed the drag only
+  when the content overflowed, so on that visible-but-not-overflowing bar
+  it declared no drag zone, screen-select mode did not stand down, and a
+  press on the rail began a text selection. The drag zone now tracks
+  whether the bar is **drawn**, not whether dragging it would move
+  anything: a painted bar owns presses on it, and a drag on a
+  full-height thumb is a no-op rather than a selection. Affects any
+  `Scroll` built without `scrollbar_auto_hide(true)` whose content fits;
+  overflowing and auto-hidden scrolls are unchanged.
+
 - app: **a `Tooltip` opened on CLICK and never on hover.** Hover is
   recomputed only from mouse reports, and the default session posture
   (`MouseMode::ButtonDrag`) has the terminal report motion only while a

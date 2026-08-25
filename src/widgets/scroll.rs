@@ -818,16 +818,33 @@ impl Scroll {
                     // The strip owns left drags (first-app/1335): screen
                     // select mode stands down here, so the thumb keeps the
                     // gesture instead of losing its capture to a
-                    // highlight. Exactly the conditions the handler above
-                    // uses to decide it is inert — an invisible or
-                    // non-overflowing bar claims nothing.
+                    // highlight.
+                    //
+                    // THE PREDICATE IS THE DRAW'S, NOT THE HANDLER'S, and
+                    // that distinction is the whole defect this shape had.
+                    // It used to add `.overflows()` — the condition the
+                    // handler uses to decide a drag would MOVE anything.
+                    // But `scrollbar_auto_hide` defaults to false, so a
+                    // plainly-built `Scroll` over fitting content PAINTS a
+                    // rail (the draw below gates only on emptiness and
+                    // auto-hide, never on `overflows`) while the zone
+                    // declined it. A visible bar owning no drag: the
+                    // selection layer armed an anchor and dragging the
+                    // scrollbar selected text — reported twice by the
+                    // operator, most recently "when scrolling the cursor
+                    // on the right, it actually select text".
+                    //
+                    // So the zone tracks VISIBILITY, not usefulness. A
+                    // full-height thumb that cannot move is still chrome,
+                    // and a no-op drag on it is the correct outcome. These
+                    // two conditions must stay byte-identical to the draw
+                    // closure's; `tests/scroll_visible_bar_owns_drag.rs`
+                    // reddens if they drift apart again.
                     .drag_zone(move |rect| {
                         if rect.is_empty() || (auto_hide && content_h <= rect.h) {
                             return None;
                         }
-                        scrollbar::metrics(rect, rect.w, offset, content_h)
-                            .overflows()
-                            .then_some(rect)
+                        Some(rect)
                     })
                     .draw(move |canvas, rect| {
                         if rect.is_empty() {
