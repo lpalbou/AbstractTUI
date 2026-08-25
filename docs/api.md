@@ -881,17 +881,29 @@ highlight nothing.
 ### Feed — capped preview blocks (`max_rows`)
 
 Transcript previews cap their bodies: `FeedItem::max_rows(n)` bounds
-the most recently appended Text/Rich block at `n` typeset rows TOTAL,
-applied post-wrap at the width the engine typesets at (the row count
+the most recently appended block at `n` typeset rows TOTAL, applied
+post-typeset at the width the engine typesets at (the row count
 only exists after the wrap — a consumer cannot precompute it). Content
-that wraps to at most `n` rows renders unchanged; overflow shows the
-first `n - 1` wrapped rows and spends the last row on an honest marker
+that occupies at most `n` rows renders unchanged; overflow shows the
+first `n - 1` rows and spends the last row on an honest marker
 — "… (+K more lines)" in `text_muted`, where K is the hidden
-wrapped-row count at the current width (it changes on resize).
+row count at the current width (it changes on resize).
 `FeedItem::overflow_marker(|k| ...)` overrides the wording. Extent and
 windowing count the marker row, so a capped block is never taller than
 `n`; chain per block (`.block(a).max_rows(3).block(b).max_rows(8)`);
-streaming items are unaffected (caps live on static Text/Rich blocks):
+streaming items are unaffected (caps live on static blocks).
+
+**Every row-based block kind caps** — Text, Rich, Markdown and Code.
+Markdown and Code cap RENDERED rows, not source lines: a six-paragraph
+body is eleven rows (five separators), and `max_rows(4)` shows three of
+them under a "(+8 more lines)" marker. That is the only count a reader
+sees and the only one the extent agrees with; capping the source
+instead would re-typeset different rows and could not report an honest
+K. A cut lands wherever row `n - 1` falls, which for a long document
+can be inside a table or a fence. **`Custom` is the one kind with no
+cap**: it declares its own height and paints its own rect, so the feed
+has no rows to count — `max_rows` on a `Custom` block is a debug
+assert and a release no-op:
 
 ```rust
 use abstracttui::widgets::FeedItem;

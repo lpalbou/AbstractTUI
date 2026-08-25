@@ -91,13 +91,77 @@ pub fn measure(tree: &LayoutTree, id: LayoutId, avail: Size) -> Size {
 /// and running everything. Simplifying the cross-axis re-measure away
 /// will look free from every other suite.
 pub(super) fn intrinsic_size(tree: &LayoutTree, id: LayoutId, avail: Size) -> Size {
+    intrinsic(tree, id, avail, Want::Both)
+}
+
+/// ONE axis of the intrinsic size — for the call sites that read one
+/// and discard the other.
+///
+/// WHY THIS EXISTS AND IT IS NOT A MICRO-OPTIMISATION. A measure
+/// callback is not a pure arithmetic function in this engine: a text
+/// leaf wraps, and a `Feed` typesets and CACHES at the width it was
+/// asked about. So an intrinsic query whose answer is thrown away is
+/// not free — it is a full wrap of the subtree, and if the caller asks
+/// at a width the node will never be solved to, it also evicts the
+/// cache the node had built at the right one.
+///
+/// That is not hypothetical. `commons#482`/`#490`: a `Feed` in a flex
+/// child beside a fixed sibling was typeset TWICE per scroll notch, at
+/// two different widths, against a perfectly persistent cache — 80% of
+/// the notch. The first of those was this exact waste: the row asked
+/// its `Auto`-width child for a BASIS (main axis = width only), the
+/// child aggregated its children's widths, and the recursion consulted
+/// the feed's measure callback — whose own width is `Percent(1.0)` and
+/// therefore already known without asking anything at all. The callback
+/// ran only to produce a HEIGHT that `axes.main(est)` then dropped on
+/// the floor.
+///
+/// The axis passes to children UNCHANGED whatever the direction: a
+/// node's width is built only from its children's widths (summed along
+/// a row, maxed across a column) and its height only from theirs. So
+/// asking for one axis never needs the other, at any depth.
+///
+/// The unrequested axis of the answer is NOT COMPUTED, so this returns
+/// the scalar rather than a `Size` with a plausible-looking lie in the
+/// other field.
+pub(super) fn intrinsic_extent(tree: &LayoutTree, id: LayoutId, avail: Size, want: Want) -> i32 {
+    debug_assert!(want != Want::Both, "intrinsic_extent answers ONE axis");
+    let s = intrinsic(tree, id, avail, want);
+    match want {
+        Want::H => s.h,
+        _ => s.w,
+    }
+}
+
+/// Which axis of an intrinsic answer the caller will actually READ.
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub(super) enum Want {
+    Both,
+    W,
+    H,
+}
+
+impl Want {
+    fn wants_w(self) -> bool {
+        self != Want::H
+    }
+    fn wants_h(self) -> bool {
+        self != Want::W
+    }
+}
+
+fn intrinsic(tree: &LayoutTree, id: LayoutId, avail: Size, want: Want) -> Size {
     let Some(node) = tree.nodes.get(id.0) else {
         return Size::ZERO;
     };
     let style = &node.style;
     let explicit_w = resolve_dim(style.width, avail.w);
     let explicit_h = resolve_dim(style.height, avail.h);
-    let need_content = explicit_w.is_none() || explicit_h.is_none();
+    // Content is needed only for an axis the caller will READ and the
+    // style does not already fix. An explicit dimension wins below
+    // either way, so an axis nobody asked for buys nothing.
+    let need_content =
+        (want.wants_w() && explicit_w.is_none()) || (want.wants_h() && explicit_h.is_none());
     let content = if !need_content {
         Size::ZERO
     } else if let Some(measure) = &node.measure {
@@ -135,7 +199,7 @@ pub(super) fn intrinsic_size(tree: &LayoutTree, id: LayoutId, avail: Size) -> Si
                 (inner_avail.w - cnode.style.margin.horizontal()).max(0),
                 (inner_avail.h - cnode.style.margin.vertical()).max(0),
             );
-            let cs = intrinsic_size(tree, child, child_avail);
+            let cs = intrinsic(tree, child, child_avail, want);
             let (cm, cc) = match style.direction {
                 Direction::Row => (
                     cs.w + cnode.style.margin.horizontal(),
@@ -164,17 +228,29 @@ pub(super) fn intrinsic_size(tree: &LayoutTree, id: LayoutId, avail: Size) -> Si
             ),
         }
     };
+    // An axis nobody asked for is returned as ZERO rather than as the
+    // clamp of an uncomputed content extent: `intrinsic_extent` never
+    // reads it, and a hard zero is a louder wrong answer than a
+    // min-width-inflated plausible one if anyone ever does.
     Size::new(
-        clamp_axis(
-            explicit_w.unwrap_or(content.w),
-            style.min_width,
-            style.max_width,
-        ),
-        clamp_axis(
-            explicit_h.unwrap_or(content.h),
-            style.min_height,
-            style.max_height,
-        ),
+        if want.wants_w() {
+            clamp_axis(
+                explicit_w.unwrap_or(content.w),
+                style.min_width,
+                style.max_width,
+            )
+        } else {
+            0
+        },
+        if want.wants_h() {
+            clamp_axis(
+                explicit_h.unwrap_or(content.h),
+                style.min_height,
+                style.max_height,
+            )
+        } else {
+            0
+        },
     )
 }
 
@@ -195,6 +271,20 @@ impl Axes {
         match self.dir {
             Direction::Row => Size::new(main, cross),
             Direction::Column => Size::new(cross, main),
+        }
+    }
+    /// The `Want` naming this axis view's main / cross axis, for the
+    /// single-axis intrinsic query.
+    fn want_main(self) -> Want {
+        match self.dir {
+            Direction::Row => Want::W,
+            Direction::Column => Want::H,
+        }
+    }
+    fn want_cross(self) -> Want {
+        match self.dir {
+            Direction::Row => Want::H,
+            Direction::Column => Want::W,
         }
     }
 }
@@ -303,8 +393,12 @@ fn layout_children_of(tree: &mut LayoutTree, id: LayoutId) {
                     (content.w - cstyle.margin.horizontal()).max(0),
                     (content.h - cstyle.margin.vertical()).max(0),
                 );
-                let est = intrinsic_size(tree, child, avail);
-                axes.main(est)
+                // MAIN AXIS ONLY. The cross answer was never read here
+                // (`axes.main` drops it), and computing it costs every
+                // measure callback in the subtree a full run — at a
+                // width the child may not be solved to. See
+                // `intrinsic_extent`.
+                intrinsic_extent(tree, child, avail, axes.want_main())
             });
         items.push(FlexItem {
             basis: basis.max(0),
@@ -413,13 +507,15 @@ fn layout_children_of(tree: &mut LayoutTree, id: LayoutId) {
             Some(c) => c,
             None => match align {
                 Align::Stretch => cross_avail,
-                _ => {
-                    let est = intrinsic_size(tree, child, axes.size(main_size, cross_avail));
-                    match style.direction {
-                        Direction::Row => est.h,
-                        Direction::Column => est.w,
-                    }
-                }
+                // CROSS AXIS ONLY — the main size is already decided
+                // (`main_size`), so the main half of this answer was
+                // computed and discarded.
+                _ => intrinsic_extent(
+                    tree,
+                    child,
+                    axes.size(main_size, cross_avail),
+                    axes.want_cross(),
+                ),
             },
         };
         let cross_size = clamp_axis(cross_size, cross_min, cross_max).min(cross_avail.max(0));

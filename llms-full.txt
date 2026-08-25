@@ -6857,9 +6857,9 @@ node id in `cargo metadata --format-version 1`, which reads
   (0.1.0); current release 0.5.0 (2026-08-23).
 - Extension family (sibling crates in the repo workspace, installed only when needed;
   ADR-0004 — public core API only, same MIT license and dependency discipline):
-  - `abstracttui-graph` 0.4.0 — graph auto-layout (`GraphDesc -> Layout`: layered /
+  - `abstracttui-graph` 0.5.0 — graph auto-layout (`GraphDesc -> Layout`: layered /
     force / grid passes) + the `GraphView` widget. Depends on `abstracttui` 0.5.
-  - `abstracttui-mermaid` 0.4.0 — honest-subset mermaid rendering (atomic fallback).
+  - `abstracttui-mermaid` 0.5.0 — honest-subset mermaid rendering (atomic fallback).
     Depends on `abstracttui` 0.5 and `abstracttui-graph` 0.4.
 - Description: a reactive, compositor-grade terminal UI engine — fine-grained signals,
   layered rendering with damage tracking, streaming transcripts and live-data ingestion,
@@ -6884,9 +6884,9 @@ node id in `cargo metadata --format-version 1`, which reads
   - `libc` 0.2 — Unix terminal FFI (unix targets only)
   - `windows-sys` 0.61 — Windows console FFI (windows targets only)
 - Test invocation (from CONTRIBUTING.md):
-  - `cargo test` — the core suite (~2,435 tests: unit tests, integration suites under
+  - `cargo test` — the core suite (~2,500 tests: unit tests, integration suites under
     `tests/`, and doctests).
-  - `cargo test --workspace` — core plus the extension family (~2,600 tests; the CI gate).
+  - `cargo test --workspace` — core plus the extension family (~2,730 tests; the CI gate).
   - `cargo test --test live_smoke -- --ignored --test-threads=1` — live pty smoke tests
     (spawn a real terminal session; run serially).
   - `cargo test --test perf_budgets --release -- --ignored --test-threads=1` —

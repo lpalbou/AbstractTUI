@@ -211,9 +211,66 @@ pub(crate) struct Row {
 }
 
 /// The width-keyed typeset cache one `MarkdownView` element shares
-/// between its intrinsic measure and its draw closure: `(width, rows)`
-/// of the last layout; either side recomputes on a width change.
-type TypesetCache = Rc<RefCell<Option<(i32, Vec<Row>)>>>;
+/// between its intrinsic measure and its draw closure. It holds the
+/// **two** most recently used widths, least-recently-used first out.
+///
+/// TWO, AND THE NUMBER IS MEASURED RATHER THAN CHOSEN. One slot is
+/// enough only when the solver asks at a single width. A `MarkdownView`
+/// inside a flex child beside a fixed sibling is asked at two per
+/// solve — `place_absolute`'s intrinsic query and the flex-basis fold —
+/// and with one slot the second query evicts the first, so the paint
+/// that follows misses a layout the same frame already computed:
+///
+/// ```text
+/// one slot    control (widths agree)  1 typeset  [99]        paint HITS
+///             flex beside fixed       3 typesets [99, 82, 99] paint MISSES
+/// two slots   flex beside fixed       2 typesets [99, 82]     paint HITS
+/// ```
+///
+/// Observed through the public `FenceBlock` seam, which the typesetter
+/// calls once per document layout: `tests/markdown_measure_cache_widths.rs`.
+/// The distinct width set in that shape has exactly two members, so a
+/// third slot would buy nothing measurable and cost a third row set on
+/// a long body.
+type TypesetCache = Rc<RefCell<WidthCache>>;
+
+/// Two `(width, rows)` slots, most-recently-used in `slots[0]`.
+#[derive(Default)]
+pub(crate) struct WidthCache {
+    slots: [Option<(i32, Vec<Row>)>; 2],
+}
+
+impl WidthCache {
+    /// Rows laid out at `width`, calling `build` only on a miss.
+    ///
+    /// On a miss the OLDER entry is evicted, never the one just used —
+    /// that is the whole point. Evicting most-recently-used would
+    /// reproduce the single-slot behaviour exactly under a two-width
+    /// alternation, with twice the memory and no hits.
+    fn rows_for(&mut self, width: i32, build: impl FnOnce() -> Vec<Row>) -> &[Row] {
+        match self
+            .slots
+            .iter()
+            .position(|s| matches!(s, Some((w, _)) if *w == width))
+        {
+            Some(0) => {}
+            Some(i) => self.slots.swap(0, i),
+            None => {
+                // Demote the current MRU, dropping whatever was older.
+                self.slots.swap(0, 1);
+                self.slots[0] = Some((width, build()));
+            }
+        }
+        // Every arm above leaves slot 0 populated. Asserted rather than
+        // defaulted: returning an empty slice here would render a blank
+        // document and look like an empty source, which is the silent
+        // wrong answer this file's own tests exist to prevent.
+        match &self.slots[0] {
+            Some((_, rows)) => rows,
+            None => unreachable!("WidthCache::rows_for left slot 0 empty"),
+        }
+    }
+}
 
 impl Row {
     pub(crate) fn plain(line: RichLine) -> Row {
@@ -338,6 +395,19 @@ impl MarkdownView {
 
     /// Typeset row count at `width` — the scroll clamp (same fold as the
     /// renderer, so the clamp can never drift from the pixels).
+    ///
+    /// **COST: this typesets the WHOLE document and keeps only the row
+    /// count.** It is `O(source)`, it holds no cache, and it is the same
+    /// fold the renderer runs — asking twice costs twice. It reads like
+    /// an accessor and is not one. Call it when the source or the width
+    /// CHANGES, and hold the answer; a height model that calls it once
+    /// per row per frame re-typesets every body on screen every frame,
+    /// which costs exactly as much as drawing them and shows up as a
+    /// frame time proportional to content length with nothing in the
+    /// widget tree to blame. If you need it per frame, memoise on
+    /// `(source, width, rule)` — `MarkdownView`'s own element does
+    /// precisely that (`TypesetCache`), and this free function is the
+    /// door out of that cache, not into it.
     pub fn rows(source: &str, t: &TokenSet, width: i32) -> usize {
         Self::rows_ruled(source, t, width, MdRuleStyle::default())
     }
@@ -345,7 +415,8 @@ impl MarkdownView {
     /// [`MarkdownView::rows`] for a view built with
     /// [`MarkdownView::rule_style`] — a `---` policy changes the row
     /// count, so the clamp has to be taken through the SAME policy the
-    /// view renders under.
+    /// view renders under. Carries [`MarkdownView::rows`]'s cost: a
+    /// full typeset of the document, uncached.
     pub fn rows_ruled(source: &str, t: &TokenSet, width: i32, rule: MdRuleStyle) -> usize {
         doc::layout_doc_ruled(source, t, width, rule).rows.len()
     }
@@ -470,11 +541,14 @@ impl MarkdownView {
                 .grow(1.0)
                 .basis(crate::layout::Dimension::Cells(0))
         });
-        // ONE width-keyed typeset cache shared by the intrinsic measure
-        // and the draw: whichever runs first at a width pays the
-        // layout, the other reuses it (measure runs during solving,
-        // draw during paint — never concurrently).
-        let cache: TypesetCache = Rc::new(RefCell::new(None));
+        // ONE typeset cache shared by the intrinsic measure and the
+        // draw: whichever runs first at a width pays the layout, the
+        // other reuses it (measure runs during solving, draw during
+        // paint — never concurrently). It keeps the TWO most recent
+        // widths, because a flex child beside a fixed sibling is asked
+        // at two per solve and a single slot makes the paint miss what
+        // the same frame just computed — see `WidthCache`.
+        let cache: TypesetCache = Rc::new(RefCell::new(WidthCache::default()));
         let measure_cache = Rc::clone(&cache);
         let measure_source = source.clone();
         let draw_fence = self.fence.clone();
@@ -496,20 +570,16 @@ impl MarkdownView {
                     return crate::base::Size::ZERO;
                 }
                 let mut slot = measure_cache.borrow_mut();
-                let rows = match &mut *slot {
-                    Some((w, rows)) if *w == avail.w => rows,
-                    slot => {
-                        let rows = doc::layout_doc_all(
-                            &measure_source,
-                            &tokens,
-                            avail.w,
-                            measure_fence.clone(),
-                            rule,
-                        )
-                        .rows;
-                        &mut slot.insert((avail.w, rows)).1
-                    }
-                };
+                let rows = slot.rows_for(avail.w, || {
+                    doc::layout_doc_all(
+                        &measure_source,
+                        &tokens,
+                        avail.w,
+                        measure_fence.clone(),
+                        rule,
+                    )
+                    .rows
+                });
                 let widest = rows
                     .iter()
                     .map(|r| r.indent + r.line.width())
@@ -522,15 +592,9 @@ impl MarkdownView {
                     return;
                 }
                 let mut slot = cache.borrow_mut();
-                let rows = match &mut *slot {
-                    Some((w, rows)) if *w == rect.w => rows,
-                    slot => {
-                        let rows =
-                            doc::layout_doc_all(&source, &tokens, rect.w, draw_fence.clone(), rule)
-                                .rows;
-                        &mut slot.insert((rect.w, rows)).1
-                    }
-                };
+                let rows = slot.rows_for(rect.w, || {
+                    doc::layout_doc_all(&source, &tokens, rect.w, draw_fence.clone(), rule).rows
+                });
                 let offset = offset.min(rows.len().saturating_sub(1));
                 draw_rows(canvas, rect, &tokens, &rows[offset..]);
                 if !highlights.is_empty() {

@@ -829,6 +829,90 @@ mod tests {
         );
     }
 
+    /// A BASIS query reads ONE axis, and asking for the other one costs
+    /// a measure callback that nothing reads.
+    ///
+    /// The shape is the one `commons#494` found in the field: a row
+    /// whose flexible child is `Auto`-width and whose leaf's own width
+    /// is `Percent(1.0)` — a feed inside a card beside a fixed gutter.
+    /// The row wants the child's WIDTH to size the flex basis. The
+    /// child is a column, so its width is the max of its children's
+    /// widths, and the leaf's width is `Percent` — already known. The
+    /// leaf's HEIGHT is the only thing that needs the callback, and the
+    /// basis fold drops it (`axes.main(est)`).
+    ///
+    /// So this call chain can answer without ever running the callback,
+    /// and before `intrinsic_extent` it ran it anyway. WHY THAT IS NOT
+    /// A ROUNDING ERROR: a measure callback in this engine is not pure
+    /// arithmetic. `Feed`'s TYPESETS AND CACHES at the width it is
+    /// asked about, so a query it did not need evicts the cache the
+    /// widget built at the width it is actually drawn at.
+    ///
+    /// MEASURED, not predicted: 3 before `intrinsic_extent`, 2 after —
+    /// falsified by putting `axes.main(intrinsic_size(..))` back at the
+    /// basis fold and running, which reads 3 again.
+    ///
+    /// THE TWO THAT REMAIN ARE NOT BOTH HONEST, and this guard must not
+    /// be read as saying they are. One is placement solving the leaf at
+    /// the width it was distributed to — that is the real one. The
+    /// other is the scroll root asking the row for a HEIGHT, which
+    /// genuinely needs the callback but asks at the row's FULL width,
+    /// because `intrinsic_size` cannot anticipate a flex share (its own
+    /// doc comment says so). So the leaf is still asked to wrap at a
+    /// width it will never be drawn at, once per solve. That is the
+    /// unfixed half of `commons#494` and it is a LAYOUT approximation,
+    /// not a widget bug — lowering this count to 1 means teaching the
+    /// intrinsic fold to distribute a row's main axis before it asks
+    /// for the cross.
+    #[test]
+    fn a_basis_query_does_not_run_a_measure_callback_for_an_axis_it_discards() {
+        let asked = Rc::new(RefCell::new(0usize));
+        let counter = Rc::clone(&asked);
+        let mut tree = LayoutTree::new();
+        let root = tree.add(Style::column().scroll());
+        let row = tree.add(Style::row().width(Dimension::Percent(1.0)));
+        // The flexible half: Auto on BOTH axes, so the row must ask it
+        // for a content width and the column must ask for a height.
+        let card = tree.add(
+            Style::column()
+                .width(Dimension::Auto)
+                .height(Dimension::Auto),
+        );
+        // The leaf: width is not a question (Percent), height is.
+        let body = tree.add_leaf(
+            Style::default().width(Dimension::Percent(1.0)),
+            Box::new(move |_avail: Size| {
+                *counter.borrow_mut() += 1;
+                Size::new(60, 40)
+            }),
+        );
+        // The fixed sibling that makes the distributed width differ
+        // from the offered one.
+        let gutter = tree.add(Style::default().width(Dimension::Cells(20)));
+        tree.add_child(root, row);
+        tree.add_child(row, card);
+        tree.add_child(card, body);
+        tree.add_child(row, gutter);
+        solve(&mut tree, root, Rect::new(0, 0, 100, 30));
+
+        let per_solve = *asked.borrow();
+        assert!(
+            per_solve > 0,
+            "the leaf was never measured at all, so this counts nothing — the shape \
+             stopped reaching the callback and the number below means nothing"
+        );
+        assert_eq!(
+            per_solve, 2,
+            "this shape cost 3 measure calls per solve before the basis fold stopped \
+             asking for the axis it discards, and 2 after; it is now {per_solve}. UP \
+             means `intrinsic_extent` lost its axis (check the `Want` threaded through \
+             `intrinsic`) or a new call site asks for both axes when it reads one. DOWN \
+             to 1 means the intrinsic fold learned to distribute a row's main axis \
+             before asking for the cross — that is the remaining half of commons#494, \
+             so re-run the feed cache sweep and update this."
+        );
+    }
+
     /// The magnitude behind the guard above, reproducible with
     /// `cargo test --release --lib solve_cost_table -- --ignored
     /// --nocapture`.

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-25
+
+A minor bump for a new public module, the theme-declared ground intent
+surface, and the rendering fixes that landed with them. The surface is
+additive — nothing that compiled against 0.5.0 needs changing — and the
+extension crates move their dependency floor to `0.6`, releasing as
+`abstracttui-graph` 0.5.0 and `abstracttui-mermaid` 0.5.0 in the same
+tag.
+
 ### Added — `render::color::GroundIntent` / `PairIntent`
 
 - **A theme can declare, per ground pair, which of its grounds read as
@@ -270,13 +279,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the three measured numbers over it disagree with each other — a
   size can be dead for lowercase and perfectly serviceable for icons.
 
-## [0.6.0] - 2026-08-24
-
-A minor bump for a new public module. The surface is additive — nothing
-that compiled against 0.5.0 needs changing — and the extension crates move
-their dependency floor to `0.6` in the same release.
-
-### Added
+### Added — `gfx::bigtext` draws text and icons several cells tall
 
 - gfx: **`gfx::bigtext` draws text and icons several cells tall.** A
   terminal has one font size, so a larger glyph means spending more cells
@@ -345,7 +348,7 @@ their dependency floor to `0.6` in the same release.
 - widgets: `DrawerDock` rail tabs expose their full titles through semantic
   Tabs/Tab nodes and support Enter/Space activation from keyboard focus.
 
-### Fixed
+### Fixed — mosaic and capability ladder
 
 - app: **a hover card larger than the space available now says so.** A
   `Tooltip` card taller than the rows the viewport can lend showed its first
@@ -365,7 +368,7 @@ their dependency floor to `0.6` in the same release.
   browser by `agora-wui`; a terminal has it in a sharper form, because a
   keystroke moves a whole row at once.
 
-### Documentation
+### Documentation — the gfx guide
 
 - State the terminal rendering boundary for drawer labels: portable text can
   stack grapheme clusters vertically, but terminal cells cannot rotate glyphs

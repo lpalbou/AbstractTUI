@@ -289,19 +289,21 @@ fn typeset_static(
                 push_capped(&mut current, lines, cap.as_ref(), tokens);
                 any_content = true;
             }
-            ItemBlock::Markdown(src) => {
+            ItemBlock::Markdown { src, cap } => {
                 if any_content && current.is_empty() {
                     current.push(Row::plain(RichLine::new()));
                 }
                 // DOC vocabulary (wave 3): tables, in-flow images (lazy
                 // mosaic), task lists — one recipe with MarkdownView
                 // (`layout_doc` walks the same parse + typeset pair).
+                let start = current.len();
                 for block in md::parse_doc(src, ts.styles()) {
                     ts.push_doc_block(&mut current, &block, width, true);
                 }
+                cap_typeset_rows(&mut current, start, cap.as_ref(), tokens);
                 any_content = true;
             }
-            ItemBlock::Code { lang, source } => {
+            ItemBlock::Code { lang, source, cap } => {
                 if any_content && current.is_empty() {
                     current.push(Row::plain(RichLine::new()));
                 }
@@ -309,7 +311,9 @@ fn typeset_static(
                     lang: lang.clone(),
                     lines: source.split('\n').map(str::to_string).collect(),
                 };
+                let start = current.len();
                 ts.push_block(&mut current, &block, width, true);
+                cap_typeset_rows(&mut current, start, cap.as_ref(), tokens);
                 any_content = true;
             }
             ItemBlock::Custom(c) => {
@@ -369,16 +373,7 @@ fn push_capped(
             for line in lines.into_iter().take(shown) {
                 current.push(Row::plain(line));
             }
-            let text = match cap.and_then(|c| c.marker.as_ref()) {
-                Some(f) => f(hidden),
-                None => format!("… (+{hidden} more lines)"),
-            };
-            // One row by design: overwide marker text clips at the
-            // item width through the shared row walk, never wraps.
-            current.push(Row::plain(RichLine::from_spans(vec![Span::new(
-                text,
-                crate::render::Style::new().fg(tokens.text_muted),
-            )])));
+            current.push(marker_row(hidden, cap, tokens));
         }
         _ => {
             for line in lines {
@@ -386,4 +381,51 @@ fn push_capped(
             }
         }
     }
+}
+
+/// The overflow marker as its own row — `text_muted`, default wording
+/// or the block's override. ONE row by design: overwide marker text
+/// clips at the item width through the shared row walk, never wraps.
+/// Minted at typeset time from the bound tokens, so a theme rebind
+/// retints it (feeds re-typeset everything on token change).
+fn marker_row(hidden: usize, cap: Option<&RowCap>, tokens: &TokenSet) -> Row {
+    let text = match cap.and_then(|c| c.marker.as_ref()) {
+        Some(f) => f(hidden),
+        None => format!("… (+{hidden} more lines)"),
+    };
+    Row::plain(RichLine::from_spans(vec![Span::new(
+        text,
+        crate::render::Style::new().fg(tokens.text_muted),
+    )]))
+}
+
+/// Apply a row cap to a block that typeset ITSELF into `current` —
+/// Markdown and Code, whose rows come out of the document typesetter
+/// rather than out of a wrap this function performed.
+///
+/// `start` is `current.len()` taken immediately before the block
+/// pushed (after any separator row, which belongs to the rhythm and
+/// not to the block), so the count is the block's own rendered
+/// height. Same contract as [`push_capped`]: at most `max` rows
+/// total, marker row included and counted by the extent, `K` = the
+/// rows dropped at THIS width.
+///
+/// A markdown cut is a ROW cut, not a source cut — the shown rows are
+/// byte-identical to their uncapped selves, and a cut that lands
+/// inside a table or a fence simply ends there with the marker under
+/// it. Truncating the source instead would re-typeset different rows
+/// and could not report an honest K.
+fn cap_typeset_rows(current: &mut Vec<Row>, start: usize, cap: Option<&RowCap>, tokens: &TokenSet) {
+    let max = match cap.and_then(|c| c.max_rows).map(|m| m.max(1)) {
+        Some(max) => max,
+        None => return,
+    };
+    let produced = current.len() - start;
+    if produced <= max {
+        return;
+    }
+    let shown = max - 1;
+    let hidden = produced - shown;
+    current.truncate(start + shown);
+    current.push(marker_row(hidden, cap, tokens));
 }

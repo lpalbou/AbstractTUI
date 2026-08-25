@@ -338,24 +338,64 @@ impl FeedState {
         Some((entry.key.clone(), within))
     }
 
-    /// Publish after a mutation: sync the extent signal (lawful here —
-    /// mutations happen in event/effect phases) and bump the render key.
-    /// The `try_` reads guard against a disposed UI scope (an app-held
-    /// handle outliving its widget must stay inert, never panic).
-    fn publish(&self) {
+    /// Write the extent signal if — and only if — it moved. Returns
+    /// whether it did. The `try_` read guards against a disposed UI
+    /// scope (an app-held handle outliving its widget must stay inert,
+    /// never panic).
+    fn sync_extent(&self) -> bool {
         let total = self.inner.borrow().total_rows();
-        if let Some(cur) = self.rows.try_get_untracked() {
-            if cur != total {
+        match self.rows.try_get_untracked() {
+            Some(cur) if cur != total => {
                 self.rows.set(total);
+                true
             }
+            _ => false,
         }
+    }
+
+    /// Bump the render key. Same disposed-scope guard as `sync_extent`.
+    fn bump_version(&self) {
         if self.version.try_get_untracked().is_some() {
             self.version.update(|v| *v += 1);
         }
     }
 
-    /// Deferred geometry sync for width discovered inside draw (RT1-2:
-    /// no signal writes from paint). Latched: one pending fixup.
+    /// Publish after a MUTATION: sync the extent signal (lawful here —
+    /// mutations happen in event/effect phases) and repaint. The bump is
+    /// unconditional because content can change without the row count
+    /// changing — an edited line, a replaced item of equal height.
+    fn publish(&self) {
+        self.sync_extent();
+        self.bump_version();
+    }
+
+    /// Deferred geometry sync for a width discovered inside draw, or
+    /// offered to the measure callback (RT1-2: no signal writes from
+    /// paint, and none from inside a solve either). Latched: one
+    /// pending fixup.
+    ///
+    /// THIS PATH REPAINTS ONLY IF THE EXTENT ACTUALLY MOVED, and that
+    /// conditional is load-bearing rather than an optimisation. It is
+    /// what gives the loop a fixed point.
+    ///
+    /// The solver queries the measure callback at MORE THAN ONE width
+    /// per solve (`place_absolute`'s intrinsic query and the flex-basis
+    /// fold ask at different widths whenever a feed is a flex child
+    /// beside a fixed sibling). Wrapped text has a different row total
+    /// at each. So the callback's `rows != total` test is true at every
+    /// query whose width is not the one `rows` currently holds — it
+    /// fires on a healthy tree, every frame, forever, and no scheduling
+    /// condition here can make it stop.
+    ///
+    /// What CAN converge is the publication: by the time this fixup
+    /// runs, `inner.width` is the width the feed was last typeset at —
+    /// the painted one — so the total it reads is a function of one
+    /// width rather than of whichever query ran last. Bump on a real
+    /// move and the loop terminates; bump unconditionally and the
+    /// repaint re-enters the solve, which re-queries both widths, which
+    /// schedules another fixup. That was a livelock: 128,464 typeset
+    /// blocks in 8 driver turns against 8 for the control, never idle in
+    /// 2,000 turns (`tests/feed_typeset_cache_lifetime.rs`).
     fn schedule_geometry_sync(&self) {
         let mut inner = self.inner.borrow_mut();
         if inner.fixup_scheduled {
@@ -366,7 +406,9 @@ impl FeedState {
         let state = self.clone();
         crate::reactive::after(std::time::Duration::ZERO, move || {
             state.inner.borrow_mut().fixup_scheduled = false;
-            state.publish();
+            if state.sync_extent() {
+                state.bump_version();
+            }
         });
     }
 }

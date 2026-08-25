@@ -74,9 +74,13 @@ impl CustomBlock {
     }
 }
 
-/// Width-aware row cap on a Text/Rich block (first-app/0283): applied
-/// POST-WRAP at the width the engine typesets at, because the row
+/// Width-aware row cap on a ROW-BASED block (first-app/0283): applied
+/// POST-TYPESET at the width the engine typesets at, because the row
 /// count only exists after the wrap — a consumer cannot precompute it.
+/// Text/Rich cap their wrapped lines; Markdown/Code cap the rows the
+/// whole block typesets to (the count a reader sees, not source
+/// lines). `Custom` is the one kind with no cap: it declares its own
+/// height and paints its own rect, so the feed has no rows to count.
 /// Both fields fill through the [`FeedItem::max_rows`] /
 /// [`FeedItem::overflow_marker`] builders; a marker without a cap is
 /// inert by construction (nothing overflows).
@@ -109,10 +113,18 @@ pub(super) enum ItemBlock {
         /// pre-cap behavior byte-for-byte.
         cap: Option<RowCap>,
     },
-    Markdown(String),
+    Markdown {
+        src: String,
+        /// Optional row cap, same contract as `Text` — over the rows
+        /// the WHOLE block typesets to, since a markdown source line
+        /// and a rendered row are not the same thing.
+        cap: Option<RowCap>,
+    },
     Code {
         lang: String,
         source: String,
+        /// Optional row cap, same contract as `Markdown`.
+        cap: Option<RowCap>,
     },
     Custom(CustomBlock),
     /// Span-model lines (backlog 0102): typeset through the SAME
@@ -129,8 +141,12 @@ impl From<FeedBlock> for ItemBlock {
     fn from(b: FeedBlock) -> ItemBlock {
         match b {
             FeedBlock::Text(s) => ItemBlock::Text { text: s, cap: None },
-            FeedBlock::Markdown(s) => ItemBlock::Markdown(s),
-            FeedBlock::Code { lang, source } => ItemBlock::Code { lang, source },
+            FeedBlock::Markdown(s) => ItemBlock::Markdown { src: s, cap: None },
+            FeedBlock::Code { lang, source } => ItemBlock::Code {
+                lang,
+                source,
+                cap: None,
+            },
             FeedBlock::Custom(c) => ItemBlock::Custom(c),
         }
     }
@@ -205,28 +221,36 @@ impl FeedItem {
         self
     }
 
-    /// Cap the most recently appended Text/Rich block at `rows` typeset
-    /// rows (first-app/0283) — the transcript-preview idiom. The cap is
-    /// WIDTH-AWARE: it applies POST-WRAP at the width the engine
+    /// Cap the most recently appended block at `rows` typeset rows
+    /// (first-app/0283) — the transcript-preview idiom. The cap is
+    /// WIDTH-AWARE: it applies POST-TYPESET at the width the engine
     /// typesets at, where the row count actually exists. Content that
-    /// wraps to at most `rows` rows renders unchanged; overflow shows
-    /// the first `rows - 1` wrapped rows and spends the last row on an
+    /// occupies at most `rows` rows renders unchanged; overflow shows
+    /// the first `rows - 1` rows and spends the last row on an
     /// honest marker ("… (+K more lines)", `text_muted` ink, K = the
-    /// hidden wrapped-row count — it changes with width). A capped
+    /// hidden row count — it changes with width). A capped
     /// block is therefore never taller than `rows` and never hides
     /// content silently; extent/windowing count the marker row.
     /// `rows` clamps to ≥ 1 (a zero-row cap over hidden content would
     /// vanish it without a trace). Streaming items are unaffected
-    /// (caps live on static Text/Rich blocks only).
+    /// (caps live on static blocks only).
+    ///
+    /// **Markdown and Code cap RENDERED rows, not source lines** — the
+    /// only count a reader can see, and the only one the extent
+    /// arithmetic agrees with. A cut lands wherever row `rows - 1`
+    /// falls, which for a long document can be inside a table or a
+    /// fence: the rows above it render exactly as they would
+    /// uncapped, and the marker names what is missing.
     ///
     /// Chain per block: `.block(a).max_rows(3).block(b).max_rows(8)`.
-    /// Debug builds assert when the last block is not Text/Rich
-    /// (Markdown/Code/Custom carry no row cap); release ignores it.
+    /// Debug builds assert when the last block is `Custom` — it
+    /// declares its own height and paints its own rect, so the feed
+    /// has no rows to cap; release ignores it.
     pub fn max_rows(mut self, rows: usize) -> FeedItem {
         let slot = self.last_cap();
         debug_assert!(
             slot.is_some(),
-            "FeedItem::max_rows targets the last appended Text/Rich block"
+            "FeedItem::max_rows cannot cap a Custom block (it owns its own height)"
         );
         if let Some(cap) = slot {
             cap.get_or_insert_with(RowCap::empty).max_rows = Some(rows.max(1));
@@ -235,7 +259,7 @@ impl FeedItem {
     }
 
     /// Override the overflow-marker wording of the most recently
-    /// appended Text/Rich block: `hidden_line_count -> text` (e.g.
+    /// appended block: `hidden_row_count -> text` (e.g.
     /// `|k| format!("… (+{k} more — full text in the ledger)")`).
     /// Renders in `text_muted`, one row, clipped at the item width.
     /// Inert without [`FeedItem::max_rows`] on the same block.
@@ -243,7 +267,7 @@ impl FeedItem {
         let slot = self.last_cap();
         debug_assert!(
             slot.is_some(),
-            "FeedItem::overflow_marker targets the last appended Text/Rich block"
+            "FeedItem::overflow_marker cannot mark a Custom block (it owns its own height)"
         );
         if let Some(cap) = slot {
             cap.get_or_insert_with(RowCap::empty).marker = Some(Rc::new(marker));
@@ -251,10 +275,14 @@ impl FeedItem {
         self
     }
 
-    /// The cap slot of the last block, when that block kind carries one.
+    /// The cap slot of the last block, when that block kind carries one
+    /// — every row-based kind does; `Custom` is the sole exception.
     fn last_cap(&mut self) -> Option<&mut Option<RowCap>> {
         match self.blocks.last_mut() {
-            Some(ItemBlock::Text { cap, .. }) | Some(ItemBlock::Rich { cap, .. }) => Some(cap),
+            Some(ItemBlock::Text { cap, .. })
+            | Some(ItemBlock::Rich { cap, .. })
+            | Some(ItemBlock::Markdown { cap, .. })
+            | Some(ItemBlock::Code { cap, .. }) => Some(cap),
             _ => None,
         }
     }

@@ -1,6 +1,6 @@
 [package]
 name = "abstracttui-mermaid"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 # Same MSRV floor as core (see the root manifest's MSRV note).
 rust-version = "1.87"
@@ -19,4 +19,4 @@ keywords = ["tui", "mermaid", "diagram", "flowchart", "terminal"]
 # spelling (version + path) per ADR-0004 §3.
 [dependencies]
 abstracttui = { version = "0.6", path = "../.." }
-abstracttui-graph = { version = "0.4", path = "../graph" }
+abstracttui-graph = { version = "0.5", path = "../graph" }

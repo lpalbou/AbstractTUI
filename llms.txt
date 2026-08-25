@@ -154,10 +154,10 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, **0.6.0** (2026-08-24) the current one.
-  The extension family is at `abstracttui-graph` 0.4.0 and
-  `abstracttui-mermaid` 0.4.0, each with its own changelog under `extensions/`.
-- [Contributing](CONTRIBUTING.md): Building, the test suite (~2,435 core tests; ~2,600
+  (2026-07-21) is the first public release, **0.6.0** (2026-08-25) the current one.
+  The extension family is at `abstracttui-graph` 0.5.0 and
+  `abstracttui-mermaid` 0.5.0, each with its own changelog under `extensions/`.
+- [Contributing](CONTRIBUTING.md): Building, the test suite (~2,500 core tests; ~2,730
   with the extension family via `--workspace`, the CI gate) and the explicitly-run suites
   (live pty, two release-mode perf-budget suites with byte-emission ratchets, plus the
   scheduled weekly `perf.yml` deep gate), golden snapshots, lint gates, the strict module
