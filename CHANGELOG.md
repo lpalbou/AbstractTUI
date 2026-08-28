@@ -7,6 +7,848 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-25
+
+A minor bump for a new public module, the theme-declared ground intent
+surface, and the rendering fixes that landed with them. The surface is
+additive — nothing that compiled against 0.5.0 needs changing — and the
+extension crates move their dependency floor to `0.6`, releasing as
+`abstracttui-graph` 0.5.0 and `abstracttui-mermaid` 0.5.0 in the same
+tag.
+
+### Added — `render::color::GroundIntent` / `PairIntent`
+
+- **A theme can declare, per ground pair, which of its grounds read as
+  one surface at 256 colours**, instead of the library guessing from the
+  colour values. `quantize_set_256_into_with(colors, intent, out)` takes
+  `GroundIntent::UNDECLARED` or
+  `GroundIntent::new(&[(i, j, PairIntent::Same), ..])`.
+
+  Three states per pair: `Same` (may share an entry when they collide),
+  `Distinct` (never), and undeclared — which is the *absence* of an entry
+  rather than a variant, so it cannot be written down wrong.
+
+  **The declaration is additive, and opting in cannot flip the default.**
+  A pair nobody named falls to the undeclared behaviour exactly as if the
+  theme carried no declaration at all. An empty declaration, and one
+  naming nothing but `Distinct`, are both byte-for-byte identical to no
+  declaration — pinned across all 26 built-in themes. There is
+  deliberately no way to spell "merge everything I did not mention": a
+  theme must not be able to reach that by omission.
+
+  `UNDECLARED` is byte-for-byte the behaviour that shipped before this
+  existed, also pinned across all 26 themes. The three existing entry
+  points (`quantize_set_256`, `quantize_set_256_into`, and the driver's
+  own assignment) are that default, so this adds surface and changes no
+  output.
+
+  Why declared rather than measured: the set assignment gives every
+  ground its own entry, which for grounds an author drew alike invents an
+  edge — seven built-in pairs render *more* separated at 256 than at
+  truecolor. A distance floor cannot fix it, because the same pair can be
+  simultaneously one an author left indistinct and one whose elevation
+  plain nearest collapses. Intent is not a function of the two colours.
+
+  **Intent releases a merge; it never creates one.** `Same` permits two
+  grounds to share an entry *when they collide*; it never moves a ground
+  that had an entry of its own. Forcing a collapse the palette did not
+  ask for would invent the mirror of the defect this exists to end.
+
+  Two further guarantees survive any declaration: byte-identical colours
+  share an entry even when declared `Distinct` (at truecolor they *are*
+  one surface), and a merge never crosses a non-`Same` pair by way of a
+  third ground. Three caller bugs panic rather than being skipped — an
+  out-of-range index, a ground paired with itself, and the same pair
+  named twice (the shape a `Same`/`Distinct` contradiction arrives in).
+
+  Measured effect of the maximal opt-in — all ten pairs declared `Same` —
+  over the registry: closes 3 of the 7 invented edges, re-collapses 15
+  ground pairs the assignment keeps apart (one of them,
+  `catppuccin-frappe bg/surface`, above the 1.10 report floor). Under the
+  additive rule that cost takes ten deliberate statements; no theme pays
+  any of it by opting in. The other 4 invented edges are **not** the
+  assignment's — those grounds have different nearest entries already, so
+  no declaration can reach them and they survive with the set policy
+  deleted. They remain an open defect of the xterm-256 lookup.
+
+### Added — a theme declares its ground intent; the driver applies it
+
+- **`Theme::ground_intent` and `ThemeCandidate::ground_intent`.** An
+  author states which of their grounds read as one surface, once, in
+  TOKENS — `vec![(TokenId::SurfaceRaised, TokenId::SelectionBg,
+  PairIntent::Same)]` — and `Driver::sync_palette_assignment` resolves it
+  against `TokenSet::grounds` and installs the assignment. No per-frame
+  call and no assignment to build by hand.
+
+  Tokens rather than indices deliberately: an index pair is meaningless
+  in a theme literal and would silently mean a different pair the day the
+  ground list reorders.
+
+  **Every built-in declares nothing**, so no shipped theme moves a byte;
+  the 26-theme literal baseline passes unchanged and is now guarded by
+  `every_built_in_theme_is_silent_about_ground_intent`.
+
+- **`TokenSet::ground_index` / `TokenSet::resolve_ground_intent`** map a
+  token declaration onto the positions `render::color` speaks.
+  `resolve_ground_intent` REFUSES a token that is not an opaque ground
+  rather than skipping the pair — a dropped pair leaves the author
+  believing two grounds are declared while nothing carries it.
+
+- **`RegisterError::NotAGround`** — `register` refuses such a declaration
+  in BOTH modes. `Labeled` exists so a theme with a contrast miss still
+  renders; that reasoning does not transfer to a declaration that
+  protects nothing.
+
+- `examples/grounds.rs` gains an `i` key: it registers a variant of the
+  live theme declaring its colliding pair and switches to it, so the
+  demo exercises the shipped route rather than computing a merge itself.
+  It also now calls `set_theme` as you walk the registry, which it never
+  did — the page described theme N while the driver held theme 0's
+  assignment.
+
+- **`theme::contrast::declaration_contradictions`** — where a theme's
+  declaration contradicts the colours it is about. One case exists: a
+  pair declared `Distinct` whose grounds are byte-identical. The author
+  has said "these must read as different surfaces" about one surface;
+  the bytes win and the two share an entry, which until now happened in
+  silence. `register` surfaces it as a hygiene finding (refusing in
+  `Strict`, labelling in `Labeled`) — a lighter severity than
+  `NotAGround`, because the theme still renders sensibly and the
+  resolution is determinate.
+
+  This is what the byte-inert `Distinct` state buys: a declaration that
+  can be checked against the artifact. `Same` over two far-apart colours
+  is deliberately NOT reported — it is inert, not wrong.
+
+- **BREAKING** (pre-1.0): `ThemeCandidate` has a new required field.
+  Add `ground_intent: vec![]` to literal constructions; that is silence
+  and changes nothing. `Palette::derive` fills it in for you.
+
+### Changed — BREAKING (`gfx::bigtext`, added in 0.6.0)
+
+- **`GlyphScale::has_margin()` is removed.** It answered "is this scale
+  legible" by comparing `cols` and `rows` against one constant, and that
+  shape was wrong three ways: the content classes disagree with each
+  other, the mosaic mode was never consulted, and a rectangle test
+  refuses scales that measure BETTER. Concretely it refused 4x2 while
+  offering 3x3 — 3x3 has the same uppercase margin, costs a row more,
+  and renders two lowercase characters **identically**. The crate was
+  recommending the strictly worse of the two.
+
+  Replaced by measurement, exposed at three depths:
+
+  ```rust
+  use abstracttui::gfx::bigtext::{self, BigTextStyle, Content, Legibility};
+  use abstracttui::gfx::mosaic::MosaicMode;
+
+  // "what size should I use" — searched, per class and per mode
+  let scale = bigtext::smallest_clear(MosaicMode::Sextant, Content::Text);
+
+  // "is THIS size ok" — graded
+  let style = BigTextStyle::new(scale.unwrap(), MosaicMode::Sextant);
+  assert_eq!(bigtext::legibility(&style, Content::Text), Legibility::Clear);
+
+  // "how close, exactly" — the raw number, so you can set your own bar
+  let (a, b, subpixels) = bigtext::closest_pair(&style, Content::Text).unwrap();
+  ```
+
+  New: `Content` (`Uppercase` / `Text` / `Icons`, with `alphabet()`),
+  `Legibility` (`Collides` / `Distorted` / `Marginal` / `Clear`),
+  `MARGINAL_MAX`, `closest_pair`, `closest_pair_in`, `legibility`,
+  `smallest_clear`, `GlyphScale::COMPACT` (4x2) and
+  `GlyphScale::COMPACT_WIDE` (6x2).
+
+- bigtext: **`legibility` measures the SHAPE as well as the distance, so
+  a scale you name yourself is graded honestly.** New: `fidelity_loss`,
+  `least_faithful`, `FIDELITY_MAX` and `Legibility::Distorted`.
+
+  Pairwise distance answers *are these two characters different*. It
+  cannot answer *is either one still itself*, and at small sizes those
+  come apart: `●` and `◆` at 6x2 braille measure 16 subpixels apart and
+  render as the same white bar. The aspect band (below) fixed what
+  `smallest_clear` OFFERS; it did nothing about what `legibility` SAID,
+  so asking about 6x2 directly still returned `Clear` — and this crate's
+  own example printed that verdict above the bars.
+
+  `fidelity_loss(c, &style)` compares what the renderer draws against
+  the same glyph drawn at its NATURAL proportions in the same footprint
+  (0.0 = perfect). `least_faithful(&style, content)` reports the worst
+  character of a class, measured **inside the class's own run** — the
+  crop is run-wide, so `z` alone measures 0.39 at 4x3 braille and the
+  same `z` in mixed text measures 0.19. Over `FIDELITY_MAX` (0.35) the
+  verdict is `Distorted`, which orders BELOW `Marginal`: a tight pair is
+  one a careful reader resolves, a stretched glyph is not.
+
+  **The published picks did not move.** The two terms are independent
+  and each catches what the other misses — the band refuses 6x2 icons
+  (fidelity 0.34, inside the bar) and fidelity refuses 2x3 braille icons
+  (dead centre of the band, a 2.5x vertical stretch). One guard per
+  direction; both measured red by deleting the term they name.
+
+  One doc claim died with it: **`square(2)` is the size a LONE icon
+  wants, not a ROW of them.** A row crops as one run, so the box is the
+  union of `⚠ ☑ → ●` and taller than any single icon — braille clears at
+  4x2, sextant loses 0.36 and its answer is 3x2. `square`'s doc,
+  `docs/api.md` and this file all said it flatly.
+
+- bigtext: **`smallest_clear` is bounded by an aspect band, and the
+  scales it returns have changed.** New: `MAX_STRETCH` and
+  `GlyphScale::within_aspect_band()`.
+
+  The font's glyphs are 8x16 and a cell is about 1:2, so a `cols x rows`
+  scale is undistorted at `cols == rows` and a square *footprint*
+  (`cols == 2 * rows`) is already a 2x horizontal stretch. The search now
+  considers only scales within `MAX_STRETCH` of natural in either
+  direction.
+
+  This is a correction, not a tightening for its own sake. `legibility`
+  counts how many subpixels two rasterizations DIFFER in, and more
+  columns almost always buys more difference — so an unbounded
+  cheapest-clear search walks toward whatever is widest. It returned
+  `COMPACT_WIDE` (6x2) for braille text, where a filled `●` reduces to
+  `⣾⠀⠀⠀⣷⣦` / `⠻⠿⠀⠀⠿⠏` and reads on screen as a white bar. The measure is
+  right that one bar differs from the next by 16 subpixels; it cannot see
+  that neither is its glyph any more. **Reported by an operator against a
+  real screenshot, which is the only reason this module knows.**
+
+  What moved, in `Content::Text`: sextant `6x2 -> 4x4`, braille
+  `6x2 -> 4x3`. Braille `Icons` `3x1 -> 2x2` (also better measured: 5
+  subpixels against 4). `COMPACT_WIDE` is now documented as out of band
+  and kept as the worked example; it is still constructible and still
+  fine for uppercase.
+
+- bigtext: **`MosaicMode::HalfBlock` clears, and the docs said it never
+  could.** The band let the search reach past six columns, and halfblock
+  mixed text clears at 7x5. `smallest_clear`'s doc had called `None` "the
+  honest answer for HalfBlock, whose one-subpixel-wide cells cannot
+  separate the lowercase set at any size this module offers" — a fact
+  about a search space, stated as a fact about the terminal. Worse, it
+  was already false for two of the three classes: halfblock uppercase
+  (6x5) and icons (5x3) were both inside the OLD ceiling and had been
+  returned all along. Found by a guard written to assert the flattering
+  version — that all three needed the widening — which went red on the
+  first class it checked.
+
+- bigtext: **`GlyphScale::FLOOR` is not the safe default its name
+  implies, and its doc now says so.** Measured: 4x3 is `Clear` for every
+  content class in braille and only `Marginal` for mixed text in
+  *sextant* — the mode this module tells callers to prefer for type
+  (`o`/`0` at 3 subpixels). `smallest_clear` sends sextant text to 4x4.
+  This was found by a guard written to assert the opposite.
+
+- bigtext: `GlyphScale::square(1)`'s doc claimed it was a size for an
+  icon "that still fits inside a one-row bar". Measured across the icon
+  set, 2x1 gives 1 subpixel in braille, 2 in sextant and **0** in
+  quadrant, where `★` and `✗` are the same picture. The doc now says
+  what it is good for (a lone glyph) and what it is not (a row of
+  glyphs you must tell apart).
+
+### Fixed
+
+- widgets: **dragging the scrollbar selected text instead of scrolling.**
+  `scrollbar_auto_hide` defaults to `false`, so a `Scroll` whose content
+  fits its viewport still paints a rail. The strip claimed the drag only
+  when the content overflowed, so on that visible-but-not-overflowing bar
+  it declared no drag zone, screen-select mode did not stand down, and a
+  press on the rail began a text selection. The drag zone now tracks
+  whether the bar is **drawn**, not whether dragging it would move
+  anything: a painted bar owns presses on it, and a drag on a
+  full-height thumb is a no-op rather than a selection. Affects any
+  `Scroll` built without `scrollbar_auto_hide(true)` whose content fits;
+  overflowing and auto-hidden scrolls are unchanged.
+
+- app: **a `Tooltip` opened on CLICK and never on hover.** Hover is
+  recomputed only from mouse reports, and the default session posture
+  (`MouseMode::ButtonDrag`) has the terminal report motion only while a
+  button is held — so an app that mounted a tooltip and called
+  `App::run()` got a tip that appeared on mouse-down and stayed shut when
+  the pointer crossed the anchor. Mounting one now declares the need
+  (new: `Overlays::require_pointer_motion` / `pointer_motion_required`)
+  and the driver arms mode 1003 for it. `RunConfig::hover_ink` is
+  unchanged and is still what an app sets to opt into hover INK it merely
+  wants; an app with no motion-dependent widget still enters in
+  `ButtonDrag` and pays nothing.
+
+  Nothing caught this because every tooltip test rig set `hover_ink: true`
+  by hand, which made the app-facing hole invisible from inside the
+  suite. All four rigs now leave it off, and two named guards pin both
+  halves: the byte stream carries `[?1003h` with the app asking for
+  nothing, and an app without a tip still does not.
+
+- examples: `hovercard` laid its header, feed and footer out SIDE BY SIDE
+  and came up nearly blank. `LayoutStyle::fill()` sizes both axes and
+  leaves the direction at its default ROW; the example wanted a column.
+  `Style::fill`'s doc now says so.
+
+### Changed
+
+- examples: `bigtext` rebuilt as panels rather than one draw closure
+  walking a `y` cursor — a specimen, the hardest pair in each content
+  class drawn at the current settings, the aspect trap with both shapes
+  labelled, a live readout of the closest-pair distance per content
+  class, and the size sweep as a navigable list. The readout is the
+  point: `GlyphScale::has_margin` is one boolean over one global floor,
+  and the three measured numbers over it disagree with each other — a
+  size can be dead for lowercase and perfectly serviceable for icons.
+
+### Added — `gfx::bigtext` draws text and icons several cells tall
+
+- gfx: **`gfx::bigtext` draws text and icons several cells tall.** A
+  terminal has one font size, so a larger glyph means spending more cells
+  and subdividing them with mosaic characters. `bigtext` rasterizes a
+  string through the engine's embedded 8x16 font and hands it to
+  `gfx::mosaic`, so all four vocabularies (half-block, quadrant, sextant,
+  braille) and the existing capability ladder apply unchanged:
+
+  ```rust
+  use abstracttui::gfx::bigtext::{self, GlyphScale};
+  use abstracttui::gfx::mosaic::MosaicMode;
+
+  let size = bigtext::measure("AGORA", GlyphScale::FLOOR).unwrap();
+  let grid = bigtext::render("AGORA", GlyphScale::FLOOR, MosaicMode::Sextant, ink, ground)?;
+  ```
+
+  `GlyphScale::FLOOR` (4 cells across, 3 down) is the legibility floor:
+  across the 26 uppercase letters the closest pair differs by 10 subpixels
+  there, against 4 at `GlyphScale::TIGHT` (3x3) and 2 at 2x2.
+  `GlyphScale::square(rows)` gives a footprint that is square on screen —
+  cells are about 1:2, so a square icon needs twice as many columns as
+  rows. `measure` reports the cost before you commit layout. A character
+  the font has no glyph for is refused by name rather than dropped; the
+  embedded table carries no accented letters.
+
+  `BigTextStyle` carries two further axes for callers that want them,
+  through `render_with`/`rasterize_with`: `Sampling::AreaAverage` (the
+  default) keeps thin strokes and leaves letters further apart, while
+  `Sampling::Nearest` gives harder edges and halves that margin; and
+  `GlyphWeight::Bold` is a synthetic weight for tight scales — the CSS
+  `font-weight` axis, since the crate carries exactly one font. Quadrant and
+  sextant fit two colours per cell, so they need an opaque ground and
+  return `BigTextError::TransparentGround` rather than a correctly-sized
+  blank grid. See
+  [docs/api.md](docs/api.md#gfxbigtext--text-and-icons-several-cells-tall)
+  and `cargo run --example bigtext`, which sweeps sixteen sizes and cycles
+  symbols (`s`), weight (`w`) and sampling (`a`) from the keyboard.
+
+- app: **hover tips are reachable from the keyboard.** A `Tooltip` opens on
+  its ANCHOR taking focus as well as on hover — one arming path, the same
+  delay — closes on `FocusOut`, and `Escape` dismisses an open one. Escape
+  is consumed only when a tip is actually up, so an anchor never becomes a
+  place where Escape stops working for the dialog behind it. A hover-only
+  affordance is invisible to a keyboard user and to a terminal with no
+  mouse reporting at all, which is what this was.
+
+  The trigger sits on the ROOT of the view you pass and nowhere deeper.
+  Focus transitions are delivered target-only while hover is delivered
+  per-node along the hovered path, so the wrapper `attach_content` builds
+  could hear the mouse and could never hear focus — a listener there was
+  unreachable by construction, not merely missing. Attach to the focusable
+  node itself: `Tooltip::attach(cx, ov, "…", d, Button::new(…))` gets Tab;
+  an anchor that merely *contains* the focusable does not. The engine does
+  not make your anchor focusable for you, because that would insert a tab
+  stop into your app's traversal order. `cargo run --example hovercard`
+  demonstrates both halves, including the wrapper case that deliberately
+  stays mouse-only.
+
+- widgets, app: `List::on_context_menu` reports a secondary-button row
+  request in screen coordinates, with Shift+F10 as the keyboard equivalent.
+  The reusable `ContextMenu` popup supplies disabled actions, keyboard
+  navigation, viewport-aware placement, semantic Menu/MenuItem roles, and
+  close-before-action callbacks. Right-clicking a row does not implicitly
+  select or activate it.
+
+- widgets: `DrawerDock` rail tabs expose their full titles through semantic
+  Tabs/Tab nodes and support Enter/Space activation from keyboard focus.
+
+### Fixed — mosaic and capability ladder
+
+- app: **a hover card larger than the space available now says so.** A
+  `Tooltip` card taller than the rows the viewport can lend showed its first
+  few rows with no indication that more existed, and a label wider than the
+  viewport was cut mid-word. A truncated card carries a `… N more` row, and
+  an over-wide label ends in an ellipsis. A terminal has no scrollbar to
+  signal hidden content, so the marker is the only affordance available.
+
+- app: **a hover tip whose anchor moves under it now closes instead of
+  floating at stale coordinates.** The anchor rect is captured once, at
+  hover time, and hover is recomputed only from mouse reports — so content
+  scrolling under a stationary pointer moved the anchor with nothing to
+  synthesise a `MouseLeave` from, and the card was left describing a row
+  that had moved away. The anchor's own draw is now the signal: it runs
+  exactly when the anchor repaints, so an unmoved anchor costs nothing and
+  a moved one dismisses the tip on the next timer phase. Reported for the
+  browser by `agora-wui`; a terminal has it in a sharper form, because a
+  keystroke moves a whole row at once.
+
+### Documentation — the gfx guide
+
+- State the terminal rendering boundary for drawer labels: portable text can
+  stack grapheme clusters vertically, but terminal cells cannot rotate glyphs
+  by 90 degrees. A rotated bitmap is artwork rather than semantic terminal
+  text.
+
+## [0.5.0] - 2026-08-23
+
+A minor bump because one addition is technically breaking (below); the
+public surface is otherwise additive, and the migration is one line in the
+rare code that needs it.
+
+### Breaking
+
+- app: **`RunConfig` gained a public field, `extra_grounds`.** Under
+  ADR-0003 a config struct stays exhaustively constructible and grows
+  behind the functional-update idiom, so the documented form keeps
+  compiling untouched:
+
+  ```rust
+  let cfg = RunConfig { hover_ink: true, ..RunConfig::default() };
+  ```
+
+  What breaks is an **exhaustive** literal — one that names every field and
+  has no `..` tail. Migration: add `..RunConfig::default()` to it. Nothing
+  else in the public API changed incompatibly; the semver gate reports this
+  single finding against 0.4.1.
+
+- extensions: `abstracttui-graph` and `abstracttui-mermaid` are **0.4.0**
+  and require `abstracttui` 0.5. Neither crate's own API changed. Update
+  all three versions together:
+
+  ```toml
+  abstracttui = "0.5"
+  abstracttui-graph = "0.4"
+  abstracttui-mermaid = "0.4"
+  ```
+
+  If you consume the engine through `[patch.crates-io]` and a `path`
+  rather than from the registry, pin the **exact** version instead
+  (`abstracttui = "0.5.0"`). A patch outside your requirement is not an
+  error — cargo ignores it and resolves the published crate instead, so a
+  stale `"0.4"` requirement builds against 0.4.1 with a warning and exit
+  0. See [docs/troubleshooting.md](docs/troubleshooting.md#a-local-checkout-stops-being-the-engine-i-build-against).
+
+### Added
+
+- theme: **`theme::Palette` — your house colors through the engine's own
+  derivation.** `theme::register` has always been public, but the transform
+  that turns a handful of authored colors into a full `TokenSet` was not, so
+  an application with a brand palette had to reimplement it — and its tokens
+  would then drift from the engine's at the next contrast-floor change, with
+  nothing to notice. `Palette` carries the same twelve colors the built-in
+  seed table does, as owned `String`s (a palette read from a config file is
+  not `&'static`), and `Palette::derive()` returns a `ThemeCandidate`:
+
+  ```rust
+  use abstracttui::theme::{register, Palette, RegisterMode};
+
+  let mut palette = Palette::new("acme", "Acme", true);
+  palette.bg = "#101014".into();
+  palette.accent = "#ff6188".into();
+  // ... the other ten authored colors ...
+  let reg = register(palette.derive()?, RegisterMode::Strict)?;
+  ```
+
+  `derive` runs the transform and nothing else — `register` stays the single
+  place a theme is audited, so there is no second audit to keep in step. Bad
+  hex comes back as a `PaletteError` naming **every** malformed field rather
+  than the first, so a config with three typos costs one round trip. All
+  twelve colors are required: the tokens a consumer is most likely to lack
+  are semantic inks (`accent_alt`, `ok`, `warn`, `error`, `info`), and which
+  green means "resolved" in a product is a decision, not a shade.
+
+- theme: **`theme::contrast::ink_on(&tokens, ground)` — readable text on a
+  ground the theme never saw.** The audit guarantees `text` reads on the
+  theme's own grounds, and it holds; it says nothing about a panel color your
+  application mints. Measured across the 26 built-ins, a mid-dark app panel
+  leaves `text` below the 4.5:1 floor in 8 themes and a bright one in 19
+  (`solarized-light` reaches 1.01 — text the same color as the panel under
+  it). `ink_on` returns the theme's most readable **authored** ink for an
+  arbitrary ground as `Ink { color, token, contrast }`, clearing 4.5:1 on 51
+  of the 52 theme/panel combinations measured. The achieved ratio is returned
+  rather than swallowed because of the 52nd: on a bright yellow panel
+  `everforest-light` tops out at 3.49:1, and a bare color would hand you
+  unreadable text that looks like a considered choice. Check `contrast`
+  against the floor you need.
+
+  This is a door, not a default: widgets still ink themselves from the
+  theme's tokens, and nothing in the paint path changes.
+
+- render, app: **grounds stay distinct when color downlevels to 256.** The
+  contrast audit runs at truecolor; quantization to the xterm-256 cube
+  happens downstream at emit, so the audit's guarantees were not carried
+  across the downgrade. Measured across the registry, 15 of 260 ground pairs
+  — in 15 of the 26 themes — collapse onto a single palette entry at 256
+  colors, the house themes among them, which lost panel elevation entirely.
+
+  `render::color::quantize_set_256` (with `quantize_set_256_into` for a
+  runtime-sized set) is the set analogue of `quantize_pair_256`: hand it N
+  colors, get back N distinct indices, moving as few as possible, keeping a
+  displaced ground on the authored side of the ground that displaced it, and
+  never displacing a color the palette represents exactly.
+  `Presenter::set_palette_assignment` installs the result, and the pen
+  resolver consults it for cell foregrounds, backgrounds and underline colors
+  alike. `Driver` keeps the assignment in lockstep with the live theme and
+  the color depth — cached on its inputs, re-derived only when they change —
+  so the theme's own grounds need nothing from you.
+
+  Grounds **your app** mints are declared: `RunConfig::extra_grounds` on the
+  `App::run` path, `Driver::set_extra_grounds` on a hand-driven loop. The
+  separator can only keep apart what it is given.
+
+  Three limits, all stated on the calls that carry them. **256 only** — at
+  truecolor there is nothing to separate, and at `Ansi16` the collapse still
+  happens (98 of 260 pairs), because the 16 system registers are user-themable
+  and no build-time decision can know what index 4 renders as. **Foreground
+  separation still wins** — where an assignment would push a ground onto the
+  entry a foreground drawn over it wants, the foreground moves: two surfaces
+  reading as one is a defect, text reading as its own background is erased.
+  And in 7 of the 260 pairs the assignment renders two grounds the theme
+  authored as *indistinguishable* (below 1.05) slightly further apart than
+  truecolor does — an edge the author did not draw. That set is pinned and
+  measured; a single distance threshold provably cannot separate those pairs
+  from the ones that need separating.
+
+  Truecolor output is byte-for-byte unchanged, as is any 256-color app whose
+  grounds do not collide: the empty assignment is literally the previous path.
+
+- theme: **`theme::contrast::ground_overlaps(theme_id, &tokens, floor)`** asks
+  the ground-against-ground question the pairwise audit does not. It returns a
+  `GroundOverlap` for every pair of the theme's opaque grounds measuring below
+  `floor`, so a theme author can see where elevation reads as flat.
+  `floors::GROUND_SEPARATION_REPORT` (1.10) is the reporting threshold the
+  engine's own measurements use — reported, never enforced: drawing two
+  grounds alike can be deliberate. `TokenSet::grounds()` is the list it walks,
+  public so your own tooling measures the same set.
+
+- widgets: **markdown horizontal rules are stylable, on all three axes at
+  once.** `MdRuleStyle` opens the ink (`MdRuleInk::Token`, resolved at typeset
+  so a rule follows a theme switch, or `MdRuleInk::Fixed`), the width
+  (`MdRuleWidth::{FullBleed, Measure, Inset}`) and the vertical space
+  (`space(before, after)`), on both renderers — `MarkdownView::rule_style` and
+  `Feed::rule_style`:
+
+  ```rust
+  let quiet = MdRuleStyle::default()
+      .ink(MdRuleInk::Token(TokenId::TextFaint))
+      .width(MdRuleWidth::Inset(2))
+      .space(0, 0);
+  MarkdownView::new(src).rule_style(quiet)
+  ```
+
+  All three at once, because a policy that opens one axis lets a consumer
+  build half a document convention and believe it is finished. The default is
+  byte-identical to previous releases: `border` ink, full bleed, one blank row
+  each side. Callers that measure or anchor into a document rendered with a
+  non-default rule use the rule-aware forms — `rows_ruled`, `find_ruled`,
+  `outline_rows_ruled`, `resolve_anchor_ruled`.
+
+- term: **`Capabilities::headless()`** — the fixed capability set for a byte
+  sink: full color and UTF-8, every terminal-bound feature (kitty
+  keyboard/graphics, sixel, OSC 52, mouse, paste, focus, synchronized output)
+  off, and no environment read at all. `Terminal::set_tty` lets a custom
+  terminal declare whether it is attached to one.
+
+- examples: **`grounds`** (`cargo run --example grounds`) walks the
+  256-color ground work on a real screen — theme by theme, with and without a
+  declared application panel, showing the entry each ground quantizes to and
+  the contrast the chosen ink achieves.
+
+- tests: the random-tree layout properties now cover **content-sized**
+  children and gain **wrap** and **grid** populations, completing the set
+  (column, row, wrap, grid); `theme_quantisation_grounds` measures ground
+  separation across all 26 themes at both depths and pins what it found; and
+  the pty smoke suite gained a `grounds` case. Each fix below shipped with a
+  probe that turns red when the fix is reverted.
+
+### Changed
+
+- widgets: **`ThemeSwitcher` is a padded chip instead of a bare glyph, and it
+  is now 5 columns wide instead of 1.** It was a 1x1 cell drawing `☾`/`☼` on a
+  transparent ground with no margin: the smallest possible click target, the
+  smallest possible visual object, and — mounted last in a right-aligned
+  chrome row, which is where applications put it — flush against the terminal
+  edge. Three separate causes, all three addressed:
+
+  - the ground is `surface_raised` in **every** state including idle, so the
+    control reads as pressable rather than as decoration; hover and focus
+    change the ink, not whether there is a ground;
+  - one cell of padding each side, **inside** the button, so the hit area
+    grows with the chip (3x1, the shape `Badge` uses);
+  - one cell of margin each side, which is what actually keeps it off the
+    screen edge — padding alone moves the chip's own ground into the corner.
+
+  **If your chrome row pins the switcher into a fixed-width slot, widen that
+  slot to 5 columns**, or the chip is clipped back to what it was. Rows that
+  lay out from the widget's own size need no change. `ThemeSwitcher::layout`
+  still replaces the default wholesale if you want different geometry — and an
+  override wider than one cell now works: the face was a hardcoded 1x1 child,
+  so a wider box drew the glyph in its corner and left the rest blank. The
+  face fills its button and centres the glyph.
+
+- app: **capabilities are no longer detected from the environment when the
+  terminal is not a tty.** `Driver::new` resolved an undeclared `RunConfig::caps`
+  with `Capabilities::detect_env()`, which is right over a real terminal and
+  wrong over a capture terminal: a byte sink has nothing to detect, so it
+  inherited the shell of whoever ran the suite, and a host without `COLORTERM`
+  quantized every asserted color through the 256 cube. Nothing went red —
+  token-against-token comparisons pass at either depth — so the suite's verdict
+  was a property of the machine.
+
+  The branch is now three cases: declared caps win; undeclared over a tty is
+  the environment pass, unchanged; undeclared over a non-tty is
+  `Capabilities::headless()`. The substitution is never silent — it pushes a
+  startup notice naming both ways to take control (declare `RunConfig::caps`,
+  or override `Terminal::is_tty`). **A custom `Terminal` implementation that is
+  attached to a real terminal but does not override `is_tty` now gets headless
+  defaults**: override it, or call `set_tty(true)`.
+
+- tests: the performance and allocation budgets state budgets that can fail.
+  `perf_budgets` printed its measurements and **passed** in a debug build,
+  where a timing budget cannot be judged — a green meaning the opposite of what
+  it looked like; it now fails and names the release command to run, still
+  printing the measurement, and the two timing-independent tests in the file
+  still pass in debug. The allocation ratchets were restated against measured
+  values (each shown to fail one notch below), and a diff/present ratchet
+  sitting 8,000x above the acceptance test beside it was deleted. Contributor-
+  facing only: `ci.yml` never invoked these, and both documented callers pass
+  `--release`.
+
+### Fixed
+
+- layout: **a wrapped line is now tall enough for the children that stretch
+  into it.** `wrap` sized each line from the maximum of its members' cross
+  sizes, but gave an `Align::Stretch` member no cross size at all — its size
+  comes from the line, so it contributed nothing to the line it was about to be
+  measured against. Since `Stretch` is the default `align_items`, an ordinary
+  wrapped row of text beside a one-row chip was clipped to one row: a paragraph
+  needing five rows was solved to `h: 1`. Lines are now sized from every
+  member's hypothetical cross size — what it would be if it did not stretch —
+  which is how CSS breaks the same cycle. Both axes: a column-direction wrap
+  had the identical defect in its widths. The change also removes an
+  all-stretch fallback that measured children at the container's main extent
+  rather than the one they were solved to.
+
+- layout: **the 0.4.1 margin deduction now reaches wrapped containers.**
+  `intrinsic_size` is called from the single-line flex path, the wrap path and
+  the grid path; 0.4.1 deducted a child's own margins on the flex path only, so
+  the same defect survived verbatim behind `Style::wrap()`. The line-breaking
+  basis measured a content-sized child at the full content extent, and because
+  that basis becomes the child's main size and is never re-derived, a wrapping
+  leaf with side margins in a wrapped column was solved a row short of its own
+  text — 120 columns with `margin: 3` in a 40-wide wrapped column is solved to
+  width 34, which needs 4 rows, and was given 3. Wrapped rows were never
+  affected: there the main size is corrected before the cross measure reads it.
+
+- layout: **`Style::margin()` on a grid child is no longer a silent no-op.**
+  The call compiled, nothing threw, and the value was discarded: grid assigned
+  the child its raw cell with no margin term anywhere in track sizing or
+  placement, and the whole suite was byte-identical with and without a margin
+  on a grid child. A grid child's margins now come out of its cell on every
+  edge, and it sizes and aligns within the resulting margin box; an `Auto`
+  track fits the child's margin box, so the track grows to make room instead of
+  the child being squeezed. Over-large margins clamp to a zero extent rather
+  than inverting the rect. Flex has always honored margins and CSS Grid honors
+  them on grid items — a margin that silently vanished was the worst of the
+  three behaviors available.
+
+- layout: **`Style::align_items()` on a grid container is no longer a silent
+  no-op either.** Grid hardcoded the alignment fallback to `Stretch`, while the
+  crate's three other alignment sites resolve a child's alignment as its own
+  `align_self` falling back to the container's `align_items`; a grid child was
+  therefore always stretched no matter what its container asked for. Grid now
+  resolves it the same way. A grid that never mentions alignment is unchanged,
+  since the default `align_items` is already `Stretch`; only grids that set it
+  explicitly change, and those were precisely the ones being ignored.
+
+## [0.4.1] - 2026-08-22
+
+### Fixed
+
+- layout: **a child with MARGINS was measured at a width it is never
+  drawn at.** The placement pass takes a child's own margins out of its
+  cross extent (`cross_avail = content_cross_extent - m_cross_total`);
+  the intrinsic pass did not, so a content-sized leaf was asked for its
+  size at the full content width and then solved narrower. A wrapping
+  leaf therefore answered the row count for the wrong line length —
+  measured: 70 columns of text with `margin: 3` in a 40-wide column is
+  solved to width 34 but reported 2 rows instead of 3, and was drawn a
+  row short. Both intrinsic call sites (children aggregation and the
+  flex basis) now deduct the child's margins first. What this does NOT
+  fix, and cannot: a child sharing a ROW with a fixed sibling is still
+  measured at the full content width, because its flex share is not
+  known until the basis being asked for has been distributed.
+- widgets: **a content-sized `Feed` reports its true height on the
+  first frame.** `Feed` now answers an intrinsic measure during the
+  layout solve, typesetting at the width the solver offers — the same
+  door `MarkdownView` and `CodeView` use. Previously it could only
+  learn its width in paint, so its first solve reported a single-row
+  placeholder and the real height arrived a frame later. Anything
+  sizing itself from that feed saw the placeholder for one frame:
+  `Scroll::new(Feed::new(&state).view(cx))` squashed to a row per item
+  before expanding, a bound `offset_y` clamped against one-row content,
+  and a `follow_tail` pin jumped to the top and back. Apps that worked
+  around the settle — deferring chrome, debouncing the extent, or
+  re-pinning after a rebuild — can drop those workarounds.
+  `FeedState::total_rows` is still published one turn after the solve,
+  so chrome reading it is unchanged.
+- app: **select mode keeps a scrollbar drag when the press follows a
+  pointer move in the same input burst.** With `app::selection`
+  enabled, moving onto a scrollbar strip and pressing without an
+  intervening frame handed the gesture to the text-selection layer
+  instead of the thumb. Affects every drag surface that declares a
+  drag zone inside a reactive region.
+- app: **a mouse release the app never receives no longer strands a
+  selection anchor onto the next drag.** When a release is lost — the
+  pointer released outside the terminal, or `mouse_capture().suspend()`
+  spanning it — the next press now starts a clean gesture instead of
+  the stale one claiming a widget's drag.
+- widgets: **a scrollbar strip with no travel stays selectable.**
+  `List`, `Table` and `FilePicker` claimed the strip as a drag zone
+  whenever a bar was drawn, including viewports too short for the thumb
+  to move. Such a cell could be neither dragged nor selected. All three
+  now claim the strip only when the content actually overflows, as
+  `Scroll` already did.
+- widgets: **`Scroll::follow_tail` keeps a following reader at the tail
+  across a remount.** Content that publishes its height after the solve
+  could drive the pin to the top for a frame before it snapped back.
+  The pin now ignores a single short first arrival when a warm extent
+  was carried in through `extent_signal`.
+- render: **the terminal-scroll optimization requires synchronized
+  output.** `DECSTBM`+`SU` erases rows to the terminal's default
+  background before the repaint lands, which a terminal without DEC 2026
+  can present as a visible flash in the band that changed. The engine
+  now uses the optimization only where a sync bracket can hide it, and
+  emits an ordinary diff elsewhere. The cost is bytes alone — both paths
+  paint the same cells — and the capability probe enables it mid-session
+  on terminals that prove support.
+
+- widgets: **a `TextArea` focused by the turn that mounts it anchored
+  its completion dropdown at the screen origin.** `caret_cell` — the
+  anchor an owner's completion panel places against — was published
+  only from inside event handlers, whose one geometry source is
+  `EventCtx::current_rect`. At mount-time focus (`.autofocus()`, or a
+  composer that mounts already focused) the solver has not run when
+  `FocusIn` arrives, so that rect is `Rect::ZERO`, the anchor read
+  (1, 0), and `AbovePreferred` did exactly the right thing with a false
+  input: the panel opened at the top-left corner of the screen, up to a
+  full viewport away from the composer. Nothing corrected it, because
+  the character that opened the panel is typically consumed by a global
+  action ABOVE the widget, so no consumed key ever republished — and a
+  resize dismisses the panel rather than moving it. The widget now also
+  publishes from its own solved rect (`Element::rect_signal`, 0.4.1), so
+  the first layout pass after mount republishes the anchor and the panel
+  takes `AnchoredPanel`'s pure-move path. Reported from the field
+  against 0.4.0 with a deterministic repro (agora-tui's composer).
+  Resizes are corrected by the same path.
+- app: **a composer inside a `Modal` or `Drawer` anchored its
+  completion dropdown as though its layer sat at (0, 0).** The other
+  half of the entry above, and the half a green suite hid: `caret_cell`
+  is LAYER-LOCAL by contract, so `app::anchored`'s completion controller
+  translates it by the composer's screen origin — which it learned from
+  its capture-phase event handler and from nowhere else. A composer that
+  mounts FOCUSED on a draft already holding a trigger token opens its
+  panel without any event ever reaching the wrapper, so the translation
+  used `Point::ZERO` and the dropdown landed at the layer's offset from
+  the screen, staying there until the user typed. The source claimed a
+  draw-time probe covered this; there was none, and the claim is what
+  made the hole read as a documented edge. There is one now — the same
+  ambient-`layer_origin()` probe `Select`, `Combobox` and `MultiSelect`
+  have always carried, deferred by a tick so the write never lands
+  inside the draw pass, and gated so an unchanged origin costs nothing.
+  Measured through the real frame loop: the panel lands on the row under
+  the composer at its layer's column, and moves to (row 7, column 5)
+  with the probe deleted.
+
+- widgets: **a disposed element could still publish its solved size.**
+  `scroll::size_probe` — the deferred measurement readback behind
+  `Scroll::extent_signal`, `Scroll::viewport_size_signal` and `List`'s
+  viewport probe — guarded its write by asking whether the SIGNAL was
+  still alive. That is the wrong question whenever the signal OUTLIVES
+  the element, which is the normal shape for a caller-supplied signal
+  re-bound across a rebuild: a pane owns the signal, a child records its
+  size and is disposed before the deferred publish fires, and the dead
+  child's measurement lands on top of the live one's. The reader sees an
+  off-by-one; the cause is a lifetime. The probe now takes the mounting
+  `Scope` and goes inert on its cleanup, so the ELEMENT's liveness
+  decides whether a pending publish happens at all.
+
+- widgets: **remounting a `Scroll` no longer destroys a bound
+  `offset_y`.** A `Scroll` bound to an offset signal over content that
+  measures in two frames (`Feed`, and anything whose height needs a
+  width only `draw` discovers) rewound to the top on remount *and*
+  overwrote the caller's own signal with 0 — reported as a drawer bug,
+  and neither a `Drawer` nor a `PageHost` defect. The first solve
+  publishes a `(w, 1)` placeholder with the cross axis already correct,
+  which is exactly what made it dangerous: the offset repair treated
+  anything that was not the `(0, 0)` sentinel as a real measurement and
+  clamped against a height of 1. The repair now treats the first
+  measurement after the sentinel as provisional and never clamps against
+  it, and the wrapper inset is clamped at RENDER time against the
+  current extent — which is what makes skipping the clamp safe, because
+  a culled child never draws, never discovers its width, and so can
+  never correct the extent it was culled for. A genuine shrink still
+  reclamps and still writes the bound signal.
+- widgets: **`Scroll::extent_signal`'s warm start now actually protects
+  a bound offset.** Its rustdoc promised that a supplied signal's
+  current value is kept until the first solve, so a remounting caller
+  warm-starts from its last measurement; with a caller-bound extent
+  signal it delivered the opposite. There is no `(0, 0)` sentinel in
+  that case, so the warm value itself spent the "first measurement is
+  provisional" exemption and the placeholder solve arrived TRUSTED,
+  clamping the bound offset to 0. A warm value is a remembered
+  measurement, not one this mount took: the repair now captures what the
+  signal held at build time and treats any observation still equal to it
+  as "nothing has arrived yet". Fresh mounts and hint mode are
+  unchanged.
+- app: **select mode no longer steals a widget's drag.** With
+  `app::selection` enabled, pressing a scrollbar thumb and dragging
+  painted a text selection instead of scrolling: the layer claimed the
+  gesture at the first cross-cell drag, and the claim cancels the
+  pressed widget's pointer capture — so the thumb it had just grabbed
+  went dead. Every drag surface in the engine had it: both `Scroll`
+  bars, the `List` / `Table` / `FilePicker` internal bars, and
+  `Viewport3D`'s orbit (a whole interaction mode lost while select mode
+  was on). A press that lands on a drag-owning surface now arms no
+  selection anchor at all, so the Down, the Drag and the Up reach the
+  widget together. The ANCHOR decides: a drag that starts in content and
+  crosses a strip still selects, and a bar that is hidden or has nothing
+  to scroll owns nothing.
+
+### Changed
+
+- widgets: **an empty content-sized `Feed` no longer reserves a row.**
+  It reported a height of one row even with no items, which was the
+  floor that kept an unmeasured feed from collapsing to zero. With the
+  measure answering truthfully that floor is gone, so an empty feed
+  occupies no rows and a sibling beneath it moves up one. If you relied
+  on the reserved row as spacing, add it explicitly.
+
+### Added
+
+- ui: **`Element::drag_zone`** — declare the sub-rect of an element that
+  owns pointer drags, and the screen-text selection layer stands down
+  over it. A sub-rect rather than a flag because `List`/`Table`/
+  `FilePicker` handle their bar on the same element as their rows: only
+  the strip stands down, every row stays selectable. Return `None` when
+  nothing is grabbable right now — an invisible target must not swallow
+  a selection either. This is what a third-party slider, splitter, or
+  canvas drag needs to survive select mode.
+- ui: **`UiTree::press_probe_at`** → `PressProbe` — the pane that would
+  clamp a selection from a point plus whether a drag zone owns it,
+  resolved in one descent. `pane_rect_at` is now a thin wrapper over it.
+- ui: **`Element::rect_signal`** — an element publishes its own SOLVED
+  rect into a caller-supplied `Signal<Option<Rect>>`, so an app can
+  scroll one of its own children into view without re-deriving the
+  engine's layout arithmetic. The clamp stays in the app (five lines
+  over the rect and the viewport); what was missing was a way to learn
+  where a child landed. Published from the LAYOUT pass, not from paint,
+  and that is the whole point: the child an ensure-visible clamp must
+  locate is by definition the one outside the viewport, which is exactly
+  the one the paint cull skips. `None` means the element solved to ZERO
+  AREA — clean absence rather than a position at the origin, which a
+  clamp would read as "jump to the top". An unmounting element never
+  publishes, so a signal re-bound from one child to another across a
+  rebuild cannot receive the disposed child's rect afterwards.
+
 ## [0.4.0] - 2026-08-21
 
 This release was prepared as `0.3.8` and is published as **0.4.0**: the
@@ -1140,8 +1982,7 @@ not do. Use `0.3.0`.
 
 ### Fixed
 
-- ui: the FUSION class (gateway-console field incident 2026-07-24) —
-  a node crushed to ZERO AREA by flex overflow pressure no longer runs
+- ui: a node crushed to ZERO AREA by flex overflow pressure no longer runs
   its draw closure with the degenerate rect. Empty rects never
   intersect anything, so they fell through the paint cull and a
   hand-rolled closure that clips on one axis only (a title bar
@@ -2164,11 +3005,9 @@ not do. Use `0.3.0`.
   absolute CUP and its first SGR is reset-based (backlog 0298, P0). The
   poison already re-emitted every CELL, but the first run was still
   PLACED by relative motion from the pre-resize parked cursor — a ghost
-  after an emulator reflow moves the physical cursor (macOS Terminal's
-  bottom-anchored growth in the field incident), which offset the run
-  and left a stale band of the previous frame on screen (live report:
-  stale header band above the live frame after a workflow-picker close
-  around a resize). The splash player (`boot::player`) already
+  when an emulator reflow moves the physical cursor during bottom-anchored
+  growth, which offset the run and left a stale band of the previous frame
+  on screen. The splash player (`boot::player`) already
   invalidated on resize; the driver now upholds the same rule. New
   acceptance suite `tests/adv_resize_modal.rs`: every
   {resize↑↓←→, modal close} interleaving — including both in one turn —
@@ -2426,7 +3265,10 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
-[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/lpalbou/abstracttui/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/lpalbou/abstracttui/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/lpalbou/abstracttui/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/lpalbou/abstracttui/compare/v0.3.7...v0.4.0
 [0.3.7]: https://github.com/lpalbou/abstracttui/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/lpalbou/abstracttui/compare/v0.3.5...v0.3.6

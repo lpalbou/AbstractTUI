@@ -111,6 +111,17 @@ pub mod floors {
     /// palettes (everforest-light) set the honest ceiling.
     pub const SYNTAX: f32 = 4.5;
     pub const SYNTAX_COMMENT: f32 = 3.0;
+    /// Ground-vs-ground separation, REPORTED and not enforced — the
+    /// default floor for [`super::ground_overlaps`]. Below this two
+    /// grounds are close enough that a reader is unlikely to see an edge
+    /// between them, so a panel raised onto a surface has none.
+    ///
+    /// Not a member of the enforced set above, and deliberately so: at
+    /// this value it fires across most of the registry, and whether that
+    /// is a defect or authored subtlety is DESIGN's ruling. Same standing
+    /// as `TEXT_TARGET` — a number the engine will tell you about and
+    /// will not fail you for.
+    pub const GROUND_SEPARATION_REPORT: f32 = 1.10;
 }
 
 /// Audit one token set against every documented floor. Returns an empty
@@ -279,6 +290,218 @@ pub fn audit(theme_id: &str, t: &TokenSet) -> Vec<Violation> {
     }
 
     out
+}
+
+/// Two GROUNDS that a reader may not be able to tell apart.
+///
+/// Deliberately not a [`Violation`]: this is **reported, never enforced**,
+/// and calling it a violation would state a verdict that is not mine to
+/// state. See [`ground_overlaps`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct GroundOverlap {
+    /// Theme id the pair was measured in.
+    pub theme: String,
+    /// The two grounds, in `TokenSet::grounds()` order.
+    pub a: TokenId,
+    pub b: TokenId,
+    /// Their WCAG contrast ratio, at TRUECOLOR — before any quantisation.
+    pub measured: f32,
+}
+
+impl core::fmt::Display for GroundOverlap {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "[{}] {} / {} measure {:.3} apart",
+            self.theme,
+            self.a.name(),
+            self.b.name(),
+            self.measured
+        )
+    }
+}
+
+/// Every pair of GROUNDS in `t` closer together than `floor`.
+///
+/// ## Why this exists as its own function
+///
+/// [`audit`] cannot ask this question. Every one of its rules is
+/// INK-on-GROUND: `surface_raised` appears there only as a *background*
+/// for text and syntax checks, never as a subject measured against
+/// `surface` or `bg`. So a theme may author two grounds `1.006` apart —
+/// one colour to any reader — and pass a clean audit with zero
+/// violations. That is the same hole `quantize_pair_256` had against
+/// `quantize_set_256`: a rule that protects a foreground from its own
+/// background cannot protect two grounds from each other, because they
+/// live in different cells and are never handed to it as a pair.
+///
+/// ## Why it REPORTS instead of failing
+///
+/// Whether a near-invisible ground pair is a defect or deliberate
+/// subtlety is a DESIGN call, and at the default reporting floor it fires
+/// on most of the registry — so wiring it into `audit` would redden
+/// themes whose authors may well have meant it, which is the
+/// valid-input-fails defect this module spent a day learning. The
+/// engineering claim here is only that the question should be
+/// ASKABLE. Set a floor in `audit` once DESIGN has ruled; until then the
+/// honest instrument is a measurement anyone can run, not a verdict
+/// nobody agreed.
+///
+/// Note the measurement is at truecolor: it says what the theme AUTHORED,
+/// independent of what any depth downgrade later does with it.
+pub fn ground_overlaps(theme_id: &str, t: &TokenSet, floor: f32) -> Vec<GroundOverlap> {
+    let g = t.grounds();
+    let mut out = Vec::new();
+    for i in 0..g.len() {
+        for j in (i + 1)..g.len() {
+            let measured = contrast_ratio(g[i].1, g[j].1);
+            if measured < floor {
+                out.push(GroundOverlap {
+                    theme: theme_id.to_string(),
+                    a: g[i].0,
+                    b: g[j].0,
+                    measured,
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Where a theme's ground-separation DECLARATION contradicts the colours
+/// it declared it about — one line per contradiction, empty when there
+/// is none.
+///
+/// ## The one contradiction that exists, and why only that one
+///
+/// A pair declared [`Distinct`](crate::render::color::PairIntent::Distinct)
+/// whose two grounds are BYTE-IDENTICAL. The author has said "these must
+/// read as different surfaces" about one surface. It has a determinate
+/// resolution — the colours are the artifact and the declaration is
+/// metadata about them, so the bytes win and the two share an entry —
+/// and until now that resolution happened in silence.
+///
+/// The mirror case is NOT a contradiction and is deliberately not
+/// reported: `Same` over two colours a mile apart asks for a merge that
+/// can never happen, because intent only releases a merge at a
+/// collision. It is inert, not wrong, and an author may reasonably
+/// declare it against a future re-tint of their own palette.
+///
+/// ## Why this is worth a function
+///
+/// `Distinct` changes no bytes: undeclared already keeps two grounds
+/// apart, so declaring it is a statement for the record rather than an
+/// instruction. That was reported as a cost when the three states were
+/// ruled (`decision:ground-separation-intent-is-declared-by-the-theme`),
+/// weighed, and kept. THIS is what it buys in exchange — a declaration
+/// that can be checked against the artifact. An author who writes
+/// `Distinct` and then tints both grounds to the same hex now hears
+/// about it instead of believing an edge is protected.
+///
+/// Unlike [`ground_overlaps`], this is not a taste judgement about how
+/// close two colours may be, so it does not need DESIGN to set a floor:
+/// the theme contradicts ITSELF, at any floor, and the author is the
+/// only one who can say which half they meant.
+pub fn declaration_contradictions(
+    theme_id: &str,
+    t: &TokenSet,
+    declaration: &[(TokenId, TokenId, crate::render::color::PairIntent)],
+) -> Vec<String> {
+    let g = t.grounds();
+    let color_of = |id: TokenId| g.iter().find(|(k, _)| *k == id).map(|(_, c)| *c);
+    declaration
+        .iter()
+        .filter(|(_, _, intent)| *intent == crate::render::color::PairIntent::Distinct)
+        .filter_map(|(a, b, _)| {
+            let (ca, cb) = (color_of(*a)?, color_of(*b)?);
+            // RGB only: the grounds are opaque by definition, and this is
+            // the same equality the separator resolves the case with.
+            (ca.r == cb.r && ca.g == cb.g && ca.b == cb.b).then(|| {
+                format!(
+                    "[{theme_id}] {} / {} are declared Distinct and are the same colour \
+                     (#{:02x}{:02x}{:02x}) — they will share one palette entry, because \
+                     at truecolor they already are one surface",
+                    a.name(),
+                    b.name(),
+                    ca.r,
+                    ca.g,
+                    ca.b
+                )
+            })
+        })
+        .collect()
+}
+
+/// An ink chosen for a ground, with the contrast it actually achieved.
+///
+/// The ratio is returned rather than swallowed on purpose: on some
+/// theme/ground combinations NO authored ink clears [`floors::TEXT`], and
+/// a bare `Rgba` return would hand the caller unreadable text that looks
+/// like a considered choice. Check `contrast` against the floor you need.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Ink {
+    /// The chosen colour — always a token the theme AUTHORED.
+    pub color: Rgba,
+    /// Which token it came from, for diagnostics and golden output.
+    pub token: TokenId,
+    /// Achieved WCAG ratio against the ground it was chosen for.
+    pub contrast: f32,
+}
+
+/// The theme's most readable authored ink for an arbitrary `ground`.
+///
+/// ## The gap this closes
+///
+/// [`audit`] guarantees `text` reads on the theme's own grounds, and it
+/// holds: across the built-in registry `text` clears [`floors::TEXT`] on
+/// 128 of 130 theme/ground pairs. It says nothing whatsoever about a
+/// ground the THEME never saw — and `RunConfig::extra_grounds` exists
+/// precisely so an application can declare one. Measured on the registry,
+/// a mid-dark declared panel leaves `text` below the floor in 8 of 26
+/// themes (`solarized-light` reaches 1.01 — text the same colour as the
+/// panel), and a bright declared panel in 19 of 26. An app that reaches
+/// for `t.text` on its own panel is reading a coin flip, and the failure
+/// is invisible until someone switches theme.
+///
+/// ## Why the candidates are exactly `text` and `bg`
+///
+/// Those are the theme's two POLES, and [`audit`]'s `text/bg` rule
+/// already guarantees they are far apart. Whichever pole a ground is
+/// near, the other one reads on it — which is the general form of "black
+/// font on a bright panel, white font on a dark panel" expressed in
+/// colours the theme's author chose, rather than in literal black and
+/// white that belong to no palette. Nothing here MINTS a colour:
+/// `decision:no-palette-fill-in-helper` rules that the engine does not
+/// invent tokens, and selecting between two authored ones by a
+/// measurable property is the opposite of inventing a meaning.
+///
+/// ## It can still fail, and says so
+///
+/// Best-of-the-two-poles clears [`floors::TEXT`] on 51 of 52 measured
+/// theme/declared-ground combinations. The one that does not is
+/// `everforest-light` on a bright yellow panel (best 3.49): a soft light
+/// palette holds no ink dark enough, and no choice among authored tokens
+/// can rescue it. That case is REPORTED through [`Ink::contrast`] rather
+/// than papered over — the caller picks a different panel colour, or
+/// accepts it knowingly.
+pub fn ink_on(t: &TokenSet, ground: Rgba) -> Ink {
+    let candidates = [(TokenId::Text, t.text), (TokenId::Bg, t.bg)];
+    let mut best = Ink {
+        color: candidates[0].1,
+        token: candidates[0].0,
+        contrast: contrast_ratio(candidates[0].1, ground),
+    };
+    for (token, color) in candidates.into_iter().skip(1) {
+        let contrast = contrast_ratio(color, ground);
+        if contrast > best.contrast {
+            best = Ink {
+                color,
+                token,
+                contrast,
+            };
+        }
+    }
+    best
 }
 
 #[cfg(test)]

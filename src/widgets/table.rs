@@ -447,6 +447,26 @@ impl Table {
                     selection.get_untracked() + 1
                 )
             })
+            // The bar strip owns left drags (first-app/1335): screen
+            // select mode stands down over the STRIP only, so the thumb
+            // keeps its gesture and every cell stays selectable. Same
+            // geometry as the handler — and gated on `overflows()`, so a
+            // strip with zero travel (a two-row Table: one header row,
+            // one body row) claims nothing. The gesture refuses to steer
+            // it, so it must not swallow a selection either.
+            .drag_zone(move |rect| {
+                let body_h = (rect.h - 1).max(1); // header takes row 0
+                if len as i32 <= body_h {
+                    return None;
+                }
+                let bar = scrollbar::metrics(
+                    crate::base::Rect::new(rect.x, rect.y + 1, rect.w, body_h),
+                    1,
+                    offset.get_untracked(),
+                    len as i32,
+                );
+                bar.overflows().then_some(bar.track)
+            })
             .focusable();
         if let Some(focused) = self.focused {
             el = el.focus_signal(focused);

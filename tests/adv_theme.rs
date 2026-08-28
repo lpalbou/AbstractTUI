@@ -39,6 +39,7 @@ fn register_strict_refuses_text_equals_bg() {
             label: "Hostile".into(),
             dark: true,
             tokens,
+            ground_intent: Vec::new(),
         },
         RegisterMode::Strict,
     )
@@ -61,6 +62,7 @@ fn register_labeled_admits_but_reports_violations() {
             label: "Degraded".into(),
             dark: true,
             tokens,
+            ground_intent: Vec::new(),
         },
         RegisterMode::Labeled,
     )
@@ -88,6 +90,7 @@ fn register_rejects_reserved_and_invalid_ids() {
                 label: "Spoof".into(),
                 dark: true,
                 tokens: base_tokens(),
+                ground_intent: Vec::new(),
             },
             RegisterMode::Labeled, // reserved ids refuse in BOTH modes
         )
@@ -104,6 +107,7 @@ fn register_rejects_reserved_and_invalid_ids() {
                 label: "Bad id".into(),
                 dark: true,
                 tokens: base_tokens(),
+                ground_intent: Vec::new(),
             },
             RegisterMode::Strict,
         )
@@ -125,6 +129,7 @@ fn register_strict_refuses_indecisive_ground() {
             label: "Mid".into(),
             dark: true,
             tokens,
+            ground_intent: Vec::new(),
         },
         RegisterMode::Strict,
     );
@@ -146,6 +151,7 @@ fn register_wrong_polarity_declaration_caught() {
             label: "Liar".into(),
             dark: true, // lie
             tokens: light,
+            ground_intent: Vec::new(),
         },
         RegisterMode::Strict,
     );
@@ -311,3 +317,229 @@ fn color_distance(a: Rgba, b: Rgba) -> f32 {
 // cycle 3) — virtual-clock pacing honesty, drop-not-queue, hard
 // ceiling, fade-over-wide-glyphs, gate reasons, register() races.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Ink on an APP-DECLARED ground (`RunConfig::extra_grounds`).
+// claim:tui-ink-on-a-declared-ground
+//
+// `audit` guarantees `text` reads on the theme's OWN grounds. It cannot
+// say anything about a ground the theme never saw, and `extra_grounds`
+// exists so an application can declare exactly that. These tests pin the
+// size of the gap and the fact that `ink_on` closes it using only
+// authored tokens.
+// ---------------------------------------------------------------------------
+
+/// A mid-dark declared panel — the one `examples/grounds.rs` uses.
+const DECLARED_PANEL: Rgba = Rgba::rgb(41, 49, 62);
+/// A bright declared panel — laurent's "black font on bright panel".
+const DECLARED_BRIGHT: Rgba = Rgba::rgb(240, 200, 90);
+
+/// The premise: reaching for `t.text` on your own panel is a coin flip.
+///
+/// If this ever goes to zero the registry has changed such that every
+/// theme's body ink happens to read on these two grounds — which would
+/// make `ink_on` unnecessary for THESE panels and still not for an
+/// arbitrary one. Re-measure with a third panel before deleting anything.
+#[test]
+fn plain_text_on_a_declared_ground_is_unreadable_in_much_of_the_registry() {
+    use abstracttui::theme::contrast::floors;
+    let count = |ground: Rgba| {
+        themes()
+            .iter()
+            .filter(|t| contrast_ratio(t.tokens.text, ground) < floors::TEXT)
+            .count()
+    };
+    let (dark_fails, bright_fails) = (count(DECLARED_PANEL), count(DECLARED_BRIGHT));
+    assert_eq!(
+        (dark_fails, bright_fails),
+        (8, 19),
+        "the declared-ground readability gap CHANGED. This is the reason \
+         `ink_on` exists; it is not a contract that it stay broken."
+    );
+    // The worst instance, named so a regression cannot hide behind a count.
+    let worst = themes()
+        .iter()
+        .find(|t| t.id == "solarized-light")
+        .expect("solarized-light is the headline case");
+    let c = contrast_ratio(worst.tokens.text, DECLARED_PANEL);
+    assert!(
+        c < 1.1,
+        "solarized-light body text on the declared panel measured {c:.2} — \
+         it was 1.01, text the same colour as the panel it sits on"
+    );
+}
+
+/// `ink_on` clears the text floor wherever ANY authored ink can, and
+/// reports it when none can.
+#[test]
+fn ink_on_clears_the_text_floor_wherever_an_authored_ink_can() {
+    use abstracttui::theme::contrast::{floors, ink_on};
+    let mut unrescuable = vec![];
+    let mut total = 0;
+    for t in themes() {
+        for ground in [DECLARED_PANEL, DECLARED_BRIGHT] {
+            total += 1;
+            let ink = ink_on(&t.tokens, ground);
+            // Whatever it returns must be a colour the THEME authored.
+            assert!(
+                ink.color == t.tokens.text || ink.color == t.tokens.bg,
+                "{} : ink_on minted a colour that is in no token",
+                t.id
+            );
+            // It must never be beaten by the naive choice it replaces.
+            assert!(
+                ink.contrast >= contrast_ratio(t.tokens.text, ground) - 1e-6,
+                "{} : ink_on picked worse than plain t.text",
+                t.id
+            );
+            if ink.contrast < floors::TEXT {
+                unrescuable.push(format!("{} {:.2}", t.id, ink.contrast));
+            }
+        }
+    }
+    assert_eq!(
+        total, 52,
+        "registry size changed; re-measure the counts below"
+    );
+    assert_eq!(
+        unrescuable.len(),
+        1,
+        "the set of theme/ground pairs NO authored ink can serve changed: \
+         {unrescuable:?}"
+    );
+    assert!(
+        unrescuable[0].starts_with("everforest-light"),
+        "expected everforest-light (a soft light palette holds no ink dark \
+         enough for a bright panel), got {:?}",
+        unrescuable[0]
+    );
+}
+
+/// The polarity actually flips — this is the whole behaviour, and a
+/// helper that always returned `text` would pass the two tests above on
+/// the themes where `text` already wins.
+#[test]
+fn ink_on_flips_polarity_between_a_light_and_a_dark_theme() {
+    use abstracttui::theme::contrast::ink_on;
+    let pick = |id: &str, ground: Rgba| {
+        let t = themes().iter().find(|t| t.id == id).expect("theme").tokens;
+        ink_on(&t, ground).token
+    };
+    // A dark theme on a BRIGHT panel must reach for its background pole.
+    assert_eq!(pick("abstract-dark", DECLARED_BRIGHT), TokenId::Bg);
+    // ...and on a dark panel, for its text pole.
+    assert_eq!(pick("abstract-dark", DECLARED_PANEL), TokenId::Text);
+    // A light theme is the mirror image.
+    assert_eq!(pick("one-light", DECLARED_PANEL), TokenId::Bg);
+    assert_eq!(pick("one-light", DECLARED_BRIGHT), TokenId::Text);
+}
+
+// ---------------------------------------------------------------------
+// border: guaranteed on `bg`, drawn on everything else
+// ---------------------------------------------------------------------
+//
+// CHARACTERIZATION, NOT A GUARANTEE. `border` is derived as
+// `mix_until_contrast(bg, text, bg, ..., floors::BORDER)` — it earns its
+// floor against `bg` and against nothing else. The documented panel
+// recipe in `widgets::block` is `.fill(t.surface)`, so the idiomatic
+// bordered container puts that border on a ground its derivation never
+// looked at.
+//
+// The three tests below pin what the engine does TODAY so that fixing it
+// has something to turn red. When the derivation starts earning its floor
+// on the grounds it is drawn on, they go red BY DESIGN: invert them into
+// guarantees, do not delete them. A deleted characterization test is how
+// a fix ships without anyone measuring what it moved.
+
+/// The guarantee that exists, restated here as the baseline the other two
+/// are measured against. Duplicates `registry::borders_stay_subtle_not_
+/// shouting` on purpose: that test is inside the module that derives the
+/// value, this one is outside it, and the pair is the point.
+#[test]
+fn border_clears_its_floor_on_bg_in_every_theme() {
+    use abstracttui::theme::contrast::floors;
+    for t in themes() {
+        let r = contrast_ratio(t.tokens.border, t.tokens.bg);
+        assert!(
+            r >= floors::BORDER,
+            "[{}] border on bg measures {r:.3} (floor {})",
+            t.id,
+            floors::BORDER
+        );
+        assert!(r < 3.2, "[{}] border shouting on bg at {r:.3}", t.id);
+    }
+}
+
+/// THE DEFECT. A `Block` filled with `t.surface` — the recipe in the
+/// widget's own module docs — draws a border that misses the floor in
+/// well over half the registry.
+#[test]
+fn border_on_surface_misses_the_floor_in_15_of_26_themes() {
+    use abstracttui::theme::contrast::floors;
+    let mut below: Vec<(String, f32)> = themes()
+        .iter()
+        .map(|t| {
+            (
+                t.id.to_string(),
+                contrast_ratio(t.tokens.border, t.tokens.surface),
+            )
+        })
+        .filter(|(_, r)| *r < floors::BORDER)
+        .collect();
+    below.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+    assert_eq!(
+        themes().len(),
+        26,
+        "the pinned counts below are against a 26-theme registry"
+    );
+    assert_eq!(
+        below.len(),
+        15,
+        "border/surface below {}: expected the pinned 15, got {} — {below:?}. \
+         If a fix landed, invert this test into a guarantee.",
+        floors::BORDER,
+        below.len()
+    );
+    let (worst_id, worst) = &below[0];
+    assert_eq!(worst_id, "gruvbox", "worst offender moved: {below:?}");
+    assert!(
+        (1.20..1.22).contains(worst),
+        "gruvbox border/surface measured {worst:.3}, pinned at ~1.209"
+    );
+}
+
+/// Worse, and not in the row that opened this: on `surface_raised` — the
+/// ground `Code`, `Badge`, `Progress` and the drawer panels sit on — the
+/// border clears the floor in ZERO of 26. Any fix that guarantees
+/// {bg, surface} and stops there leaves this whole set unaddressed.
+#[test]
+fn border_on_surface_raised_misses_the_floor_in_every_theme() {
+    use abstracttui::theme::contrast::floors;
+    let mut best = (0.0f32, String::new());
+    for t in themes() {
+        let r = contrast_ratio(t.tokens.border, t.tokens.surface_raised);
+        assert!(
+            r < floors::BORDER,
+            "[{}] border on surface_raised measures {r:.3} — that is ABOVE \
+             the floor, which this test pins as impossible today. A fix \
+             landed: invert this into a guarantee.",
+            t.id
+        );
+        if r > best.0 {
+            best = (r, t.id.to_string());
+        }
+    }
+    assert!(
+        best.0 < floors::BORDER,
+        "best case {} at {:.3} clears the floor",
+        best.1,
+        best.0
+    );
+    assert!(
+        (1.38..1.40).contains(&best.0),
+        "best case moved: {} at {:.3}, pinned at ~1.388",
+        best.1,
+        best.0
+    );
+}

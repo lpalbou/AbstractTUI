@@ -81,6 +81,9 @@ pub(super) struct FeedInner {
     /// Blank rows between items.
     pub(super) gap: i32,
     pub(super) tokens: Option<TokenSet>,
+    /// The `---` policy (`Feed::rule_style`). Held here because rows
+    /// are CACHED: a change re-typesets, exactly like a theme change.
+    pub(super) rule: crate::widgets::MdRuleStyle,
     /// One pending after(0) geometry sync at a time.
     pub(super) fixup_scheduled: bool,
     /// Diagnostics: blocks typeset since creation (cost pins — closed
@@ -103,6 +106,7 @@ impl FeedInner {
             prefix: Vec::new(),
             gap: 1,
             tokens: None,
+            rule: crate::widgets::MdRuleStyle::default(),
             fixup_scheduled: false,
             blocks_typeset: 0,
             mutations: 0,
@@ -139,7 +143,7 @@ impl FeedInner {
         if width <= 0 {
             return;
         }
-        let ts = BlockTypesetter::new(&tokens);
+        let ts = BlockTypesetter::new(&tokens).with_rule_style(self.rule);
         let entry = &mut self.entries[i];
         match &mut entry.kind {
             EntryKind::Static(blocks) => {
@@ -179,21 +183,33 @@ impl FeedInner {
                     stream.closed_seen = closed.len();
                 }
                 // Re-typeset the open tail into segment 1.
-                let closed_rows = match &entry.segments[0] {
-                    Segment::Rows(rows) => rows.len(),
-                    _ => 0,
+                // The gap the boundary owes: `separator_rows` over the
+                // FROZEN rows, so a closed block ending in a rule hands
+                // over that rule's `space_after` rather than a hardwired
+                // one. 0 when there is nothing to separate from.
+                let (closed_rows, closed_gap) = match &entry.segments[0] {
+                    Segment::Rows(rows) => (rows.len(), ts.separator_rows(rows, true)),
+                    _ => (0, 0),
                 };
                 let open = stream.session.open_blocks();
                 let mut rows: Vec<Row> = Vec::new();
                 for (bi, b) in open.iter().enumerate() {
                     self.blocks_typeset += 1;
-                    // The blank separator between the frozen rows and
-                    // the first open block mirrors push_doc_block's
-                    // policy (out non-empty), which cannot see across
-                    // the segment boundary: list/task items stack
-                    // tight, everything else gets one blank row.
+                    // The separator between the frozen rows and the
+                    // first open block: `push_doc_block` cannot see
+                    // across the segment boundary, so it is spent here.
+                    // List/task items stack tight; a RULE spends its own
+                    // `space_before`; everything else takes whatever the
+                    // frozen tail hands over.
                     if bi == 0 && closed_rows > 0 && doc_block_separates(b) {
-                        rows.push(Row::plain(RichLine::new()));
+                        let n = if matches!(b, DocBlock::Core(Block::Rule)) {
+                            ts.rule_style().space_before.max(0) as usize
+                        } else {
+                            closed_gap
+                        };
+                        for _ in 0..n {
+                            rows.push(Row::plain(RichLine::new()));
+                        }
                     }
                     ts.push_doc_block(&mut rows, b, width, bi > 0);
                 }
@@ -273,19 +289,21 @@ fn typeset_static(
                 push_capped(&mut current, lines, cap.as_ref(), tokens);
                 any_content = true;
             }
-            ItemBlock::Markdown(src) => {
+            ItemBlock::Markdown { src, cap } => {
                 if any_content && current.is_empty() {
                     current.push(Row::plain(RichLine::new()));
                 }
                 // DOC vocabulary (wave 3): tables, in-flow images (lazy
                 // mosaic), task lists — one recipe with MarkdownView
                 // (`layout_doc` walks the same parse + typeset pair).
+                let start = current.len();
                 for block in md::parse_doc(src, ts.styles()) {
                     ts.push_doc_block(&mut current, &block, width, true);
                 }
+                cap_typeset_rows(&mut current, start, cap.as_ref(), tokens);
                 any_content = true;
             }
-            ItemBlock::Code { lang, source } => {
+            ItemBlock::Code { lang, source, cap } => {
                 if any_content && current.is_empty() {
                     current.push(Row::plain(RichLine::new()));
                 }
@@ -293,7 +311,9 @@ fn typeset_static(
                     lang: lang.clone(),
                     lines: source.split('\n').map(str::to_string).collect(),
                 };
+                let start = current.len();
                 ts.push_block(&mut current, &block, width, true);
+                cap_typeset_rows(&mut current, start, cap.as_ref(), tokens);
                 any_content = true;
             }
             ItemBlock::Custom(c) => {
@@ -301,8 +321,17 @@ fn typeset_static(
                     segments.push(Segment::Rows(std::mem::take(&mut current)));
                 }
                 if any_content {
-                    // Same one-blank-row rhythm before a custom block.
-                    segments.push(Segment::Rows(vec![Row::plain(RichLine::new())]));
+                    // Same rhythm before a custom block — but a
+                    // markdown block ending in a rule owns the gap after
+                    // it, so ask the policy rather than assume one row.
+                    let n = match segments.last() {
+                        Some(Segment::Rows(rows)) => ts.separator_rows(rows, true),
+                        _ => 1,
+                    };
+                    if n > 0 {
+                        let gap = (0..n).map(|_| Row::plain(RichLine::new())).collect();
+                        segments.push(Segment::Rows(gap));
+                    }
                 }
                 segments.push(Segment::Custom {
                     draw: c.draw.clone(),
@@ -344,16 +373,7 @@ fn push_capped(
             for line in lines.into_iter().take(shown) {
                 current.push(Row::plain(line));
             }
-            let text = match cap.and_then(|c| c.marker.as_ref()) {
-                Some(f) => f(hidden),
-                None => format!("… (+{hidden} more lines)"),
-            };
-            // One row by design: overwide marker text clips at the
-            // item width through the shared row walk, never wraps.
-            current.push(Row::plain(RichLine::from_spans(vec![Span::new(
-                text,
-                crate::render::Style::new().fg(tokens.text_muted),
-            )])));
+            current.push(marker_row(hidden, cap, tokens));
         }
         _ => {
             for line in lines {
@@ -361,4 +381,51 @@ fn push_capped(
             }
         }
     }
+}
+
+/// The overflow marker as its own row — `text_muted`, default wording
+/// or the block's override. ONE row by design: overwide marker text
+/// clips at the item width through the shared row walk, never wraps.
+/// Minted at typeset time from the bound tokens, so a theme rebind
+/// retints it (feeds re-typeset everything on token change).
+fn marker_row(hidden: usize, cap: Option<&RowCap>, tokens: &TokenSet) -> Row {
+    let text = match cap.and_then(|c| c.marker.as_ref()) {
+        Some(f) => f(hidden),
+        None => format!("… (+{hidden} more lines)"),
+    };
+    Row::plain(RichLine::from_spans(vec![Span::new(
+        text,
+        crate::render::Style::new().fg(tokens.text_muted),
+    )]))
+}
+
+/// Apply a row cap to a block that typeset ITSELF into `current` —
+/// Markdown and Code, whose rows come out of the document typesetter
+/// rather than out of a wrap this function performed.
+///
+/// `start` is `current.len()` taken immediately before the block
+/// pushed (after any separator row, which belongs to the rhythm and
+/// not to the block), so the count is the block's own rendered
+/// height. Same contract as [`push_capped`]: at most `max` rows
+/// total, marker row included and counted by the extent, `K` = the
+/// rows dropped at THIS width.
+///
+/// A markdown cut is a ROW cut, not a source cut — the shown rows are
+/// byte-identical to their uncapped selves, and a cut that lands
+/// inside a table or a fence simply ends there with the marker under
+/// it. Truncating the source instead would re-typeset different rows
+/// and could not report an honest K.
+fn cap_typeset_rows(current: &mut Vec<Row>, start: usize, cap: Option<&RowCap>, tokens: &TokenSet) {
+    let max = match cap.and_then(|c| c.max_rows).map(|m| m.max(1)) {
+        Some(max) => max,
+        None => return,
+    };
+    let produced = current.len() - start;
+    if produced <= max {
+        return;
+    }
+    let shown = max - 1;
+    let hidden = produced - shown;
+    current.truncate(start + shown);
+    current.push(marker_row(hidden, cap, tokens));
 }

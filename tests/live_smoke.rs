@@ -18,9 +18,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Once;
 use std::time::Duration;
 
-use abstracttui::base::Size;
+use abstracttui::base::{Rgba, Size};
 use abstracttui::testing::pty::spawn_in_pty_opts;
-use abstracttui::testing::VtScreen;
+use abstracttui::testing::{Paint, VtScreen};
+use abstracttui::theme::contrast::{contrast_ratio, floors};
 
 const COLS: u16 = 100;
 const ROWS: u16 = 30;
@@ -62,10 +63,29 @@ fn example_bin(name: &str) -> Option<String> {
     }
 }
 
+/// Why a case could not run. The two reasons look identical from the
+/// outside and get OPPOSITE verdicts, which is the whole point of naming
+/// them: one is covered by something else, the other is covered by
+/// nothing.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Skip {
+    /// The tree does not currently compile. Documented transient builder
+    /// state (owners edit in parallel) — a CLEAN skip, because
+    /// `cargo test --all` on a non-compiling tree fails on its own long
+    /// before it reaches here. Reddening it would fail a peer mid-edit.
+    TreeNotBuilding,
+    /// The build SUCCEEDED and the binary is still absent: this example
+    /// is no longer being built at all (renamed, dropped from
+    /// `Cargo.toml`, moved). NOTHING else in the repo notices — the
+    /// whole-suite gate stays green while this lane goes quiet. That is
+    /// the coverage hole, so it goes RED.
+    BinaryAbsent,
+}
+
 struct SmokeReport {
-    /// Set when the case could not run (tree not compiling / binary
-    /// absent). `assert_clean` treats it as a clean skip, never a failure.
-    skipped: bool,
+    /// Set when the case could not run. `assert_clean`'s verdict depends
+    /// on WHICH reason: see `Skip`.
+    skipped: Option<Skip>,
     exit_code: i32,
     bytes: usize,
     unknown: u64,
@@ -78,12 +98,48 @@ struct SmokeReport {
     cursor_visible: bool,
     kitty_depth: u64,
     panic_text: bool,
+    /// The painted screen, one entry per row: the display text and the
+    /// per-cell paint the VT model ended up holding.
+    ///
+    /// Every other field here is a property of the BYTE STREAM — it ran,
+    /// it restored the terminal, it did not panic. None of them can say
+    /// what a reader would SEE, which is how `examples/grounds.rs`
+    /// shipped announced-and-unseen and then shipped again with swatches
+    /// nobody could put text on. A case that claims something is on the
+    /// screen has to be able to look at the screen.
+    grid: Vec<Vec<(String, Paint)>>,
 }
 
 impl SmokeReport {
-    fn skipped() -> SmokeReport {
+    /// Row index whose text contains `needle`, if any.
+    fn row_with(&self, needle: &str) -> Option<usize> {
+        self.grid.iter().position(|row| {
+            row.iter()
+                .map(|c| c.0.as_str())
+                .collect::<String>()
+                .contains(needle)
+        })
+    }
+
+    /// Every `(fg, bg)` pair painted under the glyphs of `word` on `row`.
+    fn painted_word(&self, row: usize, word: &str) -> Vec<(Rgba, Rgba)> {
+        let cells = &self.grid[row];
+        let text: String = cells.iter().map(|c| c.0.as_str()).collect();
+        let mut out = Vec::new();
+        let mut from = 0;
+        while let Some(rel) = text[from..].find(word) {
+            let at = from + rel;
+            if let (Some(fg), Some(bg)) = (cells[at].1.fg, cells[at].1.bg) {
+                out.push((fg, bg));
+            }
+            from = at + word.len();
+        }
+        out
+    }
+
+    fn skipped(why: Skip) -> SmokeReport {
         SmokeReport {
-            skipped: true,
+            skipped: Some(why),
             exit_code: 0,
             bytes: 0,
             unknown: 0,
@@ -94,6 +150,7 @@ impl SmokeReport {
             cursor_visible: true,
             kitty_depth: 0,
             panic_text: false,
+            grid: Vec::new(),
         }
     }
 }
@@ -125,11 +182,11 @@ fn smoke_opts(
         println!(
             "[smoke] {name}: SKIPPED — examples do not currently compile (transient builder state)"
         );
-        return SmokeReport::skipped();
+        return SmokeReport::skipped(Skip::TreeNotBuilding);
     }
     let Some(bin) = example_bin(name) else {
         println!("[smoke] {name}: SKIPPED — example binary not present");
-        return SmokeReport::skipped();
+        return SmokeReport::skipped(Skip::BinaryAbsent);
     };
     let mut p = spawn_in_pty_opts(&bin, &[], COLS, ROWS, &[], ctty).expect("spawn under pty");
 
@@ -159,7 +216,7 @@ fn smoke_opts(
     vt.feed(&p.captured);
     let text = String::from_utf8_lossy(&p.captured).to_string();
     SmokeReport {
-        skipped: false,
+        skipped: None,
         exit_code,
         bytes: p.captured.len(),
         unknown: vt.unknown_seq_count(),
@@ -170,12 +227,67 @@ fn smoke_opts(
         cursor_visible: vt.modes().cursor_visible(),
         kitty_depth: vt.counters().kitty_push_depth,
         panic_text: text.contains("panicked at") || text.contains("RUST_BACKTRACE"),
+        grid: (0..ROWS as i32)
+            .map(|y| {
+                (0..COLS as i32)
+                    .map(|x| match vt.cell(x, y) {
+                        Some(c) => (c.display().to_string(), c.paint),
+                        None => (" ".to_string(), Paint::default()),
+                    })
+                    .collect()
+            })
+            .collect(),
+    }
+}
+
+/// Opt-out for a machine that genuinely cannot run the pty suite. A
+/// sentence a human has to type, so a green run there is a decision on
+/// the record rather than a default.
+const ALLOW_UNMEASURED: &str = "ABSTRACTTUI_ALLOW_UNMEASURED";
+
+/// Apply the skip policy. Returns `true` when the caller should stop
+/// (the case legitimately did not run); panics when the skip is a
+/// coverage hole. Every early `if r.skipped { return }` goes through
+/// here — a bare early return is the shape this policy exists to remove.
+///
+/// A `BinaryAbsent` skip used to return GREEN. That is an
+/// absent-input-passes check inside the suite whose whole job is to
+/// catch examples that never actually run — the same shape this suite
+/// found in `examples/grounds.rs`, one level up.
+///
+/// `TreeNotBuilding` stays green ON PURPOSE, and that is not the same
+/// concession: `ensure_examples_built` documents it as a transient
+/// builder state, and a tree that does not compile fails the whole-suite
+/// gate on its own. Reddening it would fail a peer who is mid-edit —
+/// valid-input-fails, which is the same defect with the polarity
+/// flipped and no better than the one being fixed.
+#[must_use]
+fn skip_is_acceptable(name: &str, r: &SmokeReport) -> bool {
+    let Some(why) = r.skipped else { return false };
+    match why {
+        Skip::TreeNotBuilding => {
+            println!("[smoke] {name}: skipped — tree not building (transient); not measured");
+            true
+        }
+        Skip::BinaryAbsent => {
+            assert!(
+                std::env::var_os(ALLOW_UNMEASURED).is_some(),
+                "{name}: the examples BUILT and this binary is still absent, so the \
+                 case is UNMEASURED and nothing else in the repo notices. This suite \
+                 is the only thing that runs an example's paint path. Reason printed \
+                 above. Set {ALLOW_UNMEASURED}=1 to accept an unmeasured run \
+                 deliberately."
+            );
+            println!(
+                "[smoke] {name}: binary absent, accepted via {ALLOW_UNMEASURED} — NOT measured"
+            );
+            true
+        }
     }
 }
 
 fn assert_clean(name: &str, r: &SmokeReport) {
-    if r.skipped {
-        println!("[smoke] {name}: skipped (see reason above)");
+    if skip_is_acceptable(name, r) {
         return;
     }
     println!(
@@ -218,6 +330,175 @@ fn assert_clean(name: &str, r: &SmokeReport) {
 // One test per example: independent pass/fail, parallel-safe (each owns
 // its own PTY + process; the shared build happens under Once).
 
+/// Tab the hover-card demo through every chip, dismiss with Escape,
+/// then quit — the keyboard path end to end, with no mouse reporting
+/// involved at any point.
+///
+/// Escape is spelled CSI 27u rather than a bare `\x1b`: a lone ESC byte
+/// waits out the reader's disambiguation window, so it either resolves
+/// late or is swallowed by the next key sent.
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_hovercard() {
+    let r = smoke(
+        "hovercard",
+        Duration::from_millis(1500),
+        &[b"\t", b"\t", b"\t", b"\t", b"\t", b"\x1b[27u", b"s", b"q"],
+        Duration::from_secs(10),
+    );
+    assert_clean("hovercard", &r);
+}
+
+/// The MOUSE half, which nothing covered: point at a chip — no button,
+/// no click — and the card must open.
+///
+/// This is the shape laurent reported: *"the tooltip shows on click, but
+/// not on mouseover."* It was true, and it was an engine defect. Hover is
+/// recomputed only from mouse REPORTS, and the default session posture
+/// (`MouseMode::ButtonDrag`) has the terminal send motion only while a
+/// button is DOWN — so pressing produced a report, moving produced
+/// nothing, and the tip looked click-triggered.
+///
+/// **What this case can and cannot prove.** It INJECTS an SGR motion
+/// report (button 35 = motion, no button held), so it proves the app
+/// turns motion into an open card. It cannot prove the app ASKED the
+/// terminal to send motion in the first place — the bytes arrive whether
+/// or not mode 1003 was armed. That half is
+/// `anchored_layer_tests::mounting_a_tooltip_arms_motion_reporting_without_the_app_asking`,
+/// which asserts `[?1003h` reached the terminal. Two halves, two tests;
+/// neither alone would have caught it.
+///
+/// The coordinates are the chip's, one-based, from the example's own
+/// layout. If the layout moves, this fails — which is the right failure:
+/// the case is asserting that a reader pointing at the chip gets a card.
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_hovercard_opens_on_pointer_motion_with_no_button_held() {
+    let r = smoke(
+        "hovercard",
+        Duration::from_millis(1500),
+        // Motion onto the `#412` chip, then three unbound keys so the
+        // 250ms open delay elapses before the screen is captured.
+        &[b"\x1b[<35;58;3M", b"x", b"x", b"x", b"q"],
+        Duration::from_secs(10),
+    );
+    assert_clean("hovercard", &r);
+    if r.skipped.is_some() {
+        return;
+    }
+    assert!(
+        r.row_with("place_panel prefers below").is_some(),
+        "pointing at the chip left the card shut — the hover trigger is \
+         dead again, or the chip moved off (58,3). Screen:\n{}",
+        r.grid
+            .iter()
+            .map(|row| row.iter().map(|c| c.0.as_str()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
+/// Walk the big-text sweep and cycle all three axis keys under a real
+/// terminal. The keys are `s` symbols, `w` weight, `a` sampling — sent
+/// here in the spelling the example's own legend advertises, so a rename
+/// that moves a legend without moving its binding fails this rather than
+/// reaching an operator. (It reached one: the legend said `v`/`f` after
+/// the words had become symbols and weight.)
+///
+/// The arrows walk the sixteen-step scale sweep past its ends, which is
+/// also the wrap-around guard.
+///
+/// **The screen assertion is the point, and it is here because a clean
+/// exit is exactly what this example gave the operator while printing
+/// `clearly apart` over a row of white bars.** The readout carries two
+/// independent numbers per class now — the closest pair, and the worst
+/// character's fidelity loss — and the second is the one that was
+/// missing. A run that painted only the first would still exit 0.
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_bigtext() {
+    let r = smoke(
+        "bigtext",
+        Duration::from_millis(1500),
+        &[
+            b"\x1b[B", b"\x1b[B", b"\x1b[B", b"s", b"s", b"w", b"a", b"\x1b[A", b"q",
+        ],
+        Duration::from_secs(10),
+    );
+    assert_clean("bigtext", &r);
+    if r.skipped.is_some() {
+        return;
+    }
+    let screen = || {
+        r.grid
+            .iter()
+            .map(|row| row.iter().map(|c| c.0.as_str()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let row = r
+        .row_with("icons")
+        .unwrap_or_else(|| panic!("the readout lost its icons row. Screen:\n{}", screen()));
+    let text: String = r.grid[row].iter().map(|c| c.0.as_str()).collect();
+    // Both columns, on the row the reported screenshot was about. The
+    // shape column is a decimal, so `0.` is enough to tell it from the
+    // subpixel count beside it — and deleting that column takes this red
+    // rather than leaving a green run with half a readout.
+    assert!(
+        text.contains("0."),
+        "the icons row shows no fidelity loss — the shape column is the term the pairwise \
+         number was missing. Row: {text:?}\nScreen:\n{}",
+        screen()
+    );
+    assert!(
+        r.row_with("shape").is_some() && r.row_with("apart").is_some(),
+        "both column headers must be on screen; one of them alone is the readout that \
+         shipped the bug. Screen:\n{}",
+        screen()
+    );
+}
+
+/// Drive `RowSelect` under a real terminal: Tab takes the surface,
+/// arrows walk two-line rows past the bottom of the viewport (so
+/// ensure-visible has to scroll by CONTENT rows), then `m` moves the
+/// selected member's index under it and the selection has to follow the
+/// KEY rather than the slot.
+///
+/// The screen assertion is the point. `index N · key "tui"` is printed
+/// by the example's own status line, so a selection that silently
+/// reverted to index-following would come back as `key "newcomer-a"` —
+/// a green process exit would not have noticed.
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_roster() {
+    let r = smoke(
+        "roster",
+        Duration::from_millis(1500),
+        &[
+            b"\t", b"\x1b[B", b"\x1b[B", b"\x1b[B", b"\r", b"\x1b[A", b"m", b"q",
+        ],
+        Duration::from_secs(10),
+    );
+    assert_clean("roster", &r);
+    if r.skipped.is_some() {
+        return;
+    }
+    // Three downs then one up leaves `agora-wui` selected at index 2;
+    // `m` puts two arrivals in front of them, so the INDEX must be 4 and
+    // the KEY unchanged. ONE row carrying BOTH — `index 4` alone would
+    // also be satisfied by a selection that had drifted to a different
+    // member, and `agora-wui` alone is on screen either way.
+    assert!(
+        r.row_with("index 4 · key \"agora-wui\"").is_some(),
+        "the selection did not follow the key through the mutation. Screen:\n{}",
+        r.grid
+            .iter()
+            .map(|row| row.iter().map(|c| c.0.as_str()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
 #[test]
 #[ignore = "live: spawns real example processes under a PTY"]
 fn live_hello() {
@@ -241,6 +522,120 @@ fn live_themes() {
         Duration::from_secs(8),
     );
     assert_clean("themes", &r);
+}
+
+/// Does `assert_clean` panic on this report?
+fn verdict_is_red(name: &str, r: &SmokeReport) -> bool {
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| assert_clean(name, r)));
+    std::panic::set_hook(hook);
+    caught.is_err()
+}
+
+/// The guard on the guard, and it has to falsify BOTH branches.
+///
+/// A skip is a coverage hole wearing a green tick — but only when
+/// nothing else covers it, and the two skip reasons differ on exactly
+/// that. Written after the first version of this guard reddened both:
+/// it was checked against an absent example name (the case in front of
+/// me) and would have failed any peer with a mid-edit tree, which is
+/// valid-input-fails dressed up as a fix for absent-input-passes.
+///
+/// Needs no pty and no build, so it runs in the ordinary suite rather
+/// than only in the `--ignored` lane: the policy is what regresses, and
+/// a policy check nobody runs is the thing being fixed here.
+#[test]
+fn skip_policy_reddens_a_dropped_example_and_spares_a_broken_tree() {
+    if std::env::var_os(ALLOW_UNMEASURED).is_some() {
+        println!("[smoke] policy test: {ALLOW_UNMEASURED} set, the guard is opted out by design");
+        return;
+    }
+    assert!(
+        verdict_is_red("dropped", &SmokeReport::skipped(Skip::BinaryAbsent)),
+        "an example that BUILT and produced no binary reported as a PASS — \
+         nothing else in the repo notices, so this lane can go quiet silently"
+    );
+    assert!(
+        !verdict_is_red("mid-edit", &SmokeReport::skipped(Skip::TreeNotBuilding)),
+        "a non-compiling tree went RED here — that fails a peer mid-edit for a \
+         state the whole-suite gate already catches"
+    );
+}
+
+/// The premise the policy test asserts against, over the real plumbing:
+/// an absent example name must reach `BinaryAbsent`, not some other
+/// skip. Separated because it needs the build and the policy test does
+/// not.
+#[test]
+#[ignore = "live: builds the examples to reach the skip path"]
+fn an_absent_example_name_is_a_binary_absent_skip() {
+    let r = smoke(
+        "definitely-not-an-example",
+        Duration::from_millis(0),
+        &[],
+        Duration::from_secs(2),
+    );
+    assert_eq!(
+        r.skipped,
+        Some(Skip::BinaryAbsent),
+        "an absent example name must classify as BinaryAbsent for the policy to bite"
+    );
+}
+
+#[test]
+#[ignore = "live: spawns real example processes under a PTY"]
+fn live_grounds() {
+    // Walk two themes and toggle the declared panel ground before
+    // quitting. This example's paint path was shipped compiled-but-never
+    // -seen and @laurent reported it launching to nothing; a pty case is
+    // the only thing that runs it.
+    let r = smoke(
+        "grounds",
+        Duration::from_millis(1500),
+        &[b"\x1b[B", b"\x1b[B", b"p", b"q"],
+        Duration::from_secs(8),
+    );
+    assert_clean("grounds", &r);
+    if r.skipped.is_some() {
+        return;
+    }
+    // @laurent, dm#15: "confirm that you can have text on top of those
+    // colored panels ... good contrast between colored panel and text".
+    // Confirmed HERE, off the painted pty screen, not off an exit code.
+    //
+    // The BRIGHT panel row deliberately, and this is the whole reason it
+    // exists in the example. On the dark themes this case walks, the
+    // theme's own grounds are all dark, so `t.text` reads on every one of
+    // them and an assertion there cannot tell `ink_on` apart from a
+    // hand-picked ink — a green check over a case that cannot fail.
+    // Measured: swapping `ink_on` for `t.text` left this case PASSING
+    // until the bright band existed. On the bright band a dark theme's
+    // body ink measures ~1.38:1, so the polarity choice is load-bearing
+    // and the check has teeth.
+    let row = r
+        .row_with("+ panel bright")
+        .expect("the bright declared-panel band should be on the first screen");
+    let painted = r.painted_word(row, "Text");
+    assert_eq!(
+        painted.len(),
+        3,
+        "expected the word Text painted on all three bands (truecolor, \
+         nearest, assigned) of the surface_raised row; found {}",
+        painted.len()
+    );
+    for (fg, bg) in painted {
+        let c = contrast_ratio(fg, bg);
+        assert!(
+            c >= floors::TEXT,
+            "text on a ground band measured {c:.2}:1 (floor {:.1}) — \
+             fg {} on bg {}. ink_on picked the wrong pole, or the band \
+             was painted with a hand-picked ink again.",
+            floors::TEXT,
+            fg.to_hex(),
+            bg.to_hex()
+        );
+    }
 }
 
 #[test]
@@ -348,8 +743,7 @@ fn live_viewer3d() {
         &[b" ", b"2", b"3", b"q"],
         Duration::from_secs(12),
     );
-    if r.skipped {
-        println!("[smoke] viewer3d: skipped");
+    if skip_is_acceptable("viewer3d", &r) {
         return;
     }
     assert_eq!(r.exit_code, 0, "viewer3d: nonzero exit");
@@ -480,8 +874,7 @@ fn live_ctty_input_reaches_app() {
         Duration::from_secs(8),
         true,
     );
-    if r.skipped {
-        println!("[smoke] hello-ctty: skipped");
+    if skip_is_acceptable("hello-ctty", &r) {
         return;
     }
     assert_clean("hello-ctty", &r);

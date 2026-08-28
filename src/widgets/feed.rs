@@ -338,24 +338,64 @@ impl FeedState {
         Some((entry.key.clone(), within))
     }
 
-    /// Publish after a mutation: sync the extent signal (lawful here —
-    /// mutations happen in event/effect phases) and bump the render key.
-    /// The `try_` reads guard against a disposed UI scope (an app-held
-    /// handle outliving its widget must stay inert, never panic).
-    fn publish(&self) {
+    /// Write the extent signal if — and only if — it moved. Returns
+    /// whether it did. The `try_` read guards against a disposed UI
+    /// scope (an app-held handle outliving its widget must stay inert,
+    /// never panic).
+    fn sync_extent(&self) -> bool {
         let total = self.inner.borrow().total_rows();
-        if let Some(cur) = self.rows.try_get_untracked() {
-            if cur != total {
+        match self.rows.try_get_untracked() {
+            Some(cur) if cur != total => {
                 self.rows.set(total);
+                true
             }
+            _ => false,
         }
+    }
+
+    /// Bump the render key. Same disposed-scope guard as `sync_extent`.
+    fn bump_version(&self) {
         if self.version.try_get_untracked().is_some() {
             self.version.update(|v| *v += 1);
         }
     }
 
-    /// Deferred geometry sync for width discovered inside draw (RT1-2:
-    /// no signal writes from paint). Latched: one pending fixup.
+    /// Publish after a MUTATION: sync the extent signal (lawful here —
+    /// mutations happen in event/effect phases) and repaint. The bump is
+    /// unconditional because content can change without the row count
+    /// changing — an edited line, a replaced item of equal height.
+    fn publish(&self) {
+        self.sync_extent();
+        self.bump_version();
+    }
+
+    /// Deferred geometry sync for a width discovered inside draw, or
+    /// offered to the measure callback (RT1-2: no signal writes from
+    /// paint, and none from inside a solve either). Latched: one
+    /// pending fixup.
+    ///
+    /// THIS PATH REPAINTS ONLY IF THE EXTENT ACTUALLY MOVED, and that
+    /// conditional is load-bearing rather than an optimisation. It is
+    /// what gives the loop a fixed point.
+    ///
+    /// The solver queries the measure callback at MORE THAN ONE width
+    /// per solve (`place_absolute`'s intrinsic query and the flex-basis
+    /// fold ask at different widths whenever a feed is a flex child
+    /// beside a fixed sibling). Wrapped text has a different row total
+    /// at each. So the callback's `rows != total` test is true at every
+    /// query whose width is not the one `rows` currently holds — it
+    /// fires on a healthy tree, every frame, forever, and no scheduling
+    /// condition here can make it stop.
+    ///
+    /// What CAN converge is the publication: by the time this fixup
+    /// runs, `inner.width` is the width the feed was last typeset at —
+    /// the painted one — so the total it reads is a function of one
+    /// width rather than of whichever query ran last. Bump on a real
+    /// move and the loop terminates; bump unconditionally and the
+    /// repaint re-enters the solve, which re-queries both widths, which
+    /// schedules another fixup. That was a livelock: 128,464 typeset
+    /// blocks in 8 driver turns against 8 for the control, never idle in
+    /// 2,000 turns (`tests/feed_typeset_cache_lifetime.rs`).
     fn schedule_geometry_sync(&self) {
         let mut inner = self.inner.borrow_mut();
         if inner.fixup_scheduled {
@@ -366,7 +406,9 @@ impl FeedState {
         let state = self.clone();
         crate::reactive::after(std::time::Duration::ZERO, move || {
             state.inner.borrow_mut().fixup_scheduled = false;
-            state.publish();
+            if state.sync_extent() {
+                state.bump_version();
+            }
         });
     }
 }
@@ -381,6 +423,7 @@ pub struct Feed {
     selected: Option<Signal<Option<String>>>,
     on_item_press: Option<ItemPressFn>,
     layout: Option<LayoutStyle>,
+    rule: crate::widgets::MdRuleStyle,
 }
 
 impl Feed {
@@ -391,7 +434,26 @@ impl Feed {
             selected: None,
             on_item_press: None,
             layout: None,
+            rule: crate::widgets::MdRuleStyle::default(),
         }
+    }
+
+    /// Set the `---` policy for markdown item blocks
+    /// ([`MdRuleStyle`](crate::widgets::MdRuleStyle)) — the same door
+    /// `MarkdownView::rule_style` opens, on the same recipe, because a
+    /// rule that read differently in a feed and in a document would be
+    /// this policy's own defect repeated one widget over.
+    ///
+    /// Rows are cached, so a change re-typesets the feed exactly as a
+    /// theme change does. Defaults reproduce every earlier release.
+    ///
+    /// Scope, stated rather than implied: this governs the gaps a rule
+    /// owns INSIDE a markdown block. The feed's own rhythm between item
+    /// blocks (and around custom blocks) stays the feed's — except
+    /// immediately after a rule, where the rule's `space_after` wins.
+    pub fn rule_style(mut self, rule: crate::widgets::MdRuleStyle) -> Feed {
+        self.rule = rule;
+        self
     }
 
     /// Bind a selection-by-key signal (the 0100 item-6 gap): while
@@ -452,8 +514,9 @@ impl Feed {
             // re-parses stream sessions once — their inline styles are
             // parse-time).
             let mut inner = state.inner.borrow_mut();
-            if inner.tokens != Some(*t) {
+            if inner.tokens != Some(*t) || inner.rule != self.rule {
                 inner.tokens = Some(*t);
+                inner.rule = self.rule;
                 inner.gap = self.gap;
                 inner.retypeset_all();
             } else if inner.gap != self.gap {
@@ -481,15 +544,61 @@ impl Feed {
             .role(crate::ui::Role::List)
             .access_value(move || format!("{} items", len_state.len()));
         if content_sized {
+            // INTRINSIC MEASURE, not a paint-discovered height.
+            //
+            // A content-sized feed used to size itself through
+            // `style_signal` from `rows`, which only `draw_feed` could
+            // fill: typesetting needs a width, and the width was learned
+            // in paint. So the first solve saw an unmeasured feed
+            // (`inner.width == 0`, every entry height 0, `rows` 0) and
+            // the element reported ONE row — a real-looking placeholder
+            // the whole frame was then laid out against, with the truth
+            // arriving a turn later through the deferred fixup. Every
+            // consumer of the extent inherited that lie for a frame: a
+            // reader squashed to one row per item, a bound offset
+            // clamped against a one-row content (field-agora/0895), a
+            // follow-tail pin driven to the top.
+            //
+            // The solver offers the width during the solve — the same
+            // door `MarkdownView` and `CodeView` use. Typeset there and
+            // the placeholder never exists.
+            //
+            // The height MUST be `Auto`: `intrinsic_size` consults a
+            // measure callback only for an axis that is not explicitly
+            // sized, so leaving `Cells(..)` here would leave this
+            // callback permanently uncalled.
             let base = style.clone();
-            el = el.style_signal(move || {
-                let mut s = base.clone();
-                s.height = Dimension::Cells(rows.get().max(1));
-                s
+            el = el.style(base.height(Dimension::Auto));
+            let measure_state = state.clone();
+            el = el.measure(move |avail| {
+                // Bail on exactly the width `draw_feed` refuses, so one
+                // path can never typeset a width the other skips.
+                if avail.w <= 1 {
+                    return crate::base::Size::ZERO;
+                }
+                let mut inner = measure_state.inner.borrow_mut();
+                if inner.width != avail.w {
+                    inner.width = avail.w;
+                    inner.retypeset_all();
+                }
+                let total = inner.total_rows();
+                drop(inner);
+                // `rows` is PUBLIC extent (`FeedState::total_rows`), and
+                // the solve is the one place a signal must not be
+                // written: `Signal::set` flushes effects synchronously
+                // while the tree is borrowed for layout. So publish it
+                // the way paint already does — enqueue a timer, which
+                // only queues. Layout no longer depends on the result;
+                // this keeps the app-visible extent honest.
+                if measure_state.rows.try_get_untracked() != Some(total) {
+                    measure_state.schedule_geometry_sync();
+                }
+                crate::base::Size::new(avail.w, total)
             });
         } else {
             el = el.style(style);
         }
+        let _ = rows;
 
         // Item press hit info (0850): attached ONLY when bound — an
         // unwired feed keeps zero handlers. Row math: the element rect

@@ -59,7 +59,7 @@ use crate::base::Rgba;
 use crate::theme::contrast::floors;
 use crate::theme::derive::{mix, mix_until_contrast, tint_until_readable};
 use crate::theme::seeds::{ThemeSeed, SEEDS, UPSTREAM_ALIASES};
-use crate::theme::tokens::TokenSet;
+use crate::theme::tokens::{TokenId, TokenSet};
 
 /// A registered theme: identity, polarity, resolved tokens.
 #[derive(Clone, Debug, PartialEq)]
@@ -72,6 +72,28 @@ pub struct Theme {
     pub dark: bool,
     /// The resolved palette.
     pub tokens: TokenSet,
+    /// **What this theme says about which of its grounds read as one
+    /// surface** when the palette cannot hold them all apart at 256
+    /// colours. Per pair, additive, and empty for every built-in.
+    ///
+    /// The driver resolves this against
+    /// [`TokenSet::grounds`](crate::theme::TokenSet::grounds) and hands
+    /// it to the separator, so an author states intent once here instead
+    /// of computing an assignment and installing it themselves.
+    ///
+    /// **Empty is not a value, it is silence** — a pair nobody named
+    /// falls to elevation-wins, exactly as if this field did not exist.
+    /// Declaring nothing therefore renders byte-for-byte like a theme
+    /// that never opted in, and there is no spelling of "merge whatever
+    /// I did not mention". See
+    /// [`GroundIntent`](crate::render::color::GroundIntent) for the rule
+    /// and `decision:ground-separation-intent-is-declared-by-the-theme`
+    /// for the ruling.
+    ///
+    /// Both tokens of a pair must be opaque grounds;
+    /// [`register`](fn@crate::theme::register) refuses a candidate whose
+    /// declaration names anything else.
+    pub ground_intent: &'static [(TokenId, TokenId, crate::render::color::PairIntent)],
 }
 
 impl Theme {
@@ -239,28 +261,59 @@ fn hex(field: &'static str, seed_id: &str, s: &str) -> Rgba {
         .unwrap_or_else(|| panic!("theme seed {seed_id}: field {field} has bad hex {s}"))
 }
 
-fn build(seed: &ThemeSeed) -> Theme {
-    let bg = hex("bg", seed.id, seed.bg);
-    let surface = hex("surface", seed.id, seed.surface);
-    let surface_raised = hex("surface_raised", seed.id, seed.surface_raised);
-    let text = hex("text", seed.id, seed.text);
-    let text_muted = hex("text_muted", seed.id, seed.text_muted);
-    let text_faint = hex("text_faint", seed.id, seed.text_faint);
-    let accent = hex("accent", seed.id, seed.accent);
-    let ok = hex("ok", seed.id, seed.ok);
-    let warn = hex("warn", seed.id, seed.warn);
-    let error = hex("error", seed.id, seed.error);
-    let info = hex("info", seed.id, seed.info);
+/// The authored colors a seed carries, already parsed. The whole input to
+/// [`derive_tokens`]: everything else in a [`TokenSet`] is derived from
+/// these twelve by the rules in the module docs.
+///
+/// Deliberately separate from [`ThemeSeed`] (a `&'static` hex table) and
+/// from `Palette` (owned strings from a consumer's config): both funnel
+/// here, so there is exactly ONE transform and neither path can drift.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub(crate) struct SeedColors {
+    pub bg: Rgba,
+    pub surface: Rgba,
+    pub surface_raised: Rgba,
+    pub text: Rgba,
+    pub text_muted: Rgba,
+    pub text_faint: Rgba,
+    pub accent: Rgba,
+    /// Curated second accent, BEFORE the contrast guard — the guard is part
+    /// of the derivation, not of the input.
+    pub accent_alt: Rgba,
+    pub ok: Rgba,
+    pub warn: Rgba,
+    pub error: Rgba,
+    pub info: Rgba,
+}
+
+/// THE derivation: twelve authored colors plus polarity in, the full
+/// 28-token set out. Total — every input is already a valid color, so
+/// there is nothing left to fail on. Parsing is the fallible half and it
+/// happens in the callers.
+pub(crate) fn derive_tokens(c: &SeedColors, dark: bool) -> TokenSet {
+    let SeedColors {
+        bg,
+        surface,
+        surface_raised,
+        text,
+        text_muted,
+        text_faint,
+        accent,
+        accent_alt: accent_alt_seed,
+        ok,
+        warn,
+        error,
+        info,
+    } = *c;
 
     // Curated second accent, contrast-guarded (see module docs).
-    let accent_alt_seed = hex("accent_alt", seed.id, seed.accent_alt);
     let accent_alt = mix_until_contrast(accent_alt_seed, text, bg, 0.0, 0.04, floors::ACCENT);
 
     let border = mix_until_contrast(bg, text, bg, 0.12, 0.02, floors::BORDER);
     let selection_bg =
         tint_until_readable(bg, accent, text, 0.30, 0.02, 0.10, floors::SELECTION_TEXT);
 
-    let shadow = if seed.dark {
+    let shadow = if dark {
         Rgba::BLACK.with_alpha(SHADOW_ALPHA_DARK)
     } else {
         text.with_alpha(SHADOW_ALPHA_LIGHT)
@@ -275,41 +328,65 @@ fn build(seed: &ThemeSeed) -> Theme {
         [accent, ok, warn, accent_alt, info],
     );
 
+    TokenSet {
+        bg,
+        surface,
+        surface_raised,
+        overlay: Rgba::BLACK.with_alpha(OVERLAY_ALPHA),
+        border,
+        border_focus: accent,
+        text,
+        text_muted,
+        text_faint,
+        accent,
+        accent_alt,
+        ok,
+        warn,
+        error,
+        info,
+        selection_bg,
+        selection_fg: text,
+        cursor: accent,
+        link: info,
+        shadow,
+        shadow_ground: shadow.over(bg),
+        chart,
+        syntax_keyword: syntax[0],
+        syntax_string: syntax[1],
+        syntax_number: syntax[2],
+        syntax_type: syntax[3],
+        syntax_func: syntax[4],
+        syntax_punct: syntax[5],
+        syntax_comment: syntax[6],
+    }
+}
+
+fn build(seed: &ThemeSeed) -> Theme {
+    let colors = SeedColors {
+        bg: hex("bg", seed.id, seed.bg),
+        surface: hex("surface", seed.id, seed.surface),
+        surface_raised: hex("surface_raised", seed.id, seed.surface_raised),
+        text: hex("text", seed.id, seed.text),
+        text_muted: hex("text_muted", seed.id, seed.text_muted),
+        text_faint: hex("text_faint", seed.id, seed.text_faint),
+        accent: hex("accent", seed.id, seed.accent),
+        accent_alt: hex("accent_alt", seed.id, seed.accent_alt),
+        ok: hex("ok", seed.id, seed.ok),
+        warn: hex("warn", seed.id, seed.warn),
+        error: hex("error", seed.id, seed.error),
+        info: hex("info", seed.id, seed.info),
+    };
     Theme {
         id: seed.id,
         label: seed.label,
         dark: seed.dark,
-        tokens: TokenSet {
-            bg,
-            surface,
-            surface_raised,
-            overlay: Rgba::BLACK.with_alpha(OVERLAY_ALPHA),
-            border,
-            border_focus: accent,
-            text,
-            text_muted,
-            text_faint,
-            accent,
-            accent_alt,
-            ok,
-            warn,
-            error,
-            info,
-            selection_bg,
-            selection_fg: text,
-            cursor: accent,
-            link: info,
-            shadow,
-            shadow_ground: shadow.over(bg),
-            chart,
-            syntax_keyword: syntax[0],
-            syntax_string: syntax[1],
-            syntax_number: syntax[2],
-            syntax_type: syntax[3],
-            syntax_func: syntax[4],
-            syntax_punct: syntax[5],
-            syntax_comment: syntax[6],
-        },
+        tokens: derive_tokens(&colors, seed.dark),
+        // Every built-in is SILENT, by ruling: elevation wins where a
+        // theme has not spoken, and none of these 26 authors has been
+        // asked. `every_built_in_theme_is_silent_about_ground_intent`
+        // pins it against the whole registry rather than against this
+        // one line.
+        ground_intent: &[],
     }
 }
 

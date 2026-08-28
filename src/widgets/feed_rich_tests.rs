@@ -452,6 +452,132 @@ fn rich_blocks_cap_with_marker_and_keep_shown_inks() {
     root.dispose();
 }
 
+// ---------------------------------------------------------------------------
+// The cap on the DEFAULT path (field report, commons#329): a chat body
+// is `FeedBlock::Markdown`, where `max_rows` used to be a debug_assert
+// in debug and a SILENT no-op in release — the call looked applied and
+// drew every row. Markdown and Code now cap the rows they typeset to.
+// ---------------------------------------------------------------------------
+
+/// Six markdown paragraphs of one short line each: at width 40 the
+/// document typesets to 11 rows (six paragraphs, five blank separator
+/// rows between them), so the cap counts RENDERED rows and not the six
+/// source lines — the distinction the whole feature turns on.
+fn six_paragraph_markdown() -> String {
+    (0..6)
+        .map(|i| format!("para {i} body"))
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+#[test]
+fn markdown_blocks_cap_rendered_rows_not_source_lines() {
+    let size = Size::new(40, 16);
+    let (root, mut tree, feed) = mount_feed(size);
+    // Uncapped first, to establish what the cap is capping — 11 rows,
+    // not 6. A test that assumed 6 would pass for the wrong reason.
+    feed.push("full", FeedItem::markdown(six_paragraph_markdown()));
+    settle(&mut tree, size);
+    assert_eq!(
+        feed.total_rows().get_untracked(),
+        11,
+        "six paragraphs render as 11 rows (five separators)"
+    );
+
+    feed.clear();
+    feed.push(
+        "capped",
+        FeedItem::markdown(six_paragraph_markdown()).max_rows(4),
+    );
+    let canvas = settle(&mut tree, size);
+    assert!(canvas.row_text(0).contains("para 0"));
+    assert!(canvas.row_text(2).contains("para 1"));
+    assert!(
+        canvas.row_text(3).contains("(+8 more lines)"),
+        "marker names the ROWS dropped (11 - 3 shown): {:?}",
+        canvas.row_text(3)
+    );
+    assert!(
+        !(0..size.h).any(|y| canvas.row_text(y).contains("para 5")),
+        "the tail is gone, and the marker says so"
+    );
+    assert_eq!(
+        feed.total_rows().get_untracked(),
+        4,
+        "capped extent counts the marker row — windowing arithmetic \
+         stays exact"
+    );
+    root.dispose();
+}
+
+#[test]
+fn a_markdown_cap_that_fits_changes_nothing_at_all() {
+    // The guard that stops the cap from being a truncation that always
+    // fires: same document, a cap above its height, byte-identical
+    // screen to the uncapped item.
+    let size = Size::new(40, 16);
+    let (root, mut tree, feed) = mount_feed(size);
+    feed.push("full", FeedItem::markdown(six_paragraph_markdown()));
+    let uncapped = settle(&mut tree, size);
+    let uncapped: Vec<String> = (0..size.h).map(|y| uncapped.row_text(y)).collect();
+
+    feed.clear();
+    feed.push(
+        "roomy",
+        FeedItem::markdown(six_paragraph_markdown()).max_rows(11),
+    );
+    let canvas = settle(&mut tree, size);
+    let capped: Vec<String> = (0..size.h).map(|y| canvas.row_text(y)).collect();
+    assert_eq!(capped, uncapped, "a cap at exactly the height is inert");
+    assert_eq!(feed.total_rows().get_untracked(), 11);
+    root.dispose();
+}
+
+#[test]
+fn code_blocks_cap_with_the_same_marker() {
+    let size = Size::new(40, 16);
+    let (root, mut tree, feed) = mount_feed(size);
+    let source = (0..8)
+        .map(|i| format!("let x{i} = {i};"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    feed.push("code", FeedItem::code("rust", source).max_rows(3));
+    let canvas = settle(&mut tree, size);
+    assert!(canvas.row_text(0).contains("let x0"));
+    assert!(
+        canvas.row_text(2).contains("more lines"),
+        "{:?}",
+        canvas.row_text(2)
+    );
+    assert_eq!(feed.total_rows().get_untracked(), 3);
+    root.dispose();
+}
+
+#[test]
+fn a_capped_markdown_body_costs_the_same_rows_however_long_the_source_is() {
+    // The reason the field wanted this: a 400-line paste must not own
+    // the pane. The cap is what makes the row count CONSTANT in the
+    // body length — assert that directly rather than trusting the
+    // single-length case above.
+    let size = Size::new(40, 16);
+    let (root, mut tree, feed) = mount_feed(size);
+    for lines in [20usize, 400] {
+        feed.clear();
+        let src = (0..lines)
+            .map(|i| format!("line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        feed.push("body", FeedItem::markdown(src).max_rows(6));
+        settle(&mut tree, size);
+        assert_eq!(
+            feed.total_rows().get_untracked(),
+            6,
+            "{lines} source lines still cost 6 rows"
+        );
+    }
+    root.dispose();
+}
+
 #[test]
 fn streaming_items_are_unaffected_by_row_caps() {
     // Caps live on static Text/Rich blocks only: a streamed item of

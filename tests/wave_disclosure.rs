@@ -560,3 +560,241 @@ fn scroll_column_remeasures_when_a_disclosure_unfolds() {
         "still showing body lines after wheel: {after_wheel:#?}"
     );
 }
+
+// ===========================================================================
+// field-agora 0890: the CAPPED body region under-measures a Feed body whose
+// items contain RICH blocks, so the last row silently clips.
+//
+// The reported shape (docs/backlog/completed/field-agora/0890_*.md) is
+// agora-tui's card: one FeedItem carrying a RICH meta line above the message
+// text. Under any positive `max_body_rows(n)` the region settles SHORT — the
+// capped path sizes itself from `Scroll::extent_signal` (disclosure.rs, the
+// `mh.min(cap)` style_signal), and rich rows are reported as contributing
+// nothing or only partially to that extent.
+//
+// Two controls make the failing case falsifiable rather than merely red:
+// a pure-TEXT body of the same row count under the same cap, and the same
+// rich body UNCAPPED. The report says both of those render completely, so if
+// either ever goes red the defect is not the one described here.
+//
+// CONFIRMED FROM THE CONSUMER SIDE, and the reason is what makes this suite
+// worth keeping. agora-tui reproduced nothing either (`bb890cc`,
+// `tests/field_0890.rs`, 3/3 against 0.4.0) — because their message cards
+// stopped being `Disclosure`s. A card is always open, its body renders under
+// the headline, and what folds is the thread trail, so `max_body_rows` is not
+// on their card path at all any more.
+//
+// So these tests no longer mirror a live usage: they are a PIN against a shape
+// nobody currently builds. Do not read that as "measured under load". The cap
+// has been exercised at 24 here and at 3 in their falsifying case, and nowhere
+// else. Anyone reintroducing a foldable rich body is the person this suite is
+// for, and 0890 should be reopened rather than assumed closed.
+// ===========================================================================
+
+/// One item: a rich META line, then two text rows. Three rows total, well
+/// under the cap, so nothing should scroll and nothing should clip.
+fn rich_meta_card(cx: abstracttui::reactive::Scope) -> FeedState {
+    let t = default_theme().tokens;
+    let fs = FeedState::new(cx);
+    fs.push(
+        "card",
+        FeedItem::rich_lines(vec![abstracttui::render::RichLine::from_spans(vec![
+            abstracttui::render::Span::new("META", abstracttui::render::Style::new().fg(t.accent)),
+        ])])
+        .block(abstracttui::widgets::FeedBlock::Text(
+            "BODY-1\nBODY-2".into(),
+        )),
+    );
+    fs
+}
+
+#[test]
+fn capped_body_measures_rich_feed_rows_and_clips_nothing() {
+    let size = Size::new(W, H);
+    let mut app = App::new(size);
+    app.mount(|cx| {
+        let t = default_theme().tokens;
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(
+                Disclosure::new("card")
+                    .initially_folded(false)
+                    // Cap of 8 is far above the 3 rows this body needs:
+                    // the cap must bound a LONG body, never shorten a
+                    // short one.
+                    .max_body_rows(8)
+                    .body(move |gcx| {
+                        let fs = rich_meta_card(gcx);
+                        Feed::new(&fs).gap(0).element(gcx, &t).build()
+                    })
+                    .view(cx),
+            )
+            .child(
+                Element::new()
+                    .style(LayoutStyle::line(1))
+                    .child(text("BELOW"))
+                    .build(),
+            )
+            .build()
+    })
+    .expect("mount");
+    let mut term = CaptureTerm::new(size);
+    let _driver = boot(&mut app, &mut term);
+
+    let lines = screen_lines(&term);
+    let screen = lines.join("\n");
+    assert!(
+        screen.contains("META"),
+        "the rich meta row paints:\n{screen}"
+    );
+    assert!(
+        screen.contains("BODY-1"),
+        "first text row paints:\n{screen}"
+    );
+    // THE DEFECT: the extent under-reports the rich row, the region settles
+    // at 2 instead of 3, and this last row never paints.
+    assert!(
+        screen.contains("BODY-2"),
+        "0890: the last body row must not clip under a cap that is larger \
+         than the body:\n{screen}"
+    );
+}
+
+/// CONTROL 1 — same three rows, same cap, no rich block. The report says a
+/// pure-text body renders completely, so this passing is what makes the
+/// failure above specific to rich measurement rather than to the cap.
+#[test]
+fn capped_body_with_a_pure_text_body_clips_nothing() {
+    let size = Size::new(W, H);
+    let mut app = App::new(size);
+    app.mount(|cx| {
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(
+                Disclosure::text("card", "META\nBODY-1\nBODY-2")
+                    .initially_folded(false)
+                    .max_body_rows(8)
+                    .view(cx),
+            )
+            .build()
+    })
+    .expect("mount");
+    let mut term = CaptureTerm::new(size);
+    let _driver = boot(&mut app, &mut term);
+    let screen = screen_lines(&term).join("\n");
+    for row in ["META", "BODY-1", "BODY-2"] {
+        assert!(
+            screen.contains(row),
+            "text body row {row} paints:\n{screen}"
+        );
+    }
+}
+
+/// CONTROL 2 — the same RICH body, uncapped. The report says this renders
+/// completely, which places the defect at the capped region's use of the
+/// measured extent, not at rich rendering itself.
+#[test]
+fn uncapped_body_renders_every_rich_row() {
+    let size = Size::new(W, H);
+    let mut app = App::new(size);
+    app.mount(|cx| {
+        let t = default_theme().tokens;
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(
+                Disclosure::new("card")
+                    .initially_folded(false)
+                    .max_body_rows(0)
+                    .body(move |gcx| {
+                        let fs = rich_meta_card(gcx);
+                        Feed::new(&fs).gap(0).element(gcx, &t).build()
+                    })
+                    .view(cx),
+            )
+            .build()
+    })
+    .expect("mount");
+    let mut term = CaptureTerm::new(size);
+    let _driver = boot(&mut app, &mut term);
+    let screen = screen_lines(&term).join("\n");
+    for row in ["META", "BODY-1", "BODY-2"] {
+        assert!(
+            screen.contains(row),
+            "uncapped rich body row {row} paints:\n{screen}"
+        );
+    }
+}
+
+/// The report's OTHER two shapes, so "does not reproduce" covers what 0890
+/// actually claimed rather than only its headline case: two ITEMS (rich then
+/// text), and a body that is rich rows only. Same cap, same expectation —
+/// nothing clips when the cap exceeds the body.
+#[test]
+fn capped_body_measures_rich_across_the_reports_other_shapes() {
+    for (name, two_items) in [("two-items", true), ("rich-only", false)] {
+        let size = Size::new(W, H);
+        let mut app = App::new(size);
+        app.mount(move |cx| {
+            let t = default_theme().tokens;
+            Element::new()
+                .style(LayoutStyle::column())
+                .child(
+                    Disclosure::new("card")
+                        .initially_folded(false)
+                        .max_body_rows(8)
+                        .body(move |gcx| {
+                            let t2 = default_theme().tokens;
+                            let fs = FeedState::new(gcx);
+                            let meta = || {
+                                FeedItem::rich_lines(vec![
+                                    abstracttui::render::RichLine::from_spans(vec![
+                                        abstracttui::render::Span::new(
+                                            "META",
+                                            abstracttui::render::Style::new().fg(t2.accent),
+                                        ),
+                                    ]),
+                                ])
+                            };
+                            if two_items {
+                                // rich item, then a separate text item
+                                fs.push("m", meta());
+                                fs.push("b", FeedItem::text("BODY-1\nBODY-2".to_string()));
+                            } else {
+                                // rich meta + a second rich row, no text at all
+                                fs.push("m", meta());
+                                fs.push(
+                                    "p",
+                                    FeedItem::rich_lines(vec![
+                                        abstracttui::render::RichLine::from_spans(vec![
+                                            abstracttui::render::Span::new(
+                                                "BODY-1",
+                                                abstracttui::render::Style::new(),
+                                            ),
+                                        ]),
+                                    ]),
+                                );
+                            }
+                            Feed::new(&fs).gap(0).element(gcx, &t).build()
+                        })
+                        .view(cx),
+                )
+                .build()
+        })
+        .expect("mount");
+        let mut term = CaptureTerm::new(size);
+        let _driver = boot(&mut app, &mut term);
+        let screen = screen_lines(&term).join("\n");
+        let want: &[&str] = if two_items {
+            &["META", "BODY-1", "BODY-2"]
+        } else {
+            &["META", "BODY-1"]
+        };
+        for row in want {
+            assert!(
+                screen.contains(row),
+                "0890 [{name}]: row {row} must not clip under a cap larger \
+                 than the body:\n{screen}"
+            );
+        }
+    }
+}

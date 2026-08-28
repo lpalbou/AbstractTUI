@@ -106,9 +106,38 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Prebuild example binaries
-        run: cargo build --examples
+        # --workspace: matches what the suite itself builds
+        # (ensure_examples_built), so the prebuild covers the extension
+        # examples the pty cases drive rather than a narrower set.
+        run: cargo build --workspace --examples
       - name: Live pty suite (serial)
-        run: cargo test --test live_smoke -- --ignored --test-threads=1
+        # The lane is #[ignore]d BY DESIGN — it spawns real processes under
+        # a real pty, so it must not fire on a bare `cargo test`. That is
+        # the right call and it costs this: "the lane never ran" and "the
+        # lane passed" are the same exit code. Drop `--ignored` from the
+        # line below and this job goes GREEN with zero pty coverage, which
+        # is the one thing in this repo that runs an example's paint path.
+        #
+        # The in-suite skip guard cannot see it: that only fires inside a
+        # case that ran. An opt-in gate needs its own receipt, so this is
+        # it — the count the lane actually executed, asserted out loud.
+        run: |
+          set -o pipefail
+          cargo test --test live_smoke -- --ignored --test-threads=1 2>&1 | tee live-pty.log
+          ran=$(awk '/^test result:/ { n += $4 } END { print n + 0 }' live-pty.log)
+          echo "live pty cases executed: $ran (floor $LIVE_PTY_MIN)"
+          if [ "$ran" -lt "$LIVE_PTY_MIN" ]; then
+            echo "::error::live pty lane executed $ran cases, expected at least" \
+                 "$LIVE_PTY_MIN. Either --ignored was dropped (the lane did not" \
+                 "run at all and this job was about to report success), or cases" \
+                 "were removed and the floor needs a deliberate edit."
+            exit 1
+          fi
+        env:
+          # Floor, not the exact count, so adding a case never breaks CI.
+          # Sized well under the current lane so a real removal is a
+          # deliberate edit here rather than a number that drifts quietly.
+          LIVE_PTY_MIN: 20
       - name: RT5 ctty probes (serial)
         run: >-
           cargo test --lib -- --ignored --test-threads=1 --exact

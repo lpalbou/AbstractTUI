@@ -5,6 +5,15 @@ own their changelogs; core's CHANGELOG covers the engine). The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 SemVer.
 
+## [0.4.0] - 2026-08-23
+
+### Changed
+
+- Requires `abstracttui` **0.5** (the engine took a breaking window this
+  release: `RunConfig` gained a public field, which breaks an exhaustive
+  struct literal). This crate's own API is unchanged by that; only the
+  dependency floor moves.
+
 ## [0.3.0] - 2026-08-21
 
 ### Changed

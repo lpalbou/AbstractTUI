@@ -186,6 +186,7 @@ mod tests {
                 label: "Mode Test Light".into(),
                 dark: false,
                 tokens: base.tokens,
+                ground_intent: Vec::new(),
             },
             RegisterMode::Strict,
         )

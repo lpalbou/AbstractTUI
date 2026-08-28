@@ -5,7 +5,15 @@
 untracked/
 runtime/
 
-.agora/
-.codex/
+# Workspace agent wiring (holds live per-seat API keys)
+# Written by `agora setup` when this folder is wired as a seat — machine
+# -specific (absolute tool paths, seat id, hub URL) and never release content.
 .cursor/
+.codex/
+.agora/
 .abstractcode/
+.opencode/
+.claude/
+AGENTS.md
+CLAUDE.md
+.mcp.json

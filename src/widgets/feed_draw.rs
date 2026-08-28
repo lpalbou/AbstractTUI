@@ -36,7 +36,16 @@ pub(super) fn draw_feed(
             state.schedule_geometry_sync();
             inner = state.inner.borrow_mut();
         }
-        let bounds = Rect::from_size(canvas.size());
+        // The band is what can be SEEN, not what the surface is.
+        // `canvas.size()` was the proxy here and it over-reports: a
+        // ClippedCanvas delegates size() to the canvas it wraps, so a
+        // Feed inside a Scroll measured its band against the whole
+        // terminal and painted every row the screen could hold instead
+        // of the handful inside the viewport. Bounded waste (capped at
+        // screen height, not proportional to body length), but paid on
+        // every frame. `clip_rect()` answers the question the proxy was
+        // standing in for.
+        let bounds = canvas.clip_rect();
         let band = rect.intersect(bounds);
         if band.is_empty() || inner.entries.is_empty() {
             return;

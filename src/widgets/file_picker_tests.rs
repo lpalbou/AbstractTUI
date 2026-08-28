@@ -367,6 +367,40 @@ fn format_size_units() {
     assert_eq!(format_size(3_000_000_000), "3.0G");
 }
 
+/// The strip is a DRAG ZONE (first-app/1335) so screen select mode
+/// stands down over it and the thumb keeps its gesture — the STRIP
+/// only, so filenames stay selectable text.
+#[test]
+fn only_the_strip_column_owns_drags() {
+    let (root, mut tree, _) = mount_picker(|p| p.start_in(join_path("/root", "many")));
+    render(&mut tree, SIZE);
+    let bar_x = SIZE.w - 1;
+    let listing_y = SIZE.h - 2; // inside the rows area, below the chrome
+    assert!(
+        tree.press_probe_at(crate::base::Point::new(bar_x, listing_y))
+            .drag_owner,
+        "the strip owns drags"
+    );
+    assert!(
+        !tree
+            .press_probe_at(crate::base::Point::new(4, listing_y))
+            .drag_owner,
+        "filenames stay selectable"
+    );
+    root.dispose();
+
+    // The default fixture fits in the rows area: no bar, no zone.
+    let (root, mut tree, _) = mount_picker(|p| p);
+    render(&mut tree, SIZE);
+    assert!(
+        !tree
+            .press_probe_at(crate::base::Point::new(bar_x, listing_y))
+            .drag_owner,
+        "a listing that fits draws no bar and owns no drags"
+    );
+    root.dispose();
+}
+
 /// The scrollbar column is the bar's. `FilePicker` resolved rows from
 /// `pos.y` alone and applied the click-on-selected-activates rule, so a
 /// second press on the strip could open a directory or commit a pick the

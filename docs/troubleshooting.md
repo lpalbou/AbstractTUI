@@ -437,6 +437,16 @@ app.run_with(RunConfig {
 })
 ```
 
+**Tooltips are the exception, and you do not have to set anything.** A
+`Tooltip` cannot work at all without motion — its whole contract is
+hover, delay, show — so mounting one declares the need itself
+(`Overlays::require_pointer_motion`) and the driver arms 1003 with
+`hover_ink` left `false`. Before that, an app that mounted a tooltip and
+called `App::run()` got a tip that opened when you PRESSED the mouse and
+stayed shut when you moved over the anchor. If you see that symptom on
+your own hover-driven widget, the fix is to declare the need the same
+way rather than to document a flag.
+
 It is off by default because 1003 sends a report for every pointer cell
 crossed, which wakes the event loop of apps that have no hover visuals to
 paint — noticeably so over SSH or tmux. Set it when your UI reacts to
@@ -458,3 +468,61 @@ which runs the full production pipeline synchronously: push input bytes,
 turn one frame, assert on the rendered screen. Every test in this crate
 that exercises the app loop is written that way, and it needs no tty, no
 timeouts, and no sleeps.
+
+## A local checkout stops being the engine I build against
+
+**Symptom**: you consume AbstractTUI from a working copy —
+`[patch.crates-io]` pointing at a `path` — the checkout moves to a new
+minor, and either a method you call disappears (`no method named
+rule_style`) or, worse, nothing fails at all and your frame-reading tests
+keep passing against a renderer you are not shipping.
+
+**Cause**: a patch whose version falls outside your dependency requirement
+is **not an error — it is ignored**. `abstracttui = "0.5.0"` means
+`^0.5.0`; once the checkout is 0.6.0 the patch no longer satisfies it, so
+cargo drops the patch, resolves the requirement from crates.io instead,
+and rewrites `Cargo.lock` to the published `0.5.0`. Resolution *fails*
+only when nothing published satisfies the requirement either — which is
+exactly the case that stops arising once a crate has a release history.
+
+Cargo does say so, on every resolve:
+
+```text
+warning: patch `abstracttui v0.6.0 (/…/abstracttui)` was not used in the crate graph
+```
+
+but it is a warning: the resolve exits 0, and it scrolls past in CI output
+like any other. A suite that asserts on painted cells goes green against
+the wrong engine without a word.
+
+**Fix**, two parts. Pin the requirement to the version the checkout
+carries, and re-pin when the checkout bumps:
+
+```toml
+abstracttui = "0.6.0"   # tracks the patch below on purpose; re-pin each minor
+```
+
+A family requirement (`"0.6"`) re-arms the trap at the next minor: 0.7.0
+in the tree, 0.6.x on the registry, and the graph resolves to the registry
+silently.
+
+Then make it fail loudly, because a pin you have to remember to update is
+not a guarantee:
+
+```sh
+cargo tree -i abstracttui | head -1 | grep -q '^abstracttui v[^ ]* (' \
+  || { echo 'abstracttui: patch not applied — building against crates.io'; exit 1; }
+```
+
+`cargo tree -i` prints the resolved package with its source: a patched
+build reads `abstracttui v0.6.0 (/path/to/abstracttui)`, an unpatched one
+reads `abstracttui v0.5.0` with no path. The check is red when the crate
+is absent from the graph too, so it cannot pass by finding nothing.
+
+**Do not test this by grepping `Cargo.lock`.** The unused patch is still
+recorded there: in the failing case the lock holds *two* `abstracttui`
+entries — 0.5.0 from the registry and 0.6.0 from the path — and only the
+first is built. The machine-readable form of the same check is the resolve
+node id in `cargo metadata --format-version 1`, which reads
+`path+file:///…#0.6.0` when the patch applied and
+`registry+…#abstracttui@0.5.0` when it did not.

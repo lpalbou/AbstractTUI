@@ -76,6 +76,47 @@ pub trait StyledCanvas: Canvas {
 pub trait Canvas {
     fn size(&self) -> Size;
 
+    /// The region of this canvas that can still accept ink, in absolute
+    /// coordinates. Writes outside it are DISCARDED.
+    ///
+    /// A draw closure is handed its whole solved box, which during a
+    /// scroll or a partial repaint is routinely many times taller than
+    /// what is on screen. `size()` cannot answer "what is visible":
+    /// a wrapper reports the surface it wraps, so it reads as the whole
+    /// terminal. This does answer it, so a consumer painting its own
+    /// loops can walk the visible band instead of the whole box:
+    ///
+    /// ```
+    /// # use abstracttui::base::{Point, Rect, Rgba};
+    /// # use abstracttui::ui::StyledCanvas;
+    /// fn paint(canvas: &mut dyn StyledCanvas, rect: Rect) {
+    ///     let visible = rect.intersect(canvas.clip_rect());
+    ///     for y in visible.y..visible.bottom() {
+    ///         canvas.print(Point::new(visible.x, y), "─", Rgba::WHITE, Rgba::TRANSPARENT);
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// Correctness never depended on this — a rogue paint cannot escape
+    /// the clip, and ignoring this method still renders correctly. COST
+    /// does: cells outside the returned rect are walked, composited and
+    /// thrown away, and the waste grows with content length rather than
+    /// with what the reader can see.
+    ///
+    /// The default is the whole surface, which is the truth for a plain
+    /// buffer: it really does accept ink anywhere in its bounds. It is
+    /// deliberately not an `Option` — a "don't know" would put a
+    /// fallback branch in every consumer that no test could exercise,
+    /// since the terminal path always clips.
+    ///
+    /// IMPLEMENTORS: a wrapper that narrows where writes land MUST
+    /// override this. Inheriting the default makes the wrapper claim
+    /// the whole surface, consumers over-paint, and nothing goes red —
+    /// the output stays correct and only the cost is wrong.
+    fn clip_rect(&self) -> Rect {
+        Rect::from_size(self.size())
+    }
+
     /// Put one character at `p`. `bg` with alpha 0 leaves the existing
     /// background (text over an inherited fill).
     fn put(&mut self, p: Point, ch: char, fg: Rgba, bg: Rgba);
@@ -305,6 +346,17 @@ impl<'a> ClippedCanvas<'a> {
 impl Canvas for ClippedCanvas<'_> {
     fn size(&self) -> Size {
         self.inner.size()
+    }
+
+    /// The clip, not the wrapped surface — this is the whole point of
+    /// the type, and `size()` above is exactly the trap it exists to
+    /// fix (it delegates, so it reports the full terminal).
+    ///
+    /// No intersection with `inner.clip_rect()` is needed: nested clips
+    /// are built as `clip.intersect(content)` by the paint walk
+    /// (`draw.rs`), so `self.clip` is already the tightest of the chain.
+    fn clip_rect(&self) -> Rect {
+        self.clip
     }
 
     fn put(&mut self, p: Point, ch: char, fg: Rgba, bg: Rgba) {

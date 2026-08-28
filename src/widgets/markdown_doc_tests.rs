@@ -17,7 +17,7 @@ fn rows_plain(source: &str, width: i32) -> Vec<String> {
         .rows
         .iter()
         .map(|r| {
-            if r.rule {
+            if r.rule.is_some() {
                 "<rule>".to_string()
             } else {
                 r.line.plain()
@@ -228,7 +228,7 @@ tail paragraph
     let expected: Vec<Heading> = crate::render::md::outline(doc);
     assert_eq!(expected.len(), 4);
     for width in [10, 16, 24, 40, 80] {
-        let entries = outline_rows(doc, &t, width);
+        let entries = outline_rows_ruled(doc, &t, width, crate::widgets::MdRuleStyle::default());
         assert_eq!(entries.len(), expected.len(), "width {width}");
         let fold = layout_doc(doc, &t, width);
         let mut last = 0usize;

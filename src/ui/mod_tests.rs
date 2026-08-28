@@ -892,3 +892,440 @@ fn handlers_can_request_focus() {
     assert_eq!(tree.focused(), Some(target));
     assert!(tree.is_focused(target));
 }
+
+/// `TreeCore::focus_memory` never sheds an unmounted container, so a
+/// `Dyn` region that rebuilds a `focus_memory` subtree leaks one dead
+/// entry per rebuild — for the life of the tree.
+///
+/// Measured 2026-08-21, before the fix: 20 rebuilds left **20 entries,
+/// 0 of them live**. Filed as app-widgets 0155 and closed by pruning
+/// the key in `remove_subtree`'s drain loop; this test is what says the
+/// prune is still there.
+///
+/// `remove_subtree` (`ui::mount`) cleared `core.focus` when the focused
+/// node died but walked past `core.focus_memory` entirely, and nothing
+/// else pruned it. Nothing was UNSOUND — the arena is generational, so
+/// `restore_memory_target` reads a dead entry as `None` and falls
+/// through to `entering`. It was unbounded growth, not a dangling
+/// handle, and a long-lived app with a rebuilding pane paid for every
+/// rebuild it ever did. That is also why it went unnoticed: no symptom
+/// until the memory does.
+///
+/// Found while designing field-agora 0910, which needs its own
+/// `ViewId`-valued map in `TreeCore`: the question was "who removes an
+/// entry when the subtree unmounts?", and the honest answer from the
+/// only precedent is "nobody". That is why 0910's map is keyed by the
+/// caller's STRING rather than by `ViewId` — a rebuild re-registers the
+/// same key and overwrites in place, so its size is bounded by the
+/// number of distinct keys instead of by the number of rebuilds.
+#[test]
+fn focus_memory_sheds_containers_that_unmount() {
+    let trigger: Rc<RefCell<Option<Signal<i32>>>> = Rc::new(RefCell::new(None));
+    let t2 = trigger.clone();
+    let (root, mut tree) = mounted(Size::new(20, 4), move |cx| {
+        let t = cx.signal(0);
+        *t2.borrow_mut() = Some(t);
+        Element::new()
+            .style(Style::column())
+            .child(dyn_view(Style::default(), move || {
+                let _n = t.get();
+                Element::new()
+                    .style(Style::row().height(Dimension::Cells(1)))
+                    .focus_memory()
+                    .child(focusable_box(3, 1).build())
+                    .child(focusable_box(3, 1).build())
+                    .build()
+            }))
+            .build()
+    });
+    crate::reactive::flush_effects();
+    tree.layout();
+    let t = trigger.borrow().unwrap();
+    for n in 1..=20 {
+        tree.focus_first();
+        tree.focus_next();
+        t.set(n);
+        crate::reactive::flush_effects();
+        tree.layout();
+    }
+    let (entries, dead) = {
+        let core = tree.core.borrow();
+        let dead = core
+            .focus_memory
+            .keys()
+            .filter(|k| core.insts.get(k.0).is_none())
+            .count();
+        (core.focus_memory.len(), dead)
+    };
+    drop(root);
+    // The map must not carry containers that no longer exist. Both
+    // halves matter: `dead == 0` is the property, and `entries <= 1`
+    // pins that the ONE surviving container is the live one rather
+    // than a map that happens to hold no corpses because it holds
+    // nothing at all.
+    assert_eq!(
+        dead, 0,
+        "dead containers left in focus_memory ({entries} entries)"
+    );
+    assert!(
+        entries <= 1,
+        "one live focus_memory container, {entries} entries"
+    );
+}
+
+// ---------------------------------------------------------------------
+// The per-leaf measurement memo (`mount::WidthMemo`).
+//
+// Measuring text is 91-97% of a solve, and the solver asks each leaf
+// `1 + Auto-sized-ancestor-depth` times per frame. These guards pin
+// that the memo removes the repeats WITHOUT ever serving a size for the
+// wrong width — a stale size is far worse than a slow one, because it
+// lays a row out at a height nothing will correct.
+// ---------------------------------------------------------------------
+
+use crate::text::{measure_calls, reset_measure_calls};
+use crate::ui::mount::WidthMemo;
+
+/// THE guard: delete the memo and this reds.
+///
+/// A leaf under N `Auto` containers is asked N+1 times; `text::measure`
+/// must run exactly ONCE. Measured against the real `UiTree`, not the
+/// memo in isolation, because the claim is about the solver's behaviour.
+///
+/// Falsifiability is not assumed here — replacing `get_or`'s body with
+/// a bare `compute(width)` takes the counts to 2/3/4/5 and reds every
+/// depth. Verified by doing exactly that.
+#[test]
+fn one_text_measure_per_leaf_however_deep_the_auto_ancestors_are() {
+    for depth in 0..4usize {
+        reset_measure_calls();
+        let (root, mut tree) = mounted(Size::new(80, 40), |_cx| {
+            let mut node = crate::ui::text("a wrapped list row of ordinary length");
+            for _ in 0..depth {
+                node = Element::new().style(Style::column()).child(node).build();
+            }
+            Element::new().style(Style::column()).child(node).build()
+        });
+        tree.layout();
+        let calls = measure_calls();
+        drop(root);
+        assert_eq!(
+            calls,
+            1,
+            "at {depth} Auto ancestors the leaf was measured {calls} times; the solver \
+             asks {} times and the memo is supposed to absorb all but the first",
+            depth + 1
+        );
+    }
+}
+
+/// The solver really does ask more than once — otherwise the guard
+/// above would pass with no memo at all and prove nothing.
+///
+/// This is the absent-input case made explicit: it counts the CALLBACK,
+/// which the memo sits inside, so it is unaffected by caching and pins
+/// the `1 + Auto-ancestor-depth` cost model the memo exists to defeat.
+#[test]
+fn the_solver_asks_once_per_auto_ancestor_which_is_what_makes_the_memo_worth_having() {
+    use crate::layout::{solve, LayoutTree};
+    for depth in 0..4i32 {
+        let asked = Rc::new(RefCell::new(0usize));
+        let mut lt = LayoutTree::new();
+        let root = lt.add(Style::column());
+        let mut parent = root;
+        for _ in 0..depth {
+            let mid = lt.add(Style::column());
+            lt.add_child(parent, mid);
+            parent = mid;
+        }
+        let counter = Rc::clone(&asked);
+        let leaf = lt.add_leaf(
+            Style::default(),
+            Box::new(move |_a: Size| {
+                *counter.borrow_mut() += 1;
+                Size::new(60, 2)
+            }),
+        );
+        lt.add_child(parent, leaf);
+        solve(&mut lt, root, Rect::new(0, 0, 80, 40));
+        let n = *asked.borrow();
+        assert_eq!(
+            n,
+            depth as usize + 1,
+            "the cost model is 1 + the number of Auto-sized ancestors BETWEEN the leaf \
+             and the root — the root itself is assigned its rect by `solve` rather than \
+             measured, which is why depth 0 is one call and not two. At depth {depth} \
+             the solver asked {n} times"
+        );
+    }
+}
+
+/// **The stale-size guard.** A memo that serves the previous width's
+/// answer is a row laid out at a height nothing will ever correct, and
+/// it is invisible in a suite that only got faster.
+///
+/// Narrow the viewport and the same content must report MORE rows, and
+/// must report exactly what `text::measure` says. If the key were wrong
+/// — or dropped — the second solve returns the first answer and this
+/// reds.
+#[test]
+fn the_memo_never_serves_a_size_for_a_different_width() {
+    // Long enough that the two widths genuinely wrap differently.
+    let content = "the quick brown fox jumps over the lazy dog and keeps on running";
+    let mut tree = UiTree::new(Size::new(60, 40));
+    let (root, root_id) = create_root(|cx| {
+        let view = Element::new()
+            .style(Style::column())
+            .child(super::text(content))
+            .build();
+        tree.mount(cx, view)
+    });
+    let leaf = {
+        let core = tree.core.borrow();
+        core.insts.get(root_id.0).expect("root").children[0]
+    };
+
+    tree.layout();
+    let h_at_60 = tree.rect_of(leaf).h;
+    tree.set_viewport(Size::new(24, 40));
+    tree.layout();
+    let h_at_24 = tree.rect_of(leaf).h;
+    drop(root);
+
+    assert!(
+        h_at_24 > h_at_60,
+        "the same text reported {h_at_24} rows at width 24 and {h_at_60} at width 60 — \
+         a memo serving the previous width's answer looks exactly like this"
+    );
+    // And it must agree with the authority, not merely differ from
+    // itself: a memo that recomputed something WRONG would also move.
+    assert_eq!(
+        (h_at_60, h_at_24),
+        (
+            crate::text::measure(content, Size::new(60, 40)).h,
+            crate::text::measure(content, Size::new(24, 40)).h
+        ),
+        "the memoized answers disagree with text::measure, the engine's only width \
+         authority"
+    );
+}
+
+/// The memo unit, away from the solver: two slots, round-robin, and
+/// every non-positive width folded into one entry.
+///
+/// The fold is not tidiness. `text::measure` turns every `avail.w <= 0`
+/// into the same unconstrained query, so keeping them apart would spend
+/// both slots on one answer and evict the width that matters.
+#[test]
+fn the_memo_holds_two_widths_and_folds_every_unconstrained_one_together() {
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let memo = WidthMemo::new();
+    let record = |w: i32| {
+        let calls = Rc::clone(&calls);
+        move |width: i32| {
+            calls.borrow_mut().push(width);
+            Size::new(w, 1)
+        }
+    };
+
+    // Two distinct widths both stay resident — the row/grid case, where
+    // a leaf sees its basis width and then its distributed width every
+    // single solve.
+    memo.get_or(80, record(80));
+    memo.get_or(24, record(24));
+    memo.get_or(80, record(80));
+    memo.get_or(24, record(24));
+    assert_eq!(
+        calls.borrow().as_slice(),
+        &[80, 24],
+        "two alternating widths must both stay resident; one slot would thrash and \
+         recompute every call"
+    );
+
+    // A third width evicts, and round-robin evicts the OLDER of the two.
+    calls.borrow_mut().clear();
+    memo.get_or(12, record(12));
+    memo.get_or(24, record(24));
+    assert_eq!(
+        calls.borrow().as_slice(),
+        &[12],
+        "24 was the more recent of the two residents and must have survived the insert \
+         of 12"
+    );
+
+    // Every non-positive width is ONE key.
+    let folded = WidthMemo::new();
+    let seen = Rc::new(RefCell::new(0usize));
+    for w in [0, -1, -100, i32::MIN + 1] {
+        let seen = Rc::clone(&seen);
+        folded.get_or(w, move |_| {
+            *seen.borrow_mut() += 1;
+            Size::new(7, 1)
+        });
+    }
+    assert_eq!(
+        *seen.borrow(),
+        1,
+        "text::measure folds every avail.w <= 0 into one unconstrained query, so the \
+         memo must too — otherwise four keys hold one answer"
+    );
+    assert_eq!(WidthMemo::normalise(-5), WidthMemo::normalise(0));
+    assert_ne!(WidthMemo::normalise(1), WidthMemo::normalise(0));
+}
+
+/// What a long list actually costs, measured through the REAL mount
+/// path rather than a hand-built `LayoutTree`.
+///
+/// `cargo test --release --lib ui_frame_cost_table -- --ignored --nocapture`
+///
+/// `layout::tests::solve_cost_table` is the sibling instrument and it
+/// answers a different question: it builds leaves that call
+/// `text::measure` directly, so it measures the SOLVER's demand. An app
+/// does not mount those — it mounts `ViewNode::Text`, whose closure
+/// carries a `WidthMemo`. Every millisecond quoted at an app author has
+/// to come through here, and quoting the solver's number at them was
+/// how this seat over-attributed the cost twice.
+///
+/// `measures` is the honest denominator: it is `text::measure`
+/// executions, so it reads the memo's effect directly rather than
+/// inferring it from wall clock.
+/// A REAL scroll must not re-measure text, and `ui_frame_cost_table`
+/// cannot tell you whether it does.
+///
+/// That instrument models "scrolling a long list" as `set_viewport` at
+/// the SAME width followed by `layout()`. That is a re-solve, and the
+/// memo handles it — but it is not a scroll. A scroll moves a
+/// `Scroll`'s offset signal, which is a different write reaching the
+/// tree by a different path, and `agora-tui`'s 8000-row channel does
+/// the second thing rather than the first.
+///
+/// The distinction is the one that cost this seat twice today: a check
+/// that models the operation instead of performing it is green about a
+/// world nobody runs. So this performs the scroll and counts
+/// `text::measure` executions, which is the memo's effect read directly
+/// rather than inferred from wall clock.
+///
+/// Falsifiable: delete the `WidthMemo` wrapper in `ui::mount` and the
+/// count jumps from zero to one per text leaf per frame.
+#[test]
+fn a_real_scroll_offset_change_re_measures_no_text_at_all() {
+    const BODY: &str = "the seam you flagged is real and the transit guard \
+                        I mentioned is in the same file, a few lines below \
+                        the one you quoted back at me";
+    const ROWS: usize = 400;
+
+    let mut tree = UiTree::new(Size::new(80, 40));
+    let (root, offset) = create_root(|cx| {
+        let offset = cx.signal(0i32);
+        let mut col = Element::new().style(Style::column());
+        for _ in 0..ROWS {
+            col = col.child(
+                Element::new()
+                    .style(Style::column().padding(crate::layout::Edges::all(1)))
+                    .child(super::text("agora-tui"))
+                    .child(super::text(BODY))
+                    .build(),
+            );
+        }
+        let view = crate::widgets::Scroll::new(col.build())
+            .offset_y(offset)
+            .view(cx);
+        tree.mount(cx, view);
+        offset
+    });
+    // Cold solve: every leaf measures once and nothing can prevent it.
+    tree.layout();
+    let cold = crate::text::measure_calls();
+    assert!(
+        cold > 0,
+        "the cold solve measured nothing, so this rig never reached the \
+         text leaves and the assertion below would prove nothing"
+    );
+
+    // THE SCROLL: move the offset, flush, re-solve. Widths are
+    // unchanged, so no leaf has a new question to answer.
+    crate::text::reset_measure_calls();
+    for i in 0..8 {
+        offset.set(if i % 2 == 0 { 2 } else { 0 });
+        crate::reactive::flush_effects();
+        tree.layout();
+    }
+    let scrolling = crate::text::measure_calls();
+
+    drop(root);
+    assert_eq!(
+        scrolling, 0,
+        "eight scroll frames over {ROWS} rows re-measured text {scrolling} times \
+         (cold solve was {cold}) — the WidthMemo is not surviving a real offset \
+         change, so every retained row pays wrap-aware measurement on every \
+         scroll frame"
+    );
+}
+
+#[test]
+#[ignore = "measurement report, not a guard: prints a table, asserts nothing"]
+fn ui_frame_cost_table() {
+    const BODY: &str = "the seam you flagged is real and the transit guard \
+                        I mentioned is in the same file, a few lines below \
+                        the one you quoted back at me";
+    println!("viewport 80x40, every row retained");
+    println!(
+        "{:>6} {:>7} {:>12} {:>9} {:>12} {:>9} {:>12} {:>9}",
+        "rows", "nodes", "cold", "meas", "same-width", "meas", "resizing", "meas"
+    );
+    for rows in [50, 100, 200, 400, 800] {
+        let mut tree = UiTree::new(Size::new(80, 40));
+        let (root, _) = create_root(|cx| {
+            let mut col = Element::new().style(Style::column().scroll());
+            for _ in 0..rows {
+                col = col.child(
+                    Element::new()
+                        .style(Style::column().padding(crate::layout::Edges::all(1)))
+                        .child(super::text("agora-tui"))
+                        .child(super::text(BODY))
+                        .build(),
+                );
+            }
+            tree.mount(cx, col.build())
+        });
+        let nodes = tree.instance_count();
+
+        // COLD: the first solve of a freshly mounted tree. Nothing is
+        // cached and nothing can be — this is the floor the memo cannot
+        // move, and the number an app pays once per mount.
+        reset_measure_calls();
+        let start = std::time::Instant::now();
+        tree.layout();
+        let cold = start.elapsed();
+        let cold_m = measure_calls();
+
+        // SAME WIDTH: what scrolling a long list actually does. Every
+        // row is re-solved; no row's width changed.
+        const N: u32 = 10;
+        reset_measure_calls();
+        let start = std::time::Instant::now();
+        for _ in 0..N {
+            tree.set_viewport(Size::new(80, 40));
+            tree.layout();
+        }
+        let warm = start.elapsed() / N;
+        let warm_m = measure_calls() / u64::from(N);
+
+        // RESIZING: a width the memo has never seen, every frame — the
+        // adversarial case, and the one where a cache can only lose.
+        reset_measure_calls();
+        let start = std::time::Instant::now();
+        for i in 0..N {
+            tree.set_viewport(Size::new(60 + i as i32, 40));
+            tree.layout();
+        }
+        let resize = start.elapsed() / N;
+        let resize_m = measure_calls() / u64::from(N);
+
+        drop(root);
+        println!(
+            "{rows:>6} {nodes:>7} {cold:>12?} {cold_m:>9} {warm:>12?} {warm_m:>9} \
+{resize:>12?} {resize_m:>9}"
+        );
+    }
+}

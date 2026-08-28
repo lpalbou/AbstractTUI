@@ -30,7 +30,9 @@ use crate::input::{Event, EventReader};
 use crate::reactive::{
     self, drain_posted, flush_effects, take_frame_request, take_worker_failures,
 };
-use crate::render::{Cell, Compositor, FrameDiff, Glyph, PresentCaps, Presenter, Surface};
+use crate::render::{
+    Cell, ColorDepth, Compositor, FrameDiff, Glyph, PresentCaps, Presenter, Surface,
+};
 use crate::term::{
     ActiveProbe, Capabilities, EnterOptions, KittyFlags, MouseMode, Terminal, TerminalWaker,
 };
@@ -39,7 +41,7 @@ use crate::ui::SurfaceCanvas;
 
 use super::events::{convert_event, is_default_quit};
 use super::overlays::{Overlays, ROOT_LAYER_ID};
-use super::selection::{selection_pane, MouseCapture, Selection, SelectionAct};
+use super::selection::{selection_anchor, MouseCapture, Selection, SelectionAct};
 use super::theme::current_theme;
 use super::App;
 
@@ -55,9 +57,51 @@ use super::App;
 /// let cfg = RunConfig { hover_ink: true, ..RunConfig::default() };
 /// ```
 pub struct RunConfig {
-    /// Capabilities to assume. `None` = passive env detection at start
-    /// (tests inject a fixed set so host env never leaks into assertions).
+    /// Capabilities to assume. `None` means the driver picks, and it
+    /// picks by asking [`Terminal::is_tty`]: over a real terminal, the
+    /// passive env pass ([`Capabilities::detect_env`]); over anything
+    /// that is not one, the fixed [`Capabilities::headless`] set.
+    ///
+    /// That second branch exists because leaving `None` in a headless
+    /// harness used to fail silently. A suite on [`CaptureTerm`] has no
+    /// terminal to detect, so it inherited *the developer's shell*: with
+    /// `COLORTERM` unset that is `ColorDepth::Xterm256`, and since
+    /// `CaptureTerm` reads back the bytes the presenter actually emitted,
+    /// every colour the tests asserted on had been through the 256 cube.
+    /// Token-vs-token comparisons pass at either depth, so the suite
+    /// looked green while its verdict moved with an environment
+    /// variable. Field-reported by a consumer (`agora-tui`), whose entire
+    /// colour suite was quantised without their knowing.
+    ///
+    /// **Declaring it is still better than relying on the default**, and
+    /// required the moment your harness cares about a capability the
+    /// headless set leaves off (graphics, kitty keyboard, OSC 52) or
+    /// wants a *lower* depth on purpose:
+    ///
+    /// ```ignore
+    /// caps: Some(Capabilities::with(|c| {
+    ///     c.truecolor = true;
+    ///     c.colors_256 = true;
+    /// })),
+    /// ```
+    ///
+    /// [`CaptureTerm`]: crate::testing::CaptureTerm
+    /// [`Terminal::is_tty`]: crate::term::Terminal::is_tty
     pub caps: Option<Capabilities>,
+    /// Grounds your app paints that the THEME does not know about — a
+    /// translucent panel fill, a custom card ground — declared once at
+    /// startup so the 256-colour separator keeps them apart from the
+    /// theme's own. Empty by default; at truecolor it costs nothing.
+    ///
+    /// The declarative twin of [`Driver::set_extra_grounds`], and the
+    /// only route on the `App::run` path, which never hands out its
+    /// Driver. Shipping the setter alone made the guarantee reachable
+    /// from a hand-driven loop and from nothing else — found while
+    /// writing `examples/grounds.rs`, which is what an example is for.
+    ///
+    /// A ground is only protected if it is HANDED IN: the separator can
+    /// keep apart exactly what it was given.
+    pub extra_grounds: Vec<crate::base::Rgba>,
     /// Session options. `None` = derived from capabilities (kitty
     /// keyboard flags requested only when the terminal speaks them).
     pub enter: Option<EnterOptions>,
@@ -78,6 +122,15 @@ pub struct RunConfig {
     /// It upgrades the mouse mode whether `enter` is derived or supplied,
     /// so turning hover ink on never costs you the kitty-keyboard
     /// auto-detection that a hand-built `EnterOptions` would.
+    ///
+    /// **You do not need it for a tooltip.** This flag is a WANT — ink
+    /// that is nicer to have; a widget that cannot function without
+    /// motion says so itself through
+    /// [`Overlays::require_pointer_motion`](super::Overlays::require_pointer_motion),
+    /// and mounting one arms 1003 with this left `false`. The
+    /// distinction is worth keeping: leaving the tip's need to an app
+    /// flag is what made `Tooltip` open on click and stay shut on
+    /// hover.
     pub hover_ink: bool,
     /// Fall back to the host clipboard (`pbcopy` / `wl-copy` / `xclip`)
     /// when the terminal does not advertise OSC 52.
@@ -92,6 +145,7 @@ impl Default for RunConfig {
     fn default() -> Self {
         RunConfig {
             caps: None,
+            extra_grounds: Vec::new(),
             enter: None,
             probe: true,
             hover_ink: false,
@@ -164,6 +218,27 @@ pub struct Driver {
     comp: Compositor,
     diff: FrameDiff,
     presenter: Presenter,
+    /// Grounds a CONSUMER mints that the theme does not know about — a
+    /// client's own panel fill, say. They join the theme's grounds in the
+    /// palette assignment, because a ground the separator is never handed
+    /// is a ground it cannot keep distinct (`set_extra_grounds`).
+    extra_grounds: Vec<crate::base::Rgba>,
+    /// What the presenter's current palette assignment was built FROM:
+    /// the colors, the depth, and the live theme's separation intent.
+    /// The assignment is a pure function of these three, so re-deriving
+    /// it is only necessary when they change — which is what keeps
+    /// `quantize_set_256` out of the frame path.
+    ///
+    /// The intent is in the key rather than assumed constant because it
+    /// is NOT a function of the colors: two themes can carry identical
+    /// grounds and different declarations, and keying on colors alone
+    /// would serve the first one's assignment to the second.
+    #[allow(clippy::type_complexity)]
+    assignment_key: Option<(
+        Vec<crate::base::Rgba>,
+        ColorDepth,
+        Vec<(usize, usize, crate::render::color::PairIntent)>,
+    )>,
     /// All compositor layers (root at id 0 + app overlays) live in the
     /// shared overlay store; the driver borrows them per phase.
     pub(super) overlays: Overlays,
@@ -227,7 +302,35 @@ impl Driver {
     /// enter bytes and (optionally) the probe queries; does NOT render —
     /// the first `turn` does, from the mount-time damage.
     pub fn new(app: &mut App, term: &mut dyn Terminal, cfg: RunConfig) -> Result<Driver> {
-        let caps = cfg.caps.unwrap_or_else(Capabilities::detect_env);
+        // Where the capabilities come from, in three cases and not two.
+        // Declared wins. Undeclared over a REAL terminal is the env pass,
+        // which is what it is for. Undeclared over something that is not
+        // a terminal used to be the env pass too — and that was the
+        // silent failure `RunConfig::caps` documents: a capture harness
+        // has no environment of its own, so detection reads the
+        // DEVELOPER'S shell and every colour the suite asserts moves with
+        // `COLORTERM`. There is nothing to detect here, so we do not
+        // pretend to: a fixed set, identical on every machine.
+        //
+        // `is_tty()` defaults to FALSE on the trait, so a third-party
+        // `Terminal` that IS interactive but never overrode it lands in
+        // this branch and gets headless defaults instead of its
+        // environment. That would be the same silent-substitution bug
+        // pointed the other way, which is why the branch is never mute:
+        // it says what it did, in the same startup-notices lane the caps
+        // summary already uses, so the fix (override `is_tty`, or declare
+        // `caps`) is legible from the app's own notice bar.
+        let caps = match cfg.caps {
+            Some(declared) => declared,
+            None if !term.is_tty() => {
+                app.push_startup_notice(
+                    "caps: headless defaults (no tty to detect — declare RunConfig::caps, \
+                     or override Terminal::is_tty if this IS a terminal)",
+                );
+                Capabilities::headless()
+            }
+            None => Capabilities::detect_env(),
+        };
         let kitty_auto = cfg.enter.is_none();
         let mut enter = cfg.enter.unwrap_or_else(|| EnterOptions {
             kitty_keyboard: if caps.kitty_keyboard {
@@ -237,11 +340,14 @@ impl Driver {
             },
             ..EnterOptions::default()
         });
-        // Hover ink is the one reason to pay for mode 1003, so it is the
-        // one thing that arms it — applied after the override above so an
-        // app can opt in without hand-building `EnterOptions` (and so
-        // without forfeiting kitty auto-detection).
-        if cfg.hover_ink {
+        // Two ways to arm mode 1003, applied after the override above so
+        // either route keeps kitty auto-detection: the app ASKING for
+        // hover ink, and a mounted widget DECLARING it cannot work
+        // without motion (`Overlays::require_pointer_motion` — the
+        // tooltip's case, where the alternative was a tip that only
+        // opened on click). The tree is already mounted here: `App::run`
+        // is called after `App::mount`, so the declaration has landed.
+        if cfg.hover_ink || app.overlays().pointer_motion_required() {
             enter.mouse = MouseMode::AnyMotion;
         }
         term.enter(&enter)?;
@@ -301,6 +407,8 @@ impl Driver {
             comp: Compositor::new(),
             diff: FrameDiff::new(),
             presenter: Presenter::new(),
+            extra_grounds: cfg.extra_grounds.clone(),
+            assignment_key: None,
             overlays,
             image_session: ImageSession::new(),
             pending_image_bytes: Vec::new(),
@@ -539,6 +647,10 @@ impl Driver {
         // black. A theme switch already damage_alls (contract §5), so
         // re-reading per frame keeps the ground in lockstep for free.
         self.comp.set_ground(Some(bg));
+        // Same lockstep, same reason, for the 256-color ground
+        // assignment — but this one is DERIVED rather than copied, so it
+        // is cached on its inputs. See `sync_palette_assignment`.
+        self.sync_palette_assignment(theme);
 
         // ---- phase L: layout (folds geometry damage into the ui set) ---
         app.tree().layout();
@@ -630,16 +742,40 @@ impl Driver {
         // move terminal-held placements out from under the session's
         // bookkeeping. While such images are live, take the plain diff —
         // correct pixels over the byte win.
+        //
+        // SYNC GUARD (the flicker review): the scroll path is the ONE
+        // place this engine puts an ERASE on the wire ahead of the
+        // content that replaces it. `SU`/`SD` BCE-clear up to `n`
+        // full-width rows to the terminal's DEFAULT background, and the
+        // residual repaint lands hundreds of bytes later in the same
+        // stream. Inside a DEC 2026 bracket that intermediate is never
+        // presentable; outside one it is — measured at 16 bytes to blank
+        // 62% of a pane against 2145 to restore it, in the terminal's
+        // ground rather than the theme's, so it reads as a black flash
+        // in exactly the band that changed (`detect_shift` trims to the
+        // changed rows, which is why one pane flickers and its siblings
+        // do not).
+        //
+        // Declining the optimization costs only bytes, and only on
+        // terminals that cannot hide the artifact: docs/design/render.md
+        // states the path is "a bandwidth optimization (ssh links), not
+        // a correctness or latency one" whose win "caps at the full-frame
+        // byte budget (which DEC 2026 already makes tear-free)". So it is
+        // worth having on precisely the terminals that advertise 2026.
+        // Self-healing: the probe's caps upgrade flips this on
+        // mid-session the moment the terminal proves the mode.
         self.out.clear();
-        let runs = if self.image_session.live_byte_slots() > 0 {
+        let scroll_ok =
+            self.image_session.live_byte_slots() == 0 && self.present_caps.sync_output_2026;
+        let runs = if scroll_ok {
+            self.diff
+                .compute_scrolled(&self.prev, &self.frame, &self.scratch_damage)
+        } else {
             crate::render::ScrolledRuns::plain(self.diff.compute(
                 &self.prev,
                 &self.frame,
                 &self.scratch_damage,
             ))
-        } else {
-            self.diff
-                .compute_scrolled(&self.prev, &self.frame, &self.scratch_damage)
         };
         self.presenter
             .emit_scrolled(runs, &self.frame, &self.present_caps, &mut self.out);
@@ -789,11 +925,38 @@ impl Driver {
                 // Deliberately ahead of overlay routing: select mode is
                 // an explicit user mode and may copy from modal content
                 // too (the pane clamp resolves overlay tree panes).
+                // The anchor probe is HIT TESTING, and hit testing needs
+                // fresh rects — the same precondition `UiTree::dispatch`
+                // satisfies with its own `layout()` call. It cannot be
+                // satisfied inside the probe closure: `Selection::on_input`
+                // holds a `borrow_mut` on the selection state across it,
+                // and `layout()` delivers pending autofocus, which runs
+                // user handlers that may touch `app::selection`.
+                //
+                // Staleness is REAL here, not theoretical (first-app/1335
+                // review): an input burst dispatches with no frame between
+                // events, and `Scroll` declares its drag zone inside the
+                // bar's `dyn_view`. A MouseEnter that lights the hover ink
+                // — the ordinary way a pointer reaches a thumb — rebuilds
+                // that region, so the press that follows in the same burst
+                // would probe an unsolved zero rect, miss the zone, and
+                // hand the thumb's gesture to the selection layer.
+                //
+                // Left Down only: that is the one event the probe runs on,
+                // and `layout()` is a no-op on a clean tree anyway.
+                if matches!(
+                    &other,
+                    Event::Mouse(m)
+                        if m.kind == crate::input::MouseKind::Down
+                            && m.button == crate::input::MouseButton::Left
+                ) {
+                    super::selection::layout_for_anchor(app, &self.overlays);
+                }
                 let overlays = &self.overlays;
                 let size = self.size;
                 match self
                     .selection
-                    .on_input(&other, &mut |p| selection_pane(app, overlays, size, p))
+                    .on_input(&other, &mut |p| selection_anchor(app, overlays, size, p))
                 {
                     SelectionAct::Pass => {}
                     SelectionAct::Consumed => return,
@@ -945,6 +1108,126 @@ impl Driver {
             drop(store);
             reactive::request_frame();
         }
+    }
+
+    /// Declare grounds the THEME does not know about, so they are kept
+    /// distinct from the theme's own when colors downlevel to 256.
+    ///
+    /// A consumer that mints a ground — a client's own panel fill, a
+    /// second fill for a folded state — gets no protection from the
+    /// separator unless the separator is handed it: `quantize_set_256`
+    /// can only keep apart what it was given. Everything else about the
+    /// mechanism is automatic; this is the one part that cannot be.
+    ///
+    /// Takes a slice rather than one color deliberately. The count is a
+    /// consumer's business and it grows the moment a second state gets
+    /// its own fill, and widening the signature later would cost every
+    /// caller what it costs nobody today.
+    ///
+    /// **256 ONLY.** At truecolor there is nothing to separate; at
+    /// `Ansi16` the grounds you declare here are NOT kept apart, and the
+    /// collapse still happens. Stated on the call rather than left to be
+    /// found, because the covered depth works well enough to imply the
+    /// other is covered too — see `set_palette_assignment` for why 16 is
+    /// held back and what would change it.
+    ///
+    /// Idempotent, and it owns its own repaint: a changed assignment
+    /// changes the bytes a cell resolves to, and the frame diff will not
+    /// re-emit a cell that did not change.
+    pub fn set_extra_grounds(&mut self, grounds: &[crate::base::Rgba]) {
+        if self.extra_grounds == grounds {
+            return;
+        }
+        self.extra_grounds.clear();
+        self.extra_grounds.extend_from_slice(grounds);
+        self.assignment_key = None;
+        self.poison_prev();
+        let mut store = self.overlays.store().borrow_mut();
+        for layer in store.layers.iter_mut() {
+            layer.surface_mut().damage_all();
+        }
+        drop(store);
+        reactive::request_frame();
+    }
+
+    /// The consumer grounds currently declared (empty by default).
+    pub fn extra_grounds(&self) -> &[crate::base::Rgba] {
+        &self.extra_grounds
+    }
+
+    /// Keep the presenter's palette assignment in lockstep with the live
+    /// theme, the declared extra grounds, and the color depth.
+    ///
+    /// Called once per frame beside `set_ground`, and for the same
+    /// reason: a theme switch already damages everything, and the caps
+    /// upgrade branch does too, so re-reading here covers BOTH triggers
+    /// with no hook to forget. What it does not copy from `set_ground` is
+    /// the cost — that one is a field write, this one runs a separator —
+    /// so the derivation is cached on its inputs and only re-runs when
+    /// they change. The frame path then costs one slice comparison.
+    ///
+    /// Keyed on the ground COLORS rather than a theme id on purpose: a
+    /// consumer palette can change tokens without changing the id, and
+    /// the colors are what the assignment is mostly a function of. The
+    /// theme's separation intent is the part that is NOT derivable from
+    /// them, so it rides the key as well.
+    ///
+    /// **This is the door the theme's `ground_intent` comes through.**
+    /// An author declares which of their grounds read as one surface
+    /// (`Theme::ground_intent`, in tokens) and it is resolved to indices
+    /// here, against the same `grounds()` order the colors are collected
+    /// in. Every built-in declares nothing, so this changes no output
+    /// until an app opts in.
+    ///
+    /// The intent covers the THEME's grounds only. Consumer grounds from
+    /// `set_extra_grounds` are appended after them and are never named
+    /// by it — a theme has no standing to say an app's panel fill reads
+    /// as one surface with anything, and it has never seen that colour.
+    ///
+    /// Only `Xterm256` gets an assignment. Truecolor has no defect to
+    /// fix, and the 16 system registers are user-themable — no
+    /// build-time decision can know what index 4 renders as — so both
+    /// install the empty assignment, which is byte-for-byte the plain
+    /// nearest path.
+    fn sync_palette_assignment(&mut self, theme: &crate::theme::Theme) {
+        let depth = self.present_caps.color;
+        let grounds = theme.tokens.grounds();
+        let inputs = || {
+            grounds
+                .iter()
+                .map(|(_, c)| *c)
+                .chain(self.extra_grounds.iter().copied())
+        };
+        // `register` refuses a declaration naming a non-ground, and
+        // `every_built_in_theme_is_silent_about_ground_intent` covers the
+        // other producer, so an unresolvable one here means a Theme was
+        // constructed past both — a bug worth hearing about rather than
+        // a pair to drop on the floor.
+        let pairs = crate::theme::TokenSet::resolve_ground_intent(theme.ground_intent)
+            .expect("Theme::ground_intent names only opaque grounds (register enforces it)");
+        if let Some((cached, cached_depth, cached_pairs)) = &self.assignment_key {
+            let cached: &[crate::base::Rgba] = cached;
+            if *cached_depth == depth
+                && *cached_pairs == pairs
+                && cached.iter().copied().eq(inputs())
+            {
+                return;
+            }
+        }
+        let colors: Vec<crate::base::Rgba> = inputs().collect();
+        let assignment: Vec<(crate::base::Rgba, u8)> = if depth == ColorDepth::Xterm256 {
+            let mut idx = vec![0u8; colors.len()];
+            crate::render::color::quantize_set_256_into_with(
+                &colors,
+                crate::render::color::GroundIntent::new(&pairs),
+                &mut idx,
+            );
+            colors.iter().copied().zip(idx).collect()
+        } else {
+            Vec::new()
+        };
+        self.presenter.set_palette_assignment(&assignment);
+        self.assignment_key = Some((colors, depth, pairs));
     }
 
     /// Tier-2 verb, immediate form — for embedders driving their own
@@ -1179,6 +1462,69 @@ mod tests {
         ];
         coalesce_damage(&mut d, vp);
         assert_eq!(d, vec![Rect::new(0, 0, 5, 5), Rect::new(18, 8, 2, 2)]);
+    }
+
+    /// THE INSTRUMENT that was missing: how many damage rects does a
+    /// real long-list scroll actually produce?
+    ///
+    /// `coalesce_damage` is O(n²) in the length of that list, and the
+    /// quadratic has been carried as a suspect on
+    /// `commons/claim:msg-47-make-long-lists-fast` precisely because
+    /// nobody had measured `n`. A quadratic over 3 rects is not a cost;
+    /// over 400 it is the frame. This answers which one we have, and it
+    /// is deliberately a COUNT rather than a timing, so it is
+    /// deterministic and states a fact the next reader can act on.
+    ///
+    /// Prints the observed count. The assertion is the guard: if a
+    /// change ever makes a scroll emit per-row damage, `n` jumps by two
+    /// orders of magnitude and this goes red with the real number in
+    /// the message.
+    #[test]
+    fn a_long_list_scroll_emits_few_damage_rects_not_one_per_row() {
+        use crate::layout::Style as LayoutStyle;
+        use crate::reactive::create_root;
+        use crate::ui::{text, Element, UiTree};
+        use crate::widgets::Scroll;
+
+        const ROWS: i32 = 400;
+        let viewport = Size::new(100, 30);
+        let mut tree = UiTree::new(viewport);
+        let (_root, offset) = create_root(|cx| {
+            let offset = cx.signal(0i32);
+            let mut col = Element::new().style(LayoutStyle::column());
+            for i in 0..ROWS {
+                col = col.child(text(format!("row {i} — some content to wrap and measure")));
+            }
+            let view = Scroll::new(col.build()).offset_y(offset).view(cx);
+            tree.mount(cx, view);
+            offset
+        });
+        tree.layout();
+        let _first_paint = tree.take_damage();
+
+        // A scroll-shaped change: the offset moves by a page.
+        offset.set(30);
+        crate::reactive::flush_effects();
+        tree.layout();
+        let damage = tree.take_damage();
+
+        eprintln!(
+            "[instrument] {ROWS}-row scroll by one page emitted {} damage rect(s): {:?}",
+            damage.len(),
+            damage
+        );
+
+        // The guard, stated as the thing that would make the quadratic
+        // matter. `coalesce_damage` compares every kept rect against
+        // every input rect, so this bound is what keeps that cost
+        // irrelevant.
+        assert!(
+            damage.len() < 32,
+            "a scroll emitted {} damage rects for {ROWS} rows — approaching \
+             per-row damage, which is the input size that makes \
+             coalesce_damage's O(n^2) a real frame cost",
+            damage.len()
+        );
     }
 
     #[test]

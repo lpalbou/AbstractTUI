@@ -29,19 +29,12 @@
 #   - `github-release` depends only on core publish: a family failure
 #     is visible (red job) but never blocks the core release record.
 #
-# AUTH + FIRST PUBLISH OF NEW CRATE NAMES: publishing authenticates
-# with the classic API token in the CARGO_REGISTRY_TOKEN repository
-# secret (set once by the maintainer). For the FIRST publish of the
-# family crates (new names on crates.io) that token must have the
-# "publish-new" scope — verify on crates.io/settings/tokens before
-# tagging, or publish the two 0.1.0s locally once
-# (`cargo publish -p abstracttui-graph && cargo publish -p
-# abstracttui-mermaid`) and let this workflow cover every release
-# after. If the repo later switches to crates.io Trusted Publishing
-# (OIDC), EACH family crate needs its own trust configuration — for
-# not-yet-existing names use crates.io's "pending publisher" flow —
-# then restore rust-lang/crates-io-auth-action here and drop the
-# secret.
+# AUTH: both publishing jobs exchange GitHub's OIDC identity for a
+# short-lived crates.io token through Trusted Publishing. crates.io has
+# a matching publisher entry for each crate in the family, keyed to
+# lpalbou/AbstractTUI, release.yml, and the crates-io environment. The
+# family job's exchange authorizes both extension crates. No long-lived
+# crates.io token is stored in GitHub or supplied by a local machine.
 
 name: Release
 
@@ -122,10 +115,13 @@ jobs:
     environment: crates-io
     permissions:
       contents: read
-      id-token: write # OIDC token exchange if Trusted Publishing is adopted
+      id-token: write # crates.io Trusted Publishing OIDC exchange
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      - name: Authenticate with crates.io (Trusted Publishing)
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
       - name: cargo publish (core, tolerate an already-published version)
         # Idempotent so a version already on crates.io re-runs GREEN
         # instead of failing the tag flow: the maintainer sometimes
@@ -166,10 +162,9 @@ jobs:
             fi
           fi
         env:
-          # Classic API token from the repository secrets (set once by
-          # the maintainer). See the header comment for the Trusted
-          # Publishing migration path.
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          # Ephemeral token minted for this job and revoked by the
+          # authentication action when the job ends.
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
       - name: assert the version is on the index (job success means published)
         # The postcondition that makes a phantom release impossible: no
         # code path above — publish, excuse, or any future guard — can
@@ -205,6 +200,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+      - name: Authenticate with crates.io (Trusted Publishing)
+        id: auth
+        uses: rust-lang/crates-io-auth-action@v1
       - name: Publish family crates in dependency order (skip already-published versions)
         run: |
           publish_if_absent() {
@@ -227,7 +225,9 @@ jobs:
           publish_if_absent abstracttui-graph
           publish_if_absent abstracttui-mermaid
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          # One exchange covers every family crate whose crates.io
+          # publisher entry matches this workflow identity.
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
       - name: assert family versions are on the index
         # Same postcondition as core: whether a crate was published just
         # now or skipped as already-present, the workspace version must

@@ -350,7 +350,10 @@ pub(crate) fn option_rows_view(t: &TokenSet, rows: OptionRows) -> View {
                         .access_label(label.clone())
                         .on(Phase::Bubble, move |ctx, ev| {
                             if let UiEvent::Mouse(m) = ev {
-                                if matches!(m.kind, crate::ui::MouseKind::Down(_)) {
+                                if matches!(
+                                    m.kind,
+                                    crate::ui::MouseKind::Down(crate::ui::MouseButton::Left)
+                                ) {
                                     if !disabled {
                                         on_activate(pos);
                                     }

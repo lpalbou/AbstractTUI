@@ -95,6 +95,9 @@ pub(crate) struct OverlayStore {
     /// uploads until told otherwise; dropping the entry alone would leak
     /// terminal-side pixel memory unboundedly (RT4-1).
     pub retired_images: Vec<u64>,
+    /// Set by a widget whose contract NEEDS pointer motion with no
+    /// button held (`Tooltip`). Read once by the driver at enter time.
+    pub pointer_motion_required: bool,
     next_id: u64,
 }
 
@@ -152,6 +155,43 @@ impl Overlays {
             store: Rc::downgrade(&self.store),
             id,
         }
+    }
+
+    /// Declare that this app cannot work without pointer MOTION
+    /// reports — the pointer moving with no button held.
+    ///
+    /// The driver reads this when it enters the terminal and upgrades
+    /// the session to [`MouseMode::AnyMotion`](crate::term::MouseMode)
+    /// (mode 1003) exactly as [`RunConfig::hover_ink`] does. Two
+    /// different questions, deliberately: `hover_ink` is an app saying
+    /// "I would LIKE hover ink and accept the traffic", this is a
+    /// widget saying "without motion I do not work at all".
+    ///
+    /// [`Tooltip`](super::anchored::Tooltip) is the case that forced it. Its
+    /// whole contract is `MouseEnter` → delay → show, and `MouseEnter`
+    /// is recomputed only from mouse reports. Under the default
+    /// `ButtonDrag` posture the terminal sends motion only while a
+    /// button is DOWN, so a tooltip opened on click and stayed shut on
+    /// hover — a widget whose one job silently did not happen, in an
+    /// app that had done nothing wrong. Mounting a tooltip now pays
+    /// for the motion it needs and nothing else does.
+    ///
+    /// [`RunConfig::hover_ink`]: super::RunConfig::hover_ink
+    pub fn require_pointer_motion(&self) {
+        if let Ok(mut store) = self.store.try_borrow_mut() {
+            store.pointer_motion_required = true;
+        }
+    }
+
+    /// Whether any mounted widget has called
+    /// [`require_pointer_motion`](Self::require_pointer_motion). The
+    /// driver's read point; an embedder driving its own terminal wants
+    /// it too, since nothing else will arm mode 1003 for them.
+    pub fn pointer_motion_required(&self) -> bool {
+        self.store
+            .try_borrow()
+            .map(|s| s.pointer_motion_required)
+            .unwrap_or(false)
     }
 
     /// Manual layer: paint whenever you like through the handle.

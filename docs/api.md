@@ -335,12 +335,13 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
 - **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, wheel scrolling (the window moves, the caret stays; any edit re-attaches), and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
-- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`, bindable `selection`/`offset_y`, hover ink. Removable rows in one call (`on_remove`), or the general trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), and timed double-click on the body (`on_row_double_click`). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
-- **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful.
+- **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`, bindable `selection`/`offset_y`, hover ink. Removable rows in one call (`on_remove`), or the general trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), timed double-click on the body (`on_row_double_click`), and non-selecting right-click/Shift+F10 row context requests (`on_context_menu`) that pair with `ContextMenu`. Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
+- **RowSelect** — `List`'s keyboard over rows the engine does NOT render: wrap a `Scroll` of arbitrary (multi-line) `Element`s and it gains arrows, Home/End, Page keys, click-to-select, Enter/Space activation, ensure-visible by CONTENT rows, and sticky selection by key. The rows stay yours; the selection core is literally `List`'s (see [its own section](#rowselect--keyboard-selection-over-rows-you-render)).
+- **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful. A content-sized feed carries an intrinsic measure, so `Scroll::new(Feed::new(&state).view(cx))` scrolls the true extent from the first frame.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, hover ink, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
 - **PageHost** — the page-level tab host: N FULL pages behind one themed tab bar, exactly one mounted (see [its own section](#widgetspagehost--the-page-level-tab-host) below).
-- **DrawerDock** — the right-edge drawer rail: always-visible vertical tabs, each fronting a docked side panel — at most one open, fully collapsed to the bare rail otherwise, with reactive badge dots (see [its own section](#widgetsdrawerdock--the-right-edge-drawer-rail) below).
+- **DrawerDock** — the right-edge drawer rail: always-visible semantic keyboard tabs rendered portably as stacked graphemes, each fronting a docked side panel — at most one open, fully collapsed to the bare rail otherwise, with reactive badge dots (see [its own section](#widgetsdrawerdock--the-right-edge-drawer-rail) below).
 - **Disclosure** — the fold/unfold card: a one-row title header (glyph + truncating title + muted detail slot) that expands a body in place. Click or Enter/Space toggles; `max_body_rows` caps the body behind a scrollbar; state is widget-internal (`initially_folded`) or app-owned (`folded(Signal<bool>)`).
 - **FilePicker** — directory browser for modals and attach flows: breadcrumb header, type-to-filter input, entry rows with kind glyphs and an optional size column, opt-in multi-select, `on_pick(Vec<String>)`; entries come from the pluggable `FileSource` seam (see [the file-attachments section](#file-attachments--paste-intercept-drop-classifier-filepicker) below).
 - **Scroll** — clipped viewport over oversized content, mounted once so state, focus, and hit testing survive scrolling. The content extent is measured by the layout solver (`content_size` is an optional override) and can be read back through `extent_signal`; `follow_tail` binds the pinned-to-bottom idiom; `scrollbar_auto_hide` hides the bar while content fits, and `scrollbar_width` widens its reserved gutter.
@@ -356,7 +357,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **Grid** — container widget over `Display::Grid`; spans ride each child's own style.
 - **Image** — bitmap display through the mosaic pipeline (`ImageFit`; `Bitmap` re-exported beside it). Measures as its native cell footprint, so it holds real space in `Auto`-sized rows/panels.
 - **Viewport3D** — orbiting 3D view of a `three::Model`: `.orbit(yaw, pitch, zoom)`, `.animate(clip, t)`, `.on_orbit`/`.on_zoom` deltas; camera state lives app-side in signals. Grows into its region by default (a draw widget has no intrinsic size to grow from, so the default layout claims the available space).
-- **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables with the crush-honesty ladder, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code (C-like, diff, json/yaml lexers). Both content views carry an intrinsic measure (wave 13): `Scroll::new(view)` scrolls the true extent out of the box, and content-sized panels hug the document instead of collapsing it to zero. Wrapping in `Scroll` is also what gives a document the WHEEL, PgUp/PgDn and a draggable thumb — the `scroll_offset(rows)` setter is for apps that genuinely own the offset, and gets keyboard scrolling only.
+- **MarkdownView / RichTextView / CodeView** — typeset markdown (doc vocabulary: GFM tables with the crush-honesty ladder, lazy in-flow images, task lists, plus outline/anchor rows and find-with-highlights — see the reader-surface section below), wrapped styled spans, read-only highlighted code (C-like, diff, json/yaml lexers). Both content views carry an intrinsic measure: `Scroll::new(view)` scrolls the true extent out of the box, and content-sized panels hug the document instead of collapsing it to zero. `Feed` answers the same way, so every content widget reports its real height during the layout solve rather than after the first paint. Wrapping in `Scroll` is also what gives a document the WHEEL, PgUp/PgDn and a draggable thumb — the `scroll_offset(rows)` setter is for apps that genuinely own the offset, and gets keyboard scrolling only.
 - **`widgets::FenceBlock`** — a fenced code block rendered as something other than code, INSIDE the document. `MarkdownView::fence_block(claimant)` installs it; the claimant measures the fences it recognizes and paints their rows, so a diagram lives in the document's own scroll surface, outline and search index instead of forcing the app to splice widgets between document fragments. Fences it declines render as code, unchanged. The engine ships no diagram languages — `abstracttui-mermaid`'s `MermaidFence` is the reference claimant (see [graphs-and-diagrams.md](graphs-and-diagrams.md)).
 - **Meter / AudioScope** — live level rendering: dB meter with real ballistics (instant attack, timed decay, peak hold) and a rolling braille waveform — see the live-levels section below.
 - **Logo** — the AbstractTUI wordmark for headers, about screens, empty states.
@@ -532,6 +533,48 @@ scrollbar-column presses belong to the bar (see
 [`List::rich_items`](crate::widgets::List::rich_items) (same length as
 `items`; accessories stay plain text).
 
+**Row context actions.**
+[`List::on_context_menu`](crate::widgets::List::on_context_menu) reports a
+secondary-button press over an item as a
+[`ListContext`](crate::widgets::ListContext). The event carries the row index,
+the pointer cell, and the visible row rect in **screen coordinates**, so the
+same code works inside a root view, modal, or drawer. Shift+F10 invokes the
+callback for the selected row and first scrolls it into view.
+
+The gesture is deliberately separate from selection and activation:
+right-clicking an unselected row does not call `on_select`, `on_activate`, or
+an accessory callback. Use the reported index to resolve a stable item id,
+then build a [`ContextMenu`](crate::app::ContextMenu) for that item:
+
+```rust
+use abstracttui::prelude::*;
+use std::rc::Rc;
+
+fn seats(cx: Scope, names: Vec<String>, ids: Vec<String>) -> View {
+    let ids = Rc::new(ids);
+    List::new(names)
+        .on_context_menu(move |event| {
+            let Some(seat_id) = ids.get(event.index).cloned() else { return };
+            ContextMenu::new([
+                ContextMenuItem::new("promote", "Promote"),
+                ContextMenuItem::new("demote", "Demote").disabled(false),
+                ContextMenuItem::new("mission", "Assign mission").hint("A"),
+            ])
+            .access_label(format!("{seat_id} actions"))
+            .on_action(move |action| apply_seat_action(&seat_id, action))
+            .open(cx, event.screen_position);
+        })
+        .view(cx)
+}
+```
+
+`ContextMenu` is an owned popup: Up/Down/Home/End/Page keys move the
+highlight while skipping disabled actions; Enter or Space commits; a left
+press commits a row; Escape, an outside press, anchor disposal, or resize
+dismisses without running an action. The popup closes before `on_action`
+runs, so the callback may dispose the opener or open a replacement safely.
+Empty and fully disabled menus do not open.
+
 **Hover ink.** Ink marks the hot ROW, bold marks the hot ZONE: the row
 under the pointer takes accent ink, and whichever of body/accessory the
 pointer is actually in adds bold. Moving from a row's text onto its `✕`
@@ -606,6 +649,66 @@ List::new(names)
 See `cargo run --example presence_board` and docs/faq.md § "scrollable
 rich list".
 
+### RowSelect — keyboard selection over rows you render
+
+`List` renders its own rows and they are **one line each**: an item's
+extra rows reserve SPACE, and wrapped multi-row item CONTENT is not
+planned. A row that is genuinely two lines — a name above a mission, a
+title above a path — has to be your own tree in a `Scroll`, and that
+used to cost the keyboard.
+
+[`RowSelect`](crate::widgets::RowSelect) is the keyboard without the
+rendering. It WRAPS your content and drives the same selection core
+`List` drives, so the two cannot drift apart.
+
+```rust,ignore
+let sel = cx.signal(0usize);          // your row builder reads this
+let sel_key = cx.signal(String::new());
+let offset = cx.signal(0i32);         // SHARED with the Scroll
+
+let scroll = Scroll::new(my_two_line_rows(members.clone(), sel))
+    .offset_y(offset)
+    .view(cx);
+
+RowSelect::new(members.iter().map(|m| m.id))  // one stable key per row
+    .row_heights(|_| 2)                       // rows in CELL ROWS
+    .selection(sel)
+    .selection_key(sel_key)                   // sticky across mutations
+    .offset_y(offset)
+    .on_activate(move |i| open(i))
+    .wrap(cx, scroll)
+    .build()
+```
+
+**What it assumes.** Row `i` occupies content rows
+`[prefix[i], prefix[i+1])` from `row_heights` (default 1) — what a
+column of fixed-height children inside a `Scroll` lays out. Both
+ensure-visible and click hit-testing key off it, so declare the height
+you actually gave the row.
+
+**What it takes over.** Navigation keys are claimed in the CAPTURE
+phase, before the content sees them, because the `Scroll` inside would
+otherwise scroll on the same arrows. Unmodified
+`Up`/`Down`/`PageUp`/`PageDown`/`Home`/`End`, and `Enter`/`Space` when
+`on_activate` is bound, belong to the RowSelect for its whole subtree —
+**do not put a text editor inside a selectable row.** Modified chords
+pass through untouched, and the wheel and the scrollbar stay the
+`Scroll`'s.
+
+**Tab stops.** The wrapper is focusable by default so the keyboard
+reaches it even when nothing inside can hold focus. A `Scroll` is also
+focusable, so the canonical composition has two tab stops that behave
+identically. `focusable(false)` gives you exactly one when the content
+already carries it.
+
+**Sticky selection is the half worth testing.** With `selection_key`
+bound, a rebuild re-finds the key's CURRENT index — a mutation that
+moves the selected row keeps that row selected. When the key is gone
+(the row was removed) the SLOT is held, clamped: the next row down.
+
+See `cargo run --example roster` — press `m` and watch the index move
+while the key does not.
+
 ### Table — selection vs activation
 
 Same split, browsing-surface edition: `on_select` notifies selection
@@ -667,8 +770,16 @@ renders as a TABLE live (the whole in-flight table is the open region
 until its first non-pipe line seals it), task lists wear checkboxes,
 `~~strikethrough~~` strikes, and `![alt](path)` images typeset from a
 header-only probe (decode happens lazily when an image row first
-draws — items measure and window without decoding). `total_rows()` is
-the reactive content extent, and `clear()` rebuilds bounded windows:
+draws — items measure and window without decoding). `clear()` rebuilds
+bounded windows.
+
+A content-sized feed (one you give no explicit `layout`) typesets at the
+width the layout solver offers, so it reports its real height on the
+first frame and a surrounding `Scroll` measures the true extent
+immediately. An empty feed occupies no rows. `total_rows()` is the
+reactive content extent for chrome such as "N more rows"; it is
+published one turn after the solve, so drive layout from the widget and
+read this signal for display:
 
 ```rust
 use abstracttui::prelude::*;
@@ -770,17 +881,29 @@ highlight nothing.
 ### Feed — capped preview blocks (`max_rows`)
 
 Transcript previews cap their bodies: `FeedItem::max_rows(n)` bounds
-the most recently appended Text/Rich block at `n` typeset rows TOTAL,
-applied post-wrap at the width the engine typesets at (the row count
+the most recently appended block at `n` typeset rows TOTAL, applied
+post-typeset at the width the engine typesets at (the row count
 only exists after the wrap — a consumer cannot precompute it). Content
-that wraps to at most `n` rows renders unchanged; overflow shows the
-first `n - 1` wrapped rows and spends the last row on an honest marker
+that occupies at most `n` rows renders unchanged; overflow shows the
+first `n - 1` rows and spends the last row on an honest marker
 — "… (+K more lines)" in `text_muted`, where K is the hidden
-wrapped-row count at the current width (it changes on resize).
+row count at the current width (it changes on resize).
 `FeedItem::overflow_marker(|k| ...)` overrides the wording. Extent and
 windowing count the marker row, so a capped block is never taller than
 `n`; chain per block (`.block(a).max_rows(3).block(b).max_rows(8)`);
-streaming items are unaffected (caps live on static Text/Rich blocks):
+streaming items are unaffected (caps live on static blocks).
+
+**Every row-based block kind caps** — Text, Rich, Markdown and Code.
+Markdown and Code cap RENDERED rows, not source lines: a six-paragraph
+body is eleven rows (five separators), and `max_rows(4)` shows three of
+them under a "(+8 more lines)" marker. That is the only count a reader
+sees and the only one the extent agrees with; capping the source
+instead would re-typeset different rows and could not report an honest
+K. A cut lands wherever row `n - 1` falls, which for a long document
+can be inside a table or a fence. **`Custom` is the one kind with no
+cap**: it declares its own height and paints its own rect, so the feed
+has no rows to count — `max_rows` on a `Custom` block is a debug
+assert and a release no-op:
 
 ```rust
 use abstracttui::widgets::FeedItem;
@@ -1025,6 +1148,7 @@ its rightmost column and answers the same gestures:
 | drag after that press | the thumb tracks the pointer row for row, and keeps steering after the pointer leaves the strip (pointer capture) |
 | press on bare track | teleports: the thumb centers on the pressed row |
 | release | commits where it stands — no snap-back |
+| any of the above with SELECT MODE on | still the bar's: the strip is a drag zone, so the screen-text layer stands down over it |
 
 The thumb's length is proportional to the visible fraction with a floor
 of 3 rows (the exact proportion of a long transcript rounds to zero),
@@ -1199,9 +1323,10 @@ tree above the whole live stack with `DismissReason`-labeled endings:
 commit, Escape, outside press, anchor scope death, and viewport
 resize — a resize stales both the solved placement and the captured
 anchor, so an open popup closes rather than float at stale
-coordinates) and the TOOLTIP mode (`Tooltip::attach`, a hover-timed
-passive label) ship beside it on the same placement engine — the
-select family below rides the owned mode.
+coordinates) and the TOOLTIP mode (`Tooltip::attach`, a delay-timed
+passive tip opened by hover OR by the anchor taking focus) ship beside
+it on the same placement engine — the select family below rides the
+owned mode.
 
 ### Select / Combobox / MultiSelect — the choice controls
 
@@ -1331,6 +1456,17 @@ The contract, stated plainly:
   from screen; debug builds assert. Keep tab titles short: the rail
   renders tabs top-down at fixed height, and a tab past the viewport
   bottom is clipped and unreachable by mouse.
+- **Rail labels are stacked text, not rotated text.** Terminal cells carry a
+  grapheme and styling attributes but no 90-degree transform or vertical
+  writing mode. `DrawerDock` therefore prints one grapheme cluster per row
+  and exposes the full title as the tab's semantic label. A caller can display
+  a pre-rendered rotated bitmap elsewhere, but that is image artwork rather
+  than portable, searchable terminal text and is not a `DrawerDock` label
+  mode.
+- **Tabs are keyboard-operable and semantic.** Tab/Shift+Tab focuses the
+  rail's `Role::Tab` nodes; Enter or Space performs the same toggle as a left
+  click. The semantic tree retains each full title even though the visible
+  rail uses stacked graphemes.
 - **`open` is the API.** A `Signal<Option<String>>` of the drawer id.
   The dock renders and mutates it; the app may write it any time —
   external writes switch panels without firing `on_change`, dock-driven
@@ -1589,9 +1725,34 @@ Around the core loop the module provides:
   PASSIVE layer (never focused — keys stay with the anchor's owner;
   `Completion` builds the caret-anchored dropdown on it), `Popup` is the
   OWNED modal tree above the whole live stack with `DismissReason`-named
-  endings (the Select family rides it), and `Tooltip` is the hover-timed
-  passive label. All three close with their opener's scope (see the
-  widgets section for the completion and select details).
+  endings (the Select family rides it), and `Tooltip` is the delay-timed
+  passive tip. A tip carries either content shape: `TipContent::Label` is
+  one line of plain text on a draw layer with no tree, and
+  `TipContent::card(size, build)` mounts a widget subtree, which is what a
+  rich preview card needs. A card larger than the space the viewport can
+  lend is marked rather than silently cut — a truncated card gets a
+  `… N more` row and an over-wide label ends in an ellipsis. A tip opens
+  on hover OR on its ANCHOR taking focus, closes on `MouseLeave`,
+  `FocusOut` or the anchor moving under it, and `Escape` dismisses an
+  open one — consumed only then, so an Escape with no tip up still
+  reaches the dialog behind it. **The keyboard trigger sits on the ROOT
+  of the view you pass and nowhere deeper**: focus transitions are
+  delivered target-only while hover is delivered per-node along the
+  hovered path, so `Tooltip::attach(cx, ov, "…", d, Button::new(…))`
+  gets Tab and an anchor that merely *contains* the focusable does not.
+  The engine will not make your anchor focusable for you — that would
+  insert a tab stop into your traversal order, which is the app's call.
+  **You do not have to arm mouse motion for a tip.** Hover is recomputed
+  only from mouse reports and the default session posture reports motion
+  only while a button is held, which used to make a tooltip open on
+  CLICK and stay shut on hover in any app that just called `App::run()`.
+  Mounting a `Tooltip` now declares the need
+  (`Overlays::require_pointer_motion`) and the driver arms mode 1003 for
+  it; `RunConfig::hover_ink` remains what it always was — an app opting
+  into hover INK it merely wants. An app with no motion-dependent widget
+  still pays nothing. `cargo run --example hovercard` walks all of it. All three
+  close with their opener's scope (see the widgets section for the
+  completion and select details).
 - **Hooks** — `use_theme(cx)` (the app-level theme signal), `use_viewport(cx)`
   (terminal size as a signal), `use_startup_notices(cx)` (labeled startup
   degradations as a reactive list), and `use_caps(cx)` — the driver's LIVE
@@ -1818,8 +1979,10 @@ and is not planned.) See `examples/shell.rs` (the 'i'/'g' drawers) and
 
 ## app::ThemeSwitcher — the theme menu button
 
-One cell of chrome that gives any app runtime theming — mount it in a
-header, tab bar or footer row:
+Five columns of chrome that give any app runtime theming — a 3x1 chip
+(glyph plus a cell of padding each side) with a cell of margin each side
+so it stays off the terminal edge. Mount it in a header, tab bar or footer
+row; if that row uses a fixed-width slot, size the slot at 5:
 
 ```rust,ignore
 use abstracttui::prelude::*;
@@ -2057,6 +2220,19 @@ rules, stated plainly:
 - **Left Down while a region is VISIBLE**: the click DISMISSES the
   selection — clear + consume, both halves of the click (Esc parity:
   the user was clearing a highlight, not aiming at the widget beneath).
+- **Left Down inside a widget's DRAG ZONE**: the layer stands down —
+  no anchor arms, and the whole gesture (Down, Drag, Up) belongs to the
+  widget. Click-through is not enough for a widget that owns drags
+  rather than clicks: a scrollbar thumb takes hold on the Down, and the
+  claim one drag later would cancel that press. Every engine drag
+  surface declares its zone — both `Scroll` bars, the `List` / `Table` /
+  `FilePicker` internal bars, and an orbiting `Viewport3D` — so with
+  select mode on the thumb still scrolls and the camera still orbits.
+  Your own drag widgets declare one with
+  [`Element::drag_zone`](#ui--elements-views-composition); an invisible or
+  non-overflowing bar returns `None` and owns nothing. The **anchor**
+  decides: a drag that starts in content and crosses a strip keeps
+  selecting.
 
 **Every copy ends the gesture**: the region clears with the copy,
 so the app's next keystrokes — including Enter and `c` — route normally
@@ -2181,6 +2357,41 @@ can add their own themes at runtime with `theme::register(candidate, mode)`:
 every registration runs the full contrast audit, and the mode decides
 whether violations refuse the theme or register it with labeled findings.
 
+A house palette goes through the engine's own derivation rather than a
+reimplementation of it — `theme::Palette` takes the twelve authored colors
+the built-in seed table carries and `Palette::derive()` returns the
+`ThemeCandidate` you register:
+
+```rust
+use abstracttui::theme::{register, Palette, RegisterMode};
+
+let mut palette = Palette::new("acme", "Acme", true);
+palette.bg = "#101014".into();
+// ... the other eleven authored colors ...
+let reg = register(palette.derive()?, RegisterMode::Strict)?;
+```
+
+`derive` neither audits nor validates the id — `register` stays the one
+place a theme is judged — and a `PaletteError` names every malformed hex
+field at once. See
+[docs/theming.md](theming.md#deriving-tokens-from-your-house-colors).
+
+Two surfaces for grounds the theme does not own.
+`theme::contrast::ink_on(&tokens, ground)` returns the theme's most
+readable authored ink for an arbitrary ground as
+`Ink { color, token, contrast }` — check `contrast` against
+`floors::TEXT`, because on a few theme/panel pairs no authored ink clears
+it. `theme::contrast::ground_overlaps(id, &tokens, floor)` reports pairs of
+the theme's own grounds that measure below `floor`
+(`floors::GROUND_SEPARATION_REPORT` is the engine's reporting threshold),
+walking the list `TokenSet::grounds()` publishes.
+
+At 256 colors the driver keeps the theme's grounds on distinct palette
+entries automatically; grounds your app mints are declared through
+`RunConfig::extra_grounds` (or `Driver::set_extra_grounds`). See
+[docs/theming.md](theming.md#grounds-at-256-colours) and
+`cargo run --example grounds`.
+
 Polarity is first-class: `ThemeMode::{Dark, Light}` (closed — the
 decisive-ground invariant admits no third value), `theme.mode()` derived
 from the audited flag, and `theme::themes_by_mode(mode)` listing one
@@ -2277,6 +2488,27 @@ anchor_id }` with GitHub-compatible, deduplicated slugs
 `MarkdownView::outline_rows(source, &tokens, width)` pairs each heading
 with the typeset ROW its text starts at (the TOC jump target), and
 `MarkdownView::resolve_anchor(...)` answers `[text](#anchor)` links.
+
+**The `---` policy.** A horizontal rule spends three things — ink,
+width and vertical space — and all three are the caller's:
+`MdRuleStyle { ink, width, space_before, space_after }`, installed with
+`MarkdownView::rule_style(...)` or `Feed::rule_style(...)`. `ink` is a
+`TokenId` (resolved against the LIVE theme every typeset, so the rule
+follows a theme switch) or a fixed `Rgba`; `width` is `FullBleed`,
+`Measure` (the box the block was typeset at) or `Inset(cells)`; the two
+space counts are the rule's own gap, which the following block does not
+add to — `1`/`1` is the historical three-row rule, `0`/`0` a one-row
+one. Defaults reproduce every earlier release byte for byte.
+
+All three open together on purpose: a policy exposing one axis lets a
+consumer ship half an ordinal and believe it is finished. Two things it
+deliberately does NOT do — restyle the level-1 heading underline (a
+different block that paints the same chrome), and produce an invisible
+rule (an inset past the measure floors at one cell rather than paint
+nothing). Row positions move with it, so a styled view takes its scroll
+clamp, outline and search rows from the `_ruled` twins
+(`rows_ruled`, `outline_rows_ruled`, `resolve_anchor_ruled`,
+`find_ruled`) rather than the default-fold statics.
 
 `MarkdownView` AND `Feed` markdown items render the full doc
 vocabulary (one shared typeset recipe — a feed item and a reader pane
@@ -2448,6 +2680,190 @@ assert_eq!(cells.len(), 8 * 4);
   re-emit. Bytes reach the terminal through the presenter, and tmux
   passthrough wrapping applies automatically when capabilities prove it.
 
+## gfx::bigtext — text and icons several cells tall
+
+A terminal has one font size and no API makes a cell taller, so a bigger
+glyph means spending more cells and subdividing them with mosaic
+characters. `gfx::bigtext` rasterizes a string through the engine's
+embedded 8x16 font and hands the result to `gfx::mosaic`, so the four
+vocabularies and the capability ladder you already use for images apply
+unchanged — there is no second encoder and no extra probe.
+
+```rust
+use abstracttui::base::Rgba;
+use abstracttui::gfx::bigtext::{self, GlyphScale};
+use abstracttui::gfx::mosaic::MosaicMode;
+
+let ink = Rgba::rgb(220, 220, 220);
+// The colour you are drawing ONTO. Sextant and quadrant fit two colours
+// per cell, so a transparent ground is refused rather than rendered blank.
+let ground = Rgba::rgb(20, 20, 24);
+
+// Budget the space before you commit layout.
+let size = bigtext::measure("AGORA", GlyphScale::FLOOR).unwrap();
+assert_eq!((size.w, size.h), (24, 3));
+
+// `render` returns Err for a character the font has no glyph for.
+let grid = bigtext::render("AGORA", GlyphScale::FLOOR, MosaicMode::Sextant, ink, ground)
+    .expect("Latin capitals are in the embedded font");
+assert_eq!((grid.cols(), grid.rows()), (24, 3));
+// `grid.cell_patches(origin)` yields (point, char, fg, bg) — the same shape
+// the image path blits.
+```
+
+**Choosing a scale — ask, do not assume.** A `GlyphScale` is cells per
+character, and how small you can go depends on three things at once: WHAT
+you are drawing, WHICH mosaic symbols you are drawing it in, and how much
+margin you want. `bigtext::smallest_clear(mode, content)` answers all
+three by measuring; `bigtext::legibility(&style, content)` grades a scale
+you already have, and `bigtext::closest_pair(&style, content)` hands back
+the raw number (`0` = the renderer produced the same picture twice) so you
+can set your own bar.
+
+`Content` is the parameter that matters most: `Uppercase`, `Text`
+(lowercase and digits — the strict one) and `Icons` bottom out at
+*different* sizes. At 2x2 in braille the closest lowercase pair is 1
+subpixel apart and the closest icon pair is 5, which is more room than
+3x3 gives uppercase. There is no single floor, and the earlier
+`has_margin()` — a rectangle test against one constant, blind to both
+content and mode — has been removed. It refused 4x2 for having two rows
+while offering 3x3, which measures strictly worse: same uppercase margin,
+one row MORE, and two lowercase characters rendered identically.
+
+The named scales are conveniences over that measurement, and each says
+what it is measured to be:
+
+| constant | cells | measured |
+|---|---|---|
+| `GlyphScale::COMPACT` | 4x2 | cheapest that reads for mixed text; beats `TIGHT` for a row less |
+| `GlyphScale::COMPACT_WIDE` | 6x2 | clears on the numbers, **out of the aspect band** — kept as the worked example of why the band exists |
+| `GlyphScale::FLOOR` | 4x3 | clear for everything in braille; **marginal for mixed text in sextant** |
+| `GlyphScale::TIGHT` | 3x3 | uppercase only — mixed text collides |
+
+Read the `FLOOR` row twice: sextants are what this module tells you to
+prefer for text, and at 4x3 mixed text there measures 3 subpixels — under
+the bar. `smallest_clear(MosaicMode::Sextant, Content::Text)` returns
+`4x4`.
+
+**Two ways to be unreadable, and pairwise distance sees one of them.**
+`closest_pair` answers *are these two characters different*. It cannot
+answer *is either one still itself*, and at small sizes those come apart:
+`●` and `◆` at 6x2 braille measure 16 subpixels apart and both render as
+the same white bar.
+
+So there is a second measurement. `bigtext::fidelity_loss(c, &style)`
+compares what the renderer draws against the same glyph drawn at its
+NATURAL proportions in the same footprint — 0.0 is a perfect match — and
+`bigtext::least_faithful(&style, content)` reports the worst character of
+a class, measured inside the class's own run. Over `FIDELITY_MAX` (0.35),
+`legibility` returns `Legibility::Distorted` however far apart the pair
+measures. `Distorted` orders BELOW `Marginal`: a tight pair is one a
+careful reader can still resolve, a stretched glyph is not.
+
+The two failures want different fixes, which is why they are different
+verdicts — a collision wants MORE cells, a distortion wants the same
+cells rebalanced between columns and rows.
+
+**The aspect band, the other half.** The font's glyphs are 8x16 and a
+cell is about 1:2, so against the full glyph box a `cols x rows` scale is
+undistorted when `cols == rows` — and a square *footprint*
+(`cols == 2 * rows`, what `GlyphScale::square(rows)` gives you) is already
+a 2x horizontal stretch. `smallest_clear` searches only within
+`MAX_STRETCH` (2x) of that in either direction, and
+`GlyphScale::within_aspect_band()` is that test as an API.
+
+**Neither term is redundant, and the band is the coarser one.** It is
+referenced to the full 8x16 box, which the renderer never draws — the
+vertical crop below means the true undistorted point moves with the
+content. So the band passes `2x3` braille icons (a two-and-a-half times
+vertical stretch) and refuses `6x2` icons that measure inside
+`FIDELITY_MAX`. `legibility` applies both.
+
+The band governs what the search OFFERS, not what you may draw —
+`COMPACT_WIDE` is still constructible and still fine for uppercase, which
+has no round strokes to lose.
+
+Two consequences worth knowing:
+
+- **Widening the columns found scales that were never reachable.**
+  `MosaicMode::HalfBlock` now clears at 6x5 (uppercase), 7x5 (mixed text)
+  and 5x3 (icons). This page used to say no scale cleared for halfblock at
+  all; that was a fact about a search which stopped at six columns, stated
+  as a fact about the terminal — and for uppercase and icons it was not
+  even that, since both were already inside the old ceiling and nobody had
+  checked.
+- **Every `square(rows)` sits exactly on the band's wide edge**, since
+  that edge *is* `cols == 2 * rows`. `square(2)` is a 4x2 badge — the size
+  a LONE icon wants, and measured, not the size a ROW of them wants:
+  braille clears at 4x2 and sextant does not (0.36 loss, `Distorted`;
+  its answer is 3x2). A row of icons crops as one run, so the box is the
+  union of `⚠ ☑ → ●` and taller than any single icon, which makes four
+  columns a stretch. `square(1)` is in band and still a bad idea for a
+  row of icons — 2x1 puts the closest icon pair 1 subpixel apart in
+  braille and 0 in quadrant, which the band cannot help with, because
+  aspect and legibility are two different questions and this module now
+  asks both.
+
+**Choosing a vocabulary.** `mode` is yours to pass, and the trade differs
+from the image case. Braille has the most subpixels per cell but terminals
+draw its dots with gaps, so a letter reads as a constellation; sextants are
+solid ink at a lower density and usually read better as type. Prefer
+`MosaicMode::Sextant` for text where the font carries the Unicode 13
+sextants, and `MosaicMode::auto(&caps)` when you want the probed default.
+
+**Ground must be opaque for the two-colour fits.** `MosaicMode::Quadrant`
+and `MosaicMode::Sextant` pick their glyph by fitting ink and ground
+against each other, and a transparent subpixel does not vote — so a
+transparent ground leaves the fit nothing to weigh and every cell comes
+back blank. Pass the colour you are drawing *onto*.
+`render`/`render_with` return `BigTextError::TransparentGround` rather
+than a correctly-sized empty grid, because that grid looks like a working
+call. `Braille` and `HalfBlock` threshold by luminance and carry
+transparency fine.
+
+**Weight and sampling.** `BigTextStyle` carries the two remaining axes for
+callers that want them; `render`/`rasterize` take the defaults, and
+`render_with`/`rasterize_with` take the struct.
+
+```rust
+use abstracttui::gfx::bigtext::{BigTextStyle, GlyphWeight, Sampling};
+
+let style = BigTextStyle::new(GlyphScale::FLOOR, MosaicMode::Sextant)
+    .sampling(Sampling::Nearest)
+    .weight(GlyphWeight::Bold);
+```
+
+`Sampling::AreaAverage` (the default) weights each source pixel by how
+much of it the target covers, which keeps thin strokes and leaves letters
+further apart — at 4x3 the closest pair is 8 subpixels rather than 4.
+`Sampling::Nearest` takes one source pixel per target: harder edges, and
+that margin halves. Solid display type at three rows often looks better
+point sampled; a run of arbitrary text needs the margin.
+
+`GlyphWeight::Bold` is a synthetic weight — the crate carries one font, so
+this is the CSS `font-weight` axis rather than a family choice, and it
+dilates the glyphs one pixel the way a terminal has always faked a bold
+face. It raises pairwise distinctness at 3x3 and changes nothing from four
+rows up, but the gain is partly mechanical (dilation adds ink to every
+glyph) and at three rows it can close a counter. Treat it as a weight to
+choose, not an improvement to apply by default.
+
+**Limits, stated plainly.** The embedded font carries 164 glyphs — Latin
+letters, digits and common punctuation — and no accented forms, so `é`,
+`à` and `ñ` return `BigTextError::UnsupportedChar` naming the character
+rather than being dropped. The vertical crop that recovers ascender space
+is applied across the whole string so the baseline and relative letter
+heights survive; a string containing a descender therefore needs more rows
+than one without, and mixed case reads weaker than capitals at the same
+scale.
+
+`cargo run --example bigtext` walks a sixteen-step size sweep (width first
+at three rows, then height per width) and cycles symbols (`s`), weight
+(`w`) and sampling (`a`) from the keyboard, printing the closest letter
+pair under each
+combination — the only place these questions can actually be settled is
+your terminal in your font.
+
 ## three — 3D models
 
 `three::quick_view(path)` is the five-line hello: load a GLB, get a camera
@@ -2554,6 +2970,29 @@ term.push_input(b"+");                              // a keypress
 driver.turn(&mut app, &mut term).unwrap();          // dispatch + repaint
 assert!(term.screen().to_text().contains("n = 1"));
 ```
+
+**Capabilities in a headless test.** A capture terminal is not a tty, so
+undeclared capabilities (`RunConfig::caps: None`) resolve to
+`Capabilities::headless()` — full color, UTF-8, every terminal-bound
+feature off — and never to the environment of whoever runs the suite. That
+matters for color assertions: an environment pass on a host without
+`COLORTERM` quantizes every emitted color through the 256 cube, and
+token-against-token comparisons pass at either depth, so the verdict would
+move with the machine. Declare `caps` explicitly when a test needs a
+specific depth:
+
+```rust
+let cfg = RunConfig {
+    caps: Some(Capabilities::with(|c| { c.truecolor = true; c.colors_256 = true; })),
+    probe: false,
+    ..RunConfig::default()
+};
+```
+
+A custom `Terminal` implementation that IS attached to a terminal must
+override `Terminal::is_tty` (or call `set_tty(true)`), or it gets the
+headless set too. The substitution announces itself with a startup notice
+either way.
 
 Input is fed as the terminal would send it, so every dispatch, focus, and
 damage path is the real one. For pure component tests, skip the driver: mount

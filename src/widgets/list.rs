@@ -28,6 +28,14 @@
 //! beside it. Rich labels ride
 //! [`List::rich_items`] (styled spans on the body column only).
 //!
+//! Row context actions are a separate, non-selecting gesture:
+//! [`List::on_context_menu`] fires on a secondary-button press over an
+//! item and reports the item index plus screen-space pointer/row geometry
+//! in [`ListContext`]. The List deliberately does not import the app
+//! overlay layer; pass that event to
+//! [`ContextMenu`](crate::app::ContextMenu) when the app wants an owned,
+//! keyboard-accessible menu.
+//!
 //! Disposal-safety law (ruling clause 4): the List completes ALL of its
 //! own bookkeeping (selection write, sticky-key write, ensure-visible
 //! scrolling) BEFORE any user callback runs, so a callback may dispose
@@ -76,14 +84,15 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use crate::base::Point;
+use crate::base::{Point, Rect};
 use crate::layout::{Dimension, Style as LayoutStyle};
 use crate::reactive::{Scope, Signal};
 use crate::render::rich::RichText;
 use crate::render::{Attrs, Style};
 use crate::theme::TokenSet;
-use crate::ui::{dyn_view, Element, EventCtx, Key, MouseButton, MouseKind, Phase, UiEvent};
+use crate::ui::{dyn_view, Element, EventCtx, Key, Mods, MouseButton, MouseKind, Phase, UiEvent};
 use crate::widgets::richtext::draw_rich_lines;
+use crate::widgets::row_select;
 use crate::widgets::scrollbar;
 
 type HeightFn = Box<dyn Fn(usize, &str) -> i32>;
@@ -125,6 +134,48 @@ enum ListHit {
 /// against the (build-fixed) accessory width. Hit-testing and painting
 /// then borrow — neither allocates, so hover motion is free.
 type AccessoryCells = Rc<Vec<Option<(String, i32)>>>;
+
+/// A secondary-button press over a List item.
+///
+/// Both coordinates are in SCREEN cells, including when the List lives
+/// inside a positioned overlay. `screen_row` is the visible portion of
+/// the item, excluding the scrollbar; anchor a popup at
+/// `screen_position` and use `index` to build row-specific actions.
+/// The gesture does not move selection and never activates the row.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct ListContext {
+    pub index: usize,
+    pub screen_position: Point,
+    pub screen_row: Rect,
+    pub mods: Mods,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn list_context(
+    index: usize,
+    position: Point,
+    rect: Rect,
+    cols: ListColumns,
+    offset: i32,
+    prefix: &[i32],
+    layer_origin: Point,
+    mods: Mods,
+) -> ListContext {
+    let top = (rect.y + prefix[index] - offset).max(rect.y);
+    let bottom = (rect.y + prefix[index + 1] - offset).min(rect.bottom());
+    ListContext {
+        index,
+        screen_position: Point::new(position.x + layer_origin.x, position.y + layer_origin.y),
+        screen_row: Rect::new(
+            rect.x + layer_origin.x,
+            top + layer_origin.y,
+            cols.body_w + cols.accessory_w,
+            (bottom - top).max(0),
+        ),
+        mods,
+    }
+}
 
 fn list_columns(viewport_w: i32, show_bar: bool, accessory_w: i32) -> ListColumns {
     let bar_w = i32::from(show_bar);
@@ -187,23 +238,6 @@ fn resolve_hit(
     ))
 }
 
-/// Scroll `offset` the least amount that brings item `idx` fully into a
-/// `view_h`-row viewport. Shared by keyboard/click selection and the
-/// `scroll_to` command so the two can never drift apart.
-fn ensure_visible(offset: Signal<i32>, prefix: &[i32], idx: usize, view_h: i32, total_rows: i32) {
-    let top = prefix[idx];
-    let bottom = prefix[idx + 1];
-    offset.update(|o| {
-        if top < *o {
-            *o = top;
-        }
-        if view_h > 0 && bottom > *o + view_h {
-            *o = bottom - view_h;
-        }
-        *o = (*o).clamp(0, (total_rows - view_h.max(1)).max(0));
-    });
-}
-
 /// A virtualized, selectable vertical list — the picker surface.
 ///
 /// Bind [`selection`](List::selection) to a `Signal<usize>`; selection
@@ -230,6 +264,7 @@ pub struct List {
     on_accessory_click: Option<Box<dyn FnMut(usize)>>,
     on_remove: Option<Box<dyn FnMut(usize)>>,
     on_row_double_click: Option<Box<dyn FnMut(usize)>>,
+    on_context_menu: Option<Box<dyn FnMut(ListContext)>>,
     rich_items: Option<Vec<RichText>>,
 }
 
@@ -264,6 +299,7 @@ impl List {
             on_accessory_click: None,
             on_remove: None,
             on_row_double_click: None,
+            on_context_menu: None,
             rich_items: None,
         }
     }
@@ -407,6 +443,21 @@ impl List {
         self
     }
 
+    /// Secondary-button action request for an item. Fires on
+    /// `MouseButton::Right` DOWN over either the row body or its
+    /// accessory, never over empty space or the scrollbar. The callback
+    /// receives screen-space geometry suitable for an anchored popup.
+    ///
+    /// This gesture does not move selection, call `on_select`, or call
+    /// `on_activate`. When unbound, right presses continue bubbling.
+    /// Pair it with [`ContextMenu`](crate::app::ContextMenu) for the
+    /// standard owned menu surface. Shift+F10 invokes the same callback
+    /// for the selected row and first scrolls that row into view.
+    pub fn on_context_menu(mut self, f: impl FnMut(ListContext) + 'static) -> List {
+        self.on_context_menu = Some(Box::new(f));
+        self
+    }
+
     /// Per-row rich labels (same length as `items`). Body column only;
     /// accessories stay plain text. Replaces the plain string on the
     /// first visible row of each item.
@@ -438,22 +489,11 @@ impl List {
         let len = items.len();
         // Prefix sums over item heights: prefix[i] = first content row
         // of item i; prefix[len] = total rows. Uniform lists get the
-        // identity prefix — ONE windowing code path.
-        let prefix: Rc<Vec<i32>> = Rc::new({
-            let mut out = Vec::with_capacity(len + 1);
-            let mut acc = 0i32;
-            out.push(0);
-            for (i, item) in items.iter().enumerate() {
-                let h = self
-                    .heights
-                    .as_ref()
-                    .map(|f| f(i, item).max(1))
-                    .unwrap_or(1);
-                acc += h;
-                out.push(acc);
-            }
-            out
-        });
+        // identity prefix — ONE windowing code path. (Shared with
+        // `RowSelect` — `widgets::row_select` owns the selection core.)
+        let prefix: Rc<Vec<i32>> = Rc::new(row_select::prefix_sums(len, |i| {
+            self.heights.as_ref().map(|f| f(i, &items[i])).unwrap_or(1)
+        }));
         let total_rows = *prefix.last().unwrap_or(&0);
 
         let selection = self.selection.unwrap_or_else(|| cx.signal(0usize));
@@ -476,37 +516,27 @@ impl List {
                     .collect::<Vec<_>>(),
             )
         });
-        // Settle selection against THIS build's items. Rows can vanish
-        // between builds (a dismiss ✕, a filter, a server push), and a
-        // selection naming a row that no longer exists is a real defect:
-        // nothing highlights, `access_value` announces a phantom row to
-        // a screen reader, and the first arrow key moves the wrong way.
-        // So the index is always re-derived and always in range.
-        if len > 0 {
-            let by_key = self
-                .selection_key
-                .zip(keys.as_ref())
-                .and_then(|(sig, keys)| {
-                    let wanted = sig.get_untracked();
-                    keys.iter().position(|k| *k == wanted)
-                });
-            // The key is gone (or there is none): hold the SLOT, clamped.
-            // Removing a row leaves the next one selected, and removing
-            // the last leaves the new last — the expected list behavior.
-            let idx = by_key.unwrap_or_else(|| selection.get_untracked().min(len - 1));
-            selection.set_if_changed(idx);
-            if let (Some(sig), Some(keys)) = (self.selection_key, keys.as_ref()) {
-                sig.set_if_changed(keys[idx].clone());
-            }
-        }
-        let selection_key = self.selection_key;
-        let keys_for_select = keys.clone();
-
         // First visible CONTENT ROW. A bound offset survives rebuilds
         // (see `offset_y`) — but the items it points into may have
         // shrunk since it was written, so clamp it here for the same
-        // reason selection is settled above: no viewport past the end.
+        // reason selection is settled below: no viewport past the end.
         let offset = self.offset_y.unwrap_or_else(|| cx.signal(0i32));
+
+        // The SELECTION CORE, shared with `RowSelect` (which drives the
+        // same model over rows it does not render): settle-on-rebuild,
+        // sticky-by-key, ensure-visible, and the select transition.
+        let model = row_select::SelectionModel {
+            len,
+            keys: keys.clone(),
+            prefix: prefix.clone(),
+            selection,
+            selection_key: self.selection_key,
+            offset,
+        };
+        // Settle selection against THIS build's items — see
+        // `SelectionModel::settle` for why a stale index is a real
+        // defect and not merely untidy.
+        model.settle();
         if self.offset_y.is_some() {
             offset.update(|o| *o = (*o).clamp(0, (total_rows - 1).max(0)));
         }
@@ -516,6 +546,8 @@ impl List {
             Rc::new(RefCell::new(self.on_activate));
         let on_row_double_click: crate::widgets::SharedCallback<usize> =
             Rc::new(RefCell::new(self.on_row_double_click));
+        let on_context_menu: crate::widgets::SharedCallback<ListContext> =
+            Rc::new(RefCell::new(self.on_context_menu));
 
         // `on_remove` is `row_accessory` + `accessory_width` +
         // `on_accessory_click` with the dismiss glyph filled in; an
@@ -571,30 +603,17 @@ impl List {
             .layout
             .unwrap_or_else(|| LayoutStyle::default().grow(1.0));
 
-        let prefix_for_select = prefix.clone();
         let select = {
             let on_select = on_select.clone();
+            let model = model.clone();
             move |target: usize, view_h: i32| {
-                if len == 0 {
-                    return; // nothing to select (prefix has no item span)
-                }
-                let target = target.min(len - 1);
-                let changed = selection.get_untracked() != target;
-                if changed {
-                    selection.set(target);
-                    if let (Some(key_sig), Some(keys)) = (selection_key, keys_for_select.as_ref()) {
-                        if let Some(k) = keys.get(target) {
-                            key_sig.set(k.clone());
-                        }
-                    }
-                }
-                // ensure-visible on CONTENT ROWS (variable heights).
-                // ALL widget bookkeeping lands BEFORE the user callback
-                // (0250 ruling clause 4, disposal-safety law): a
-                // callback that disposes this List's scope must find no
-                // widget code left to run on dead signals.
-                ensure_visible(offset, &prefix_for_select, target, view_h, total_rows);
-                if changed {
+                // The model writes selection, the sticky key, and the
+                // ensure-visible offset — ALL widget bookkeeping lands
+                // BEFORE the user callback (0250 ruling clause 4,
+                // disposal-safety law): a callback that disposes this
+                // List's scope must find no widget code left to run on
+                // dead signals.
+                if model.select(target, view_h) {
                     // Held borrow across `f`: safe — dispatch-only slot
                     // (the SharedCallback held-borrow contract).
                     if let Some(f) = on_select.borrow_mut().as_mut() {
@@ -606,7 +625,7 @@ impl List {
 
         // scroll_to command signal: consume Some(idx) into an offset.
         if let Some(request) = self.scroll_to {
-            let prefix_for_scroll = prefix.clone();
+            let model = model.clone();
             cx.effect_labeled("list-scroll-to", move || {
                 let Some(idx) = request.get() else {
                     return;
@@ -619,8 +638,7 @@ impl List {
                 if vh <= 0 {
                     return; // hold the request until the probe measures
                 }
-                let idx = idx.min(len - 1);
-                ensure_visible(offset, &prefix_for_scroll, idx, vh, total_rows);
+                model.ensure_visible(idx.min(len - 1), vh);
                 request.set(None); // consumed (one extra no-op run)
             });
         }
@@ -634,9 +652,11 @@ impl List {
         let activate = on_activate;
         let accessory_click = on_accessory_click;
         let row_double_click = on_row_double_click;
+        let context_menu = on_context_menu;
         let accessory_w_handler = accessory_w;
         let cells_handler = accessory_cells.clone();
         let hover_handler = hover;
+        let model_handler = model.clone();
         let handler = move |ctx: &mut EventCtx, ev: &UiEvent| {
             let rect = ctx.current_rect();
             let h = rect.h.max(1);
@@ -656,6 +676,35 @@ impl List {
                     hover_handler.set_if_changed(None);
                 }
                 UiEvent::Key(k) => {
+                    // The portable keyboard equivalent of a secondary
+                    // press. Modified function keys are distinct on the
+                    // baseline terminal wire; a physical Menu key is not.
+                    if k.key == Key::F(10) && k.mods == Mods::SHIFT {
+                        if len == 0 || context_menu.borrow().is_none() {
+                            return;
+                        }
+                        let idx = selection.get_untracked().min(len - 1);
+                        model_handler.ensure_visible(idx, h);
+                        let cols = list_columns(rect.w, total_rows > h, accessory_w_handler);
+                        let first = offset.get_untracked();
+                        let y = (rect.y + prefix_for_handler[idx] - first)
+                            .clamp(rect.y, rect.bottom().saturating_sub(1));
+                        let event = list_context(
+                            idx,
+                            Point::new(rect.x, y),
+                            rect,
+                            cols,
+                            first,
+                            &prefix_for_handler,
+                            ctx.layer_origin(),
+                            k.mods,
+                        );
+                        ctx.stop_propagation();
+                        if let Some(f) = context_menu.borrow_mut().as_mut() {
+                            f(event);
+                        }
+                        return;
+                    }
                     // Activation keys (0250 ruling clause 2): Enter
                     // always; Space too, because a List has no toggle
                     // meaning. Consumed ONLY when a callback is bound —
@@ -673,15 +722,9 @@ impl List {
                         return;
                     }
                     let cur = selection.get_untracked();
-                    let page = (h as usize).max(1);
-                    let target = match k.key {
-                        Key::Up => cur.saturating_sub(1),
-                        Key::Down => cur + 1,
-                        Key::PageUp => cur.saturating_sub(page),
-                        Key::PageDown => cur + page,
-                        Key::Home => 0,
-                        Key::End => len.saturating_sub(1),
-                        _ => return,
+                    let Some(target) = row_select::nav_target(k.key, cur, len, (h as usize).max(1))
+                    else {
+                        return;
                     };
                     select(target, h);
                     ctx.stop_propagation();
@@ -767,6 +810,31 @@ impl List {
                         }
                         ctx.stop_propagation();
                     }
+                    MouseKind::Down(MouseButton::Right) => {
+                        let Some(ListHit::Row(idx, _)) = hit_at(m.pos) else {
+                            return;
+                        };
+                        // An unbound List does not claim the terminal's
+                        // secondary-button gesture. This lets an ancestor
+                        // provide a broader surface menu.
+                        let mut slot = context_menu.borrow_mut();
+                        let Some(f) = slot.as_mut() else { return };
+                        let cols = list_columns(rect.w, total_rows > h, accessory_w_handler);
+                        let event = list_context(
+                            idx,
+                            m.pos,
+                            rect,
+                            cols,
+                            offset.get_untracked(),
+                            &prefix_for_handler,
+                            ctx.layer_origin(),
+                            m.mods,
+                        );
+                        // All widget work ends before user code: the
+                        // callback may synchronously dispose this List.
+                        ctx.stop_propagation();
+                        f(event);
+                    }
                     _ => {}
                 },
                 _ => {}
@@ -791,7 +859,31 @@ impl List {
             // reaches the reactive graph without paint ever writing a
             // signal. A steady frame records an unchanged size and
             // schedules nothing.
-            .draw(super::scroll::size_probe(view_box))
+            .draw(super::scroll::size_probe(cx, view_box))
+            // The internal bar column owns left drags (first-app/1335):
+            // screen select mode stands down over the STRIP only, so the
+            // thumb keeps its gesture while every row stays selectable.
+            //
+            // Gated on `overflows()`, not merely on the bar being drawn:
+            // a one-row viewport draws a full-height thumb with ZERO
+            // travel, which the gesture refuses to steer. A cell nothing
+            // can drag must not swallow a selection either — that is the
+            // contract `Element::drag_zone` states.
+            .drag_zone(move |rect| {
+                let cols = list_columns(rect.w, total_rows > rect.h, accessory_w);
+                if cols.bar_w == 0 {
+                    return None;
+                }
+                let strip = Rect::new(
+                    rect.x + cols.body_w + cols.accessory_w,
+                    rect.y,
+                    cols.bar_w,
+                    rect.h,
+                );
+                scrollbar::metrics(strip, cols.bar_w, 0, total_rows)
+                    .overflows()
+                    .then_some(strip)
+            })
             .focusable();
         if let Some(focused) = self.focused {
             el = el.focus_signal(focused);

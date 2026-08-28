@@ -27,6 +27,7 @@ use super::diff::Run;
 use super::scroll::{ScrolledRuns, Shift};
 use super::sgr::{build_incremental, build_reset, csi_n, cup, push_u32, resolve_pen, Pen};
 use super::surface::Surface;
+use crate::base::Rgba;
 
 /// Presenter feature switches. `scroll_optimization` gates the
 /// DECSTBM+SU/SD path (docs/design/render.md §2.7): **ON by default**
@@ -125,6 +126,10 @@ pub struct Presenter {
     /// Scratch for candidate SGR parameter strings (incremental vs reset).
     seq_inc: Vec<u8>,
     seq_reset: Vec<u8>,
+    /// Palette entries decided upstream for specific colors — the theme's
+    /// grounds, kept distinct at 256 colors. Empty until someone sets it,
+    /// and empty means exactly the previous behavior.
+    assignment: Vec<(Rgba, u8)>,
 }
 
 impl Default for Presenter {
@@ -148,7 +153,46 @@ impl Presenter {
             open_link: String::new(),
             seq_inc: Vec::new(),
             seq_reset: Vec::new(),
+            assignment: Vec::new(),
         }
+    }
+
+    /// Install the palette assignment used when downleveling to 256
+    /// colors: `(color, index)` pairs decided upstream, normally a
+    /// theme's grounds run through
+    /// [`color::quantize_set_256`](super::color::quantize_set_256) so
+    /// that two surfaces the palette would merge stay distinct.
+    ///
+    /// **256 ONLY. At `Ansi16` this does nothing, and the collapse it
+    /// prevents still happens there** (98 of 260 built-in ground pairs
+    /// merge at 16 colors). Said here rather than left to be discovered,
+    /// because the covered half works: an API that separates grounds
+    /// correctly at 256 invites the assumption that it does so at every
+    /// depth, and a partial guarantee is believable exactly in
+    /// proportion to how well its covered part behaves. The 16 system
+    /// registers are user-themable, so no build-time decision can know
+    /// what index 4 renders as — which is a reason not to pick the
+    /// index, and is being re-examined as a reason to leave two grounds
+    /// sharing one (`claim:tui-ansi16-ground-assignment`).
+    ///
+    /// **The caller owns the repaint.** Changing the assignment changes
+    /// the bytes a cell resolves to, and the frame diff will not re-emit
+    /// a cell that did not change — so a caller that swaps this without
+    /// damaging the scene leaves the old indices on screen. The two
+    /// moments that need it (a theme swap and a color-depth upgrade)
+    /// both already damage every layer; this is stated because a third
+    /// caller would not know.
+    pub fn set_palette_assignment(&mut self, assignment: &[(Rgba, u8)]) {
+        self.assignment.clear();
+        self.assignment.extend_from_slice(assignment);
+        // The pen memo compares emission representations; a changed
+        // assignment can make the NEXT pen equal to a stale current one.
+        self.pen = None;
+    }
+
+    /// The assignment currently installed (empty = plain nearest).
+    pub fn palette_assignment(&self) -> &[(Rgba, u8)] {
+        &self.assignment
     }
 
     /// The feature switches this presenter was built with — the app
@@ -414,7 +458,7 @@ impl Presenter {
     // -- SGR -----------------------------------------------------------------
 
     fn set_pen(&mut self, cell: &Cell, caps: &PresentCaps, out: &mut Vec<u8>) {
-        let target = resolve_pen(cell, caps);
+        let target = resolve_pen(cell, caps, &self.assignment);
         match self.pen {
             Some(cur) if cur == target => return,
             Some(cur) => {

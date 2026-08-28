@@ -191,7 +191,17 @@ const UNBOUNDED_WIDTH: i32 = 1 << 24;
 /// - Height is the wrapped line count, NOT clamped to `avail.h`: the
 ///   solver decides how much to show. Empty input still occupies one line
 ///   (a text leaf is never zero-height).
+///
+/// **`avail.h` is not read, and every `avail.w <= 0` is the same query.**
+/// Both are load-bearing for the per-leaf `WidthMemo` in `ui::mount`, which caches this
+/// answer per text leaf: the first says the memo may key on width alone,
+/// the second says it must fold the non-positive widths together or keep
+/// one entry per meaningless distinction. Verified over a 13-string
+/// corpus at 12 widths x 6 heights in
+/// `measure_ignores_available_height_and_folds_every_unconstrained_width`.
 pub fn measure(s: &str, avail: crate::base::Size) -> crate::base::Size {
+    #[cfg(test)]
+    count_measure_call();
     let window = if avail.w <= 0 {
         UNBOUNDED_WIDTH
     } else {
@@ -200,6 +210,34 @@ pub fn measure(s: &str, avail: crate::base::Size) -> crate::base::Size {
     let lines = wrap(s, window);
     let w = lines.iter().map(|l| width(l)).max().unwrap_or(0);
     crate::base::Size::new(w, lines.len() as i32)
+}
+
+// How many times `measure` has actually run on this thread — the
+// instrument the memo guards assert on.
+//
+// Test builds only, and thread-local on purpose: the counter is
+// per-test, so guards asserting exact call counts do not interfere when
+// the harness runs them in parallel.
+#[cfg(test)]
+thread_local! {
+    static MEASURE_CALLS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+#[cfg(test)]
+fn count_measure_call() {
+    MEASURE_CALLS.with(|c| c.set(c.get() + 1));
+}
+
+/// Read the per-thread [`measure`] call count.
+#[cfg(test)]
+pub(crate) fn measure_calls() -> u64 {
+    MEASURE_CALLS.with(|c| c.get())
+}
+
+/// Zero the per-thread [`measure`] call count.
+#[cfg(test)]
+pub(crate) fn reset_measure_calls() {
+    MEASURE_CALLS.with(|c| c.set(0));
 }
 
 #[cfg(test)]

@@ -609,6 +609,7 @@ fn register_same_id_from_many_threads_is_consistent() {
                     label: format!("Racer {i}"),
                     dark: true,
                     tokens: base,
+                    ground_intent: Vec::new(),
                 };
                 register(cand, RegisterMode::Strict)
             })

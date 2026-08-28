@@ -47,22 +47,31 @@ impl Pen {
 /// lookups can collapse a deliberately-subtle theme pair into one palette
 /// slot, erasing text; the pair quantizer nudges the foreground to the
 /// nearest distinct entry preserving the light/dark ordering).
-pub(crate) fn resolve_pen(cell: &Cell, caps: &PresentCaps) -> Pen {
+///
+/// `assignment` is the upstream palette decision for colors this emitter
+/// cannot resolve on its own — two GROUNDS collapsing into each other,
+/// which are never in one cell and so never in front of `resolve_pen`
+/// together. Empty (the default) is byte-for-byte today's behavior.
+/// 16-color is deliberately NOT assignment-aware: those registers are
+/// user-themable, so a build-time decision cannot know what index 4
+/// actually renders as — see `claim:tui-audit-does-not-survive-
+/// quantisation`, where that is still an open question rather than a
+/// settled no.
+pub(crate) fn resolve_pen(
+    cell: &Cell,
+    caps: &PresentCaps,
+    assignment: super::color::PaletteAssignment,
+) -> Pen {
     let attrs = canonical_attrs(cell.attrs, caps);
+    let idx256 = |c| super::color::nearest_xterm256_assigned(c, assignment);
     let (fg, bg) = match caps.color {
         ColorDepth::TrueColor => (repr_rgb(cell.fg), repr_rgb(cell.bg)),
         ColorDepth::Xterm256 => match (cell.fg.is_transparent(), cell.bg.is_transparent()) {
             (true, true) => (ColorRepr::Default, ColorRepr::Default),
-            (false, true) => (
-                ColorRepr::Idx256(super::color::nearest_xterm256(cell.fg)),
-                ColorRepr::Default,
-            ),
-            (true, false) => (
-                ColorRepr::Default,
-                ColorRepr::Idx256(super::color::nearest_xterm256(cell.bg)),
-            ),
+            (false, true) => (ColorRepr::Idx256(idx256(cell.fg)), ColorRepr::Default),
+            (true, false) => (ColorRepr::Default, ColorRepr::Idx256(idx256(cell.bg))),
             (false, false) => {
-                let (f, b) = super::color::quantize_pair_256(cell.fg, cell.bg);
+                let (f, b) = super::color::quantize_pair_256_assigned(cell.fg, cell.bg, assignment);
                 (ColorRepr::Idx256(f), ColorRepr::Idx256(b))
             }
         },
@@ -92,8 +101,12 @@ pub(crate) fn resolve_pen(cell: &Cell, caps: &PresentCaps) -> Pen {
         ColorRepr::Default
     } else {
         match caps.color {
+            // Assignment-aware for the same reason the grounds are: one
+            // color must resolve to one index everywhere it appears, or
+            // an underline drawn in a ground color would disagree with
+            // the ground itself.
             ColorDepth::TrueColor => repr_rgb(cell.ul),
-            ColorDepth::Xterm256 => ColorRepr::Idx256(super::color::nearest_xterm256(cell.ul)),
+            ColorDepth::Xterm256 => ColorRepr::Idx256(idx256(cell.ul)),
             ColorDepth::Ansi16 => ColorRepr::Default,
         }
     };

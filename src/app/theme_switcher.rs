@@ -1,5 +1,5 @@
 //! [`ThemeSwitcher`] — the drop-in theme control (backlog
-//! app-kits/0595): a one-cell icon button any app mounts in its chrome.
+//! app-kits/0595): a small icon button any app mounts in its chrome.
 //!
 //! Two faces, one chrome:
 //!
@@ -39,6 +39,34 @@
 //!   `☀` carries an emoji flag some terminal stacks promote to a
 //!   double-width color glyph. Same mnemonic, none of the risk.
 //!
+//! ## The chrome (design note)
+//!
+//! A 3x1 CHIP — one cell of padding each side of the glyph — with one
+//! cell of margin left and right. The same shape [`Badge`] uses, so the
+//! switcher reads as a member of the control family rather than a
+//! stray character in the chrome.
+//!
+//! It began as a bare 1x1 glyph on a transparent ground, and the three
+//! things that went wrong with that are worth keeping written down,
+//! because each looks like a nit and none of them is:
+//!
+//! - **Transparent idle.** A dim glyph on the app's own backdrop has
+//!   nothing marking it as pressable, so it reads as decoration. The
+//!   chip now carries `surface_raised` in EVERY state, idle included;
+//!   hover and focus change the ink, not whether there is a ground.
+//! - **No padding.** One cell is both the smallest possible target and
+//!   the smallest possible visual object. The padding is INSIDE the
+//!   button, so it grows the hit area as well as the chip.
+//! - **No margin.** Padding alone does not fix being jammed against
+//!   the terminal edge — it just moves the chip's own ground into the
+//!   corner. Apps mount this last in a right-aligned chrome row, which
+//!   is exactly where an unmargined control ends up unreachable.
+//!
+//! Everything here is a DEFAULT: [`ThemeSwitcher::layout`] replaces it
+//! wholesale, and the face fills whatever box it is given.
+//!
+//! [`Badge`]: crate::widgets::Badge
+//!
 //! ## Zero idle
 //!
 //! Closed, the switcher is one dormant element + one theme-tracking
@@ -53,7 +81,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::base::{Rect, Size};
-use crate::layout::{Dimension, Style as LayoutStyle};
+use crate::layout::{Dimension, Edges, Style as LayoutStyle};
 use crate::reactive::{Scope, Signal};
 use crate::render::Style;
 use crate::theme::{themes_by_mode, Theme, ThemeMode};
@@ -75,6 +103,22 @@ use super::viewport::use_viewport;
 /// highlight (28 entries at 26 built-in themes + 2 headers: a taller
 /// default than Select's 8 reads better for a browse-y list).
 const DEFAULT_MAX_VISIBLE: usize = 12;
+
+/// Cells of padding on EACH side of the glyph, inside the button.
+const H_PAD: i32 = 1;
+
+/// The button's default width: the glyph plus its padding. Three cells
+/// is the same shape `Badge` uses for a chip (`label + 2`), so the
+/// switcher reads as a member of the same control family instead of a
+/// stray character in the chrome.
+const BUTTON_W: i32 = 1 + 2 * H_PAD;
+
+/// Cells of margin OUTSIDE the button, left and right. Padding alone
+/// does not solve being jammed against the terminal edge: the chip's
+/// own ground would run into the screen border. This is what keeps the
+/// control off the edge when an app mounts it last in a top-right
+/// chrome row, which is where it usually goes.
+const H_MARGIN: i32 = 1;
 
 /// The mode glyph — see the module docs for the design reasoning.
 pub(crate) fn mode_glyph(mode: ThemeMode) -> &'static str {
@@ -135,8 +179,10 @@ impl ThemeSwitcher {
         }
     }
 
-    /// Override the 1×1-cell default layout (rarely needed; the
-    /// control is designed to read at exactly one cell).
+    /// Override the default layout (a 3x1 chip with one cell of margin
+    /// each side). The face fills whatever box you give it and centres
+    /// its glyph, so a wider override reads as a wider button rather
+    /// than a glyph stranded in the corner of an empty box.
     pub fn layout(mut self, layout: LayoutStyle) -> ThemeSwitcher {
         self.layout = Some(layout);
         self
@@ -235,9 +281,12 @@ impl ThemeSwitcher {
 
         let mut el = Element::new()
             .style(self.layout.unwrap_or_else(|| {
+                // shrink 0, like the Badge chip: a control the user
+                // reaches for never vanishes under overflow pressure.
                 LayoutStyle::default()
-                    .width(Dimension::Cells(1))
+                    .width(Dimension::Cells(BUTTON_W))
                     .height(Dimension::Cells(1))
+                    .margin(Edges::hv(H_MARGIN, 0))
                     .shrink(0.0)
             }))
             .role(Role::Button)
@@ -271,9 +320,14 @@ impl ThemeSwitcher {
             });
         }
         el.child(dyn_view(
+            // Percent, not a second copy of the cell count: the face
+            // fills whatever box the button was solved to, so a caller
+            // who overrides `layout()` gets a face that follows. It used
+            // to be a hardcoded 1x1, which drew a one-cell glyph in the
+            // corner of any wider override and left the rest blank.
             LayoutStyle::default()
-                .width(Dimension::Cells(1))
-                .height(Dimension::Cells(1)),
+                .width(Dimension::Percent(1.0))
+                .height(Dimension::Percent(1.0)),
             move || {
                 // Tracked reads: the glyph follows the LIVE theme (a
                 // toggle or an external switch retints and re-glyphs),
@@ -282,24 +336,39 @@ impl ThemeSwitcher {
                 let t = theme.get();
                 let tokens = t.tokens;
                 let glyph = mode_glyph(t.mode());
+                // The chip ALWAYS has a ground, idle included. A
+                // transparent idle state was the reported defect: on a
+                // dark terminal a dim glyph on the app's own background
+                // is indistinguishable from decoration, so the control
+                // read as invisible rather than as a button.
                 let (fg, bg) = if focused.get() {
                     (tokens.selection_fg, tokens.selection_bg)
                 } else if hovered.get() {
-                    (tokens.accent, crate::base::Rgba::TRANSPARENT)
+                    (tokens.accent, tokens.surface_raised)
                 } else {
-                    (tokens.text, crate::base::Rgba::TRANSPARENT)
+                    (tokens.text, tokens.surface_raised)
                 };
                 Element::new()
                     .style(
                         LayoutStyle::default()
-                            .width(Dimension::Cells(1))
-                            .height(Dimension::Cells(1)),
+                            .width(Dimension::Percent(1.0))
+                            .height(Dimension::Percent(1.0)),
                     )
                     .draw(move |canvas, rect| {
                         if rect.is_empty() {
                             return;
                         }
-                        canvas.print_styled(rect.origin(), glyph, &Style::new().fg(fg).bg(bg));
+                        canvas.fill(rect, ' ', fg, bg);
+                        // Centre the glyph in whatever width we got, so
+                        // the padding stays even under an override or a
+                        // squeeze. Integer division biases left on even
+                        // widths, which is the conventional choice.
+                        let x = rect.x + (rect.w - 1) / 2;
+                        canvas.print_styled(
+                            crate::base::Point::new(x, rect.y),
+                            glyph,
+                            &Style::new().fg(fg).bg(bg),
+                        );
                     })
                     .build()
             },

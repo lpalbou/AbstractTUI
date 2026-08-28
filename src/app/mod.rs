@@ -38,6 +38,7 @@ pub mod actions;
 pub mod anchored;
 mod caps;
 pub mod choice_prompt;
+pub mod context_menu;
 pub mod drawer;
 mod drawer_view;
 mod driver;
@@ -88,6 +89,7 @@ pub use choice_prompt::{
     ChoiceAnswer, ChoiceOption, ChoiceOutcome, ChoicePrompt, ChoicePromptHandle, ChoiceQuestion,
     ChoiceSequence, ChoiceSequenceOutcome,
 };
+pub use context_menu::{ContextMenu, ContextMenuItem};
 // Appended (wave 8, app-kits/0585): the global drawer system.
 pub use drawer::{
     Drawer, DrawerCloseReason, DrawerEdge, DrawerFocus, DrawerHandle, DrawerSize, DRAWER_Z,

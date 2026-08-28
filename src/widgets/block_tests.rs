@@ -596,3 +596,111 @@ fn close_run_geometry_ladder() {
     assert_eq!(close_run(r(2, 3), false), Some(Rect::new(1, 0, 1, 1)));
     assert_eq!(close_run(r(0, 3), false), None);
 }
+
+// ---------------------------------------------------------------------
+// The border sits on the ground the panel fills — read off the frame
+// ---------------------------------------------------------------------
+//
+// Everything else that guards `border` is contrast arithmetic over the
+// token table: it never draws, so it cannot tell you WHICH ground the
+// stroke lands on. The answer had been a doc comment (`.fill(t.surface)`
+// in the module example) until this test, and the whole
+// border-on-the-wrong-ground defect rests on it. A claim about what is
+// on the screen has to be able to look at the screen.
+
+/// The structural half: a filled `Block` paints its fill under the border
+/// glyphs too, not only inside them. If `fill` ever becomes
+/// interior-only, the stroke lands on the parent's ground instead and
+/// every border/surface measurement in `adv_theme` starts describing a
+/// pair that no longer occurs — silently, because those tests read
+/// tokens rather than cells.
+///
+/// NOTE FOR ANYONE MUTATION-TESTING THIS: the property is enforced
+/// TWICE, so no single-line mutant reddens it and a green one does not
+/// mean this test is hollow. `paint` fills the whole rect (border cells
+/// included), AND the stroke `print` carries `bg = fill.unwrap_or(keep)`
+/// — either alone puts the fill under the glyph. Insetting the fill:
+/// green. Dropping the stroke's `bg` to `keep`: green. Both together:
+/// red, which is measured, not assumed. The unit of the defect is one
+/// property with two implementations, which is larger than the unit of
+/// the audit.
+#[test]
+fn a_filled_block_paints_its_fill_under_the_border_glyphs() {
+    let t = default_theme().tokens;
+    for (label, ground) in [("surface", t.surface), ("surface_raised", t.surface_raised)] {
+        let view = Block::new()
+            .border(BorderKind::Rounded)
+            .fill(ground)
+            .element(&t);
+        let c = draw_into(view, SIZE);
+        for (what, p) in [
+            ("corner", crate::base::Point::new(0, 0)),
+            ("top edge", crate::base::Point::new(3, 0)),
+            ("left edge", crate::base::Point::new(0, 2)),
+        ] {
+            let cell = c.cell(p).unwrap();
+            assert_eq!(
+                cell.2, ground,
+                "[{label}] {what} ground is not the fill — the stroke is on \
+                 someone else's ground, and the token-table border guards \
+                 are now measuring a pair that does not occur"
+            );
+            assert_eq!(cell.1, t.border, "[{label}] {what} ink is not `border`");
+        }
+    }
+}
+
+/// CHARACTERIZATION, and the painted counterpart of the `adv_theme`
+/// pins. Same defect, measured on cells instead of on tokens: the
+/// contrast a reader actually gets between the stroke and the ground it
+/// is drawn on. Red by design once `border` earns its floor on the
+/// grounds it is drawn on — invert it into a guarantee, do not delete it.
+#[test]
+fn painted_border_contrast_misses_the_floor_on_both_panel_grounds() {
+    use crate::theme::contrast::floors;
+    use crate::theme::{contrast_ratio, themes};
+
+    let mut surface_below = 0usize;
+    let mut raised_below = 0usize;
+    for theme in themes() {
+        let t = theme.tokens;
+        for (is_raised, ground) in [(false, t.surface), (true, t.surface_raised)] {
+            let view = Block::new()
+                .border(BorderKind::Rounded)
+                .fill(ground)
+                .element(&t);
+            let c = draw_into(view, SIZE);
+            let cell = c.cell(crate::base::Point::new(3, 0)).unwrap();
+            // Measured on the cell, not on the token pair: ink and ground
+            // are whatever actually reached the buffer.
+            let r = contrast_ratio(cell.1, cell.2);
+            if r < floors::BORDER {
+                if is_raised {
+                    raised_below += 1;
+                } else {
+                    surface_below += 1;
+                }
+            }
+        }
+    }
+
+    assert_eq!(
+        themes().len(),
+        26,
+        "the pinned counts below are against a 26-theme registry"
+    );
+    assert_eq!(
+        surface_below,
+        15,
+        "painted border on `surface` below {}: pinned at 15, got {surface_below}. \
+         If the derivation now earns its floor, invert this into a guarantee.",
+        floors::BORDER
+    );
+    assert_eq!(
+        raised_below,
+        26,
+        "painted border on `surface_raised` below {}: pinned at 26, got {raised_below}. \
+         If the derivation now earns its floor, invert this into a guarantee.",
+        floors::BORDER
+    );
+}

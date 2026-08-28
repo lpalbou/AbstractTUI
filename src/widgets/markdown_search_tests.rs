@@ -101,7 +101,7 @@ fn mapping_round_trips_at_cluster_boundaries() {
         ground: None,
         fence: None,
         quote: false,
-        rule: false,
+        rule: None,
         image: None,
     };
     let plain = row.line.plain();

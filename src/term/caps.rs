@@ -179,6 +179,54 @@ impl Capabilities {
         caps
     }
 
+    /// The capability set for a terminal that is not a terminal — a
+    /// capture harness, a recorder, an embedding that only wants bytes.
+    /// The counterpart to [`detect_env`](Self::detect_env): where that
+    /// one reads the environment, this one deliberately does NOT, and
+    /// that is its whole value.
+    ///
+    /// A headless sink has no `TERM`, no `COLORTERM`, no locale to
+    /// consult — so running the env pass there does not detect anything
+    /// about it, it detects *the developer's shell*, and the resulting
+    /// output depends on who ran the suite. Colour is where that bites:
+    /// a capture terminal reads back the bytes the presenter actually
+    /// emitted, so a shell without `COLORTERM` quantises every asserted
+    /// colour through the 256 cube while token-vs-token comparisons stay
+    /// green. `Driver` substitutes this set automatically when
+    /// [`RunConfig::caps`] is `None` and [`Terminal::is_tty`] is false.
+    ///
+    /// The set: full colour, UTF-8, nothing else. Full colour because a
+    /// byte sink can record any colour and the harness should assert the
+    /// colour it wrote; UTF-8 because the sink stores bytes, not a font.
+    /// Every terminal-bound feature — kitty keyboard/graphics, sixel,
+    /// OSC 52, mouse, paste, focus, synchronized output — stays OFF, so
+    /// the emitted stream carries only what the frame needed.
+    ///
+    /// `NO_COLOR` is deliberately NOT honoured here. It is a request
+    /// about a human's screen; a capture buffer has no human in front of
+    /// it, and letting it move the bytes would reintroduce exactly the
+    /// environment-dependent verdict this constructor exists to remove.
+    /// A harness that wants to test the no-colour path asks for it:
+    /// `Capabilities::with(|c| c.no_color = true)`.
+    ///
+    /// ```
+    /// use abstracttui::term::Capabilities;
+    ///
+    /// let caps = Capabilities::headless();
+    /// assert!(caps.truecolor && caps.colors_256 && caps.unicode_ok);
+    /// assert!(!caps.kitty_graphics && !caps.sgr_mouse && !caps.no_color);
+    /// ```
+    ///
+    /// [`RunConfig::caps`]: crate::app::RunConfig::caps
+    /// [`Terminal::is_tty`]: crate::term::Terminal::is_tty
+    pub fn headless() -> Self {
+        Self::with(|c| {
+            c.truecolor = true;
+            c.colors_256 = true;
+            c.unicode_ok = true;
+        })
+    }
+
     // Passive env detection lives in a `#[path]` sibling (file-size
     // split): see caps_detect.rs — same impl, different file.
 }

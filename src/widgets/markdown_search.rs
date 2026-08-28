@@ -72,7 +72,7 @@ pub(crate) fn find_in_rows(rows: &[Row], query: &str, fold_case: bool) -> Vec<Md
     }
     let mut out = Vec::new();
     for (row_idx, row) in rows.iter().enumerate() {
-        if row.rule || row.image.is_some() || row.line.is_empty() {
+        if row.rule.is_some() || row.image.is_some() || row.line.is_empty() {
             continue;
         }
         let plain = row.line.plain();

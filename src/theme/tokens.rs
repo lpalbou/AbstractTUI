@@ -246,6 +246,65 @@ impl TokenId {
 }
 
 impl TokenSet {
+    /// The OPAQUE grounds: every token a widget paints a REGION with, and
+    /// therefore every token a user reads as "this is a different
+    /// surface". `overlay` is not one — it carries alpha and is
+    /// composited over whatever it covers, so it has no fixed value.
+    ///
+    /// This is the authoritative list, not a convenience. Two grounds
+    /// that quantise to one palette entry render as one surface, so the
+    /// downlevel path has to be handed the whole set at once
+    /// (`render::color::quantize_set_256`) — and it can only be handed
+    /// what this returns. A ground added to `TokenSet` and forgotten here
+    /// is a surface that silently stops being separable at 256 colours,
+    /// which is exactly the defect that produced this method.
+    pub const fn grounds(&self) -> [(TokenId, Rgba); 5] {
+        [
+            (TokenId::Bg, self.bg),
+            (TokenId::Surface, self.surface),
+            (TokenId::SurfaceRaised, self.surface_raised),
+            (TokenId::SelectionBg, self.selection_bg),
+            (TokenId::ShadowGround, self.shadow_ground),
+        ]
+    }
+
+    /// This ground's position in [`grounds`](TokenSet::grounds), or
+    /// `None` for a token that is not an opaque ground.
+    ///
+    /// The index is what [`render::color`](crate::render::color) speaks:
+    /// its declarations are positions in the color slice it was handed.
+    /// A theme states its intent in TOKENS, which is the only spelling
+    /// that survives — an index literal in a theme would silently mean
+    /// something else the day this list reorders.
+    pub fn ground_index(id: TokenId) -> Option<usize> {
+        // Sourced from the same list `grounds` returns, so the two cannot
+        // disagree about what a ground is or what order they are in.
+        let probe = TokenSet::default();
+        probe.grounds().iter().position(|(g, _)| *g == id)
+    }
+
+    /// Resolve a theme's token-pair separation intent into the index
+    /// pairs [`quantize_set_256_into_with`](
+    /// crate::render::color::quantize_set_256_into_with) takes.
+    ///
+    /// `Err(id)` names the first token that is not an opaque ground.
+    /// Refusing rather than skipping is the point: a dropped pair leaves
+    /// the author believing two grounds are declared when nothing carries
+    /// the declaration. [`register`](fn@crate::theme::register) applies this
+    /// so a runtime theme cannot reach the driver holding one.
+    pub fn resolve_ground_intent(
+        declaration: &[(TokenId, TokenId, crate::render::color::PairIntent)],
+    ) -> Result<Vec<(usize, usize, crate::render::color::PairIntent)>, TokenId> {
+        declaration
+            .iter()
+            .map(|&(a, b, intent)| {
+                let ia = TokenSet::ground_index(a).ok_or(a)?;
+                let ib = TokenSet::ground_index(b).ok_or(b)?;
+                Ok((ia, ib, intent))
+            })
+            .collect()
+    }
+
     /// Resolve a token by id.
     pub fn get(&self, id: TokenId) -> Rgba {
         match id {

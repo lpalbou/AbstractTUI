@@ -8,7 +8,7 @@ use super::*;
 use crate::base::{Point, Size};
 use crate::theme::default_theme;
 use crate::ui::{Key, Mods, MouseKind, UiEvent, UiTree};
-use crate::widgets::itest_util::{key, key_mod, mount_widget, mouse, render, type_str};
+use crate::widgets::itest_util::{key, key_mod, mount_widget, mouse, render, settle, type_str};
 
 // ------------------------------------------------------------------ model
 
@@ -526,6 +526,53 @@ fn caret_cell_tracks_typing_and_clears_on_blur() {
         state.caret_cell().get_untracked(),
         None,
         "blur clears the anchor (owner-driven dismissal keys off this)"
+    );
+}
+
+#[test]
+fn autofocus_at_mount_anchors_to_the_solved_rect_not_the_origin() {
+    // field-agora (agora-tui's composer): a TextArea focused by the very
+    // turn that MOUNTS it published its anchor from `Rect::ZERO` — the
+    // solver had not run when `FocusIn` arrived — so `caret_cell` read
+    // (1, 0) and the owner's completion panel opened at the top-left of
+    // the screen, 27 rows from the composer. Autofocus is exactly the
+    // case where nothing corrects it: the character that opened the
+    // panel was consumed ABOVE the widget, so no consumed key ever
+    // republishes, and a resize dismisses the panel rather than moving
+    // it. The solved rect is the second publish source that closes it.
+    let t = &default_theme().tokens;
+    let size = Size::new(20, 8);
+    let holder: std::rc::Rc<std::cell::RefCell<Option<TextAreaState>>> = Default::default();
+    let h2 = holder.clone();
+    let (_root, mut tree) = mount_widget(size, move |cx| {
+        let state = TextAreaState::new(cx);
+        *h2.borrow_mut() = Some(state.clone());
+        // Five rows of chrome above, so a ZERO-rect anchor and a solved
+        // one cannot be confused: the composer's first row is y=5.
+        Element::new()
+            .style(LayoutStyle::column().width(Dimension::Percent(1.0)))
+            .child(Element::new().style(LayoutStyle::line(5)).build())
+            .child(
+                TextArea::new()
+                    .state(&state)
+                    .rows(1, 3)
+                    .element(cx, t)
+                    .autofocus()
+                    .build(),
+            )
+            .build()
+    });
+    // No key is ever dispatched — that is the whole point of the case.
+    settle(&mut tree, size);
+    let state = holder.borrow().clone().expect("state");
+    let cell = state
+        .caret_cell()
+        .get_untracked()
+        .expect("autofocused: an anchor is published");
+    assert_eq!(
+        cell,
+        Point::new(1, 5),
+        "anchor sits on the composer's solved row, not the screen origin"
     );
 }
 

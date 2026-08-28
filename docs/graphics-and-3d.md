@@ -238,6 +238,55 @@ node-and-edge diagrams, prefer the `abstracttui-graph` /
 `abstracttui-mermaid` crates over hand-stroking
 ([graphs-and-diagrams.md](graphs-and-diagrams.md)).
 
+### Not an image: text drawn several cells tall
+
+`gfx::bigtext` rides the same mosaic encoder described above, but its
+source is the engine's embedded 8x16 font rather than a decoded picture.
+It exists because a terminal has one font size: a bigger glyph means
+spending more cells and subdividing them, so a banner heading or an
+oversized icon is a rasterization problem, not a typography one.
+
+Because it reuses the encoder, the capability ladder and every mosaic
+mode apply unchanged — but the best mode differs from the image case.
+Braille packs the most subpixels per cell and terminals draw its dots
+with visible gaps, which reads well for photographs and poorly for
+letterforms; sextants are solid ink at 2x3 and usually read better as
+type.
+
+Two rules the surface makes explicit, both easy to get wrong by
+guessing: how small you can go is a MEASUREMENT and not a constant —
+`bigtext::smallest_clear(mode, content)` takes it, because uppercase,
+mixed text and icons bottom out at different sizes and the mosaic mode
+moves all three — and a square icon needs twice as many columns as rows
+because a cell is about 1:2, which `GlyphScale::square(rows)` does for
+you. The sharp edge worth knowing before you pick: `GlyphScale::FLOOR`
+(4x3) is clear for everything in braille and only MARGINAL for mixed
+text in sextant, the mode this page just told you to prefer for type;
+`smallest_clear` sends you to 4x4 there.
+
+The second edge is the one that produced a bug report, and it took two
+fixes. Pairwise distance measures whether two rasterizations DIFFER, and
+more columns always buys more difference — so a cheapest-clear search
+with no bound walks to the widest scale it can and calls it best. It used
+to return 6x2 for braille text, where a filled `●` reduces to six
+near-solid cells and looks like a white bar; the measure was right that
+one bar differs from the next by 16 subpixels and had no way to notice
+that neither was its glyph any more.
+
+The search is now bounded to twice the glyph's natural aspect in either
+direction (`GlyphScale::within_aspect_band`), which also lets it reach
+past six columns: `MosaicMode::HalfBlock` clears at 7x5 for mixed text,
+and this page used to say it never cleared at all. **And `legibility`
+now measures the shape as well as the distance** —
+`bigtext::fidelity_loss` compares what is drawn against the same glyph
+at its natural proportions, so a scale you name yourself is graded
+honestly too: 6x2 comes back `Legibility::Distorted`, not `Clear`. The
+full surface, its
+limits (no accented glyphs) and the measurements behind the floor are in
+[api.md § gfx::bigtext](api.md#gfxbigtext--text-and-icons-several-cells-tall);
+`cargo run --example bigtext` shows every scale and symbol set on your
+own terminal.
+
 ## 3D end-to-end
 
 ### The five-line hello

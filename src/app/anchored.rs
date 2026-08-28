@@ -341,7 +341,7 @@ pub use completion::{Completion, CompletionCandidate, TriggerPosition};
 // path stays `app::anchored::{Popup, DismissReason, Tooltip}`.
 #[path = "anchored_owned.rs"]
 mod owned;
-pub use owned::{DismissReason, Popup, Tooltip};
+pub use owned::{DismissReason, Popup, TipContent, Tooltip};
 
 #[cfg(test)]
 #[path = "anchored_tests.rs"]

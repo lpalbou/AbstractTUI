@@ -31,18 +31,18 @@ pub use crate::theme::{Theme, TokenId, TokenSet};
 // Interactive widgets (RT8-1: every real app's first import line) +
 // the display set DESIGN ships.
 pub use crate::widgets::{
-    Badge, Bitmap, Block, BorderKind, Button, Checkbox, Grid, Image, List, Logo, Progress,
-    RadioGroup, Scroll, Separator, Spinner, Table, Tabs, TextInput, Viewport3D,
+    Badge, Bitmap, Block, BorderKind, Button, Checkbox, Grid, Image, List, ListContext, Logo,
+    Progress, RadioGroup, Scroll, Separator, Spinner, Table, Tabs, TextInput, Viewport3D,
 };
 
 pub use crate::app::{
     current_theme, set_theme, set_theme_by_id, use_startup_notices, use_theme, use_viewport, App,
-    KeymapHelp, Modal, Quitter, RunConfig, Toast,
+    ContextMenu, ContextMenuItem, KeymapHelp, Modal, Quitter, RunConfig, Toast,
 };
 
 pub use crate::anim::{Easing, Timeline, Transition, Tween};
 
-pub use crate::app::anchored::{DismissReason, Popup, Tooltip};
+pub use crate::app::anchored::{DismissReason, Popup, TipContent, Tooltip};
 pub use crate::app::select::{Combobox, MultiSelect, Select, SelectOption};
 pub use crate::app::selection::{copy_to_clipboard, mouse_capture, selection};
 pub use crate::{

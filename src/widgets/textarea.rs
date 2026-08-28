@@ -121,12 +121,23 @@ impl TextAreaState {
         self.inner.focused
     }
 
-    /// The caret's solved SCREEN CELL — the anchor a completion
-    /// dropdown places itself against (backlog 0120 §6). Updated from
-    /// inside the widget's event handlers (`EventCtx::current_rect`,
-    /// the engine's only rect source today — 0500 records the general
-    /// rect-query gap); `None` while unfocused. After a pure resize the
-    /// cell can be stale until the next key event.
+    /// The caret's solved cell — the anchor a completion dropdown places
+    /// itself against (backlog 0120 §6). `None` while unfocused.
+    ///
+    /// LAYER-LOCAL, like every rect the widget can see: a composer
+    /// inside a Modal or Drawer publishes in that layer's space, and a
+    /// consumer placing in viewport space must translate by the layer
+    /// origin (`app::anchored_completion` does).
+    ///
+    /// Published from TWO sources, because neither alone is enough:
+    /// the event handlers (`EventCtx::current_rect`) — right during
+    /// typing, ahead of the next solve — and the widget's own solved
+    /// rect (`Element::rect_signal`), which covers the turns where
+    /// GEOMETRY, not the caret, is what moved. The second is what makes
+    /// a TextArea focused by the turn that MOUNTS it truthful: at that
+    /// `FocusIn` the solver has not run, the handler's rect is
+    /// `Rect::ZERO`, and the anchor read (1, 0) until some later key
+    /// happened to republish it. A resize is corrected the same way.
     pub fn caret_cell(&self) -> Signal<Option<Point>> {
         self.inner.caret_cell
     }
@@ -425,6 +436,55 @@ impl TextArea {
             }
         };
 
+        // The caret anchor's SECOND source: the solved rect itself.
+        //
+        // `publish_caret_cell` runs inside event handlers, where the only
+        // geometry available is `ctx.current_rect()` — and at MOUNT-TIME
+        // focus that rect is `Rect::ZERO`: the widget is focused by the
+        // same turn that creates it, before the solver has ever seen it.
+        // The anchor then reads (1, 0) and an owner's completion panel
+        // opens at the top-left corner of the screen instead of against
+        // the composer, staying there until the next consumed key
+        // republishes (field-agora, agora-tui composer). Autofocus is
+        // exactly the case where no such key arrives: the character that
+        // opened the panel was consumed by a global action above.
+        //
+        // So bind the root to its own solved rect and republish from the
+        // layout pass. The event path stays as it is — it is the one that
+        // is right DURING typing, ahead of the next solve — and this
+        // catches every turn where geometry, not the caret, is what
+        // changed: first solve after mount, and any resize.
+        //
+        // Layer-local, like `current_rect` and like the anchor's existing
+        // contract (`app::anchored_completion` translates by the layer
+        // origin); this changes WHEN the cell is truthful, never in which
+        // space it is expressed.
+        let solved: Signal<Option<crate::base::Rect>> = cx.signal(None);
+        if !disabled {
+            let state = state.clone();
+            let width_hint = width_hint.clone();
+            cx.effect_labeled("textarea:anchor-from-solve", move || {
+                let Some(rect) = solved.get() else { return };
+                // Not focused = no anchor to hold: FocusOut cleared it,
+                // and republishing here would resurrect it.
+                if !focused.get() {
+                    return;
+                }
+                let width = (rect.w - 2).max(1);
+                width_hint.set(width);
+                let before = caret.get_untracked();
+                let mut c = before;
+                publish_caret_cell(&state, &mut c, rect, width);
+                // `publish_caret_cell` also clamps the scroll window, so
+                // it can move the caret's `top`. Write back only a real
+                // change: an unconditional set would re-render the draw
+                // child on every solve for nothing.
+                if c != before {
+                    caret.set(c);
+                }
+            });
+        }
+
         // Grow-to-content: height tracks the wrapped row count inside
         // [min_rows, max_rows]; shrink 0 so an overflowing sibling can
         // never crush the composer (0240 #2).
@@ -468,6 +528,7 @@ impl TextArea {
             el = el
                 .focusable()
                 .focus_signal(focused)
+                .rect_signal(solved)
                 .on(Phase::Bubble, handler);
         }
         el.child(dyn_view(

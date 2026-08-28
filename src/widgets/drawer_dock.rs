@@ -26,11 +26,17 @@
 //! - **Badges** ride the tabs ([`DrawerDock::drawer_badge`]): a themed
 //!   dot under the vertical label, resolved reactively — the "something
 //!   waits behind this drawer" affordance, readable without opening.
+//! - **Vertical means stacked graphemes, not rotated glyphs.** A terminal
+//!   cell has no text transform or writing mode, so the portable rail
+//!   prints one grapheme cluster per row. True 90-degree text would have
+//!   to be caller-supplied raster artwork; it is not terminal text and
+//!   loses the portable, searchable, semantic label contract.
 //!
 //! ## Interaction contract
 //!
-//! Click a tab: open that drawer (replacing any other). Click the
-//! ACTIVE tab or its header ✕ to collapse. (Esc also collapses, but
+//! Click a tab, or focus it and press Enter/Space: open that drawer
+//! (replacing any other). Activate the ACTIVE tab or its header ✕ to
+//! collapse. (Esc also collapses, but
 //! only while focus sits INSIDE the panel — a text-only drawer that
 //! never takes focus closes by mouse alone, like the web reference.)
 //! Drawer BUILDERS must not write `open` synchronously — a redirect
@@ -58,7 +64,7 @@ use crate::reactive::{Scope, Signal};
 use crate::render::Style;
 use crate::theme::TokenSet;
 use crate::ui::{
-    dyn_view, dyn_view_scoped, Element, EventCtx, Key, Mods, MouseButton, MouseKind, Phase,
+    dyn_view, dyn_view_scoped, Element, EventCtx, Key, Mods, MouseButton, MouseKind, Phase, Role,
     UiEvent, View,
 };
 use unicode_segmentation::UnicodeSegmentation;
@@ -72,7 +78,7 @@ const CLOSE_GLYPH: &str = "✕";
 const RAIL_W: i32 = 3;
 
 type DrawerBuilder = Box<dyn FnMut(Scope) -> View>;
-type BadgeFn = Box<dyn Fn() -> bool>;
+type BadgeFn = Rc<dyn Fn() -> bool>;
 type ChangeBox = Box<dyn FnMut(Option<&str>)>;
 type ChangeFn = Rc<RefCell<Option<ChangeBox>>>;
 
@@ -81,6 +87,9 @@ struct DrawerDef {
     title: String,
     badge: Option<BadgeFn>,
     build: DrawerBuilder,
+    /// Overrides the dock-wide `panel_width` while THIS drawer is open.
+    /// `None` = use the dock's value.
+    width: Option<i32>,
 }
 
 /// The right-edge drawer rail + docked panel. See the [module
@@ -129,7 +138,48 @@ impl DrawerDock {
             title: title.into(),
             badge: None,
             build: Box::new(build),
+            width: None,
         });
+        self
+    }
+
+    /// Widen (or narrow) the LAST added drawer's panel, overriding the
+    /// dock-wide [`panel_width`](Self::panel_width) while that drawer is
+    /// open. Same floor of 8 cells.
+    ///
+    /// The panel is rebuilt whenever the open drawer changes, so this
+    /// resolves per open drawer rather than once for the dock — which is
+    /// what `panel_width` alone could not express.
+    ///
+    /// Requested by a consumer whose leaderboard drawer needs five
+    /// reputation columns plus rank, name and score, beside Members and
+    /// Files panels that are fine narrow. Their fallback was compressing
+    /// to two-character cells, which shows the numbers and is not the
+    /// same panel.
+    ///
+    /// It attaches to the last `.drawer(..)` exactly like
+    /// [`drawer_badge`](Self::drawer_badge), for the same reason: the
+    /// value belongs to one drawer, and a `|id| -> width` closure would
+    /// make the caller re-state ids the builder already knows.
+    ///
+    /// ```
+    /// # use abstracttui::widgets::DrawerDock;
+    /// # use abstracttui::ui::Element;
+    /// DrawerDock::new(Element::new().build())
+    ///     .drawer("members", "Members", |_| Element::new().build())
+    ///     .drawer("board", "Leaderboard", |_| Element::new().build())
+    ///     .drawer_width(64) // the board only
+    ///     .panel_width(32); // everything else
+    /// ```
+    pub fn drawer_width(mut self, w: i32) -> DrawerDock {
+        debug_assert!(
+            !self.drawers.is_empty(),
+            "DrawerDock::drawer_width attaches to the LAST added drawer — \
+             call it after `.drawer(..)`, never before the first one",
+        );
+        if let Some(last) = self.drawers.last_mut() {
+            last.width = Some(w.max(8));
+        }
         self
     }
 
@@ -143,7 +193,7 @@ impl DrawerDock {
              call it after `.drawer(..)`, never before the first one",
         );
         if let Some(last) = self.drawers.last_mut() {
-            last.badge = Some(Box::new(f));
+            last.badge = Some(Rc::new(f));
         }
         self
     }
@@ -200,6 +250,7 @@ impl DrawerDock {
         // builder in the panel closure — safe because effect re-runs
         // are never inline (reactive law), so no reentry path exists;
         // the debug_assert below keeps the builder honest instead.
+        let tab_focus: Vec<Signal<bool>> = (0..drawers.len()).map(|_| cx.signal(false)).collect();
         let defs = Rc::new(RefCell::new(drawers));
 
         // The dock's ONE transition choke point: every interaction
@@ -245,6 +296,7 @@ impl DrawerDock {
                         .build();
                 };
                 let title = def.title.clone();
+                let width = def.width.unwrap_or(panel_width);
                 let body = (def.build)(gcx);
                 drop(defs);
                 // A builder that writes `open` SYNCHRONOUSLY writes a
@@ -329,7 +381,7 @@ impl DrawerDock {
                 Element::new()
                     .style(
                         LayoutStyle::column()
-                            .width(Dimension::Cells(panel_width))
+                            .width(Dimension::Cells(width))
                             .height(Dimension::Percent(1.0)),
                     )
                     // Ground fill + chrome, before children paint:
@@ -409,11 +461,14 @@ impl DrawerDock {
                     .draw(move |canvas, rect| {
                         let ink = Style::new().fg(rail_t.text_faint).bg(rail_t.surface);
                         canvas.fill_styled(rect, ' ', &ink);
-                    });
+                    })
+                    .role(Role::Tabs)
+                    .access_label("drawers");
                 let defs = rail_defs.borrow();
-                for def in defs.iter() {
+                for (def_index, def) in defs.iter().enumerate() {
                     let id = def.id.clone();
                     let is_active = active.as_deref() == Some(id.as_str());
+                    let focus = tab_focus[def_index];
                     // Grapheme clusters, one per rail row: a combining
                     // accent or ZWJ family renders as ONE glyph, never
                     // shredded across rows (adversarial review P2-3).
@@ -423,54 +478,94 @@ impl DrawerDock {
                     // Tab block: one blank row, the label vertically,
                     // an optional badge dot, one blank row.
                     let rows = label.len() as i32 + 2 + i32::from(badge);
-                    let (fg, bg) = if is_active {
-                        (rail_t.accent, rail_t.surface_raised)
-                    } else {
-                        (rail_t.text_faint, rail_t.surface)
-                    };
                     let accent = rail_t.accent;
                     let toggle = rail_transition.clone();
+                    let toggle_key = toggle.clone();
                     let next = if is_active { None } else { Some(id) };
-                    col = col.child(
-                        Element::new()
-                            .style(
-                                LayoutStyle::default()
-                                    .width(Dimension::Cells(RAIL_W))
-                                    .height(Dimension::Cells(rows))
-                                    .shrink(0.0),
-                            )
-                            .draw(move |canvas, rect| {
-                                if rect.is_empty() {
-                                    return;
+                    let next_key = next.clone();
+                    let access_label = def.title.clone();
+                    // The rail Dyn regenerates on active/badge changes.
+                    // Remember keyboard ownership before replacement and
+                    // hand it to the corresponding new tab.
+                    let restore_focus = focus.get_untracked();
+                    let tab = Element::new()
+                        .style(
+                            LayoutStyle::default()
+                                .width(Dimension::Cells(RAIL_W))
+                                .height(Dimension::Cells(rows))
+                                .shrink(0.0),
+                        )
+                        .role(Role::Tab)
+                        .access_label(access_label)
+                        .access_value(move || {
+                            if is_active {
+                                "selected"
+                            } else {
+                                "not selected"
+                            }
+                            .into()
+                        })
+                        .draw(move |canvas, rect| {
+                            if rect.is_empty() {
+                                return;
+                            }
+                            // Untracked at paint time: FocusIn damages
+                            // this rect, so the next frame observes the
+                            // signal without regenerating (and thereby
+                            // disposing) the focused tab itself.
+                            let is_focused = focus.get_untracked();
+                            let (fg, bg) = if is_active {
+                                (rail_t.accent, rail_t.surface_raised)
+                            } else if is_focused {
+                                (rail_t.accent, rail_t.surface)
+                            } else {
+                                (rail_t.text_faint, rail_t.surface)
+                            };
+                            let ink = if is_focused {
+                                Style::new().fg(fg).bg(bg).bold()
+                            } else {
+                                Style::new().fg(fg).bg(bg)
+                            };
+                            canvas.fill_styled(rect, ' ', &ink);
+                            let x = rect.x + 1;
+                            for (i, g) in label.iter().enumerate() {
+                                let y = rect.y + 1 + i as i32;
+                                if y >= rect.bottom() {
+                                    break;
                                 }
-                                let ink = Style::new().fg(fg).bg(bg);
-                                canvas.fill_styled(rect, ' ', &ink);
-                                let x = rect.x + 1;
-                                for (i, g) in label.iter().enumerate() {
-                                    let y = rect.y + 1 + i as i32;
-                                    if y >= rect.bottom() {
-                                        break;
-                                    }
-                                    canvas.print_styled(Point::new(x, y), g, &ink);
+                                canvas.print_styled(Point::new(x, y), g, &ink);
+                            }
+                            if badge {
+                                let y = rect.y + 1 + label.len() as i32;
+                                if y < rect.bottom() {
+                                    let dot = Style::new().fg(accent).bg(bg);
+                                    canvas.print_styled(Point::new(x, y), "●", &dot);
                                 }
-                                if badge {
-                                    let y = rect.y + 1 + label.len() as i32;
-                                    if y < rect.bottom() {
-                                        let dot = Style::new().fg(accent).bg(bg);
-                                        canvas.print_styled(Point::new(x, y), "●", &dot);
-                                    }
+                            }
+                        })
+                        .on(
+                            Phase::Bubble,
+                            move |ctx: &mut EventCtx, ev: &UiEvent| match ev {
+                                UiEvent::Mouse(m)
+                                    if m.kind == MouseKind::Down(MouseButton::Left) =>
+                                {
+                                    toggle(next.clone());
+                                    ctx.stop_propagation();
                                 }
-                            })
-                            .on(Phase::Bubble, move |ctx: &mut EventCtx, ev: &UiEvent| {
-                                if let UiEvent::Mouse(m) = ev {
-                                    if m.kind == MouseKind::Down(MouseButton::Left) {
-                                        toggle(next.clone());
-                                        ctx.stop_propagation();
-                                    }
+                                UiEvent::Key(k)
+                                    if matches!(k.key, Key::Enter | Key::Char(' '))
+                                        && k.mods == Mods::NONE =>
+                                {
+                                    toggle_key(next_key.clone());
+                                    ctx.stop_propagation();
                                 }
-                            })
-                            .build(),
-                    );
+                                _ => {}
+                            },
+                        )
+                        .focusable()
+                        .focus_signal(focus);
+                    let tab = if restore_focus { tab.autofocus() } else { tab };
+                    col = col.child(tab.build());
                 }
                 col.build()
             },
