@@ -32,10 +32,12 @@ use abstracttui::theme::themes;
 use abstracttui::three::{Light, Model, Vec3};
 
 /// Workspace assets the engine's own tests render (tried in order when
-/// no path is given).
+/// no path is given). Relative to the crate root inside an
+/// AbstractFramework workspace checkout, where sibling repositories sit
+/// next to this one.
 const DEFAULT_ASSETS: [&str; 2] = [
-    "/Users/albou/tmp/abstractframework/meshvault/frontend/testmodels/helmet.glb",
-    "/Users/albou/tmp/abstractframework/abstract3d/out/x-wing/scene.glb",
+    "../meshvault/frontend/testmodels/helmet.glb",
+    "../abstract3d/out/x-wing/scene.glb",
 ];
 
 const MODES: [(MosaicMode, &str); 4] = [
