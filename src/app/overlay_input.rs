@@ -144,4 +144,27 @@ impl Overlays {
             tree.cancel_pointer_press();
         }
     }
+
+    /// Drop a press capture left in an overlay tree that did NOT receive
+    /// the release (it went to another layer). A tree that received the
+    /// release has already cleared its own capture, so only stale ones
+    /// are cancelled (see `Driver`'s mouse-up rule).
+    pub(crate) fn drop_stale_captures(&self) {
+        let trees: Vec<UiTree> = {
+            let store = self.store.borrow();
+            store
+                .meta
+                .iter()
+                .filter_map(|m| match &m.content {
+                    OverlayContent::Tree { tree, .. } => Some(tree.handle()),
+                    _ => None,
+                })
+                .collect()
+        };
+        for mut tree in trees {
+            if tree.pointer_capture().is_some() {
+                tree.cancel_pointer_press();
+            }
+        }
+    }
 }
