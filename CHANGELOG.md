@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.8] - staged (not published)
+
+Maintenance release on the 0.3 line (branch `maint/0.3`, from 0.3.7) for
+consumers still pinned to 0.3 — the AbstractGateway terminal console and
+the AbstractCore console screens. The same two fixes as 0.6.1. No API
+change.
+
+### Fixed
+
+- `TextInput`: a click puts the cursor where it lands — on the cluster
+  under the pointer (either cell of a wide cluster lands before it), past
+  the end at the end. Before, a click only took the focus and the cursor
+  stayed at the start of a pre-filled value. A click never starts a
+  selection; one already there is dropped.
+- `Scroll`: ←/→ bubble on unless the scroller moved sideways, so an
+  application's own ←/→ keep working with the focus inside a
+  vertical-only pane. ↑/↓, PgUp/PgDn and Home/End are unchanged.
+
 ## [0.3.7] - 2026-08-20
 
 ### Added
