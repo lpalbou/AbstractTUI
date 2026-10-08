@@ -508,3 +508,43 @@ fn an_empty_anchor_never_becomes_a_phantom_selection() {
     type_str(&mut tree, "X");
     assert_eq!(value.get_untracked(), "abcdeX", "no phantom selection");
 }
+
+/// Click-to-cursor (0.6.1): a press inside the text puts the cursor on the
+/// cluster under the pointer; past the end, at the end. Column 0 is the
+/// left stroke, the text starts at column 1.
+#[test]
+fn a_click_puts_the_cursor_under_the_pointer_and_past_the_end_at_the_end() {
+    use crate::widgets::itest_util::click;
+    let size = Size::new(16, 1);
+    let (_root, mut tree, value) = focused_input(size);
+    type_str(&mut tree, "hello");
+    render(&mut tree, size);
+    click(&mut tree, 3, 0); // the cell of "l" (cluster 2)
+    type_str(&mut tree, "X");
+    assert_eq!(value.get_untracked(), "heXllo");
+    click(&mut tree, 13, 0); // past the end
+    type_str(&mut tree, "!");
+    assert_eq!(value.get_untracked(), "heXllo!");
+    click(&mut tree, 1, 0); // the first cell
+    type_str(&mut tree, "<");
+    assert_eq!(value.get_untracked(), "<heXllo!");
+}
+
+/// A wide cluster is one position: a click on either of its cells lands
+/// before it; a click never starts a selection.
+#[test]
+fn a_click_on_a_wide_cluster_lands_before_it_and_never_selects() {
+    use crate::widgets::itest_util::click;
+    let size = Size::new(16, 1);
+    let (_root, mut tree, value) = focused_input(size);
+    type_str(&mut tree, "a界b");
+    render(&mut tree, size);
+    click(&mut tree, 3, 0); // the second cell of 界 (cols 2-3)
+    type_str(&mut tree, "|");
+    assert_eq!(value.get_untracked(), "a|界b");
+    // Select all, then click: the selection goes, typing inserts.
+    key_mod(&mut tree, Key::Char('a'), Mods::CTRL);
+    click(&mut tree, 1, 0);
+    type_str(&mut tree, "^");
+    assert_eq!(value.get_untracked(), "^a|界b");
+}

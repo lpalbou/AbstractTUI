@@ -910,3 +910,86 @@ fn scrollbar_thumb_floor_yields_to_short_tracks() {
     );
     root.dispose();
 }
+
+/// ←/→ inside a vertical-only scroller bubble to the app (a parent's tab
+/// switching keeps working with the focus in the pane); ↑/↓ stay the
+/// scroller's. Before 0.6.1 the scroller stopped every arrow.
+#[test]
+fn left_and_right_bubble_out_of_a_vertical_only_scroller() {
+    use crate::ui::{Phase, UiEvent};
+    let t = &default_theme().tokens;
+    let size = Size::new(12, 4);
+    let (content, h) = tall_content();
+    let seen: Rc<RefCell<Vec<Key>>> = Rc::new(RefCell::new(Vec::new()));
+    let seen_in = seen.clone();
+    let (_root, mut tree) = mount_widget(size, move |cx| {
+        Element::new()
+            .style(LayoutStyle::column().grow(1.0))
+            .on(Phase::Bubble, move |_ctx, ev| {
+                if let UiEvent::Key(k) = ev {
+                    seen_in.borrow_mut().push(k.key);
+                }
+            })
+            .child(
+                Scroll::new(content)
+                    .content_size(10, h)
+                    .element(cx, t)
+                    .build(),
+            )
+            .build()
+    });
+    render(&mut tree, size);
+    key(&mut tree, Key::Tab); // focus the scroller
+    seen.borrow_mut().clear();
+    key(&mut tree, Key::Left);
+    key(&mut tree, Key::Right);
+    key(&mut tree, Key::Down);
+    assert_eq!(
+        *seen.borrow(),
+        vec![Key::Left, Key::Right],
+        "←/→ bubble, ↓ is the scroller's"
+    );
+    let canvas = render(&mut tree, size);
+    assert!(canvas.row_text(0).starts_with("row 1"), "↓ still scrolls");
+}
+
+/// A scroller that scrolls sideways keeps ←/→ while it moves, and lets
+/// them go at its edge.
+#[test]
+fn a_horizontal_scroller_keeps_left_right_while_it_moves() {
+    use crate::ui::{Phase, UiEvent};
+    let t = &default_theme().tokens;
+    let size = Size::new(8, 3);
+    let wide = text("0123456789abcdefghij".to_string());
+    let seen: Rc<RefCell<Vec<Key>>> = Rc::new(RefCell::new(Vec::new()));
+    let seen_in = seen.clone();
+    let (_root, mut tree) = mount_widget(size, move |cx| {
+        Element::new()
+            .style(LayoutStyle::column().grow(1.0))
+            .on(Phase::Bubble, move |_ctx, ev| {
+                if let UiEvent::Key(k) = ev {
+                    seen_in.borrow_mut().push(k.key);
+                }
+            })
+            .child(
+                Scroll::new(wide)
+                    .axes(true, false)
+                    .content_size(20, 1)
+                    .element(cx, t)
+                    .build(),
+            )
+            .build()
+    });
+    render(&mut tree, size);
+    key(&mut tree, Key::Tab);
+    seen.borrow_mut().clear();
+    key(&mut tree, Key::Right); // moves: kept
+    assert!(
+        seen.borrow().is_empty(),
+        "a moving → is the scroller's: {:?}",
+        seen.borrow()
+    );
+    key(&mut tree, Key::Left); // back to 0: moves, kept
+    key(&mut tree, Key::Left); // at the edge: bubbles
+    assert_eq!(*seen.borrow(), vec![Key::Left], "← at the edge bubbles");
+}

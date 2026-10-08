@@ -696,8 +696,16 @@ impl Scroll {
                         Key::End => (0, content_h),
                         _ => return,
                     };
-                    scroll_by(dx, dy, rect);
-                    ctx.stop_propagation();
+                    let moved = scroll_by(dx, dy, rect);
+                    // ←/→ belong to the scroller only when it scrolls
+                    // sideways: a vertical-only pane (or one already at
+                    // its horizontal edge) lets them bubble, so an app's
+                    // own ←/→ (tab switching, a parent's navigation)
+                    // still works with the focus inside the pane.
+                    // Vertical keys stay owned as before.
+                    if dx == 0 || moved {
+                        ctx.stop_propagation();
+                    }
                 }
                 _ => {}
             }
