@@ -98,6 +98,20 @@ pub(crate) struct ClusterMap {
     widths: Vec<i32>,
 }
 
+/// The cursor position for display column `col` of the text: the
+/// cluster whose cells hold `col`, or the end when `col` is past it.
+fn cluster_at_col(map: &ClusterMap, col: i32) -> usize {
+    let mut start = 0;
+    for i in 0..map.len() {
+        let w = map.widths[i];
+        if w > 0 && col < start + w {
+            return i;
+        }
+        start += w;
+    }
+    map.len()
+}
+
 impl ClusterMap {
     pub(crate) fn of(text: &str) -> ClusterMap {
         let mut bounds = Vec::new();
@@ -319,6 +333,27 @@ impl TextInput {
                         insert_text(&clean, value, caret, width);
                         notify(&on_change, value);
                         ctx.stop_propagation();
+                    }
+                    // Click-to-cursor (0.6.1): a press inside the text
+                    // area puts the cursor at that column — on the
+                    // cluster under the pointer, past the end at the
+                    // end. A click never starts a selection (any
+                    // selection is dropped, like a plain cursor move).
+                    // The press still routes on (focus is the tree's).
+                    UiEvent::Mouse(m)
+                        if matches!(
+                            m.kind,
+                            crate::ui::MouseKind::Down(crate::ui::MouseButton::Left)
+                        ) =>
+                    {
+                        let rect = ctx.current_rect();
+                        let rel = m.pos.x - (rect.x + 1);
+                        caret.update(|c| {
+                            let col = (rel + c.scroll).max(0);
+                            let map = value.with_untracked(|v| ClusterMap::of(v));
+                            c.cursor = cluster_at_col(&map, col);
+                            c.anchor = None;
+                        });
                     }
                     _ => {}
                 }
