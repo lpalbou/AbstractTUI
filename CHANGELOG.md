@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - staged (not published)
+
+Two input fixes found while redesigning the AbstractGateway terminal
+console to be mouse-first (round 15). No API change.
+
+### Fixed
+
+- `TextInput`: a click puts the cursor where it lands. A left press inside
+  the text area moves the cursor to the cluster under the pointer (either
+  cell of a wide cluster lands before it), and a press past the end of the
+  text moves it to the end. Before, the field only took the focus and the
+  cursor stayed where it was — at the start of a pre-filled value, so a
+  click after the text and a keystroke inserted at the front. A click
+  never starts a selection; one already there is dropped, as any plain
+  cursor move does. Masked fields map columns the same way (one bullet per
+  cluster, in the cluster's width).
+- `Scroll`: ←/→ no longer die in a pane that cannot use them. The scroller
+  stopped every arrow key, so an application's own ←/→ (tab switching,
+  page navigation) stopped working as soon as the focus was inside a
+  vertical-only scroll pane. ←/→ now bubble on unless the scroller actually
+  moved sideways (horizontal axis on and not at its edge); ↑/↓, PgUp/PgDn
+  and Home/End keep their behaviour.
+
 ## [0.6.0] - 2026-08-25
 
 A minor bump for a new public module, the theme-declared ground intent
