@@ -996,6 +996,22 @@ impl Driver {
                         Some(consumed) => consumed,
                         None => app.tree().dispatch(&ui_event),
                     };
+                    // A release ends EVERY tree's press, not just the one it
+                    // was routed to: a press that opened a modal leaves its
+                    // own tree holding the automatic press capture while the
+                    // release goes to the modal — that stale capture would
+                    // route every later press in that tree to the old
+                    // widget. Trees that received the release have already
+                    // dropped their capture; only stale ones are cancelled.
+                    if let crate::ui::UiEvent::Mouse(m) = &ui_event {
+                        if matches!(m.kind, crate::ui::MouseKind::Up(_)) {
+                            self.overlays.drop_stale_captures();
+                            let root = app.tree();
+                            if root.pointer_capture().is_some() {
+                                root.cancel_pointer_press();
+                            }
+                        }
+                    }
                     // Global actions run LAST: only keys nothing in the
                     // UI consumed reach the keymap (a focused input
                     // typing 's' never fires a bare-'s' binding).

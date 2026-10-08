@@ -29,6 +29,14 @@ console to be mouse-first (round 15). No API change.
   vertical-only scroll pane. ←/→ now bubble on unless the scroller actually
   moved sideways (horizontal axis on and not at its edge); ↑/↓, PgUp/PgDn
   and Home/End keep their behaviour.
+- Pointer capture across layers: a press that opens a modal (or any
+  overlay) in the same event no longer leaves its own tree holding the
+  pointer. The release is routed to the new layer, so the tree that saw
+  the press never received it and kept its automatic press capture —
+  every later press in that tree went to the old widget (a select reopened
+  on the next click elsewhere; a segment took every press). The driver now
+  cancels the press in every tree that still holds a capture after a
+  release went elsewhere; the tree that received the release is unaffected.
 
 ## [0.6.0] - 2026-08-25
 
