@@ -703,6 +703,19 @@ fn left_and_right_bubble_out_of_a_vertical_only_scroller() {
     );
     let canvas = render(&mut tree, size);
     assert!(canvas.row_text(0).starts_with("row 1"), "↓ still scrolls");
+    // ↓ at the bottom edge is still the scroller's (vertical keys keep
+    // their behaviour even when they cannot move).
+    key(&mut tree, Key::End);
+    render(&mut tree, size);
+    seen.borrow_mut().clear();
+    key(&mut tree, Key::Down);
+    key(&mut tree, Key::Up);
+    key(&mut tree, Key::End);
+    assert!(
+        seen.borrow().is_empty(),
+        "vertical keys never bubble: {:?}",
+        seen.borrow()
+    );
 }
 
 /// A scroller that scrolls sideways keeps ←/→ while it moves, and lets

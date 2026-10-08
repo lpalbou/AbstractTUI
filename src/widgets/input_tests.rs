@@ -542,9 +542,10 @@ fn a_click_on_a_wide_cluster_lands_before_it_and_never_selects() {
     click(&mut tree, 3, 0); // the second cell of 界 (cols 2-3)
     type_str(&mut tree, "|");
     assert_eq!(value.get_untracked(), "a|界b");
-    // Select all, then click: the selection goes, typing inserts.
+    // Select all, then click AWAY from the selection's anchor (cluster
+    // 1): the selection goes, typing inserts instead of replacing.
     key_mod(&mut tree, Key::Char('a'), Mods::CTRL);
-    click(&mut tree, 1, 0);
+    click(&mut tree, 2, 0);
     type_str(&mut tree, "^");
-    assert_eq!(value.get_untracked(), "^a|界b");
+    assert_eq!(value.get_untracked(), "a^|界b");
 }
