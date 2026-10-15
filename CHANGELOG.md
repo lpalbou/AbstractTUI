@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.8] - staged (not published)
+## [0.3.8] - 2026-10-15
 
 Maintenance release on the 0.3 line (branch `maint/0.3`, from 0.3.7) for
 consumers still pinned to 0.3 — the AbstractGateway terminal console and
