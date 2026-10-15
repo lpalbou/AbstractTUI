@@ -95,7 +95,7 @@ impl Driver {
         // Snapshot decisions first; nothing mutates under the borrow.
         let (retired, moved): (Vec<u64>, Vec<u64>) = {
             let mut store = self.overlays.store().borrow_mut();
-            let retired: Vec<u64> = store.retired_images.drain(..).collect();
+            let retired: Vec<u64> = std::mem::take(&mut store.retired_images);
             let moved = store
                 .images
                 .iter()

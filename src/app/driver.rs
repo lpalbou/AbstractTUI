@@ -412,7 +412,7 @@ impl Driver {
 
         let mut events = 0usize;
         let mut quit = false;
-        let pending: Vec<Event> = self.pending.drain(..).collect();
+        let pending: Vec<Event> = std::mem::take(&mut self.pending);
         for ev in pending {
             events += 1;
             self.handle_event(app, term, ev, &mut quit);
@@ -1111,7 +1111,7 @@ fn coalesce_moves(events: &mut Vec<Event>) {
         |e: &Event| matches!(e, Event::Mouse(m) if m.kind == crate::input::MouseKind::Move);
     let mut keep = 0usize;
     for i in 0..events.len() {
-        let dropped = is_move(&events[i]) && events.get(i + 1).map(&is_move).unwrap_or(false);
+        let dropped = is_move(&events[i]) && events.get(i + 1).map(is_move).unwrap_or(false);
         if !dropped {
             events.swap(keep, i);
             keep += 1;
