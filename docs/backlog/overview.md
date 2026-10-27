@@ -33,7 +33,7 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | State | Count |
 | --- | --- |
 | Planned | 5 |
-| Proposed | 84 |
+| Proposed | 85 |
 | Completed | 75 |
 | Deprecated | 0 |
 | Recurrent | 0 |
@@ -254,6 +254,7 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0675 | Scroll shift × live images: kitty re-place restores the scroll byte win | media-av | A log app keeping a persistent image. |
 | 0680 | Sixel bottom-row honesty: last-row clamp + DECSET 8452 probe | media-av | First sixel validation pass of the images-truth recipe. |
 | 0688 | Detection/transport robustness: strict kitty-probe reply parse; >1 MiB single-frame payloads under tmux | media-av | Next caps/probe wave or a tmux+iTerm2 field report. |
+| 0690 | Selectable list with an inline preview action (`on_preview` on settle, generation id, trailing ▶/■ action) + a `PlaybackStatus` widget (idle/loading/playing/failed) | media-av | The console-TUI voice picker (its Test does not play) or the first browse-and-preview app. |
 | 0710 | Game tick: public per-frame tasks + fixed-timestep helper | games | First real-time game example, or the second in-tree consumer hand-rolling an `after`-recursion clock. |
 | 0720 | Sprite/tile toolkit: masked blit, sprite sheets, cell-art palette swap | games | First game example reaching its render phase. |
 | 0730 | Board-grid math: square + hex coordinates, range, line, aspect-corrected projection | games | First grid-mapped surface in any dogfood app; placement routes through ADR-0004's classification. |
