@@ -33,7 +33,7 @@ zero idle cost — codified with the milestone bands and validation vehicles in
 | State | Count |
 | --- | --- |
 | Planned | 5 |
-| Proposed | 85 |
+| Proposed | 89 |
 | Completed | 75 |
 | Deprecated | 0 |
 | Recurrent | 0 |
@@ -214,6 +214,9 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0170 | 1.0-track API stability pass — PARTIALLY EXECUTED: ADRs 0001-0003 + `#[non_exhaustive]` on Capabilities/GraphicsCaps; the full 1.0 audit stays open | app-widgets | The remaining audit rides the 0.3 window (budget doc: planned/0002). |
 | 0175 | `Block::shadow` consumes a row/col of the block's own slot; under interior crush the FIRST child dies, order-dependently (wave-12 §1b) | app-widgets | The chrome-yields-vs-document ruling in-item; the order-dependence half rides the 0185 investigation. |
 | 0185 | Measure inflation around Tabs: fixed-height siblings crushed while grow slack exists (wave-12 §1) | app-widgets | ALREADY ACCEPTED by the code seat as "the top engine investigation for the next wave" — needs the failing-test pin first. |
+| 0186 | TextInput/TextArea content inset (`.inset(left,right)`, every path incl. mouse-to-caret, narrow-safe) | app-widgets | AbstractCode composer ("› " prompt). |
+| 0187 | Semantic hit targets for custom-drawn spans (action ids recorded at draw, engine hit-test; chrome half of 0165) | app-widgets | AbstractCode chrome (workflow/model/session id). |
+| 0188 | JSON block: pretty-print + optional collapse over the existing `CodeView` json lexer + `Disclosure` | app-widgets | AbstractCode tool-result envelopes. |
 | 0200 | EPIC: coding-agent console over `abstractcode serve` JSONL | ports | Its widget + live-data dependencies land (widget deps complete). |
 | 0210 | EPIC: a2a chat TUI over the agora hub | ports | Its widget + live-data dependencies land (Feed + TextArea DONE; lifecycle 0040 done, 0050 remains). |
 | 0272 | ChoicePrompt aux-key vocabulary — non-option key surface, hint row open to callers (split out of 0271) | first-app | The consumer's `f` cards↔JSON toggle ask recurring, or the next ChoicePrompt wave. |
@@ -255,6 +258,7 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0680 | Sixel bottom-row honesty: last-row clamp + DECSET 8452 probe | media-av | First sixel validation pass of the images-truth recipe. |
 | 0688 | Detection/transport robustness: strict kitty-probe reply parse; >1 MiB single-frame payloads under tmux | media-av | Next caps/probe wave or a tmux+iTerm2 field report. |
 | 0690 | Browse-and-preview lists: reuse `List` (`on_select`, `row_accessory`), `reactive::after`, `Spinner`/`Progress` and 0640; add keyboard reach to the row accessory (`List::accessory_key`) | media-av | The console-TUI voice picker (its Test does not play) adopts the recipe. |
+| 1260 | Status bar with named slots (bottom twin of 0560's AppHeader; shared slot-layout helper) | app-kits | AbstractCode chrome. |
 | 0710 | Game tick: public per-frame tasks + fixed-timestep helper | games | First real-time game example, or the second in-tree consumer hand-rolling an `after`-recursion clock. |
 | 0720 | Sprite/tile toolkit: masked blit, sprite sheets, cell-art palette swap | games | First game example reaching its render phase. |
 | 0730 | Board-grid math: square + hex coordinates, range, line, aspect-corrected projection | games | First grid-mapped surface in any dogfood app; placement routes through ADR-0004's classification. |
