@@ -1378,7 +1378,7 @@ fn coalesce_moves(events: &mut Vec<Event>) {
         |e: &Event| matches!(e, Event::Mouse(m) if m.kind == crate::input::MouseKind::Move);
     let mut keep = 0usize;
     for i in 0..events.len() {
-        let dropped = is_move(&events[i]) && events.get(i + 1).map(&is_move).unwrap_or(false);
+        let dropped = is_move(&events[i]) && events.get(i + 1).is_some_and(is_move);
         if !dropped {
             events.swap(keep, i);
             keep += 1;
