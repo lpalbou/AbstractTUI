@@ -157,6 +157,7 @@ pub(super) fn mount_view(
                     access: el.access.clone(),
                     payload: InstPayload::Element {
                         draw: el.draw.map(|d| Rc::new(RefCell::new(d))),
+                        action_host: el.handlers.iter().find_map(|h| h.host.clone()),
                         handlers: Rc::new(RefCell::new(el.handlers)),
                         shortcuts: Rc::new(RefCell::new(el.shortcuts)),
                     },
@@ -448,6 +449,8 @@ pub(super) fn remove_subtree(core: &Rc<RefCell<TreeCore>>, root: ViewId) {
             // instance to fix a set bounded by container count, and no
             // test could tell the sweep from its absence.
             c.focus_memory.remove(&id);
+            // Its drawn action spans die with it (0187).
+            c.action_spans.remove(&id);
         }
     }
     c.damage_rect(root_rect);

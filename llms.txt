@@ -154,7 +154,7 @@
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, **0.6.0** (2026-08-25) the current one.
+  (2026-07-21) is the first public release, **0.7.0** (2026-10-28) the current one.
   The extension family is at `abstracttui-graph` 0.5.0 and
   `abstracttui-mermaid` 0.5.0, each with its own changelog under `extensions/`.
 - [Contributing](CONTRIBUTING.md): Building, the test suite (~2,500 core tests; ~2,730

@@ -26,6 +26,7 @@
 //! ```
 
 mod access;
+mod action;
 mod canvas;
 mod click;
 pub mod compose;
@@ -37,6 +38,7 @@ mod tree;
 mod view;
 
 pub use access::{focus_affordance_visible, AccessEntry, AccessSnapshot, Role};
+pub use action::ActionId;
 pub use canvas::{BufferCanvas, Canvas, ClippedCanvas, StyledCanvas, SurfaceCanvas};
 pub use click::{
     event_time, set_event_time, ClickChain, DEFAULT_CLICK_TOLERANCE, DEFAULT_CLICK_WINDOW,

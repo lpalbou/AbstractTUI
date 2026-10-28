@@ -134,3 +134,9 @@ pub use crate::app::{
     REASONING_AUTO, REASONING_LADDER,
 };
 pub use crate::widgets::{ThinkingFold, ThinkingFoldState};
+
+// App chrome (app-kits 1260 + app-widgets 0187) — appended with their
+// wave: the named-slot status/header bar and the semantic hit-target
+// id its items (and any draw closure) tag spans with.
+pub use crate::ui::ActionId;
+pub use crate::widgets::{BarFit, BarItem, Slot, StatusBar};

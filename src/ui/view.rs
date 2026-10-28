@@ -40,6 +40,10 @@ pub type ShortcutFn = Box<dyn FnMut(&mut EventCtx)>;
 pub(crate) struct Handler {
     pub phase: Phase,
     pub run: HandlerFn,
+    /// Set on the handler `Element::on_action` installs (0187): the
+    /// host state rides the handler list (heap) rather than a new
+    /// `Element` field — `ViewNode`'s variant-size budget is spent.
+    pub host: Option<Rc<super::action::ActionHost>>,
 }
 
 pub(crate) struct Shortcut {
@@ -112,6 +116,7 @@ impl View {
             el.handlers.push(Handler {
                 phase,
                 run: Box::new(f),
+                host: None,
             });
         }
     }
@@ -329,6 +334,7 @@ impl Element {
         self.handlers.push(Handler {
             phase,
             run: Box::new(f),
+            host: None,
         });
         self
     }
@@ -378,6 +384,70 @@ impl Element {
             chord,
             label: Some(label.into()),
             run: Box::new(f),
+        });
+        self
+    }
+
+    /// Make this element an ACTION HOST (backlog 0187): it receives the
+    /// activations of every action span drawn by its own draw closure
+    /// or by a DESCENDANT's (spans tagged with
+    /// [`StyledCanvas::print_action`](super::StyledCanvas::print_action)
+    /// / [`StyledCanvas::mark_action`](super::StyledCanvas::mark_action)).
+    ///
+    /// - Mouse: Left press + Left release on the same span = one call
+    ///   of `f` with that span's id. The press stops propagation.
+    /// - Keyboard: only while THIS element holds focus — `on_action`
+    ///   does not make it focusable; add [`Element::focusable`] for
+    ///   keyboard reach. Left/Right move a cursor across the host's
+    ///   spans in reading order (wrapping), Enter/Space activate it.
+    ///   The cursor span draws REVERSED while the host is focused.
+    ///
+    /// The engine owns the geometry: the app never computes or stores
+    /// where a span landed. See `ui::action` for the record rules.
+    ///
+    /// ```
+    /// use std::cell::RefCell;
+    /// use std::rc::Rc;
+    /// use abstracttui::base::{Point, Size};
+    /// use abstracttui::layout::LayoutStyle;
+    /// use abstracttui::reactive::create_root;
+    /// use abstracttui::render::Style;
+    /// use abstracttui::ui::{ActionId, BufferCanvas, Element, MouseButton, MouseEvent, MouseKind, Mods, StyledCanvas, UiEvent, UiTree};
+    ///
+    /// let fired: Rc<RefCell<Vec<String>>> = Rc::default();
+    /// let log = fired.clone();
+    /// let mut tree = UiTree::new(Size::new(20, 1));
+    /// let (root, ()) = create_root(|cx| {
+    ///     let bar = Element::new()
+    ///         .style(LayoutStyle::line(1))
+    ///         .on_action(move |_, id| log.borrow_mut().push(id.to_string()))
+    ///         .draw(|canvas, rect| {
+    ///             let x = canvas.print_action(Point::new(rect.x, rect.y), "model", &Style::new(), &ActionId::from("pick-model"));
+    ///             canvas.print_action(Point::new(rect.x + x + 1, rect.y), "session", &Style::new(), &ActionId::from("sessions"));
+    ///         });
+    ///     tree.mount(cx, bar.build());
+    /// });
+    /// tree.draw(&mut BufferCanvas::new(Size::new(20, 1)));
+    /// let at = tree.action_rect("sessions").unwrap();
+    /// for kind in [MouseKind::Down(MouseButton::Left), MouseKind::Up(MouseButton::Left)] {
+    ///     tree.dispatch(&UiEvent::Mouse(MouseEvent { pos: Point::new(at.x, at.y), kind, mods: Mods::NONE }));
+    /// }
+    /// assert_eq!(*fired.borrow(), ["sessions"]);
+    /// root.dispose();
+    /// ```
+    pub fn on_action(
+        mut self,
+        f: impl FnMut(&mut EventCtx, &super::action::ActionId) + 'static,
+    ) -> Element {
+        let host = self
+            .handlers
+            .iter()
+            .find_map(|h| h.host.clone())
+            .unwrap_or_default();
+        self.handlers.push(Handler {
+            phase: Phase::Bubble,
+            run: Box::new(super::action::host_handler(host.clone(), f)),
+            host: Some(host),
         });
         self
     }

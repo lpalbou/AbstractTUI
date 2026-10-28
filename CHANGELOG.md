@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-28
+
+A minor bump for two additive app-chrome surfaces: semantic hit targets
+for drawn spans (backlog app-widgets 0187) and a status/header bar with
+named slots (backlog app-kits 1260). Nothing that compiled against 0.6
+needs changing. The extension crates move their dependency floor to
+`0.7`, releasing as `abstracttui-graph` 0.6.0 and `abstracttui-mermaid`
+0.6.0 in the same tag.
+
+### Added — semantic hit targets (`ui::ActionId`)
+
+- **A draw closure can tag a span it paints with an action id**:
+  `StyledCanvas::print_action(p, text, style, &id)` prints and tags;
+  `StyledCanvas::mark_action(rect, &id)` tags an already-painted rect.
+  Both are provided trait methods, so no canvas implementor changes.
+- **`Element::on_action(f)`** makes an element an action host: the
+  engine records every tagged span per drawing element (relative to its
+  rect, so spans follow layout moves; dropped on unmount), hit-tests a
+  Left press + release on the same span, and calls `f` with the id.
+  With `.focusable()`, Left/Right move a cursor across the host's spans
+  in reading order and Enter/Space activate it; the cursor span prints
+  reversed while the host is focused. Apps never compute a cell
+  coordinate.
+- `UiTree::action_rect(id)` / `UiTree::action_targets()` report where
+  each live target is, for tests and automation.
+
+### Added — `widgets::StatusBar` with named slots
+
+- `StatusBar` (`left` / `center` / `right` slots of ordered `BarItem`s:
+  styled runs, `priority`, `BarFit::{Whole, TruncateEnd, TruncateStart}`,
+  optional `action`). Items yield in ascending priority: truncate with
+  `…` to their minimum, then drop whole; whole items never fragment.
+  Center items stay centered and slide clear of the side slots.
+- `StatusBar::live(build, on_action)`: a stable, focusable action host
+  around a reactive region, so keyboard focus survives content changes;
+  `StatusBar::element(&tokens)` is the static form. The pure layout
+  helper `plan_slots` is public (the header in backlog 0560 will reuse it).
+- `examples/status_bar.rs`; `docs/api.md` sections for both surfaces.
+
+### Changed
+
+- `examples/viewer3d.rs` looks for its default assets relative to the
+  workspace checkout instead of an absolute developer path.
+
 ## [0.6.0] - 2026-08-25
 
 A minor bump for a new public module, the theme-declared ground intent
@@ -3265,7 +3309,8 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
-[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/lpalbou/abstracttui/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/lpalbou/abstracttui/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/lpalbou/abstracttui/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/lpalbou/abstracttui/compare/v0.4.0...v0.4.1

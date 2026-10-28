@@ -298,6 +298,11 @@ pub struct EventCtx {
     /// LAYER-LOCAL; anchors handed to viewport-space APIs translate by
     /// this (see [`EventCtx::current_rect_screen`]).
     pub(crate) layer_origin: crate::base::Point,
+    /// Action-host routing (0187), filled by the tree only while an
+    /// `Element::on_action` host's handlers run: the drawn span under a
+    /// mouse event's pointer, and the host's spans in reading order.
+    pub(crate) action: Option<super::action::ActionId>,
+    pub(crate) host_actions: Vec<super::action::ActionId>,
 }
 
 impl EventCtx {

@@ -59,6 +59,38 @@ pub trait StyledCanvas: Canvas {
         0
     }
 
+    /// [`StyledCanvas::print_styled`] that also TAGS the printed extent
+    /// (`text::width(text)` cells, one row, clipped to the drawing
+    /// element's rect) with `action` — a semantic hit target (backlog
+    /// 0187). The nearest [`Element::on_action`](super::Element::on_action)
+    /// host receives its clicks and keyboard activations. While that
+    /// host is focused and this span is its keyboard cursor, the span
+    /// prints with REVERSE added (the focus ring). Returns the cells
+    /// advanced, like `print_styled`.
+    ///
+    /// Outside a tree's paint walk (a bare canvas) it is exactly
+    /// `print_styled`: nothing records.
+    fn print_action(
+        &mut self,
+        p: Point,
+        text: &str,
+        style: &crate::render::Style,
+        action: &super::ActionId,
+    ) -> i32 {
+        let w = crate::text::width(text);
+        let ring = super::action::record(Rect::new(p.x, p.y, w, 1), action);
+        let style = if ring { style.reverse() } else { *style };
+        self.print_styled(p, text, &style)
+    }
+
+    /// Tag an already-painted `rect` with `action` (see
+    /// [`StyledCanvas::print_action`]). Returns `true` when this target
+    /// is the focused host's keyboard cursor, so a widget can draw its
+    /// own focus ring.
+    fn mark_action(&mut self, rect: Rect, action: &super::ActionId) -> bool {
+        super::action::record(rect, action)
+    }
+
     /// Fill a rect with a styled character. Default: per-row prints.
     fn fill_styled(&mut self, rect: Rect, ch: char, style: &crate::render::Style) {
         let mut buf = [0u8; 4];
