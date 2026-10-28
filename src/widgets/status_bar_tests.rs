@@ -315,3 +315,157 @@ fn without_the_tree_recorder_nothing_is_a_target() {
     let tree = UiTree::new(Size::new(80, 1));
     assert!(tree.action_targets().is_empty());
 }
+
+/// Review fixes (2026-10-28). A host with two spans "a" / "b" whose
+/// height is a signal (crush it to zero), optionally autofocused.
+fn crushable(
+    autofocus: bool,
+) -> (
+    crate::reactive::RootScope,
+    UiTree,
+    Rc<RefCell<Vec<String>>>,
+    crate::reactive::Signal<i32>,
+) {
+    let fired: Rc<RefCell<Vec<String>>> = Rc::default();
+    let log = fired.clone();
+    let mut h_sig = None;
+    let (root, tree) = mount_widget(Size::new(20, 2), |cx| {
+        let h = cx.signal(1);
+        h_sig = Some(h);
+        let host = Element::new()
+            .style_signal(move || {
+                LayoutStyle::default()
+                    .width(Dimension::Cells(20))
+                    .height(Dimension::Cells(h.get()))
+            })
+            .focusable()
+            .on_action(move |_, id| log.borrow_mut().push(id.to_string()))
+            .draw(|canvas: &mut dyn StyledCanvas, rect: Rect| {
+                let s = crate::render::Style::new();
+                canvas.print_action(Point::new(rect.x, rect.y), "aa", &s, &ActionId::from("a"));
+                canvas.print_action(
+                    Point::new(rect.x + 4, rect.y),
+                    "bb",
+                    &s,
+                    &ActionId::from("b"),
+                );
+            });
+        let host = if autofocus { host.autofocus() } else { host };
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(host.build())
+            .build()
+    });
+    (root, tree, fired, h_sig.unwrap())
+}
+
+#[test]
+fn a_collapsed_drawer_stops_being_a_target_for_mouse_and_keyboard() {
+    let (root, mut tree, fired, h) = crushable(false);
+    render(&mut tree, Size::new(20, 2));
+    assert_eq!(tree.action_targets().len(), 2);
+    tree.focus_next();
+    h.set(0);
+    flush_effects();
+    render(&mut tree, Size::new(20, 2));
+    assert!(
+        tree.action_targets().is_empty(),
+        "{:?}",
+        tree.action_targets()
+    );
+    key(&mut tree, Key::Enter);
+    assert!(
+        fired.borrow().is_empty(),
+        "Enter on an invisible bar fires nothing"
+    );
+    root.dispose();
+}
+
+#[test]
+fn spans_scrolled_out_of_a_clipping_parent_are_not_targets() {
+    let mut off_sig = None;
+    let (root, mut tree) = mount_widget(Size::new(20, 3), |cx| {
+        let off = cx.signal(0);
+        off_sig = Some(off);
+        let clipper = Element::new()
+            .style(
+                LayoutStyle::default()
+                    .width(Dimension::Cells(20))
+                    .height(Dimension::Cells(1))
+                    .clip(),
+            )
+            .child(
+                Element::new()
+                    .style_signal(move || {
+                        LayoutStyle::default()
+                            .width(Dimension::Cells(20))
+                            .height(Dimension::Cells(1))
+                            .margin(crate::layout::Edges {
+                                top: off.get(),
+                                ..Default::default()
+                            })
+                    })
+                    .on_action(|_, _| {})
+                    .draw(|canvas: &mut dyn StyledCanvas, rect: Rect| {
+                        canvas.print_action(
+                            Point::new(rect.x, rect.y),
+                            "aa",
+                            &crate::render::Style::new(),
+                            &ActionId::from("a"),
+                        );
+                    })
+                    .build(),
+            )
+            .build();
+        Element::new()
+            .style(LayoutStyle::column())
+            .child(clipper)
+            .build()
+    });
+    render(&mut tree, Size::new(20, 3));
+    assert_eq!(tree.action_targets().len(), 1);
+    off_sig.unwrap().set(2);
+    flush_effects();
+    let c = render(&mut tree, Size::new(20, 3));
+    assert_eq!(row(&c, 2).trim(), "", "the clip hides it");
+    assert!(
+        tree.action_targets().is_empty(),
+        "{:?}",
+        tree.action_targets()
+    );
+    root.dispose();
+}
+
+#[test]
+fn a_click_moves_the_ring_with_the_cursor() {
+    let (root, mut tree, fired, _) = crushable(false);
+    render(&mut tree, Size::new(20, 2));
+    tree.focus_next();
+    render(&mut tree, Size::new(20, 2));
+    let b = tree.action_rect("b").unwrap();
+    click(&mut tree, b.x, b.y);
+    let damage = tree.take_damage();
+    assert!(!damage.is_empty(), "the click repaints the ring");
+    let c = render(&mut tree, Size::new(20, 2));
+    assert!(c
+        .attrs_at(Point::new(b.x, b.y))
+        .contains(crate::render::Attrs::REVERSE));
+    key(&mut tree, Key::Enter);
+    assert_eq!(*fired.borrow(), ["b", "b"]);
+    root.dispose();
+}
+
+#[test]
+fn focus_before_the_first_paint_rings_the_first_span() {
+    let (root, mut tree, fired, _) = crushable(true);
+    render(&mut tree, Size::new(20, 2)); // spans recorded; cursor settles
+    let c = render(&mut tree, Size::new(20, 2));
+    let a = tree.action_rect("a").unwrap();
+    assert!(c
+        .attrs_at(Point::new(a.x, a.y))
+        .contains(crate::render::Attrs::REVERSE));
+    key(&mut tree, Key::Right);
+    key(&mut tree, Key::Enter);
+    assert_eq!(*fired.borrow(), ["b"]);
+    root.dispose();
+}

@@ -62,3 +62,11 @@ them fires nothing, a sibling grows and the record follows without a repaint),
 `spans_follow_a_resize_and_a_relayout`; the `Element::on_action` doctest.
 Red without the recorder: with the store call removed from `ui/draw.rs`,
 6 of the 11 tests fail (checked 2026-10-28).
+
+Adversarial review (2026-10-28, read-only Opus) — four findings, all fixed with
+tests that go red without the fix: stale spans on a collapsed / scrolled-out
+drawer (`a_collapsed_drawer_stops_being_a_target_for_mouse_and_keyboard`,
+`spans_scrolled_out_of_a_clipping_parent_are_not_targets`), the ring not
+following a click (`a_click_moves_the_ring_with_the_cursor`), no ring when focus
+arrives before the first paint (`focus_before_the_first_paint_rings_the_first_span`),
+and a per-keystroke subtree walk for non-focused ancestor hosts (now skipped).

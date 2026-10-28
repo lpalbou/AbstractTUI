@@ -19,6 +19,10 @@
 //!   that does not repaint the drawer still hit-tests at the new place.
 //! - They are clipped to the drawer's rect at record time (a span printed
 //!   past the element's edge is not clickable past it).
+//! - They are clipped to what is VISIBLE (the viewport narrowed by
+//!   `clip_overflow` ancestors), and a drawer that stops being visible
+//!   — collapsed to zero area, scrolled or clipped out — stops being a
+//!   target, for the keyboard as well as the mouse.
 //! - They die with the drawer (unmount drops them).
 //!
 //! ## Activation
@@ -32,7 +36,8 @@
 //!   not make an element focusable — add [`Element::focusable`](super::Element::focusable)).
 //!   Left/Right move a cursor across the host's spans in reading order
 //!   (top-to-bottom, then left-to-right; wrapping), Enter/Space activate
-//!   it. The cursor starts on the first span. The cursor span is the
+//!   it. The cursor starts on the first span (also when focus arrives
+//!   before the first paint, or when the cursor's span disappears). The cursor span is the
 //!   focus ring: `print_action` adds REVERSE to it while the host is
 //!   focused; `mark_action` returns `true` for it so a custom ring can
 //!   be drawn.
@@ -282,7 +287,10 @@ pub(super) fn host_handler(
             MouseKind::Down(MouseButton::Left) => {
                 pressed = ctx.action.clone();
                 if let Some(id) = &pressed {
-                    *host.cursor.borrow_mut() = Some(id.clone());
+                    let moved = host.cursor.replace(Some(id.clone())).as_ref() != Some(id);
+                    if moved {
+                        ctx.request_repaint(); // the ring follows the click
+                    }
                     ctx.stop_propagation();
                 }
             }
@@ -313,12 +321,29 @@ pub(super) fn host_handler(
             if list.is_empty() {
                 return;
             }
-            let at = {
+            let found = {
                 let cursor = host.cursor.borrow();
                 cursor
                     .as_ref()
                     .and_then(|c| list.iter().position(|a| a == c))
-                    .unwrap_or(0)
+            };
+            let Some(at) = found else {
+                // No valid cursor yet (focus arrived before the spans, or
+                // the cursor's span vanished): the first arrow lands on
+                // the first span; Enter/Space act on it.
+                match k.key {
+                    Key::Left | Key::Right | Key::Enter | Key::Char(' ') => {
+                        let first = list[0].clone();
+                        *host.cursor.borrow_mut() = Some(first.clone());
+                        ctx.request_repaint();
+                        ctx.stop_propagation();
+                        if matches!(k.key, Key::Enter | Key::Char(' ')) {
+                            f(ctx, &first);
+                        }
+                    }
+                    _ => {}
+                }
+                return;
             };
             match k.key {
                 Key::Left | Key::Right if list.len() > 1 => {

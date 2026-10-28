@@ -524,6 +524,9 @@ impl UiTree {
                         }
                     }
                 }
+                // Keys: only for the focused host itself (an ancestor host
+                // never acts on keys, so it pays no subtree walk).
+                UiEvent::Key(_) if ctx.target != Some(id) => {}
                 UiEvent::Key(_) | UiEvent::FocusIn => {
                     ctx.host_actions = self
                         .core

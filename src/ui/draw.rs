@@ -28,8 +28,9 @@ impl UiTree {
         let root = self.core.borrow().root;
         if let Some(root) = root {
             let vp = Rect::from_size(self.core.borrow().viewport);
-            self.draw_node(root, canvas, vp);
+            self.draw_node(root, canvas, vp, vp);
         }
+        self.settle_action_cursor();
     }
 
     /// Paint only the parts of the tree intersecting `damage` (screen
@@ -43,12 +44,61 @@ impl UiTree {
         let _origin = super::tree::publish_layer_origin(self.core.borrow().layer_origin);
         let root = self.core.borrow().root;
         let Some(root) = root else { return };
+        let vp = Rect::from_size(self.core.borrow().viewport);
         for &rect in damage {
             if rect.is_empty() {
                 continue;
             }
             let mut clipped = ClippedCanvas::new(canvas, rect);
-            self.draw_node(root, &mut clipped, rect);
+            self.draw_node(root, &mut clipped, rect, vp);
+        }
+        self.settle_action_cursor();
+    }
+
+    /// Action hosts (0187): a focused host whose keyboard cursor is
+    /// unset or names a span that no longer exists lands on its first
+    /// span once spans exist (focus can arrive before the first paint),
+    /// and repaints so the ring shows where Enter will act.
+    fn settle_action_cursor(&mut self) {
+        let mut core = self.core.borrow_mut();
+        let Some(focus) = core.focus else { return };
+        let Some(host) = core.action_host(focus) else {
+            return;
+        };
+        let list = core.actions_in(focus);
+        let valid = host
+            .cursor
+            .borrow()
+            .as_ref()
+            .is_some_and(|c| list.iter().any(|(a, _)| a == c));
+        if valid || list.is_empty() {
+            return;
+        }
+        *host.cursor.borrow_mut() = Some(list[0].0.clone());
+        let rect = core
+            .insts
+            .get(focus.0)
+            .map(|i| core.layout.rect(i.layout))
+            .unwrap_or_default();
+        core.damage_rect(rect);
+        drop(core);
+        crate::reactive::request_frame();
+    }
+
+    /// Drop the action spans of `id`'s whole subtree: it is no longer
+    /// visible, so nothing in it may stay a target (keyboard reach
+    /// included — the mouse hit test is clip-aware on its own).
+    fn drop_action_spans(&self, id: ViewId) {
+        let mut core = self.core.borrow_mut();
+        if core.action_spans.is_empty() {
+            return;
+        }
+        let mut stack = vec![id];
+        while let Some(n) = stack.pop() {
+            core.action_spans.remove(&n);
+            if let Some(inst) = core.insts.get(n.0) {
+                stack.extend(inst.children.iter().copied());
+            }
         }
     }
 
@@ -62,7 +112,11 @@ impl UiTree {
     /// borrows, which cannot be flattened onto an explicit stack. Depth
     /// equals VIEW NESTING depth (tens, not thousands) — unlike the
     /// reactive graph walks, which stay iterative.
-    fn draw_node(&self, id: ViewId, canvas: &mut dyn StyledCanvas, clip: Rect) {
+    ///
+    /// `vis` is the VISIBLE region (viewport narrowed by `clip_overflow`
+    /// ancestors only — never by damage): action spans are recorded
+    /// against it and dropped for nodes outside it (0187).
+    fn draw_node(&self, id: ViewId, canvas: &mut dyn StyledCanvas, clip: Rect, vis: Rect) {
         enum Paint {
             Draw(Rc<RefCell<DrawFn>>, Rect, Option<crate::ui::ActionId>),
             Text(String, Rect, Rgba),
@@ -82,6 +136,14 @@ impl UiTree {
             // readback must not starve when the content scrolls fully
             // out — first-app/0281); its children still cull below.
             if !rect.intersects(clip) && !rect.is_empty() && !inst.probe_when_culled {
+                // Outside the damage only: its record is still true.
+                // Outside the VISIBLE region: nothing in it may stay a
+                // target (0187).
+                let invisible = !rect.intersects(vis);
+                drop(core);
+                if invisible {
+                    self.drop_action_spans(id);
+                }
                 return;
             }
             // A zero-AREA node paints nothing (the fusion class,
@@ -122,7 +184,7 @@ impl UiTree {
                         (rect.w - style.padding.horizontal()).max(0),
                         (rect.h - style.padding.vertical()).max(0),
                     );
-                    Some(clip.intersect(content))
+                    Some((clip.intersect(content), vis.intersect(content)))
                 }
                 _ => None,
             };
@@ -135,7 +197,7 @@ impl UiTree {
             // Action spans (0187): the closure records into a frame
             // opened for THIS drawer; its record replaces the last one.
             Paint::Draw(draw, rect, ring) => {
-                super::action::begin_record(rect, ring);
+                super::action::begin_record(rect.intersect(vis), ring);
                 (draw.borrow_mut())(canvas, rect);
                 let spans = super::action::end_record();
                 let mut core = self.core.borrow_mut();
@@ -158,21 +220,33 @@ impl UiTree {
                     }
                 }
             }
-            Paint::None => {}
+            Paint::None => {
+                // A drawer that stopped drawing (collapsed to zero
+                // area) stops being a target (0187).
+                let mut core = self.core.borrow_mut();
+                if !core.action_spans.is_empty() {
+                    core.action_spans.remove(&id);
+                }
+            }
         }
         match child_clip {
-            Some(cc) => {
+            Some((cc, cvis)) => {
                 if cc.is_empty() {
+                    if cvis.is_empty() {
+                        for child in children {
+                            self.drop_action_spans(child);
+                        }
+                    }
                     return; // everything below is scrolled/clipped away
                 }
                 let mut wrapped = ClippedCanvas::new(canvas, cc);
                 for child in children {
-                    self.draw_node(child, &mut wrapped, cc);
+                    self.draw_node(child, &mut wrapped, cc, cvis);
                 }
             }
             None => {
                 for child in children {
-                    self.draw_node(child, canvas, clip);
+                    self.draw_node(child, canvas, clip, vis);
                 }
             }
         }
