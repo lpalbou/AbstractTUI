@@ -157,9 +157,9 @@ pub(super) fn mount_view(
                     access: el.access.clone(),
                     payload: InstPayload::Element {
                         draw: el.draw.map(|d| Rc::new(RefCell::new(d))),
+                        action_host: el.handlers.iter().find_map(|h| h.host.clone()),
                         handlers: Rc::new(RefCell::new(el.handlers)),
                         shortcuts: Rc::new(RefCell::new(el.shortcuts)),
-                        action_host: el.action_host.take(),
                     },
                 }));
                 if el.autofocus {

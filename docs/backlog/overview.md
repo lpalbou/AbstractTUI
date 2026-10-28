@@ -200,6 +200,8 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0605 | Block close affordance: `Block::on_close` panel ✕ (mouse-only, never focusable; title-yields-first truncation ladder; disposal-safe) — completed 2026-07-25 (ledger row added 2026-07-25) | completed/app-kits/ |
 | 0273 | File-attachment surfaces: `TextInput`/`TextArea` `on_paste` intercept (`PasteAction`), `input::paste::classify` cross-terminal drop classifier, `FilePicker` over the `FileSource` seam + `examples/attachments.rs` — completed 2026-07-25, attachments wave (ledger row added 2026-07-25) | completed/first-app/ |
 | 1250 | Reasoning controls (operator-ordered cross-seat plan, tui section): `ReasoningSelect` three-state effort picker (capable/locked/unknown+override, facts AS DATA, screen-anchored popup) + `reasoning_label`/`reasoning_label_glyph` parity grammar (⊘ U+2298 research recorded; plain form canonical) + `ThinkingFold` streaming reasoning fold (folded default, last-wins complete, data-driven indicator, zero idle) + `Disclosure::title_muted`/`detail_signal` + `examples/reasoning.rs` — completed 2026-07-26 | completed/app-kits/ |
+| 0187 | Semantic hit targets for drawn spans: `ActionId`, `StyledCanvas::print_action`/`mark_action`, `Element::on_action` (mouse + keyboard reach), `UiTree::action_rect`/`action_targets` — completed 2026-10-28, chrome wave (0.7.0) | completed/app-widgets/ |
+| 1260 | `StatusBar` with named slots (left/center/right, priority truncation/drop, `plan_slots` shared helper, `StatusBar::live` focusable host) + `examples/status_bar.rs` — completed 2026-10-28, chrome wave (0.7.0) | completed/app-kits/ |
 
 ## Proposed ledger — general bands
 
@@ -215,7 +217,6 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0175 | `Block::shadow` consumes a row/col of the block's own slot; under interior crush the FIRST child dies, order-dependently (wave-12 §1b) | app-widgets | The chrome-yields-vs-document ruling in-item; the order-dependence half rides the 0185 investigation. |
 | 0185 | Measure inflation around Tabs: fixed-height siblings crushed while grow slack exists (wave-12 §1) | app-widgets | ALREADY ACCEPTED by the code seat as "the top engine investigation for the next wave" — needs the failing-test pin first. |
 | 0186 | TextInput/TextArea content inset (`.inset(left,right)`, every path incl. mouse-to-caret, narrow-safe) | app-widgets | AbstractCode composer ("› " prompt). |
-| 0187 | Semantic hit targets for custom-drawn spans (action ids recorded at draw, engine hit-test; chrome half of 0165) | app-widgets | AbstractCode chrome (workflow/model/session id). |
 | 0188 | JSON block: pretty-print + optional collapse over the existing `CodeView` json lexer + `Disclosure` | app-widgets | AbstractCode tool-result envelopes. |
 | 0200 | EPIC: coding-agent console over `abstractcode serve` JSONL | ports | Its widget + live-data dependencies land (widget deps complete). |
 | 0210 | EPIC: a2a chat TUI over the agora hub | ports | Its widget + live-data dependencies land (Feed + TextArea DONE; lifecycle 0040 done, 0050 remains). |
@@ -258,7 +259,6 @@ waves; 2026-07-25: the attachments + theme-switcher + panel-✕ waves).
 | 0680 | Sixel bottom-row honesty: last-row clamp + DECSET 8452 probe | media-av | First sixel validation pass of the images-truth recipe. |
 | 0688 | Detection/transport robustness: strict kitty-probe reply parse; >1 MiB single-frame payloads under tmux | media-av | Next caps/probe wave or a tmux+iTerm2 field report. |
 | 0690 | Browse-and-preview lists: reuse `List` (`on_select`, `row_accessory`), `reactive::after`, `Spinner`/`Progress` and 0640; add keyboard reach to the row accessory (`List::accessory_key`) | media-av | The console-TUI voice picker (its Test does not play) adopts the recipe. |
-| 1260 | Status bar with named slots (bottom twin of 0560's AppHeader; shared slot-layout helper) | app-kits | AbstractCode chrome. |
 | 0710 | Game tick: public per-frame tasks + fixed-timestep helper | games | First real-time game example, or the second in-tree consumer hand-rolling an `after`-recursion clock. |
 | 0720 | Sprite/tile toolkit: masked blit, sprite sheets, cell-art palette swap | games | First game example reaching its render phase. |
 | 0730 | Board-grid math: square + hex coordinates, range, line, aspect-corrected projection | games | First grid-mapped surface in any dogfood app; placement routes through ADR-0004's classification. |

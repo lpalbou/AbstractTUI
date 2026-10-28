@@ -5,6 +5,13 @@ own their changelogs; core's CHANGELOG covers the engine). The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 SemVer.
 
+## [0.6.0] - 2026-10-28
+
+### Changed
+
+- Requires `abstracttui` **0.7** (an additive engine minor: action
+  spans and `StatusBar`). No API change in this crate.
+
 ## [0.4.0] - 2026-08-23
 
 ### Changed

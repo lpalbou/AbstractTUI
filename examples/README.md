@@ -32,6 +32,7 @@ the previous one:
 | 4 · interaction | `interaction_affordances.rs` | hover ink, removable rows, live filtering, nested scroll wheel bubbling |
 | 4 · interaction | `scrollbar.rs` | the shared scroll strip: grab the thumb, drag it, teleport from the track — `Scroll`, `List` and `Table` side by side |
 | 4 · interaction | `drawer_dock.rs` | the right-edge drawer rail (`DrawerDock`): docked panels, full collapse, badge dots |
+| 4 · interaction | `status_bar.rs` | app chrome from named slots (`StatusBar`): items yield by priority on resize; every item is a clickable, keyboard-reachable action span |
 | 4 · interaction | `decide.rs` | the modal decision gate (`ChoicePrompt`): confirmations, multi-pick, chains |
 | 4 · interaction | `hovercard.rs` | `Tooltip` and rich hover cards on citation chips — reachable by hover AND by Tab, dismissed by Escape, with the `… N more` marker on a card the viewport cannot fit |
 | 5 · content + live data | `feed.rs` | background threads → bounded ingestion → `Feed` with follow-tail |

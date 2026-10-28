@@ -40,6 +40,10 @@ pub type ShortcutFn = Box<dyn FnMut(&mut EventCtx)>;
 pub(crate) struct Handler {
     pub phase: Phase,
     pub run: HandlerFn,
+    /// Set on the handler `Element::on_action` installs (0187): the
+    /// host state rides the handler list (heap) rather than a new
+    /// `Element` field — `ViewNode`'s variant-size budget is spent.
+    pub host: Option<Rc<super::action::ActionHost>>,
 }
 
 pub(crate) struct Shortcut {
@@ -112,6 +116,7 @@ impl View {
             el.handlers.push(Handler {
                 phase,
                 run: Box::new(f),
+                host: None,
             });
         }
     }
@@ -174,8 +179,6 @@ pub struct Element {
     /// `pub(crate)` field of a `pub(super)` type: fine for the crate,
     /// but keep the FIELD crate-private too.
     pub(super) access: super::access::AccessProps,
-    /// Action-host state (0187) — see [`Element::on_action`].
-    pub(crate) action_host: Option<Rc<super::action::ActionHost>>,
     pub(crate) children: Vec<View>,
 }
 
@@ -197,7 +200,6 @@ impl Element {
             rect_sig: None,
             padding_floor: None,
             access: super::access::AccessProps::default(),
-            action_host: None,
             children: Vec::new(),
         }
     }
@@ -332,6 +334,7 @@ impl Element {
         self.handlers.push(Handler {
             phase,
             run: Box::new(f),
+            host: None,
         });
         self
     }
@@ -437,10 +440,16 @@ impl Element {
         f: impl FnMut(&mut EventCtx, &super::action::ActionId) + 'static,
     ) -> Element {
         let host = self
-            .action_host
-            .get_or_insert_with(Default::default)
-            .clone();
-        self.on(Phase::Bubble, super::action::host_handler(host, f))
+            .handlers
+            .iter()
+            .find_map(|h| h.host.clone())
+            .unwrap_or_default();
+        self.handlers.push(Handler {
+            phase: Phase::Bubble,
+            run: Box::new(super::action::host_handler(host.clone(), f)),
+            host: Some(host),
+        });
+        self
     }
 
     /// Participate in Tab traversal; receives FocusIn/FocusOut and key

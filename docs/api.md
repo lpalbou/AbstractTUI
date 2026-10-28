@@ -1415,6 +1415,85 @@ fn command_picker(cx: Scope) -> (View, SelectHandle) {
 }
 ```
 
+## widgets::StatusBar — app chrome from named slots
+
+A one-row header or status bar with three named slots — `left`,
+`center`, `right` — each holding ordered `BarItem`s (styled runs, a
+priority, a fit rule, an optional action id). The app never draws and
+never computes a cell coordinate (backlog app-kits 1260).
+
+```rust
+use abstracttui::prelude::*;
+
+let bar = StatusBar::live(
+    move || {
+        StatusBar::new()
+            .left(BarItem::text("▲ App").priority(10))
+            .left(BarItem::text(workflow.get()).action("workflow")
+                .fit(BarFit::TruncateEnd { min: 8 }).priority(5))
+            .center(BarItem::text(path.get()).action("workspace")
+                .fit(BarFit::TruncateStart { min: 12 }).priority(3))
+            .right(BarItem::text("theme ▾").action("theme").priority(6))
+    },
+    move |_ctx, id| match id.as_str() {
+        "workflow" => open_workflow_picker(),
+        "workspace" => open_workspace_modal(),
+        "theme" => open_theme_picker(),
+        _ => {}
+    },
+);
+```
+
+- **Placement.** Left items sit flush from `padding` (default 1), right
+  items flush to the right edge, center items are centered on the bar
+  and slide sideways to keep `slot_gap` (default 2) from the others.
+  Inside a slot, items keep declaration order joined by `separator`
+  (default two blanks).
+- **Overflow.** Items yield in ascending `priority` (higher survives
+  longer; ties: later-declared first, slots ordered left, center,
+  right). A yielding item first truncates with `…` down to its `min`
+  (`BarFit::TruncateEnd` keeps the head, `BarFit::TruncateStart` keeps
+  the tail), then drops whole. `BarFit::Whole` (the default) never
+  fragments.
+- **`StatusBar::live(build, on_action)`** is the chrome door: a stable,
+  focusable action host (focus survives content changes) around a
+  reactive region that re-runs `build` when its signals change and on
+  theme switch. `StatusBar::element(&tokens)` is the static draw
+  element; `plan_slots` is the pure layout helper both use.
+- Tokens: ground `surface`, default ink `text_muted`, separator
+  `text_faint`. Example: `examples/status_bar.rs`.
+
+## ui — action spans: semantic hit targets in draw closures
+
+Any draw closure can tag what it paints with an `ActionId`
+(backlog app-widgets 0187); the nearest `Element::on_action` host
+receives clicks and keyboard activations by id:
+
+```rust
+Element::new()
+    .focusable() // keyboard reach (on_action does not imply it)
+    .on_action(|_ctx, id| println!("activated {id}"))
+    .draw(|canvas, rect| {
+        let s = abstracttui::render::Style::new();
+        let w = canvas.print_action(Point::new(rect.x, rect.y), "model", &s, &ActionId::from("model"));
+        canvas.print_action(Point::new(rect.x + w + 2, rect.y), "session", &s, &ActionId::from("session"));
+    })
+```
+
+- **Record.** Spans are recorded per drawing element on each of its
+  draws (replacing the previous record), stored relative to its rect
+  (they follow layout moves), clipped to it, dropped on unmount.
+  `mark_action(rect, id)` tags an already-painted rect.
+- **Mouse.** Left press + release on the same span = one activation;
+  the press stops propagation. The deepest drawer on the hit path with
+  a span under the pointer wins.
+- **Keyboard.** While the host itself is focused: Left/Right move a
+  cursor across its spans in reading order (wrapping), Enter/Space
+  activate. The cursor span prints REVERSED (`mark_action` returns
+  `true` for it so custom widgets can draw their own ring).
+- **Tests and automation.** `UiTree::action_rect("id")` and
+  `UiTree::action_targets()` report where each live target is now.
+
 ## widgets::DrawerDock — the right-edge drawer rail
 
 The team-page pattern in cells: a persistent rail of vertical tabs on
