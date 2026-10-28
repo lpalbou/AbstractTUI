@@ -64,7 +64,7 @@ impl UiTree {
     /// reactive graph walks, which stay iterative.
     fn draw_node(&self, id: ViewId, canvas: &mut dyn StyledCanvas, clip: Rect) {
         enum Paint {
-            Draw(Rc<RefCell<DrawFn>>, Rect),
+            Draw(Rc<RefCell<DrawFn>>, Rect, Option<crate::ui::ActionId>),
             Text(String, Rect, Rgba),
             None,
         }
@@ -105,7 +105,9 @@ impl UiTree {
                 Paint::None
             } else {
                 match &inst.payload {
-                    InstPayload::Element { draw: Some(d), .. } => Paint::Draw(d.clone(), rect),
+                    InstPayload::Element { draw: Some(d), .. } => {
+                        Paint::Draw(d.clone(), rect, core.ring_for(id))
+                    }
                     InstPayload::Text { content } => {
                         Paint::Text(content.clone(), rect, core.text_fg)
                     }
@@ -130,7 +132,17 @@ impl UiTree {
             // User draw code runs with the core released. Reactive reads
             // here are the RT1-2 violation the guard reports; deliberate
             // peeks use get_untracked.
-            Paint::Draw(draw, rect) => (draw.borrow_mut())(canvas, rect),
+            // Action spans (0187): the closure records into a frame
+            // opened for THIS drawer; its record replaces the last one.
+            Paint::Draw(draw, rect, ring) => {
+                super::action::begin_record(rect, ring);
+                (draw.borrow_mut())(canvas, rect);
+                let spans = super::action::end_record();
+                let mut core = self.core.borrow_mut();
+                if !spans.is_empty() || core.action_spans.contains_key(&id) {
+                    core.store_actions(id, rect, spans);
+                }
+            }
             Paint::Text(content, rect, fg) => {
                 if !rect.is_empty() {
                     // Wrap-aware paint mirroring the measure callback:

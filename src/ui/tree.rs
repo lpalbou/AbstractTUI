@@ -30,6 +30,9 @@ pub(super) enum InstPayload {
         draw: Option<Rc<RefCell<DrawFn>>>,
         handlers: Rc<RefCell<Vec<Handler>>>,
         shortcuts: Rc<RefCell<Vec<Shortcut>>>,
+        /// Set by `Element::on_action` (0187): this element receives
+        /// activations of action spans drawn in its subtree.
+        action_host: Option<Rc<super::action::ActionHost>>,
     },
     Text {
         content: String,
@@ -127,6 +130,8 @@ pub(super) struct TreeCore {
     /// only phase that knows a rect changed — paint cannot be the hook
     /// because the interesting child is the culled one.
     pub(super) rect_probes: Vec<RectProbe>,
+    /// Action spans recorded per drawing element (0187, `ui::action`).
+    pub(super) action_spans: super::action::ActionSpans,
 }
 
 /// A rect publish that the solve just made due, held OUTSIDE the tree
@@ -270,6 +275,7 @@ impl UiTree {
                 click_chain: super::click::ClickChain::new(),
                 layer_origin: Point::ZERO,
                 rect_probes: Vec::new(),
+                action_spans: Default::default(),
             })),
         }
     }
@@ -553,6 +559,28 @@ impl UiTree {
 
     pub fn instance_count(&self) -> usize {
         self.core.borrow().insts.live()
+    }
+
+    /// The current (layer-local) rect of the first live drawn span
+    /// tagged `id`, in reading order — where a click on that action
+    /// lands. `None` when no live element drew it. For tests and
+    /// automation (backlog 0187); apps receive activations through
+    /// [`Element::on_action`](super::Element::on_action) instead.
+    pub fn action_rect(&self, id: &str) -> Option<Rect> {
+        self.action_targets()
+            .into_iter()
+            .find(|(a, _)| a == id)
+            .map(|(_, r)| r)
+    }
+
+    /// Every live drawn action span, reading order (first occurrence
+    /// of each id).
+    pub fn action_targets(&self) -> Vec<(super::ActionId, Rect)> {
+        let core = self.core.borrow();
+        match core.root {
+            Some(root) => core.actions_in(root),
+            None => Vec::new(),
+        }
     }
 
     pub fn rect_of(&self, id: ViewId) -> Rect {

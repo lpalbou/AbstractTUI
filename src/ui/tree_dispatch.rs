@@ -495,16 +495,47 @@ impl UiTree {
         event: &UiEvent,
         ctx: &mut EventCtx,
     ) {
-        let handlers = {
+        let (handlers, is_host) = {
             let core = self.core.borrow();
             let Some(inst) = core.insts.get(id.0) else {
                 return;
             };
             match &inst.payload {
-                InstPayload::Element { handlers, .. } => handlers.clone(),
+                InstPayload::Element {
+                    handlers,
+                    action_host,
+                    ..
+                } => (handlers.clone(), action_host.is_some()),
                 _ => return,
             }
         };
+        // Action hosts (0187): the engine resolves the span under the
+        // pointer among drawers on the hit path at or below this host,
+        // and the host's spans in reading order for keyboard reach.
+        ctx.action = None;
+        ctx.host_actions.clear();
+        if is_host {
+            match event {
+                UiEvent::Mouse(m) => {
+                    if let Some(target) = ctx.target {
+                        let path = self.path_to(target);
+                        if let Some(at) = path.iter().position(|p| *p == id) {
+                            ctx.action = self.core.borrow().action_at(&path[at..], m.pos);
+                        }
+                    }
+                }
+                UiEvent::Key(_) | UiEvent::FocusIn => {
+                    ctx.host_actions = self
+                        .core
+                        .borrow()
+                        .actions_in(id)
+                        .into_iter()
+                        .map(|(a, _)| a)
+                        .collect();
+                }
+                _ => {}
+            }
+        }
         // The running node's identity/geometry (RT3-4: widgets do their
         // own-rect math from here, never from the possibly-deeper target).
         ctx.current = Some(id);

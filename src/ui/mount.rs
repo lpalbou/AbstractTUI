@@ -159,6 +159,7 @@ pub(super) fn mount_view(
                         draw: el.draw.map(|d| Rc::new(RefCell::new(d))),
                         handlers: Rc::new(RefCell::new(el.handlers)),
                         shortcuts: Rc::new(RefCell::new(el.shortcuts)),
+                        action_host: el.action_host.take(),
                     },
                 }));
                 if el.autofocus {
@@ -448,6 +449,8 @@ pub(super) fn remove_subtree(core: &Rc<RefCell<TreeCore>>, root: ViewId) {
             // instance to fix a set bounded by container count, and no
             // test could tell the sweep from its absence.
             c.focus_memory.remove(&id);
+            // Its drawn action spans die with it (0187).
+            c.action_spans.remove(&id);
         }
     }
     c.damage_rect(root_rect);

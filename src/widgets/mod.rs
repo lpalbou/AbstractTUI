@@ -47,6 +47,7 @@ pub mod scroll;
 mod scrollbar;
 pub mod separator;
 pub mod spinner;
+pub mod status_bar;
 pub mod table;
 pub mod tabs;
 pub mod textarea;
@@ -109,6 +110,8 @@ pub use input::PasteAction;
 // Appended (app-kits 1250, the reasoning wave): the streaming
 // thinking-text fold.
 pub use thinking_fold::{ThinkingFold, ThinkingFoldState};
+// Appended (app-kits 1260, the chrome wave): the named-slot status bar.
+pub use status_bar::{BarFit, BarItem, Slot, StatusBar};
 
 /// Shared callback-slot shape for interactive widgets: the builder's
 /// `Option<Box<dyn FnMut(..)>>` moved behind `Rc<RefCell<..>>` so
@@ -188,8 +191,9 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 48] = [
+    const SOURCES: [(&str, &str); 49] = [
         ("mod.rs", include_str!("mod.rs")),
+        ("status_bar.rs", include_str!("status_bar.rs")),
         ("animated_image.rs", include_str!("animated_image.rs")),
         ("audio_scope.rs", include_str!("audio_scope.rs")),
         ("meter.rs", include_str!("meter.rs")),
