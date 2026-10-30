@@ -7,7 +7,7 @@ use crate::{
     base::{Point, Rgba},
     gfx::{Bitmap, MosaicRenderer},
     layout::{Dimension, Style as LayoutStyle},
-    reactive::{interval, on_cleanup, Scope, Signal},
+    reactive::{batch, interval, on_cleanup, Scope, Signal},
     theme::TokenSet,
     ui::{dyn_view, Element, Role, View},
 };
@@ -123,16 +123,50 @@ impl Avatar {
         let active = self.active;
         let enabled = self.animated;
         let frame = cx.signal(0u64);
+        let sampled_level = cx.signal(0.0f32);
+        let styles = self.styles;
+        let style = self.style;
+        let levels = self.level;
+        // Producer signals may notify even for equal values. Cut them off before
+        // clock ownership and painting: a 20-Hz audio callback must not keep
+        // re-arming an 84-ms interval before its first frame can fire.
+        let state = cx.memo(move || {
+            (
+                pose.get(),
+                styles.map(|s| s.get()).unwrap_or(style),
+                active.map(|s| s.get()).unwrap_or(true),
+            )
+        });
+        let moving = cx.memo(move || {
+            let (pose, _, live) = state.get();
+            live && pose.moves() && enabled.map(|s| s.get()).unwrap_or(false)
+        });
         cx.effect(move || {
-            if pose.get().moves()
-                && active.map(|s| s.get()).unwrap_or(true)
-                && enabled.map(|s| s.get()).unwrap_or(false)
-            {
+            if moving.get() {
+                sampled_level
+                    .set_if_changed(normalized(levels.map(|s| s.get_untracked()).unwrap_or(0.0)));
                 let clock_scope = cx.child();
                 interval(clock_scope, Duration::from_millis(84), move || {
-                    frame.update(|n| *n = n.wrapping_add(1))
+                    batch(|| {
+                        sampled_level.set_if_changed(normalized(
+                            levels.map(|s| s.get_untracked()).unwrap_or(0.0),
+                        ));
+                        frame.update(|n| *n = n.wrapping_add(1));
+                    });
                 });
                 on_cleanup(move || clock_scope.dispose());
+            }
+        });
+        let render_level = cx.memo(move || {
+            let (pose, _, live) = state.get();
+            if !live || !matches!(pose, AvatarPose::Listening | AvatarPose::Speaking) {
+                0.0
+            } else if moving.get() {
+                sampled_level.get()
+            } else {
+                // With reduced motion there is no frame clock, but deliberate
+                // level changes still update the static listening/speaking pose.
+                normalized(levels.map(|s| s.get()).unwrap_or(0.0))
             }
         });
         let image = Bitmap::default();
@@ -140,21 +174,15 @@ impl Avatar {
         // Buffers survive reactive frame rebuilds, and allocate only on resize.
         let buffers = std::rc::Rc::new(std::cell::RefCell::new((image, renderer)));
         let label = self.label;
-        let styles = self.styles;
-        let style = self.style;
-        let levels = self.level;
         let child = dyn_view(
             LayoutStyle::default()
                 .width(Dimension::Percent(1.0))
                 .height(Dimension::Percent(1.0)),
             move || {
                 let t = tokens.unwrap_or_else(|| super::theme_tokens(cx));
-                let p = pose.get();
-                let live = active.map(|s| s.get()).unwrap_or(true);
-                let style = styles.map(|s| s.get()).unwrap_or(style);
-                let level = normalized(levels.map(|s| s.get()).unwrap_or(0.0));
-                let moving = live && p.moves() && enabled.map(|s| s.get()).unwrap_or(false);
-                let phase = if moving {
+                let (p, style, live) = state.get();
+                let level = render_level.get();
+                let phase = if moving.get() {
                     frame.get() as f32 * 0.084
                 } else {
                     0.0

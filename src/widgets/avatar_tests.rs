@@ -147,3 +147,100 @@ fn disabled_avatar_draws_nothing_and_keeps_no_clock() {
     assert!(next_timer_deadline().is_none());
     root.dispose();
 }
+
+#[test]
+fn audio_producer_updates_and_equal_state_writes_cannot_starve_or_accelerate_the_clock() {
+    use crate::{
+        app::{App, Driver, RunConfig},
+        reactive::{batch, set_loop_clock},
+        testing::CaptureTerm,
+    };
+    for producer_ms in [20u64, 50] {
+        let size = Size::new(18, 9);
+        let t0 = Instant::now();
+        set_loop_clock(Some(t0));
+        let state = Rc::new(RefCell::new(None));
+        let out = state.clone();
+        let mut app = App::new(size);
+        app.mount(move |cx| {
+            let pose = cx.signal(AvatarPose::Speaking);
+            let active = cx.signal(true);
+            let enabled = cx.signal(true);
+            let level = cx.signal(0.0f32);
+            *out.borrow_mut() = Some((pose, active, enabled, level));
+            Avatar::new(pose)
+                .active(active)
+                .animated(enabled)
+                .level(level)
+                .view(cx)
+        })
+        .unwrap();
+        let now = Rc::new(std::cell::Cell::new(t0));
+        let clock = now.clone();
+        let mut term = CaptureTerm::new(size);
+        let mut driver = Driver::new(
+            &mut app,
+            &mut term,
+            RunConfig {
+                probe: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        driver.set_clock(move || clock.get());
+        for _ in 0..3 {
+            driver.turn(&mut app, &mut term).unwrap();
+        }
+        term.take_bytes();
+        let first_deadline = next_timer_deadline().unwrap();
+        let (pose, active, enabled, level) = state.borrow().unwrap();
+        let mut emitted = 0;
+        for ms in 1..=6000u64 {
+            now.set(t0 + Duration::from_millis(ms));
+            set_loop_clock(Some(now.get()));
+            if ms % producer_ms == 0 {
+                batch(|| {
+                    pose.set(AvatarPose::Speaking);
+                    active.set(true);
+                    enabled.set(true);
+                    level.set(if ms % (producer_ms * 2) == 0 {
+                        0.9
+                    } else {
+                        0.1
+                    });
+                });
+            }
+            if ms == producer_ms {
+                assert_eq!(
+                    next_timer_deadline(),
+                    Some(first_deadline),
+                    "producer must not postpone the first frame"
+                );
+            }
+            if driver.turn(&mut app, &mut term).unwrap().emitted {
+                emitted += 1;
+            }
+        }
+        assert!((60..=72).contains(&emitted),"producer {producer_ms}ms: {emitted} emitted frames; producer cadence must be coalesced to the activity clock");
+        active.set(false);
+        driver.turn(&mut app, &mut term).unwrap();
+        term.take_bytes();
+        assert!(next_timer_deadline().is_none());
+        for ms in 6001..=6200 {
+            now.set(t0 + Duration::from_millis(ms));
+            level.set(ms as f32);
+            pose.set(AvatarPose::Speaking);
+            active.set(false);
+            enabled.set(true);
+            driver.turn(&mut app, &mut term).unwrap();
+        }
+        assert!(
+            term.bytes().is_empty(),
+            "hidden avatars must not repaint when producer data changes"
+        );
+        assert!(next_timer_deadline().is_none());
+        drop(driver);
+        drop(app);
+        set_loop_clock(None);
+    }
+}
