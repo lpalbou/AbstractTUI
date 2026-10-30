@@ -18,3 +18,6 @@ AGENTS.md
 CLAUDE.md
 .mcp.json
 .venv/
+
+# Optional Python native-host examples
+__pycache__/

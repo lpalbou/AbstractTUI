@@ -24,6 +24,7 @@ exclude = ["reviews/", "docs/captures/", "docs/media/", ".github/", ".cursor/", 
 # low-level, MIT/Apache-licensed set below. Everything else is hand-rolled.
 # This manifest is owned by the integrator; agents request additions via reviews/.
 [dependencies]
+abstract-avatar = { version = "0.1.0", path = "crates/abstract-avatar" }
 unicode-width = "0.2"
 unicode-segmentation = "1"
 miniz_oxide = "0.9"
@@ -64,5 +65,5 @@ abstracttui-mermaid = { path = "extensions/mermaid" }
 # `abstracttui`; members publish separately (core first, family the
 # same day). See extensions/README.md.
 [workspace]
-members = ["extensions/*"]
+members = ["extensions/*", "crates/*"]
 resolver = "2"

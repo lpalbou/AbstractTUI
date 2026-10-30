@@ -36,7 +36,7 @@ Chat widgets do not make network calls or load models.
 - `ChatTranscript`: role-labelled message bubbles, Markdown and scrolling when
   the host provides its own composer.
 - `ChatPanel`: transcript plus bound multiline composer and Send button.
-- `Avatar`: procedural Halo/Hover activity presentation; the host supplies pose,
+- `Avatar`: six procedural activity designs from `AvatarStyle::ALL`; the host supplies pose,
   amplitude and visibility. It owns no model, microphone or speaker.
 
 ## Host-owned chat
@@ -85,7 +85,7 @@ Inside an application mount callback, allocate `pose = cx.signal(AvatarPose::Rea
 `level = cx.signal(0.0f32)`, `visible = cx.signal(true)` and `motion = cx.signal(false)`.
 Build `Avatar::new(pose).style(AvatarStyle::Halo).level(level).active(visible)
 .animated(motion).view(cx)`. Poses also include Thinking, Working, Listening,
-Speaking, Waiting and Error; style Hover draws a domed robot. Bind active to real
+Speaking, Waiting and Error; styles include Halo, Hover, Vortex, Eclipse, Eye and Rover. Bind active to real
 host visibility and motion to user preferences. Enabled Ready breathes at2fps,
 Waiting pulses at6fps, active phases run at roughly12fps, and Error is static.
 Animation stops its clock when hidden,
@@ -107,3 +107,10 @@ picture button. Empty cells preserve underlying glyphs/styles; occupied cells
 replace a whole terminal glyph, including antialiased edges. Keep the underlying
 view in the paint tree for restoration after motion/hide. Opaque previews remain
 the default; focus/press on the button retains a visible selection cue.
+
+Ready pointer tracking is opt-in: create `AvatarPointer::new(cx)`, pass
+`.follow_pointer(pointer)`, and forward actual `MouseKind::Move` positions through
+`pointer.moved(pos)`. It expires after2s, ignores non-Ready/reduced motion and samples
+at12fps without polling. Clear on host hide. Error faces show red X eyes. Geometry
+and catalog live in `crates/abstract-avatar`, independently usable through Rust/C/Wasm;
+never copy shaders into a client. See that crate's README and ADR0006.

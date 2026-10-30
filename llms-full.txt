@@ -63,9 +63,9 @@ through ordinary reactivity.*
   collapsed otherwise, reactive badge dots) — arranged by a flexbox-style solver
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
-- **Activity avatars** — procedural Halo orb and Hover robot with host-supplied
+- **Activity avatars** — six procedural watch-inspired designs (Halo, Hover, Vortex, Eclipse, Eye, Rover) with host-supplied
   poses and audio level. Optional motion uses 2fps for Ready,6fps for Waiting and
-  up to12fps for active poses; hidden and reduced-motion views stop their clocks. Run `cargo run --example avatar` to preview.
+  up to12fps for active poses and Ready cursor tracking; hidden and reduced-motion views stop their clocks. Run `cargo run --example avatar` to preview. `cargo run --example avatar_catalog -- /tmp/avatars.png error` exports a headless catalog. Geometry/catalog are shared with web/native hosts through the independent [abstract-avatar core](crates/abstract-avatar/README.md).
 - **Chat panels** — `ChatPanel` and `ChatTranscript` provide configurable message
   bubbles, Markdown, scrolling and a bound composer; the host owns requests, history
   and permissions. Run `cargo run --example chat` for a local echo conversation.
@@ -1813,7 +1813,8 @@ that needs no framework packages or network.
 
 ### Avatar — procedural activity presentation
 
-`Avatar` renders a Halo orb or Hover robot using the existing cell mosaic renderer.
+`Avatar` renders Halo, Hover, Vortex, Eclipse, Eye or Rover using the existing cell mosaic renderer.
+`AvatarStyle::ALL` provides stable keys, labels, descriptions and watch reference codes.
 It performs no networking, inference, audio capture or playback. The application
 supplies observed state and decides where the view is visible.
 
@@ -1835,7 +1836,7 @@ Poses are `Ready`, `Thinking`, `Working`, `Listening`, `Speaking`, `Waiting` and
 `Error`. Hover leans with a raised listening hand, rests lower with a dimmed gaze
 while waiting, and bobs with thruster sparks while working. They are presentation
 states, not inferred thoughts. Use `.style_signal`
-for a reactive `Halo` / `Hover` choice. Audio levels clamp to 0–1. Animation is off
+for a reactive choice from `AvatarStyle::ALL`. Audio levels clamp to 0–1. Animation is off
 unless a signal enables it. Ready breathes at 2 frames/second, Waiting pulses at
 roughly 6, and active poses update at roughly 12. Error remains static.
 Animated listening/speaking samples producer audio levels at that frame cadence,
@@ -1846,6 +1847,19 @@ Hidden (`active=false`), reduced-motion
 and disposed views cancel their animation timers. The host must bind visibility;
 the component cannot determine whether a terminal window is covered or minimized.
 
+Ready can optionally follow pointer activity. Create `pointer = AvatarPointer::new(cx)`,
+pass `.follow_pointer(pointer)`, and call `pointer.moved(mouse.pos)` only on actual
+`MouseKind::Move` events in a host capture handler. It requests terminal motion via
+the existing Overlays context; hosts without that context must enable motion themselves.
+Face designs move their eyes; abstract orbs turn subtly. Targets clamp to the frame
+and expire after two seconds without movement. Tracking samples at about12fps,
+then returns to2fps; other poses/reduced motion ignore gaze. Clear the pointer when
+the host hides it. Error draws red X eyes for Hover/Rover and a central X for Eye.
+
+Shared geometry lives in the dependency-free [abstract-avatar crate](../crates/abstract-avatar/README.md).
+Its optional C/Wasm ABI supports Canvas/React and native Qt hosts, with the same
+styles, poses and gaze; application state, timers, themes and preferences stay host-owned.
+
 Shaded materials, soft glow and antialiased silhouettes use half-block cells on
 colour terminals and a braille fallback where colour is unavailable. These are
 terminal cells, not a pixel graphics protocol. Raster work is capped at 64×32
@@ -1855,6 +1869,7 @@ control when less space is available.
 The widget is presentation-only: compose it inside a Button for click/keyboard
 activation and provide an accessible name for that action. Preview styles, poses,
 level and playback with `cargo run --example avatar` (no framework or assets needed).
+Export a headless terminal catalog with `cargo run --example avatar_catalog -- /tmp/avatars.png error`.
 
 Opt in to `.transparent_background(true)` for a shape-only overlay. Empty artwork
 cells leave underlying glyphs, colors and attributes untouched; occupied cells,
@@ -7113,7 +7128,7 @@ Chat widgets do not make network calls or load models.
 - `ChatTranscript`: role-labelled message bubbles, Markdown and scrolling when
   the host provides its own composer.
 - `ChatPanel`: transcript plus bound multiline composer and Send button.
-- `Avatar`: procedural Halo/Hover activity presentation; the host supplies pose,
+- `Avatar`: six procedural activity designs from `AvatarStyle::ALL`; the host supplies pose,
   amplitude and visibility. It owns no model, microphone or speaker.
 
 ## Host-owned chat
@@ -7162,7 +7177,7 @@ Inside an application mount callback, allocate `pose = cx.signal(AvatarPose::Rea
 `level = cx.signal(0.0f32)`, `visible = cx.signal(true)` and `motion = cx.signal(false)`.
 Build `Avatar::new(pose).style(AvatarStyle::Halo).level(level).active(visible)
 .animated(motion).view(cx)`. Poses also include Thinking, Working, Listening,
-Speaking, Waiting and Error; style Hover draws a domed robot. Bind active to real
+Speaking, Waiting and Error; styles include Halo, Hover, Vortex, Eclipse, Eye and Rover. Bind active to real
 host visibility and motion to user preferences. Enabled Ready breathes at2fps,
 Waiting pulses at6fps, active phases run at roughly12fps, and Error is static.
 Animation stops its clock when hidden,
@@ -7184,3 +7199,10 @@ picture button. Empty cells preserve underlying glyphs/styles; occupied cells
 replace a whole terminal glyph, including antialiased edges. Keep the underlying
 view in the paint tree for restoration after motion/hide. Opaque previews remain
 the default; focus/press on the button retains a visible selection cue.
+
+Ready pointer tracking is opt-in: create `AvatarPointer::new(cx)`, pass
+`.follow_pointer(pointer)`, and forward actual `MouseKind::Move` positions through
+`pointer.moved(pos)`. It expires after2s, ignores non-Ready/reduced motion and samples
+at12fps without polling. Clear on host hide. Error faces show red X eyes. Geometry
+and catalog live in `crates/abstract-avatar`, independently usable through Rust/C/Wasm;
+never copy shaders into a client. See that crate's README and ADR0006.

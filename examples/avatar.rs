@@ -9,11 +9,16 @@ fn main() -> abstracttui::base::Result<()> {
     let mut app = App::new(Size::new(80, 28));
     let quit = app.quitter();
     app.mount(move|cx| {
+        let pointer=AvatarPointer::new(cx);
         let pose=cx.signal(AvatarPose::Ready);let style=cx.signal(AvatarStyle::Halo);
         let level=cx.signal(0.5f32);let animated=cx.signal(true);let active=cx.signal(true);
-        let mut root=Element::new().style(LayoutStyle::column().gap(1).padding(Edges::all(1)))
+        let mut root=Element::new().on(abstracttui::ui::Phase::Capture,move|_,event| {
+            if let abstracttui::ui::UiEvent::Mouse(mouse)=event {
+                if matches!(mouse.kind,abstracttui::ui::MouseKind::Move) { pointer.moved(mouse.pos); }
+            }
+        }).style(LayoutStyle::column().gap(1).padding(Edges::all(1)))
             .shortcut(KeyChord::plain(Key::Char('q')),move |_|quit.quit())
-            .shortcut(KeyChord::plain(Key::Char('s')),move |_|style.set(if style.get_untracked()==AvatarStyle::Halo{AvatarStyle::Hover}else{AvatarStyle::Halo}))
+            .shortcut(KeyChord::plain(Key::Char('s')),move |_|style.set(AvatarStyle::ALL[(AvatarStyle::ALL.iter().position(|s| *s==style.get_untracked()).unwrap_or(0)+1)%AvatarStyle::ALL.len()]))
             .shortcut(KeyChord::plain(Key::Char(' ')),move |_|animated.update(|x|*x = !*x))
             .shortcut(KeyChord::plain(Key::Char('h')),move |_|active.update(|x|*x = !*x))
             .shortcut(KeyChord::plain(Key::Char('+')),move |_|level.update(|x|*x=(*x+0.1).min(1.0)))
@@ -22,7 +27,7 @@ fn main() -> abstracttui::base::Result<()> {
             root=root.shortcut(KeyChord::plain(Key::Char(key)),move |_|pose.set(value));
         }
         root.child(text("Procedural avatar · 1–7 pose · s style · space animation · +/- level · h hide · q quit"))
-            .child(Avatar::new(pose).style_signal(style).level(level).active(active).animated(animated).layout(LayoutStyle::default().width(Dimension::Cells(32)).height(Dimension::Cells(17))).view(cx))
+            .child(Avatar::new(pose).follow_pointer(pointer).style_signal(style).level(level).active(active).animated(animated).layout(LayoutStyle::default().width(Dimension::Cells(32)).height(Dimension::Cells(17))).view(cx))
             .child(dyn_view(LayoutStyle::line(1),move ||text(format!("{:?} · {:?} · level {:.1} · animation {}",style.get(),pose.get(),level.get(),animated.get())))).build()
     })?;
     app.run()

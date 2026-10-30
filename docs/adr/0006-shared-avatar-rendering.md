@@ -17,9 +17,11 @@ visibility/timing, captions and interaction. Optional bounded C/Wasm exports reu
 that exact core; AbstractUIC ships a generated Wasm artifact and thin Canvas/React
 adapters. Native/Qt hosts can use the same optional C ABI. Application integrations
 and existing watch implementation are migrated separately; watch codes are catalog
-provenance, not new preference authority. Existing halo/hover keys stay valid.
+provenance, not new preference authority. Existing halo/hover keys stay valid. Cursor coordinates remain host-fed transient
+view state, never identity or a global mouse listener inside the core. Ready gaze
+expires after two seconds at the adapter; other phases/reduced motion ignore it.
 
-The renderer accepts explicit pose/time/level and emits material/light/coverage.
+The renderer accepts explicit pose/time/level/gaze and emits material/light/coverage.
 Hosts supply palette lookup values; no literal application colors or UI toolkit
 enter shared geometry. No registry/service/model or network call is introduced.
 ABI handles bound dimensions and live buffers; destroy releases owned buffers.

@@ -4,7 +4,11 @@ use crate::{
     reactive::{flush_effects, next_timer_deadline, run_due_timers},
     widgets::itest_util::{mount_widget, settle},
 };
-use std::{cell::RefCell, rc::Rc, time::Instant};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 #[test]
 fn activity_clock_uses_slow_idle_cadence_and_disarms_when_hidden_reduced_or_error() {
@@ -81,7 +85,7 @@ fn all_poses_and_styles_render_in_narrow_and_large_rectangles() {
         Size::new(18, 10),
         Size::new(80, 30),
     ] {
-        for style in [AvatarStyle::Halo, AvatarStyle::Hover] {
+        for style in AvatarStyle::ALL {
             for pose in [
                 AvatarPose::Ready,
                 AvatarPose::Thinking,
@@ -121,7 +125,7 @@ fn level_and_theme_change_art_without_mutating_the_theme() {
     let t = crate::theme::default_theme().tokens;
     let materials_value = Materials::new(&t);
     let materials = &materials_value;
-    for style in [AvatarStyle::Halo, AvatarStyle::Hover] {
+    for style in AvatarStyle::ALL {
         let image = |level| {
             (0..80)
                 .flat_map(|y| {
@@ -267,7 +271,7 @@ fn audio_producer_updates_and_equal_state_writes_cannot_starve_or_accelerate_the
 fn shaded_scene_ground_is_opaque_and_surfaces_have_continuous_tonal_detail() {
     let tokens = crate::theme::default_theme().tokens;
     let materials = Materials::new(&tokens);
-    for style in [AvatarStyle::Halo, AvatarStyle::Hover] {
+    for style in AvatarStyle::ALL {
         assert_eq!(
             sample(style, AvatarPose::Ready, 0.0, 0.0, -0.99, -0.99, &materials),
             tokens.bg
@@ -411,7 +415,7 @@ fn every_nonerror_pose_has_visible_motion_at_main_and_preview_sizes_with_fixed_a
         testing::CaptureTerm,
     };
     for size in [Size::new(32, 17), Size::new(48, 25)] {
-        for style in [AvatarStyle::Halo, AvatarStyle::Hover] {
+        for style in AvatarStyle::ALL {
             for pose in [
                 AvatarPose::Ready,
                 AvatarPose::Thinking,
@@ -533,7 +537,7 @@ fn transparent_art_preserves_underlying_text_attributes_and_ink_outside_its_shap
         if light {
             tokens.bg = Rgba::rgb(238, 242, 252);
         }
-        for style in [AvatarStyle::Halo, AvatarStyle::Hover] {
+        for style in AvatarStyle::ALL {
             for pose in [
                 AvatarPose::Ready,
                 AvatarPose::Listening,
@@ -629,16 +633,22 @@ fn transparent_animation_damage_restores_old_silhouette_and_hidden_underlay() {
         testing::CaptureTerm,
         ui::Element,
     };
-    for style in [AvatarStyle::Halo, AvatarStyle::Hover] {
+    for style in AvatarStyle::ALL {
         assert!(crate::app::set_theme_by_id("abstract-dark"));
         let size = Size::new(32, 17);
         let start = Instant::now();
         set_loop_clock(Some(start));
         let shared = Rc::new(RefCell::new(None));
         let out = shared.clone();
+        let (initial_pose, target_pose) = match style {
+            AvatarStyle::Vortex | AvatarStyle::Eclipse => (AvatarPose::Working, AvatarPose::Ready),
+            AvatarStyle::Eye => (AvatarPose::Listening, AvatarPose::Waiting),
+            AvatarStyle::Rover => (AvatarPose::Listening, AvatarPose::Ready),
+            _ => (AvatarPose::Waiting, AvatarPose::Listening),
+        };
         let mut app = App::new(size);
         app.mount(move |cx| {
-            let pose = cx.signal(AvatarPose::Waiting);
+            let pose = cx.signal(initial_pose);
             let active = cx.signal(false);
             let motion = cx.signal(true);
             *out.borrow_mut() = Some((pose, active, motion));
@@ -700,7 +710,7 @@ fn transparent_animation_damage_restores_old_silhouette_and_hidden_underlay() {
         active.set(true);
         driver.turn(&mut app, &mut term).unwrap();
         let first = cells(&term);
-        pose.set(AvatarPose::Listening);
+        pose.set(target_pose);
         driver.turn(&mut app, &mut term).unwrap();
         let second = cells(&term);
         let restored = first
@@ -744,4 +754,135 @@ fn transparent_animation_damage_restores_old_silhouette_and_hidden_underlay() {
         set_loop_clock(None);
         assert!(crate::app::set_theme_by_id("abstract-dark"));
     }
+}
+
+#[test]
+fn pointer_activity_expires_after_two_seconds_and_does_not_leave_a_timer() {
+    use crate::reactive::{create_root, set_loop_clock};
+    let start = Instant::now();
+    set_loop_clock(Some(start));
+    let (root, pointer) = create_root(AvatarPointer::new);
+    pointer.moved(Point::new(2, 3));
+    assert_eq!(next_timer_deadline(), Some(start + Duration::from_secs(2)));
+    run_due_timers(start + Duration::from_millis(1999));
+    assert_eq!(pointer.point.get_untracked(), Some(Point::new(2, 3)));
+    set_loop_clock(Some(start + Duration::from_secs(1)));
+    pointer.moved(Point::new(2, 3)); // even another report in the same cell is activity
+    assert_eq!(next_timer_deadline(), Some(start + Duration::from_secs(3)));
+    run_due_timers(start + Duration::from_secs(2));
+    assert!(pointer.point.get_untracked().is_some());
+    run_due_timers(start + Duration::from_secs(3));
+    assert!(pointer.point.get_untracked().is_none());
+    assert!(next_timer_deadline().is_none());
+    pointer.moved(Point::new(5, 6));
+    root.dispose();
+    assert!(next_timer_deadline().is_none());
+    set_loop_clock(None);
+}
+
+#[test]
+fn cursor_gaze_is_sampled_without_starving_the_clock_and_returns_to_idle() {
+    use crate::{
+        app::{App, Driver, RunConfig},
+        reactive::{next_timer_deadline, set_loop_clock},
+        testing::CaptureTerm,
+    };
+    let start = Instant::now();
+    let now = Rc::new(std::cell::Cell::new(start));
+    let clock = now.clone();
+    let out = Rc::new(RefCell::new(None));
+    let shared = out.clone();
+    let mut app = App::new(Size::new(32, 17));
+    app.mount(move |cx| {
+        let p = AvatarPointer::new(cx);
+        *shared.borrow_mut() = Some(p);
+        Avatar::new(cx.signal(AvatarPose::Ready))
+            .style(AvatarStyle::Hover)
+            .follow_pointer(p)
+            .animated(cx.signal(true))
+            .view(cx)
+    })
+    .unwrap();
+    let mut term = CaptureTerm::new(Size::new(32, 17));
+    let mut driver = Driver::new(
+        &mut app,
+        &mut term,
+        RunConfig {
+            probe: false,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    driver.set_clock(move || clock.get());
+    driver.turn(&mut app, &mut term).unwrap();
+    driver.turn(&mut app, &mut term).unwrap();
+    let pointer = out.borrow().unwrap();
+    let mut frames = 0;
+    for i in 1..=50 {
+        now.set(start + Duration::from_millis(i * 20));
+        set_loop_clock(Some(now.get()));
+        pointer.moved(Point::new((i % 4) as i32, 0));
+        term.take_bytes();
+        driver.turn(&mut app, &mut term).unwrap();
+        if !term.bytes().is_empty() {
+            frames += 1;
+        }
+    }
+    assert!(
+        (8..=15).contains(&frames),
+        "cursor reports must not outrun or starve12fps: {frames}"
+    );
+    now.set(start + Duration::from_secs(3));
+    driver.turn(&mut app, &mut term).unwrap();
+    assert!(pointer.point.get_untracked().is_none());
+    assert_eq!(
+        next_timer_deadline(),
+        Some(now.get() + Duration::from_millis(500)),
+        "return to the normal Ready cadence after2s"
+    );
+    drop(driver);
+    drop(app);
+    assert!(next_timer_deadline().is_none());
+    set_loop_clock(None);
+}
+
+#[test]
+fn reducing_motion_recenters_an_existing_gaze_immediately() {
+    let shared = Rc::new(RefCell::new(None));
+    let out = shared.clone();
+    let size = Size::new(48, 25);
+    let (root, mut tree) = mount_widget(size, move |cx| {
+        let motion = cx.signal(false);
+        let pointer = AvatarPointer::new(cx);
+        *out.borrow_mut() = Some((motion, pointer));
+        Avatar::new(cx.signal(AvatarPose::Ready))
+            .style(AvatarStyle::Hover)
+            .follow_pointer(pointer)
+            .animated(motion)
+            .layout(
+                LayoutStyle::default()
+                    .width(Dimension::Cells(48))
+                    .height(Dimension::Cells(25)),
+            )
+            .view(cx)
+    });
+    // Compare actual colored cells: the geometry consists of identical block glyphs.
+    let colors = |frame: &crate::ui::BufferCanvas| {
+        (0..25)
+            .flat_map(|y| (0..48).map(move |x| Point::new(x, y)))
+            .map(|p| frame.cell(p).unwrap())
+            .collect::<Vec<_>>()
+    };
+    let base = colors(&settle(&mut tree, size));
+    let (motion, pointer) = shared.borrow().unwrap();
+    motion.set(true);
+    pointer.moved(Point::new(0, 0));
+    assert_ne!(colors(&settle(&mut tree, size)), base);
+    motion.set(false);
+    assert_eq!(
+        colors(&settle(&mut tree, size)),
+        base,
+        "reduced motion clears stored gaze"
+    );
+    root.dispose();
 }

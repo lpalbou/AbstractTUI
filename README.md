@@ -57,9 +57,9 @@ through ordinary reactivity.*
   collapsed otherwise, reactive badge dots) — arranged by a flexbox-style solver
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
-- **Activity avatars** — procedural Halo orb and Hover robot with host-supplied
+- **Activity avatars** — six procedural watch-inspired designs (Halo, Hover, Vortex, Eclipse, Eye, Rover) with host-supplied
   poses and audio level. Optional motion uses 2fps for Ready,6fps for Waiting and
-  up to12fps for active poses; hidden and reduced-motion views stop their clocks. Run `cargo run --example avatar` to preview.
+  up to12fps for active poses and Ready cursor tracking; hidden and reduced-motion views stop their clocks. Run `cargo run --example avatar` to preview. `cargo run --example avatar_catalog -- /tmp/avatars.png error` exports a headless catalog. Geometry/catalog are shared with web/native hosts through the independent [abstract-avatar core](crates/abstract-avatar/README.md).
 - **Chat panels** — `ChatPanel` and `ChatTranscript` provide configurable message
   bubbles, Markdown, scrolling and a bound composer; the host owns requests, history
   and permissions. Run `cargo run --example chat` for a local echo conversation.

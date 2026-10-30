@@ -784,7 +784,8 @@ that needs no framework packages or network.
 
 ### Avatar — procedural activity presentation
 
-`Avatar` renders a Halo orb or Hover robot using the existing cell mosaic renderer.
+`Avatar` renders Halo, Hover, Vortex, Eclipse, Eye or Rover using the existing cell mosaic renderer.
+`AvatarStyle::ALL` provides stable keys, labels, descriptions and watch reference codes.
 It performs no networking, inference, audio capture or playback. The application
 supplies observed state and decides where the view is visible.
 
@@ -806,7 +807,7 @@ Poses are `Ready`, `Thinking`, `Working`, `Listening`, `Speaking`, `Waiting` and
 `Error`. Hover leans with a raised listening hand, rests lower with a dimmed gaze
 while waiting, and bobs with thruster sparks while working. They are presentation
 states, not inferred thoughts. Use `.style_signal`
-for a reactive `Halo` / `Hover` choice. Audio levels clamp to 0–1. Animation is off
+for a reactive choice from `AvatarStyle::ALL`. Audio levels clamp to 0–1. Animation is off
 unless a signal enables it. Ready breathes at 2 frames/second, Waiting pulses at
 roughly 6, and active poses update at roughly 12. Error remains static.
 Animated listening/speaking samples producer audio levels at that frame cadence,
@@ -817,6 +818,19 @@ Hidden (`active=false`), reduced-motion
 and disposed views cancel their animation timers. The host must bind visibility;
 the component cannot determine whether a terminal window is covered or minimized.
 
+Ready can optionally follow pointer activity. Create `pointer = AvatarPointer::new(cx)`,
+pass `.follow_pointer(pointer)`, and call `pointer.moved(mouse.pos)` only on actual
+`MouseKind::Move` events in a host capture handler. It requests terminal motion via
+the existing Overlays context; hosts without that context must enable motion themselves.
+Face designs move their eyes; abstract orbs turn subtly. Targets clamp to the frame
+and expire after two seconds without movement. Tracking samples at about12fps,
+then returns to2fps; other poses/reduced motion ignore gaze. Clear the pointer when
+the host hides it. Error draws red X eyes for Hover/Rover and a central X for Eye.
+
+Shared geometry lives in the dependency-free [abstract-avatar crate](../crates/abstract-avatar/README.md).
+Its optional C/Wasm ABI supports Canvas/React and native Qt hosts, with the same
+styles, poses and gaze; application state, timers, themes and preferences stay host-owned.
+
 Shaded materials, soft glow and antialiased silhouettes use half-block cells on
 colour terminals and a braille fallback where colour is unavailable. These are
 terminal cells, not a pixel graphics protocol. Raster work is capped at 64×32
@@ -826,6 +840,7 @@ control when less space is available.
 The widget is presentation-only: compose it inside a Button for click/keyboard
 activation and provide an accessible name for that action. Preview styles, poses,
 level and playback with `cargo run --example avatar` (no framework or assets needed).
+Export a headless terminal catalog with `cargo run --example avatar_catalog -- /tmp/avatars.png error`.
 
 Opt in to `.transparent_background(true)` for a shape-only overlay. Empty artwork
 cells leave underlying glyphs, colors and attributes untouched; occupied cells,
