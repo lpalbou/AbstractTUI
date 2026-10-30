@@ -798,7 +798,7 @@ let avatar = Avatar::new(pose)
     .level(level)
     .active(visible)
     .animated(motion)
-    .layout(LayoutStyle::default().width(Dimension::Cells(18)).height(Dimension::Cells(9)))
+    .layout(LayoutStyle::default().width(Dimension::Cells(28)).height(Dimension::Cells(15)))
     .view(cx);
 ```
 
@@ -812,8 +812,12 @@ clock animation, level changes remain data-driven. Ready, Waiting and Error rema
 and disposed views cancel their animation timers. The host must bind visibility;
 the component cannot determine whether a terminal window is covered or minimized.
 
-Raster work is capped at 32×16 cells and buffers are reused. Hover is clearest at
-about 12×6 cells or larger; use a compact host control when less space is available.
+Shaded materials, soft glow and antialiased silhouettes use half-block cells on
+colour terminals and a braille fallback where colour is unavailable. These are
+terminal cells, not a pixel graphics protocol. Raster work is capped at 64×32
+cells with reused buffers and theme-cached material ramps. Use about 28×15 cells
+or larger for the main avatar and 48×25 for a detailed preview; use a compact host
+control when less space is available.
 The widget is presentation-only: compose it inside a Button for click/keyboard
 activation and provide an accessible name for that action. Preview styles, poses,
 level and playback with `cargo run --example avatar` (no framework or assets needed).

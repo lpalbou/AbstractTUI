@@ -154,3 +154,57 @@ mod tests {
         assert!(contrast_ratio(sel, bg) > 1.05);
     }
 }
+
+/// Theme-derived decorative material: a shadow/midtone/highlight ramp with
+/// precomposited edge coverage. Build once when the theme changes; rasterizers
+/// can look up smooth shading and antialiasing without deriving colors per pixel.
+/// The supplied stops describe one material, not a hue-spanning brand gradient.
+#[derive(Clone)]
+pub struct MaterialRamp {
+    colors: [[Rgba; 32]; 256],
+}
+impl MaterialRamp {
+    pub fn sample(&self, light: f32, coverage: f32) -> Rgba {
+        let index = |value: f32, count: usize| {
+            if value.is_finite() {
+                (value.clamp(0.0, 1.0) * (count - 1) as f32).round() as usize
+            } else {
+                0
+            }
+        };
+        self.colors[index(light, 256)][index(coverage, 32)]
+    }
+}
+pub fn material_ramp(ground: Rgba, midtone: Rgba, highlight: Rgba) -> MaterialRamp {
+    MaterialRamp {
+        colors: std::array::from_fn(|shade| {
+            let value = shade as f32 / 255.0;
+            let ink = if value < 0.65 {
+                mix(ground, midtone, value / 0.65)
+            } else {
+                mix(midtone, highlight, (value - 0.65) / 0.35)
+            };
+            std::array::from_fn(|coverage| mix(ground, ink, coverage as f32 / 31.0))
+        }),
+    }
+}
+
+#[cfg(test)]
+mod material_tests {
+    use super::*;
+    #[test]
+    fn material_edges_keep_the_ground_and_invalid_inputs_do_not_poison_the_raster() {
+        let ground = Rgba::rgb(12, 16, 24);
+        let mid = Rgba::rgb(150, 90, 30);
+        let light = Rgba::rgb(245, 230, 210);
+        let ramp = material_ramp(ground, mid, light);
+        for shade in [0.0, 0.4, 1.0] {
+            assert_eq!(ramp.sample(shade, 0.0), ground);
+        }
+        assert_eq!(ramp.sample(0.0, 1.0), ground);
+        assert_eq!(ramp.sample(1.0, 1.0), light);
+        assert_eq!(ramp.sample(f32::NAN, 1.0), ground);
+        assert_eq!(ramp.sample(1.0, f32::INFINITY), ground);
+        assert_ne!(ramp.sample(0.8, 0.5), ramp.sample(0.8, 1.0));
+    }
+}

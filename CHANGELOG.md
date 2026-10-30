@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Avatar uses shaded, antialiased Halo/Hover artwork with warm materials and
+  soft glow; larger previews retain detail within a bounded 64×32-cell raster.
+
 - Add procedural Halo/Hover Avatar with host-supplied poses, level and visibility,
   bounded activity animation and a standalone preview.
 

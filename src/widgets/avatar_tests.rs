@@ -105,6 +105,8 @@ fn all_poses_and_styles_render_in_narrow_and_large_rectangles() {
 #[test]
 fn level_and_theme_change_art_without_mutating_the_theme() {
     let t = crate::theme::default_theme().tokens;
+    let materials_value = Materials::new(&t);
+    let materials = &materials_value;
     for style in [AvatarStyle::Halo, AvatarStyle::Hover] {
         let image = |level| {
             (0..80)
@@ -117,7 +119,7 @@ fn level_and_theme_change_art_without_mutating_the_theme() {
                             0.0,
                             (x as f32 - 40.0) / 40.0,
                             (y as f32 - 40.0) / 40.0,
-                            &t,
+                            materials,
                         )
                     })
                 })
@@ -129,8 +131,10 @@ fn level_and_theme_change_art_without_mutating_the_theme() {
     assert_eq!(normalized(f32::INFINITY), 0.0);
     assert_eq!(normalized(-1.0), 0.0);
     assert_eq!(normalized(9.0), 1.0);
-    assert_eq!(ink(AvatarPose::Error, &t), t.error);
-    assert_eq!(ink(AvatarPose::Waiting, &t), t.warn);
+    assert_ne!(
+        materials.warm.sample(0.65, 1.0),
+        materials.eye.sample(0.65, 1.0)
+    );
 }
 
 #[test]
@@ -242,5 +246,40 @@ fn audio_producer_updates_and_equal_state_writes_cannot_starve_or_accelerate_the
         drop(driver);
         drop(app);
         set_loop_clock(None);
+    }
+}
+
+#[test]
+fn shaded_scene_ground_is_opaque_and_surfaces_have_continuous_tonal_detail() {
+    let tokens = crate::theme::default_theme().tokens;
+    let materials = Materials::new(&tokens);
+    for style in [AvatarStyle::Halo, AvatarStyle::Hover] {
+        assert_eq!(
+            sample(style, AvatarPose::Ready, 0.0, 0.0, -0.99, -0.99, &materials),
+            tokens.bg
+        );
+        let mut shades = std::collections::HashSet::new();
+        for y in 0..96 {
+            for x in 0..96 {
+                let color = sample(
+                    style,
+                    AvatarPose::Ready,
+                    0.0,
+                    0.0,
+                    (x as f32 - 48.0) / 48.0,
+                    (y as f32 - 48.0) / 48.0,
+                    &materials,
+                );
+                assert_eq!(
+                    color.a, 255,
+                    "half-block edges must not turn alpha-zero ink into default white"
+                );
+                shades.insert(color);
+            }
+        }
+        assert!(
+            shades.len() > 40,
+            "material should retain smooth tonal shading, not a handful of flat token bands"
+        );
     }
 }

@@ -90,3 +90,6 @@ host visibility and motion to user preferences. Ready/Waiting/Error are static;
 other enabled activity runs at roughly12fps, stopping its clock when hidden,
 reduced-motion or disposed. Compose in a host Button for activation and collapse
 below useful cell sizes. `cargo run --example avatar` demonstrates every input.
+Allocate about 28×15 cells for recognizable art or 48×25 for a detailed preview.
+Colour terminals use shaded half-blocks, with braille as a monochrome fallback;
+the widget does not require a terminal image protocol.
