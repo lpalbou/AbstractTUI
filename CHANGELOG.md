@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Avatar adds low-rate Ready breathing and Waiting pulses, attentive Listening,
+  scanning Thinking and fixed-level Speaking motion; hidden/reduced views stop clocks.
+
 - Hover has distinct listening/waiting/working postures and bounded working
   particles. Half-block edge rendering avoids detached silhouette stripes.
 

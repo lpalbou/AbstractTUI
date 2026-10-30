@@ -807,10 +807,13 @@ Poses are `Ready`, `Thinking`, `Working`, `Listening`, `Speaking`, `Waiting` and
 while waiting, and bobs with thruster sparks while working. They are presentation
 states, not inferred thoughts. Use `.style_signal`
 for a reactive `Halo` / `Hover` choice. Audio levels clamp to 0–1. Animation is off
-unless a signal enables it; moving poses then update at roughly 12 frames/second.
+unless a signal enables it. Ready breathes at 2 frames/second, Waiting pulses at
+roughly 6, and active poses update at roughly 12. Error remains static.
 Animated listening/speaking samples producer audio levels at that frame cadence,
 so faster audio updates cannot reset or accelerate the animation clock. Without
-clock animation, level changes remain data-driven. Ready, Waiting and Error remain static. Hidden (`active=false`), reduced-motion
+clock animation, level changes remain data-driven. Halo Listening draws inward
+intake rings; Speaking emits outward rings, distinct even at a fixed audio level.
+Hidden (`active=false`), reduced-motion
 and disposed views cancel their animation timers. The host must bind visibility;
 the component cannot determine whether a terminal window is covered or minimized.
 

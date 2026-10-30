@@ -64,8 +64,8 @@ through ordinary reactivity.*
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
 - **Activity avatars** — procedural Halo orb and Hover robot with host-supplied
-  poses and audio level. Activity animation is bounded; idle, hidden and reduced-motion
-  views stop their animation clocks. Run `cargo run --example avatar` to preview.
+  poses and audio level. Optional motion uses 2fps for Ready,6fps for Waiting and
+  up to12fps for active poses; hidden and reduced-motion views stop their clocks. Run `cargo run --example avatar` to preview.
 - **Chat panels** — `ChatPanel` and `ChatTranscript` provide configurable message
   bubbles, Markdown, scrolling and a bound composer; the host owns requests, history
   and permissions. Run `cargo run --example chat` for a local echo conversation.
@@ -1836,10 +1836,13 @@ Poses are `Ready`, `Thinking`, `Working`, `Listening`, `Speaking`, `Waiting` and
 while waiting, and bobs with thruster sparks while working. They are presentation
 states, not inferred thoughts. Use `.style_signal`
 for a reactive `Halo` / `Hover` choice. Audio levels clamp to 0–1. Animation is off
-unless a signal enables it; moving poses then update at roughly 12 frames/second.
+unless a signal enables it. Ready breathes at 2 frames/second, Waiting pulses at
+roughly 6, and active poses update at roughly 12. Error remains static.
 Animated listening/speaking samples producer audio levels at that frame cadence,
 so faster audio updates cannot reset or accelerate the animation clock. Without
-clock animation, level changes remain data-driven. Ready, Waiting and Error remain static. Hidden (`active=false`), reduced-motion
+clock animation, level changes remain data-driven. Halo Listening draws inward
+intake rings; Speaking emits outward rings, distinct even at a fixed audio level.
+Hidden (`active=false`), reduced-motion
 and disposed views cancel their animation timers. The host must bind visibility;
 the component cannot determine whether a terminal window is covered or minimized.
 
@@ -7150,8 +7153,9 @@ Inside an application mount callback, allocate `pose = cx.signal(AvatarPose::Rea
 Build `Avatar::new(pose).style(AvatarStyle::Halo).level(level).active(visible)
 .animated(motion).view(cx)`. Poses also include Thinking, Working, Listening,
 Speaking, Waiting and Error; style Hover draws a domed robot. Bind active to real
-host visibility and motion to user preferences. Ready/Waiting/Error are static;
-other enabled activity runs at roughly12fps, stopping its clock when hidden,
+host visibility and motion to user preferences. Enabled Ready breathes at2fps,
+Waiting pulses at6fps, active phases run at roughly12fps, and Error is static.
+Animation stops its clock when hidden,
 reduced-motion or disposed. Compose in a host Button for activation and collapse
 below useful cell sizes. `cargo run --example avatar` demonstrates every input.
 Allocate about 28×15 cells for recognizable art or 48×25 for a detailed preview.
@@ -7160,4 +7164,6 @@ the widget does not require a terminal image protocol.
 When composing inside Button, position Avatar absolutely at left/top zero with
 full percentage bounds; do not add it beside Button's existing label in row flow.
 Keep the button label at the bottom for visible keyboard focus. Hover's Listening
-leans, Waiting rests still, and Working bobs with deterministic thruster sparks.
+leans, Waiting pulses in a lower posture with sequential dots, and Working bobs
+with deterministic thruster sparks. Halo Listening takes rings inward and Speaking
+emits them outward; fixed audio input still gives distinct active motion.

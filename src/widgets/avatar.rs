@@ -38,11 +38,13 @@ impl AvatarPose {
             Self::Error => "Error",
         }
     }
-    fn moves(self) -> bool {
-        matches!(
-            self,
-            Self::Thinking | Self::Working | Self::Listening | Self::Speaking
-        )
+    fn period(self) -> Option<Duration> {
+        match self {
+            Self::Ready => Some(Duration::from_millis(500)),
+            Self::Waiting => Some(Duration::from_millis(167)),
+            Self::Error => None,
+            _ => Some(Duration::from_millis(84)),
+        }
     }
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -53,10 +55,11 @@ pub enum AvatarStyle {
     Hover,
 }
 
-/// A small token-colored avatar with an optional 12-fps activity clock.
-/// Animation is off unless bound to an enabled signal. Ready/waiting/error are
-/// static even when animation is enabled. Hosts must set `active` false while
-/// hidden; this disarms the clock and skips drawing. Reduced motion is simply
+/// A small token-colored avatar with an optional, pose-paced activity clock.
+/// Ready breathes at 2 fps, Waiting pulses at about 6 fps, and active poses use
+/// at most 12 fps. Error stays static. Animation is opt-in. Hosts must set
+/// `active` false while hidden; this disarms the clock and skips drawing.
+/// Reduced motion is simply
 /// `animated = false`; pose and level changes still update the static picture.
 pub struct Avatar {
     pose: Signal<AvatarPose>,
@@ -122,7 +125,7 @@ impl Avatar {
         let pose = self.pose;
         let active = self.active;
         let enabled = self.animated;
-        let frame = cx.signal(0u64);
+        let phase = cx.signal(0.0f32);
         let sampled_level = cx.signal(0.0f32);
         let styles = self.styles;
         let style = self.style;
@@ -137,21 +140,25 @@ impl Avatar {
                 active.map(|s| s.get()).unwrap_or(true),
             )
         });
-        let moving = cx.memo(move || {
+        let cadence = cx.memo(move || {
             let (pose, _, live) = state.get();
-            live && pose.moves() && enabled.map(|s| s.get()).unwrap_or(false)
+            if live && enabled.map(|s| s.get()).unwrap_or(false) {
+                pose.period()
+            } else {
+                None
+            }
         });
         cx.effect(move || {
-            if moving.get() {
+            if let Some(period) = cadence.get() {
                 sampled_level
                     .set_if_changed(normalized(levels.map(|s| s.get_untracked()).unwrap_or(0.0)));
                 let clock_scope = cx.child();
-                interval(clock_scope, Duration::from_millis(84), move || {
+                interval(clock_scope, period, move || {
                     batch(|| {
                         sampled_level.set_if_changed(normalized(
                             levels.map(|s| s.get_untracked()).unwrap_or(0.0),
                         ));
-                        frame.update(|n| *n = n.wrapping_add(1));
+                        phase.update(|seconds| *seconds += period.as_secs_f32());
                     });
                 });
                 on_cleanup(move || clock_scope.dispose());
@@ -161,7 +168,7 @@ impl Avatar {
             let (pose, _, live) = state.get();
             if !live || !matches!(pose, AvatarPose::Listening | AvatarPose::Speaking) {
                 0.0
-            } else if moving.get() {
+            } else if cadence.get().is_some() {
                 sampled_level.get()
             } else {
                 // With reduced motion there is no frame clock, but deliberate
@@ -185,8 +192,8 @@ impl Avatar {
                 let materials = materials.get();
                 let (p, style, live) = state.get();
                 let level = render_level.get();
-                let phase = if moving.get() {
-                    frame.get() as f32 * 0.084
+                let phase = if cadence.get().is_some() {
+                    phase.get()
                 } else {
                     0.0
                 };
@@ -347,15 +354,43 @@ fn halo(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) -> 
     } else {
         0.0
     };
-    let radius = 0.49 + voice * 0.035;
+    let breath = if p == AvatarPose::Ready {
+        0.014 * (time * 0.9).sin()
+    } else {
+        0.0
+    };
+    let expression = if p == AvatarPose::Speaking {
+        0.018 * speech(time)
+    } else if p == AvatarPose::Listening {
+        -0.010 * (0.5 + 0.5 * (time * 1.2).sin())
+    } else {
+        0.0
+    };
+    let radius = 0.49 + voice * 0.035 + breath + expression;
     let rim = glow(r - radius, 0.075);
     if r < radius + 0.015 {
         let nx = x / radius;
         let ny = y / radius;
         let z = (1.0 - nx * nx - ny * ny).max(0.0).sqrt();
         let diffuse = (-0.45 * nx - 0.5 * ny + 0.72 * z).max(0.0);
-        let highlight = glow(((nx + 0.30).powi(2) + (ny + 0.35).powi(2)).sqrt(), 0.22);
-        let veins = (a * 5.0 + r * 22.0 - time * 0.6).sin().abs().powi(9) * 0.035;
+        let scan = if p == AvatarPose::Thinking {
+            0.12 * (time * 0.8).sin()
+        } else {
+            0.0
+        };
+        let highlight = glow(
+            ((nx + 0.30 - scan).powi(2) + (ny + 0.35).powi(2)).sqrt(),
+            0.22,
+        );
+        let veins = (a * 5.0 + r * 22.0 - time * if p == AvatarPose::Thinking { 1.7 } else { 0.6 })
+            .sin()
+            .abs()
+            .powi(9)
+            * if p == AvatarPose::Thinking {
+                0.08
+            } else {
+                0.035
+            };
         let heart = glow(r, radius * 0.58) * 0.18;
         return m.warm.sample(
             (0.18 + 0.65 * diffuse + 0.24 * highlight + veins + heart).clamp(0.0, 1.0),
@@ -365,6 +400,10 @@ fn halo(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) -> 
     // The watch Halo's seven broad streamers remain soft, not isolated dots.
     let turn = if p == AvatarPose::Thinking {
         time * 0.25
+    } else if p == AvatarPose::Listening {
+        -time * 0.24
+    } else if p == AvatarPose::Speaking {
+        time * 0.45
     } else {
         time * 0.07
     };
@@ -373,6 +412,25 @@ fn halo(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) -> 
     .max(0.0);
     let reach = 0.12 + voice * 0.18 + if p == AvatarPose::Thinking { 0.08 } else { 0.0 };
     let crown = glow(r - radius, 0.08 + reach * streamers) * 0.42;
+    // Intake travels toward the core; spoken syllables send a wider wave out.
+    // The distinction remains visible with a constant or quiet audio level.
+    let flow = if matches!(p, AvatarPose::Listening | AvatarPose::Speaking) {
+        let progress = (time
+            * if p == AvatarPose::Listening {
+                0.55
+            } else {
+                0.90
+            })
+        .fract();
+        let distance = if p == AvatarPose::Listening {
+            0.28 * (1.0 - progress)
+        } else {
+            0.32 * progress
+        };
+        glow(r - radius - distance, 0.028) * (std::f32::consts::PI * progress).sin().powi(2) * 0.28
+    } else {
+        0.0
+    };
     let rotation = if p == AvatarPose::Working {
         time * 0.65
     } else {
@@ -387,21 +445,38 @@ fn halo(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) -> 
         glow(r - 0.76, 0.065) * 0.12
     };
     let outer = if p == AvatarPose::Waiting {
-        glow(r - 0.83, 0.045) * 0.48
+        let pulse = 0.5 + 0.5 * (time * 2.4).sin();
+        glow(r - (0.83 + 0.018 * (time * 2.4).sin()), 0.045) * (0.30 + 0.25 * pulse)
+            + glow(r - 0.83, 0.035) * (0.5 + 0.5 * (a - time * 1.1).cos()).powi(6) * 0.30
     } else {
         0.0
     };
-    let intensity = (rim * 0.38 + crown + arc + outer).clamp(0.0, 0.88);
+    let intensity = (rim * 0.38 + crown + arc + outer + flow).clamp(0.0, 0.88);
     if intensity < 0.012 {
         m.tokens.bg
     } else {
         m.state(p).sample(intensity, 1.0)
     }
 }
+fn blink(time: f32, period: f32, duration: f32) -> f32 {
+    let phase = time.rem_euclid(period);
+    if phase < duration {
+        1.0 - 0.88 * (std::f32::consts::PI * phase / duration).sin().powi(2)
+    } else {
+        1.0
+    }
+}
+fn speech(time: f32) -> f32 {
+    0.6 * (0.5 + 0.5 * (time * 8.0).sin()) + 0.4 * (0.5 + 0.5 * (time * 13.0 + 1.0).sin())
+}
 fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) -> Rgba {
     let bob = if p == AvatarPose::Working {
         0.10 * (time * 1.6).sin() + 0.012 * (time * 3.1).sin()
-    } else if p.moves() {
+    } else if p == AvatarPose::Ready {
+        0.018 * (time * 0.85).sin()
+    } else if p == AvatarPose::Thinking {
+        -0.025 + 0.026 * (time * 0.9).sin()
+    } else if matches!(p, AvatarPose::Listening | AvatarPose::Speaking) {
         0.025 * (time * 1.05).sin()
     } else {
         0.0
@@ -412,10 +487,10 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
         // Cock toward the user's conversation, with a raised listening hand.
         // This is a real head/body roll, not an almost invisible shear.
         x += 0.075;
-        let (s, c) = (-0.24f32).sin_cos();
+        let (s, c) = (-0.24 + 0.055 * (time * 1.1).sin()).sin_cos();
         (x, y) = (c * x + s * y, -s * x + c * y);
     } else if p == AvatarPose::Thinking {
-        y += 0.065 * x;
+        y += (0.065 + 0.045 * (time * 0.8).sin()) * x;
     } else if p == AvatarPose::Waiting {
         y -= 0.065;
     }
@@ -459,19 +534,41 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
         } else {
             1.0
         };
-        let gaze = if p == AvatarPose::Waiting { 0.045 } else { 0.0 };
+        let blink = if p == AvatarPose::Ready {
+            blink(time, 5.0, 0.8)
+        } else if p == AvatarPose::Thinking {
+            blink(time + 1.0, 4.7, 0.35)
+        } else if p == AvatarPose::Listening {
+            blink(time + 2.0, 6.3, 0.3)
+        } else {
+            1.0
+        };
+        let open = open * blink;
+        let gaze = if p == AvatarPose::Waiting {
+            0.045
+        } else if p == AvatarPose::Thinking {
+            0.075 * (time * 1.1).sin()
+        } else {
+            0.0
+        };
         let d = (((x - gaze).abs() - eye_x).powi(2) + ((y - eye_y) / open).powi(2)).sqrt();
         let radius = 0.088
             + if p == AvatarPose::Speaking {
-                level * 0.018
+                level * 0.018 + 0.008 * speech(time)
+            } else if p == AvatarPose::Listening {
+                level * 0.012
             } else {
                 0.0
             };
-        let eye = &m.eye;
+        let eye = if p == AvatarPose::Waiting {
+            &m.warm
+        } else {
+            &m.eye
+        };
         if d < radius {
             let core = 1.0 - d / radius;
             let brightness = if p == AvatarPose::Waiting {
-                0.52 + 0.26 * core.powf(0.35)
+                0.42 + 0.22 * core.powf(0.35) + 0.15 * (0.5 + 0.5 * (time * 2.4).sin())
             } else {
                 0.66 + 0.34 * core.powf(0.35)
             };
@@ -493,11 +590,14 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
         let band2 = 0.455 + 0.045 * (x / 0.69).powi(2);
         let band = glow(y - band1, 0.012).max(glow(y - band2, 0.016));
         if p == AvatarPose::Speaking
-            && x.abs() < 0.20
-            && (y - 0.35).abs() < 0.055
-            && (x * 55.0).sin() > 0.3
+            && x.abs() < 0.23
+            && (y - 0.35).abs() < 0.025 + (0.035 + level * 0.045) * speech(time)
         {
-            return m.state(p).sample(0.45 + level * 0.4, 1.0);
+            return if (x * 55.0).sin() > 0.1 {
+                m.eye.sample(0.38 + 0.35 * level + 0.17 * speech(time), 1.0)
+            } else {
+                m.dim.sample(0.10, 1.0)
+            };
         }
         return m.warm.sample(
             (lit + band * 0.18).clamp(0.0, 1.0),
@@ -507,7 +607,7 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
     // Rounded arms, extending a little while tools are working.
     let reach = if p == AvatarPose::Working { 0.12 } else { 0.0 };
     let arm = if p == AvatarPose::Listening && x < 0.0 {
-        segment(x, y, -0.72, 0.06, -0.82, -0.20) - 0.065
+        segment(x, y, -0.72, 0.06, -0.82 - 0.025 * (time * 1.4).sin(), -0.20) - 0.065
     } else if p == AvatarPose::Waiting {
         segment(x.abs(), y, 0.72, 0.06, 0.69, 0.42) - 0.055
     } else {
@@ -519,12 +619,16 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
             .sample((0.75 - x.abs() * 0.1).clamp(0.0, 1.0), soft(arm, 0.05));
     }
     if p == AvatarPose::Waiting {
+        let hot = (time * 1.5).floor() as usize % 3;
         let dots = [-0.15f32, 0.0, 0.15]
             .iter()
-            .map(|dx| glow(x - dx, 0.035) * glow(y - 0.76, 0.035))
+            .enumerate()
+            .map(|(i, dx)| {
+                glow(x - dx, 0.035) * glow(y - 0.76, 0.035) * if i == hot { 0.72 } else { 0.25 }
+            })
             .fold(0.0f32, f32::max);
-        if dots > 0.04 {
-            return m.warm.sample(0.55 * dots, 1.0);
+        if dots > 0.02 {
+            return m.warm.sample(dots, 1.0);
         }
     }
     let plume_len = 0.14

@@ -7,7 +7,7 @@ use crate::{
 use std::{cell::RefCell, rc::Rc, time::Instant};
 
 #[test]
-fn activity_clock_disarms_when_idle_hidden_or_reduced_motion() {
+fn activity_clock_uses_slow_idle_cadence_and_disarms_when_hidden_reduced_or_error() {
     let shared = Rc::new(RefCell::new(None));
     let out = shared.clone();
     let (root, mut tree) = mount_widget(Size::new(18, 10), move |cx| {
@@ -19,7 +19,13 @@ fn activity_clock_disarms_when_idle_hidden_or_reduced_motion() {
     });
     settle(&mut tree, Size::new(18, 10));
     let (pose, active, animated) = shared.borrow().unwrap();
-    assert!(next_timer_deadline().is_none(), "Ready must not animate");
+    let idle_deadline = next_timer_deadline().expect("opt-in Ready breathes gently");
+    assert_eq!(run_due_timers(idle_deadline), 1);
+    assert_eq!(
+        next_timer_deadline().unwrap().duration_since(idle_deadline),
+        Duration::from_millis(500),
+        "idle must not repaint at active cadence"
+    );
     pose.set(AvatarPose::Thinking);
     flush_effects();
     let due = next_timer_deadline().expect("Thinking should arm one clock");
@@ -44,11 +50,19 @@ fn activity_clock_disarms_when_idle_hidden_or_reduced_motion() {
     animated.set(true);
     flush_effects();
     assert!(next_timer_deadline().is_some());
-    for p in [AvatarPose::Ready, AvatarPose::Waiting, AvatarPose::Error] {
-        pose.set(p);
-        flush_effects();
-        assert!(next_timer_deadline().is_none(), "{p:?}");
-    }
+    pose.set(AvatarPose::Waiting);
+    flush_effects();
+    let waiting_deadline = next_timer_deadline().expect("Waiting pulses on its slower cadence");
+    assert_eq!(run_due_timers(waiting_deadline), 1);
+    assert_eq!(
+        next_timer_deadline()
+            .unwrap()
+            .duration_since(waiting_deadline),
+        Duration::from_millis(167)
+    );
+    pose.set(AvatarPose::Error);
+    flush_effects();
+    assert!(next_timer_deadline().is_none(), "Error stays static");
     pose.set(AvatarPose::Working);
     flush_effects();
     assert!(next_timer_deadline().is_some());
@@ -323,10 +337,10 @@ fn hover_listens_with_a_cocked_posture_waits_still_and_works_with_a_larger_bob()
         waiting.1 > ready.1 + 1.5,
         "waiting should have its own lower held posture: {ready:?} vs {waiting:?}"
     );
-    assert_eq!(
-        waiting,
-        center(AvatarPose::Waiting, 2.0),
-        "waiting has no time-driven motion"
+    let later_waiting = center(AvatarPose::Waiting, 2.0);
+    assert!(
+        (waiting.0 - later_waiting.0).abs() < 1.0 && (waiting.1 - later_waiting.1).abs() < 1.0,
+        "the waiting pulse should keep its held posture"
     );
     let first = center(AvatarPose::Working, 0.0);
     let raised = center(AvatarPose::Working, 1.0);
@@ -386,5 +400,123 @@ fn hover_upper_silhouette_keeps_ground_as_background_in_actual_terminal_cells() 
             edge.paint.bg.unwrap().luminance() <= edge.paint.fg.unwrap().luminance(),
             "upper background must be the darker ground-facing sample, not bright lower-edge metal"
         );
+    }
+}
+
+#[test]
+fn every_nonerror_pose_has_visible_motion_at_main_and_preview_sizes_with_fixed_audio_level() {
+    use crate::{
+        app::{App, Driver, RunConfig},
+        reactive::set_loop_clock,
+        testing::CaptureTerm,
+    };
+    for size in [Size::new(32, 17), Size::new(48, 25)] {
+        for style in [AvatarStyle::Halo, AvatarStyle::Hover] {
+            for pose in [
+                AvatarPose::Ready,
+                AvatarPose::Thinking,
+                AvatarPose::Working,
+                AvatarPose::Listening,
+                AvatarPose::Speaking,
+                AvatarPose::Waiting,
+            ] {
+                let t0 = Instant::now();
+                set_loop_clock(Some(t0));
+                let mut app = App::new(size);
+                app.mount(move |cx| {
+                    Avatar::new(cx.signal(pose))
+                        .style(style)
+                        .level(cx.signal(0.65))
+                        .animated(cx.signal(true))
+                        .layout(
+                            LayoutStyle::default()
+                                .width(Dimension::Cells(size.w))
+                                .height(Dimension::Cells(size.h)),
+                        )
+                        .view(cx)
+                })
+                .unwrap();
+                let mut term = CaptureTerm::new(size);
+                let mut driver = Driver::new(
+                    &mut app,
+                    &mut term,
+                    RunConfig {
+                        probe: false,
+                        caps: Some(crate::term::Capabilities::with(|c| {
+                            c.truecolor = true;
+                            c.colors_256 = true;
+                            c.unicode_ok = true
+                        })),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                let now = Rc::new(std::cell::Cell::new(t0));
+                let clock = now.clone();
+                driver.set_clock(move || clock.get());
+                driver.turn(&mut app, &mut term).unwrap();
+                let cells = |term: &CaptureTerm| {
+                    (0..size.h)
+                        .flat_map(|y| {
+                            (0..size.w).map(move |x| term.screen().cell(x, y).unwrap().clone())
+                        })
+                        .collect::<Vec<_>>()
+                };
+                let first = cells(&term);
+                term.take_bytes();
+                let mut frames = 0;
+                for ms in 1..=2000 {
+                    now.set(t0 + Duration::from_millis(ms));
+                    if driver.turn(&mut app, &mut term).unwrap().rendered {
+                        frames += 1;
+                    }
+                }
+                let final_cells = cells(&term);
+                let changed = first
+                    .iter()
+                    .zip(&final_cells)
+                    .filter(|(a, b)| a != b)
+                    .count();
+                assert!(changed>=5,"{style:?}/{pose:?}/{size:?}: motion must visibly change the artwork, got {changed} cells");
+                let expected = 2000 / pose.period().unwrap().as_millis() as usize;
+                assert_eq!(
+                    frames, expected,
+                    "{style:?}/{pose:?}: one bounded pose clock"
+                );
+                assert!(!term.bytes().is_empty());
+                drop(driver);
+                drop(app);
+                set_loop_clock(None);
+            }
+        }
+    }
+}
+
+#[test]
+fn halo_intake_and_spoken_emission_are_distinct_without_relying_on_label_or_audio_changes() {
+    let materials = Materials::new(&crate::theme::default_theme().tokens);
+    for level in [0.0, 0.7] {
+        for time in [0.25, 1.2] {
+            let mut changed = 0;
+            for y in 0..64 {
+                for x in 0..64 {
+                    let at = |pose| {
+                        sample(
+                            AvatarStyle::Halo,
+                            pose,
+                            level,
+                            time,
+                            (x as f32 - 32.0) / 32.0,
+                            (y as f32 - 32.0) / 32.0,
+                            &materials,
+                        )
+                    };
+                    if at(AvatarPose::Listening) != at(AvatarPose::Speaking) {
+                        changed += 1;
+                    }
+                }
+            }
+            assert!(changed>100,"inward listening and outward speaking must differ in artwork: {level}/{time}/{changed}");
+        }
     }
 }

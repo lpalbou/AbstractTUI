@@ -58,8 +58,8 @@ through ordinary reactivity.*
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
 - **Activity avatars** — procedural Halo orb and Hover robot with host-supplied
-  poses and audio level. Activity animation is bounded; idle, hidden and reduced-motion
-  views stop their animation clocks. Run `cargo run --example avatar` to preview.
+  poses and audio level. Optional motion uses 2fps for Ready,6fps for Waiting and
+  up to12fps for active poses; hidden and reduced-motion views stop their clocks. Run `cargo run --example avatar` to preview.
 - **Chat panels** — `ChatPanel` and `ChatTranscript` provide configurable message
   bubbles, Markdown, scrolling and a bound composer; the host owns requests, history
   and permissions. Run `cargo run --example chat` for a local echo conversation.

@@ -86,8 +86,9 @@ Inside an application mount callback, allocate `pose = cx.signal(AvatarPose::Rea
 Build `Avatar::new(pose).style(AvatarStyle::Halo).level(level).active(visible)
 .animated(motion).view(cx)`. Poses also include Thinking, Working, Listening,
 Speaking, Waiting and Error; style Hover draws a domed robot. Bind active to real
-host visibility and motion to user preferences. Ready/Waiting/Error are static;
-other enabled activity runs at roughly12fps, stopping its clock when hidden,
+host visibility and motion to user preferences. Enabled Ready breathes at2fps,
+Waiting pulses at6fps, active phases run at roughly12fps, and Error is static.
+Animation stops its clock when hidden,
 reduced-motion or disposed. Compose in a host Button for activation and collapse
 below useful cell sizes. `cargo run --example avatar` demonstrates every input.
 Allocate about 28×15 cells for recognizable art or 48×25 for a detailed preview.
@@ -96,4 +97,6 @@ the widget does not require a terminal image protocol.
 When composing inside Button, position Avatar absolutely at left/top zero with
 full percentage bounds; do not add it beside Button's existing label in row flow.
 Keep the button label at the bottom for visible keyboard focus. Hover's Listening
-leans, Waiting rests still, and Working bobs with deterministic thruster sparks.
+leans, Waiting pulses in a lower posture with sequential dots, and Working bobs
+with deterministic thruster sparks. Halo Listening takes rings inward and Speaking
+emits them outward; fixed audio input still gives distinct active motion.
