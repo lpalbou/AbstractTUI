@@ -1,55 +1,6 @@
-# AbstractTUI
+# AbstractTUI documentation
 
-> AbstractTUI is a reactive, compositor-grade terminal UI engine for Rust. State lives in
-> fine-grained signals (in the SolidJS tradition — not immediate mode, not a virtual DOM):
-> a write re-runs exactly the computations that depended on it, and those re-renders damage
-> exactly the screen regions they own. Damage flows through a z-ordered compositor with
-> alpha blending and per-cell shaders, a frame diff, and a byte-economical ANSI presenter,
-> so an idle app emits zero bytes and allocates nothing. On top sit a 20+ widget library
-> arranged by a flexbox-style solver and a track-based grid (rows and tables follow one
-> convention: single click selects, Enter or engine-synthesized double-click activates),
-> an app-shell vocabulary
-> (a page-level tab host and edge-anchored drawer panels, both hosting full pages),
-> 26 built-in themes over 36
-> contrast-audited semantic design tokens with a drop-in theme-switcher control
-> (grouped dark/light menu with live preview, or a one-click mode toggle that
-> remembers the theme per mode), PNG/JPEG/GIF images (baseline and progressive
-> JPEG) drawn through the best channel the terminal proves
-> (kitty graphics, iTerm2, sixel, or unicode mosaic), animated GIF/APNG
-> played in the cell grid (video is refused by name, never decoded),
-> software-rasterized 3D from GLB files (textures, animation, skinning — no GPU),
-> cell-shader animation with tweens, easings, and timelines, streaming transcripts
-> (`Feed` + follow-tail scroll that pauses during a screen-text selection + a multiline composer
-> with completion) speaking the full
-> markdown doc vocabulary (GFM tables that render live while streaming, task lists, lazy
-> in-flow images) with a document reader surface (heading outline and anchor jumps,
-> find-in-document highlights), a live-data lane for background producers (bounded
-> ingestion, honest drop counters, `TimeSeries` history rings with relative time axes on
-> the charts) plus an engine-owned connection lifecycle with jittered-backoff reconnect,
-> key press/release state with honest fidelity (push-to-talk, level meters, and a
-> waveform scope for voice surfaces), reasoning controls for agent consoles (a
-> three-state thinking-effort picker driven by capability facts, the shared
-> `r: <value>` footer label grammar, and a streaming last-wins ThinkingFold for
-> reasoning text arriving from result metadata), file-attachment surfaces (a paste intercept
-> with a cross-terminal file-drop classifier plus a directory FilePicker widget, so
-> a dropped file becomes an attachment instead of pasted text), Codex-compatible word/line
-> editing and word-delete chords in both text widgets, text selection with OSC 52 clipboard
-> copy, an
-> optional boot splash, and a headless testing harness that drives the production
-> pipeline without a pty — including screenshot capture with deterministic plain-text,
-> replayable-ANSI and GitHub-renderable-SVG exporters. A public sub-cell vector canvas
-> (braille/quadrant dot grids,
-> lines, beziers, arcs, eighth-block fills) underlies the charts and an opt-in sibling
-> extension family: `abstracttui-graph` (graph auto-layout + a GraphView widget) and
-> `abstracttui-mermaid` (honest-subset mermaid rendering with atomic fallback). One core
-> crate, five small dependencies (unicode-width, unicode-segmentation, miniz_oxide, plus
-> libc on unix / windows-sys on Windows). MIT licensed.
-
-This file aggregates the full AbstractTUI documentation verbatim: the README followed by
-every guide under docs/, each introduced by a `===== FILE: <path> =====` separator, with
-package facts at the end.
-
-
+Expanded companion to llms.txt. The source pages below are canonical.
 
 ===== FILE: README.md =====
 
@@ -112,6 +63,9 @@ through ordinary reactivity.*
   collapsed otherwise, reactive badge dots) — arranged by a flexbox-style solver
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
+- **Chat panels** — `ChatPanel` and `ChatTranscript` provide configurable message
+  bubbles, Markdown, scrolling and a bound composer; the host owns requests, history
+  and permissions. Run `cargo run --example chat` for a local echo conversation.
 - **Transcripts and documents** — `Feed` renders append-only conversations
   and logs with keyed rich blocks (markdown, code with syntax and diff
   tinting, multi-ink rich lines, custom draw); streaming markdown items
@@ -311,6 +265,11 @@ aspirations, with the honest split stated.
 
 MIT — see [LICENSE](LICENSE).
 
+## For AI agents
+
+Register [skills/abstracttui/SKILL.md](skills/abstracttui/SKILL.md) with your agent
+host for a task-oriented guide to the Rust components, reactive state and chat panels.
+
 ===== FILE: docs/getting-started.md =====
 
 # Getting started
@@ -333,7 +292,7 @@ native library to install and no GPU requirement.
 Building against a working copy instead of a release — `[patch.crates-io]`
 pointing at a `path`, which is how a sibling app tracks the engine — has one
 rule that is not obvious: **pin the version requirement to the exact version
-the checkout carries** (`abstracttui = "0.6.0"`, not `"0.6"`). A patch whose
+the checkout carries** (`abstracttui = "0.7.0"`, not `"0.7"`). A patch whose
 version falls outside your requirement is not an error; cargo ignores it and
 resolves from crates.io instead, so you build against a published version
 while believing you build against your tree. The symptom and a check that
@@ -1403,6 +1362,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 - **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
 - **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, wheel scrolling (the window moves, the caret stays; any edit re-attaches), and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
 - **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`, bindable `selection`/`offset_y`, hover ink. Removable rows in one call (`on_remove`), or the general trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), timed double-click on the body (`on_row_double_click`), and non-selecting right-click/Shift+F10 row context requests (`on_context_menu`) that pair with `ContextMenu`. Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
+- **RowSelect** — `List`'s keyboard over rows the engine does NOT render: wrap a `Scroll` of arbitrary (multi-line) `Element`s and it gains arrows, Home/End, Page keys, click-to-select, Enter/Space activation, ensure-visible by CONTENT rows, and sticky selection by key. The rows stay yours; the selection core is literally `List`'s (see [its own section](#rowselect--keyboard-selection-over-rows-you-render)).
 - **Feed** — virtualized, append-only, keyed rich items (markdown in the full doc vocabulary — tables, lazy in-flow images, task lists — plus plain text, code fences, custom draws): the chat/log/transcript surface. Appends are O(1); a streaming tail item re-typesets only its open region (a streamed table renders as a table live); 10k items draw one screenful. A content-sized feed carries an intrinsic measure, so `Scroll::new(Feed::new(&state).view(cx))` scrolls the true extent from the first frame.
 - **Table** — fixed/percent/flex columns, styled header, virtualized rows, selection, hover ink, sort-indicator hook (the app sorts). Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/double-click — a single click only selects; see the Table section below).
 - **Tabs** — tab bar over lazily mounted panels; only the active panel is mounted.
@@ -1715,6 +1675,66 @@ List::new(names)
 See `cargo run --example presence_board` and docs/faq.md § "scrollable
 rich list".
 
+### RowSelect — keyboard selection over rows you render
+
+`List` renders its own rows and they are **one line each**: an item's
+extra rows reserve SPACE, and wrapped multi-row item CONTENT is not
+planned. A row that is genuinely two lines — a name above a mission, a
+title above a path — has to be your own tree in a `Scroll`, and that
+used to cost the keyboard.
+
+[`RowSelect`](crate::widgets::RowSelect) is the keyboard without the
+rendering. It WRAPS your content and drives the same selection core
+`List` drives, so the two cannot drift apart.
+
+```rust,ignore
+let sel = cx.signal(0usize);          // your row builder reads this
+let sel_key = cx.signal(String::new());
+let offset = cx.signal(0i32);         // SHARED with the Scroll
+
+let scroll = Scroll::new(my_two_line_rows(members.clone(), sel))
+    .offset_y(offset)
+    .view(cx);
+
+RowSelect::new(members.iter().map(|m| m.id))  // one stable key per row
+    .row_heights(|_| 2)                       // rows in CELL ROWS
+    .selection(sel)
+    .selection_key(sel_key)                   // sticky across mutations
+    .offset_y(offset)
+    .on_activate(move |i| open(i))
+    .wrap(cx, scroll)
+    .build()
+```
+
+**What it assumes.** Row `i` occupies content rows
+`[prefix[i], prefix[i+1])` from `row_heights` (default 1) — what a
+column of fixed-height children inside a `Scroll` lays out. Both
+ensure-visible and click hit-testing key off it, so declare the height
+you actually gave the row.
+
+**What it takes over.** Navigation keys are claimed in the CAPTURE
+phase, before the content sees them, because the `Scroll` inside would
+otherwise scroll on the same arrows. Unmodified
+`Up`/`Down`/`PageUp`/`PageDown`/`Home`/`End`, and `Enter`/`Space` when
+`on_activate` is bound, belong to the RowSelect for its whole subtree —
+**do not put a text editor inside a selectable row.** Modified chords
+pass through untouched, and the wheel and the scrollbar stay the
+`Scroll`'s.
+
+**Tab stops.** The wrapper is focusable by default so the keyboard
+reaches it even when nothing inside can hold focus. A `Scroll` is also
+focusable, so the canonical composition has two tab stops that behave
+identically. `focusable(false)` gives you exactly one when the content
+already carries it.
+
+**Sticky selection is the half worth testing.** With `selection_key`
+bound, a rebuild re-finds the key's CURRENT index — a mutation that
+moves the selected row keeps that row selected. When the key is gone
+(the row was removed) the SLOT is held, clamped: the next row down.
+
+See `cargo run --example roster` — press `m` and watch the index move
+while the key does not.
+
 ### Table — selection vs activation
 
 Same split, browsing-surface edition: `on_select` notifies selection
@@ -1748,6 +1768,48 @@ fn providers(cx: Scope, open_editor: impl FnMut(usize) + 'static) -> View {
     .view(cx) // single-click only selects
 }
 ```
+
+### ChatPanel and ChatTranscript — host-owned assistant conversations
+
+`ChatPanel` provides a messaging layout and composer without any service, model,
+workflow or transport dependency. Incoming and outgoing messages have measured,
+width-aware bubbles; assistant Markdown uses the existing document parser and
+Feed renderer. Short histories start at the top; longer histories scroll to the
+latest message. The host supplies tracked message/busy readers, a draft signal
+and an acceptance callback. The widget keeps the draft until the host clears it.
+
+```rust,ignore
+let messages = cx.signal(vec![ChatMessage::assistant("How can I help?")]);
+let draft = cx.signal(String::new());
+let panel = ChatPanel::new(draft, move || messages.get(), move |question| {
+    messages.update(|m| m.push(ChatMessage::user(question)));
+    // Enqueue the host's own work here; post replies back on the UI thread.
+    draft.set(String::new());
+})
+.assistant_label("Project helper")
+.placeholder("Ask a question…")
+.view(cx);
+```
+
+Use `.busy(reader)`, `.user_label(...)`, `.empty_message(...)` and
+`.pending_message(...)` for host wording and state. Enter submits; Ctrl+J inserts
+a newline. Busy prevents duplicate submission while preserving a draft being
+prepared. `ChatMessage::author` and `meta` accept host-supplied labels; the engine
+invents neither timestamps nor provenance.
+
+`ChatTranscript::new(Vec<ChatMessage>)` is the message-only form for hosts with
+existing history/composer/stop controls. Both forms fit a Drawer, PageHost or any
+allocated pane. Explicit `follow_tail` and `offset_y` signals can preserve reading
+position across host remounts. Run `cargo run --example chat` for a local echo demo
+that needs no framework packages or network.
+
+### TextInput / TextArea — inner content inset
+
+`.inset(left, right)` adds cells inside the side strokes. It affects text,
+placeholder, selection, wrapping/scroll budgets and the TextArea caret/completion
+anchor. Negative values become zero; narrow fields reduce insets before leaving
+less than one text cell. The default is `(0, 0)` for compatibility. For a chat
+composer, use `.inset(1, 1)`.
 
 ### TextInput — masked (secret) fields
 
@@ -1887,17 +1949,29 @@ highlight nothing.
 ### Feed — capped preview blocks (`max_rows`)
 
 Transcript previews cap their bodies: `FeedItem::max_rows(n)` bounds
-the most recently appended Text/Rich block at `n` typeset rows TOTAL,
-applied post-wrap at the width the engine typesets at (the row count
+the most recently appended block at `n` typeset rows TOTAL, applied
+post-typeset at the width the engine typesets at (the row count
 only exists after the wrap — a consumer cannot precompute it). Content
-that wraps to at most `n` rows renders unchanged; overflow shows the
-first `n - 1` wrapped rows and spends the last row on an honest marker
+that occupies at most `n` rows renders unchanged; overflow shows the
+first `n - 1` rows and spends the last row on an honest marker
 — "… (+K more lines)" in `text_muted`, where K is the hidden
-wrapped-row count at the current width (it changes on resize).
+row count at the current width (it changes on resize).
 `FeedItem::overflow_marker(|k| ...)` overrides the wording. Extent and
 windowing count the marker row, so a capped block is never taller than
 `n`; chain per block (`.block(a).max_rows(3).block(b).max_rows(8)`);
-streaming items are unaffected (caps live on static Text/Rich blocks):
+streaming items are unaffected (caps live on static blocks).
+
+**Every row-based block kind caps** — Text, Rich, Markdown and Code.
+Markdown and Code cap RENDERED rows, not source lines: a six-paragraph
+body is eleven rows (five separators), and `max_rows(4)` shows three of
+them under a "(+8 more lines)" marker. That is the only count a reader
+sees and the only one the extent agrees with; capping the source
+instead would re-typeset different rows and could not report an honest
+K. A cut lands wherever row `n - 1` falls, which for a long document
+can be inside a table or a fence. **`Custom` is the one kind with no
+cap**: it declares its own height and paints its own rect, so the feed
+has no rows to count — `max_rows` on a `Custom` block is a debug
+assert and a release no-op:
 
 ```rust
 use abstracttui::widgets::FeedItem;
@@ -2408,6 +2482,85 @@ fn command_picker(cx: Scope) -> (View, SelectHandle) {
     (view, picker) // `/theme` handler calls picker.open()
 }
 ```
+
+## widgets::StatusBar — app chrome from named slots
+
+A one-row header or status bar with three named slots — `left`,
+`center`, `right` — each holding ordered `BarItem`s (styled runs, a
+priority, a fit rule, an optional action id). The app never draws and
+never computes a cell coordinate (backlog app-kits 1260).
+
+```rust
+use abstracttui::prelude::*;
+
+let bar = StatusBar::live(
+    move || {
+        StatusBar::new()
+            .left(BarItem::text("▲ App").priority(10))
+            .left(BarItem::text(workflow.get()).action("workflow")
+                .fit(BarFit::TruncateEnd { min: 8 }).priority(5))
+            .center(BarItem::text(path.get()).action("workspace")
+                .fit(BarFit::TruncateStart { min: 12 }).priority(3))
+            .right(BarItem::text("theme ▾").action("theme").priority(6))
+    },
+    move |_ctx, id| match id.as_str() {
+        "workflow" => open_workflow_picker(),
+        "workspace" => open_workspace_modal(),
+        "theme" => open_theme_picker(),
+        _ => {}
+    },
+);
+```
+
+- **Placement.** Left items sit flush from `padding` (default 1), right
+  items flush to the right edge, center items are centered on the bar
+  and slide sideways to keep `slot_gap` (default 2) from the others.
+  Inside a slot, items keep declaration order joined by `separator`
+  (default two blanks).
+- **Overflow.** Items yield in ascending `priority` (higher survives
+  longer; ties: later-declared first, slots ordered left, center,
+  right). A yielding item first truncates with `…` down to its `min`
+  (`BarFit::TruncateEnd` keeps the head, `BarFit::TruncateStart` keeps
+  the tail), then drops whole. `BarFit::Whole` (the default) never
+  fragments.
+- **`StatusBar::live(build, on_action)`** is the chrome door: a stable,
+  focusable action host (focus survives content changes) around a
+  reactive region that re-runs `build` when its signals change and on
+  theme switch. `StatusBar::element(&tokens)` is the static draw
+  element; `plan_slots` is the pure layout helper both use.
+- Tokens: ground `surface`, default ink `text_muted`, separator
+  `text_faint`. Example: `examples/status_bar.rs`.
+
+## ui — action spans: semantic hit targets in draw closures
+
+Any draw closure can tag what it paints with an `ActionId`
+(backlog app-widgets 0187); the nearest `Element::on_action` host
+receives clicks and keyboard activations by id:
+
+```rust
+Element::new()
+    .focusable() // keyboard reach (on_action does not imply it)
+    .on_action(|_ctx, id| println!("activated {id}"))
+    .draw(|canvas, rect| {
+        let s = abstracttui::render::Style::new();
+        let w = canvas.print_action(Point::new(rect.x, rect.y), "model", &s, &ActionId::from("model"));
+        canvas.print_action(Point::new(rect.x + w + 2, rect.y), "session", &s, &ActionId::from("session"));
+    })
+```
+
+- **Record.** Spans are recorded per drawing element on each of its
+  draws (replacing the previous record), stored relative to its rect
+  (they follow layout moves), clipped to it, dropped on unmount.
+  `mark_action(rect, id)` tags an already-painted rect.
+- **Mouse.** Left press + release on the same span = one activation;
+  the press stops propagation. The deepest drawer on the hit path with
+  a span under the pointer wins.
+- **Keyboard.** While the host itself is focused: Left/Right move a
+  cursor across its spans in reading order (wrapping), Enter/Space
+  activate. The cursor span prints REVERSED (`mark_action` returns
+  `true` for it so custom widgets can draw their own ring).
+- **Tests and automation.** `UiTree::action_rect("id")` and
+  `UiTree::action_targets()` report where each live target is now.
 
 ## widgets::DrawerDock — the right-edge drawer rail
 
@@ -5072,7 +5225,7 @@ honestly too: 6x2 comes back `Legibility::Distorted`, not `Clear`. The
 full surface, its
 limits (no accented glyphs) and the measurements behind the floor are in
 [api.md § gfx::bigtext](api.md#gfxbigtext--text-and-icons-several-cells-tall);
-`cargo run --example bigtext` shows every scale and vocabulary on your
+`cargo run --example bigtext` shows every scale and symbol set on your
 own terminal.
 
 ## 3D end-to-end
@@ -6851,52 +7004,84 @@ first is built. The machine-readable form of the same check is the resolve
 node id in `cargo metadata --format-version 1`, which reads
 `path+file:///…#0.6.0` when the patch applied and
 `registry+…#abstracttui@0.5.0` when it did not.
-===== PACKAGE FACTS =====
 
-- Crate: `abstracttui` 0.5.0 (Rust, edition 2021). First public release: 2026-07-21
-  (0.1.0); current release 0.5.0 (2026-08-23).
-- Extension family (sibling crates in the repo workspace, installed only when needed;
-  ADR-0004 — public core API only, same MIT license and dependency discipline):
-  - `abstracttui-graph` 0.5.0 — graph auto-layout (`GraphDesc -> Layout`: layered /
-    force / grid passes) + the `GraphView` widget. Depends on `abstracttui` 0.5.
-  - `abstracttui-mermaid` 0.5.0 — honest-subset mermaid rendering (atomic fallback).
-    Depends on `abstracttui` 0.5 and `abstracttui-graph` 0.4.
-- Description: a reactive, compositor-grade terminal UI engine — fine-grained signals,
-  layered rendering with damage tracking, streaming transcripts and live-data ingestion,
-  file-attachment surfaces (paste intercept, drop classifier, FilePicker),
-  text selection with OSC 52 copy, images (PNG/JPEG/GIF over
-  kitty/iTerm2/sixel/mosaic) with animated GIF/APNG playback,
-  software-rasterized 3D (GLB), a sub-cell vector canvas, themes (with a drop-in
-  theme switcher) and animation.
-- Examples: 28 runnable in-crate examples (`examples/README.md`, ordered as a learning
-  path; includes `grounds` for 256-colour ground separation and `presence_board` for rich
-  list rows with accessories) plus 4 extension-crate examples (`workflow`/`network` in
-  `extensions/graph`, `mermaid`/`mermaid_doc` in `extensions/mermaid`); every example
-  exits cleanly without a tty.
-- License: MIT.
-- Repository / homepage: https://github.com/lpalbou/abstracttui
-- API reference: https://docs.rs/abstracttui (family: https://docs.rs/abstracttui-graph,
-  https://docs.rs/abstracttui-mermaid)
-- Dependencies (std plus this minimal set; everything else is implemented in-crate):
-  - `unicode-width` 0.2 — cell-width measurement
-  - `unicode-segmentation` 1 — grapheme segmentation
-  - `miniz_oxide` 0.9 — DEFLATE (PNG decoding)
-  - `libc` 0.2 — Unix terminal FFI (unix targets only)
-  - `windows-sys` 0.61 — Windows console FFI (windows targets only)
-- Test invocation (from CONTRIBUTING.md):
-  - `cargo test` — the core suite (~2,500 tests: unit tests, integration suites under
-    `tests/`, and doctests).
-  - `cargo test --workspace` — core plus the extension family (~2,730 tests; the CI gate).
-  - `cargo test --test live_smoke -- --ignored --test-threads=1` — live pty smoke tests
-    (spawn a real terminal session; run serially).
-  - `cargo test --test perf_budgets --release -- --ignored --test-threads=1` —
-    engine-primitive performance budgets (meaningful only in release builds; run
-    serially).
-  - `cargo test --test perf_app_surfaces --release -- --ignored --test-threads=1` —
-    app-layer performance budgets: feed streaming, select popup, selection drag,
-    composer keystroke, diff scroll, startup time-to-first-frame (release, serial).
-  - `UPDATE_GOLDENS=1 cargo test` — deliberately (re)mint golden snapshots under
-    `tests/goldens/`.
-  - Lint gates before submitting: `cargo fmt --all` and
-    `cargo clippy --all-targets` (zero warnings expected).
-  - Windows cross-check: `cargo check --target x86_64-pc-windows-msvc`.
+===== FILE: skills/abstracttui/SKILL.md =====
+
+---
+name: abstracttui
+description: Build terminal interfaces with the abstracttui Rust library. Use for reactive widgets, application shells, Markdown and chat panels, keyboard and mouse controls, or terminal rendering.
+license: MIT
+metadata:
+  package-version: "unreleased"
+---
+
+# Use AbstractTUI
+
+AbstractTUI is a Rust terminal UI library. It renders components and dispatches
+input; your application owns transport, inference, permissions and persistence.
+Chat widgets do not make network calls or load models.
+
+## Workflow
+
+1. Add `abstracttui` to your Cargo dependencies. Use `abstracttui::prelude::*`.
+2. Create `App::new(Size::new(width, height))`, then `app.mount(move |cx| { ... })?`.
+3. Allocate persistent state with `cx.signal(value)` outside reactive child rebuilds.
+   Read signals inside `Element::dyn_child` to rebuild only their dependent region.
+4. Build widgets with `.view(cx)`. A layout column or row owns sizing; grow only the
+   content region that should consume remaining space.
+5. Call `app.run()` in an interactive terminal. Use `term::have_tty()` when a command
+   should print an explanation and exit in a noninteractive environment.
+6. Keep blocking work off the UI thread. Post completion through a captured
+   `reactive::wake_handle()`; never access UI signals directly from worker threads.
+
+## Choose components
+
+- `TextInput`: single-line editor; `TextArea`: multiline editor. `.inset(1, 1)`
+  gives a cell of space inside the side strokes without moving the outer frame.
+- `List`: selectable items with keyboard and mouse-wheel navigation.
+- `MarkdownView`: document reader. Constrain its layout when it is an introduction
+  above another growing region.
+- `Feed`: measured, virtualized transcript blocks with follow-tail behavior.
+- `ChatTranscript`: role-labelled message bubbles, Markdown and scrolling when
+  the host provides its own composer.
+- `ChatPanel`: transcript plus bound multiline composer and Send button.
+
+## Host-owned chat
+
+Inside the mount callback:
+
+```rust
+let messages = cx.signal(vec![ChatMessage::assistant("How can I help?")]);
+let draft = cx.signal(String::new());
+let panel = ChatPanel::new(draft, move || messages.get(), move |question| {
+    messages.update(|m| m.push(ChatMessage::user(question)));
+    draft.set(String::new()); // Clear only after the host accepts the message.
+})
+.assistant_label("Helper")
+.placeholder("Ask a question…")
+.view(cx);
+```
+
+The host appends the assistant reply when its own backend completes. For an async
+request, bind `.busy(move || busy.get())`; this prevents duplicate sends while
+allowing preparation of the next draft. Requests, cancellation, retry, history,
+authentication and persistence remain host responsibilities. Keep distinct
+conversations in distinct host state. `ChatMessage::author` and `.meta` accept
+labels from the host; the widget does not invent timestamps.
+
+Run `cargo run --example chat` for a complete local echo application with no
+framework packages or network. Use `cargo run --example hello` for the basic shell.
+
+## Sharp edges
+
+- Nested `grow` regions divide available space: a brief introduction should not
+  grow alongside the transcript.
+- Set `.busy` from real backend state; a rendering indicator alone cannot protect
+  application actions against duplicates.
+- Default input inset is zero. Explicitly set it on composers that need spacing.
+- Terminal image support depends on the terminal; use cell-based rendering when
+  pixel protocols are unavailable. The library supplies presentation, not speech
+  synthesis, microphone recognition or an assistant service.
+
+See [API](../../docs/api.md), [getting started](../../docs/getting-started.md),
+[architecture](../../docs/architecture.md) and [graphics](../../docs/graphics-and-3d.md).

@@ -508,3 +508,37 @@ fn an_empty_anchor_never_becomes_a_phantom_selection() {
     type_str(&mut tree, "X");
     assert_eq!(value.get_untracked(), "abcdeX", "no phantom selection");
 }
+
+#[test]
+fn content_inset_keeps_strokes_selection_and_scroll_in_one_geometry() {
+    for inset in [0, 1, 2, 99] {
+        let size = Size::new(10, 1);
+        let (root, mut tree) = mount_widget(size, move |cx| {
+            TextInput::new()
+                .inset(inset, inset)
+                .placeholder("hint")
+                .element(cx, &default_theme().tokens)
+                .build()
+        });
+        key(&mut tree, Key::Tab);
+        type_str(&mut tree, "abcdefghi");
+        key(&mut tree, Key::Home);
+        let canvas = render(&mut tree, size);
+        let left = inset.min(7);
+        assert_eq!(canvas.cell(Point::new(0, 0)).unwrap().0, '▐');
+        assert_eq!(canvas.cell(Point::new(9, 0)).unwrap().0, '▌');
+        for x in 1..=left {
+            assert_eq!(canvas.cell(Point::new(x, 0)).unwrap().0, ' ');
+        }
+        assert_eq!(canvas.cell(Point::new(left + 1, 0)).unwrap().0, 'a');
+        key_mod(&mut tree, Key::Right, Mods::SHIFT);
+        let canvas = render(&mut tree, size);
+        if inset < 3 {
+            assert_eq!(
+                canvas.cell(Point::new(left + 1, 0)).unwrap().2,
+                default_theme().tokens.selection_bg
+            );
+        }
+        root.dispose();
+    }
+}

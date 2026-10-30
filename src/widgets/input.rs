@@ -67,6 +67,7 @@ pub(crate) type TextCallback = Rc<RefCell<Option<BoxedTextFn>>>;
 pub struct TextInput {
     value: Option<Signal<String>>,
     placeholder: String,
+    inset: (i32, i32),
     placeholder_while_focused: bool,
     masked: bool,
     layout: Option<LayoutStyle>,
@@ -139,6 +140,7 @@ impl TextInput {
         TextInput {
             value: None,
             placeholder: String::new(),
+            inset: (0, 0),
             placeholder_while_focused: false,
             masked: false,
             layout: None,
@@ -152,6 +154,14 @@ impl TextInput {
     /// internal one.
     pub fn value(mut self, value: Signal<String>) -> TextInput {
         self.value = Some(value);
+        self
+    }
+
+    /// Inner breathing room between the side strokes and editable content.
+    /// Negative values become zero; at narrow widths insets shrink before
+    /// the text area falls below one cell. Default: no inset.
+    pub fn inset(mut self, left: i32, right: i32) -> TextInput {
+        self.inset = (left.max(0), right.max(0));
         self
     }
 
@@ -260,6 +270,7 @@ impl TextInput {
             scroll: 0,
         });
         let focused = cx.signal(false);
+        let inset = self.inset;
         let placeholder = self.placeholder;
         let placeholder_while_focused = self.placeholder_while_focused;
         let masked = self.masked;
@@ -280,7 +291,8 @@ impl TextInput {
             let on_change = on_change.clone();
             move |ctx: &mut EventCtx, ev: &UiEvent| {
                 // Text area = rect minus the two stroke columns.
-                let width = (ctx.current_rect().w - 2).max(1);
+                let width =
+                    (crate::widgets::input::inset_frame(ctx.current_rect(), inset).w - 2).max(1);
                 match ev {
                     UiEvent::Key(k) => {
                         if edit_key(
@@ -373,8 +385,9 @@ impl TextInput {
                                 "▌",
                                 &stroke_style,
                             );
-                            let tx = rect.x + 1; // text area start
-                            let tw = rect.w - 2;
+                            let inner = inset_frame(rect, inset);
+                            let tx = inner.x + 1;
+                            let tw = inner.w - 2;
                             // Both placeholder branches clip to the
                             // interior (first-app/0284): draw closures
                             // clip to damage regions, not element rects —
@@ -776,6 +789,15 @@ fn edit_key(
         }
         _ => false,
     }
+}
+
+/// A virtual frame with the requested content inset; outer strokes keep their
+/// original position. Shared by editing, painting and TextArea caret anchors.
+pub(crate) fn inset_frame(rect: crate::base::Rect, inset: (i32, i32)) -> crate::base::Rect {
+    let budget = (rect.w - 3).max(0);
+    let left = inset.0.max(0).min(budget);
+    let right = inset.1.max(0).min(budget - left);
+    crate::base::Rect::new(rect.x + left, rect.y, rect.w - left - right, rect.h)
 }
 
 #[cfg(test)]

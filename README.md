@@ -57,6 +57,9 @@ through ordinary reactivity.*
   collapsed otherwise, reactive badge dots) — arranged by a flexbox-style solver
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
+- **Chat panels** — `ChatPanel` and `ChatTranscript` provide configurable message
+  bubbles, Markdown, scrolling and a bound composer; the host owns requests, history
+  and permissions. Run `cargo run --example chat` for a local echo conversation.
 - **Transcripts and documents** — `Feed` renders append-only conversations
   and logs with keyed rich blocks (markdown, code with syntax and diff
   tinting, multi-ink rich lines, custom draw); streaming markdown items
@@ -255,3 +258,8 @@ aspirations, with the honest split stated.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## For AI agents
+
+Register [skills/abstracttui/SKILL.md](skills/abstracttui/SKILL.md) with your agent
+host for a task-oriented guide to the Rust components, reactive state and chat panels.

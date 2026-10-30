@@ -273,6 +273,19 @@ impl UiTree {
     /// then-live instance — and `Dyn` disposal/remounting happens when
     /// the batch closes, after this function's routing work.
     pub fn dispatch(&mut self, event: &UiEvent) -> bool {
+        // A popup can own the release of a press that opened it. If a
+        // later press is elsewhere, disarm that old control without firing it.
+        // A same-control press retains the timed double-click chain.
+        if let UiEvent::Mouse(m) = event {
+            if matches!(m.kind, MouseKind::Down(_)) {
+                if let Some(id) = self.validated_capture() {
+                    if !self.rect_of(id).contains(m.pos) {
+                        self.cancel_pointer_press();
+                    }
+                }
+            }
+        }
+
         // Publish the tree's layer origin AROUND the batch: handlers
         // read it via `EventCtx::layer_origin`, and effects flushed at
         // the batch close (a completion controller reacting to a caret
@@ -306,7 +319,11 @@ impl UiTree {
                 // press cell's current occupant (`validated_capture` —
                 // Button's pressed re-render kills the raw id on the
                 // very Down that captured it).
-                let captured = self.validated_capture();
+                let captured = if matches!(m.kind, MouseKind::Down(_)) {
+                    None // a new press always hit-tests its own position
+                } else {
+                    self.validated_capture()
+                };
                 if captured.is_none() {
                     // Hover transitions ride every uncaptured mouse event
                     // (Move mostly, but a Down teleported by focus jumps

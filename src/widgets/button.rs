@@ -487,4 +487,38 @@ mod tests {
             "press = selection pair + BOLD (§3.2)"
         );
     }
+
+    #[test]
+    fn a_new_press_after_a_lost_release_hits_the_new_control_without_firing_the_old_one() {
+        let a = Rc::new(std::cell::Cell::new(0));
+        let b = Rc::new(std::cell::Cell::new(0));
+        let ca = a.clone();
+        let cb = b.clone();
+        let size = Size::new(24, 2);
+        let (root, mut tree) = mount_widget(size, move |cx| {
+            Element::new()
+                .style(LayoutStyle::row())
+                .child(
+                    Button::new("First")
+                        .layout(LayoutStyle::default().w(10).h(1))
+                        .on_click(move || ca.set(ca.get() + 1))
+                        .view(cx),
+                )
+                .child(
+                    Button::new("Second")
+                        .layout(LayoutStyle::default().w(10).h(1))
+                        .on_click(move || cb.set(cb.get() + 1))
+                        .view(cx),
+                )
+                .build()
+        });
+        mouse(&mut tree, MouseKind::Down(MouseButton::Left), 2, 0);
+        // Its release was intercepted by an owned overlay.
+        mouse(&mut tree, MouseKind::Down(MouseButton::Left), 12, 0);
+        mouse(&mut tree, MouseKind::Up(MouseButton::Left), 12, 0);
+        assert_eq!(a.get(), 0);
+        assert_eq!(b.get(), 1);
+        assert!(tree.pointer_capture().is_none());
+        root.dispose();
+    }
 }

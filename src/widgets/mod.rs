@@ -22,6 +22,7 @@ pub mod badge;
 pub mod block;
 pub mod button;
 pub mod chart;
+pub mod chat;
 pub mod checkbox;
 pub mod code;
 pub mod disclosure;
@@ -191,7 +192,7 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 49] = [
+    const SOURCES: [(&str, &str); 50] = [
         ("mod.rs", include_str!("mod.rs")),
         ("status_bar.rs", include_str!("status_bar.rs")),
         ("animated_image.rs", include_str!("animated_image.rs")),
@@ -204,6 +205,7 @@ mod lint_tests {
         ("block_close.rs", include_str!("block_close.rs")),
         ("button.rs", include_str!("button.rs")),
         ("chart.rs", include_str!("chart.rs")),
+        ("chat.rs", include_str!("chat.rs")),
         ("chart_time.rs", include_str!("chart_time.rs")),
         ("checkbox.rs", include_str!("checkbox.rs")),
         ("code.rs", include_str!("code.rs")),
@@ -301,3 +303,5 @@ mod lint_tests {
         }
     }
 }
+
+pub use chat::{ChatMessage, ChatPanel, ChatRole, ChatTranscript};

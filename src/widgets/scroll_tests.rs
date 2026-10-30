@@ -910,3 +910,29 @@ fn scrollbar_thumb_floor_yields_to_short_tracks() {
     );
     root.dispose();
 }
+
+#[test]
+fn horizontal_keys_bubble_when_a_vertical_pane_cannot_move_sideways() {
+    let size = Size::new(20, 6);
+    let seen = Rc::new(std::cell::Cell::new(0));
+    let out = seen.clone();
+    let (root, mut tree) = mount_widget(size, move |cx| {
+        Element::new()
+            .style(LayoutStyle::column().grow(1.0))
+            .on(crate::ui::Phase::Bubble, move |_, ev| {
+                if matches!(ev,UiEvent::Key(k) if k.key==Key::Right) {
+                    out.set(out.get() + 1)
+                }
+            })
+            .child(
+                Scroll::new(Element::new().style(LayoutStyle::line(1)).build())
+                    .content_size(10, 1)
+                    .view(cx),
+            )
+            .build()
+    });
+    key(&mut tree, Key::Tab);
+    key(&mut tree, Key::Right);
+    assert_eq!(seen.get(), 1);
+    root.dispose();
+}

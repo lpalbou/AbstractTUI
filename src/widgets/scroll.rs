@@ -696,8 +696,11 @@ impl Scroll {
                         Key::End => (0, content_h),
                         _ => return,
                     };
-                    scroll_by(dx, dy, rect);
-                    ctx.stop_propagation();
+                    // Horizontal keys belong to an ancestor when this pane
+                    // cannot move sideways (for example global tab navigation).
+                    if scroll_by(dx, dy, rect) || dy != 0 {
+                        ctx.stop_propagation();
+                    }
                 }
                 _ => {}
             }

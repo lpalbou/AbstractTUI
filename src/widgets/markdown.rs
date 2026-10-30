@@ -247,7 +247,7 @@ impl WidthCache {
     /// that is the whole point. Evicting most-recently-used would
     /// reproduce the single-slot behaviour exactly under a two-width
     /// alternation, with twice the memory and no hits.
-    fn rows_for(&mut self, width: i32, build: impl FnOnce() -> Vec<Row>) -> &[Row] {
+    pub(crate) fn rows_for(&mut self, width: i32, build: impl FnOnce() -> Vec<Row>) -> &[Row] {
         match self
             .slots
             .iter()

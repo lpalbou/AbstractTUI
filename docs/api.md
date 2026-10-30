@@ -743,6 +743,48 @@ fn providers(cx: Scope, open_editor: impl FnMut(usize) + 'static) -> View {
 }
 ```
 
+### ChatPanel and ChatTranscript — host-owned assistant conversations
+
+`ChatPanel` provides a messaging layout and composer without any service, model,
+workflow or transport dependency. Incoming and outgoing messages have measured,
+width-aware bubbles; assistant Markdown uses the existing document parser and
+Feed renderer. Short histories start at the top; longer histories scroll to the
+latest message. The host supplies tracked message/busy readers, a draft signal
+and an acceptance callback. The widget keeps the draft until the host clears it.
+
+```rust,ignore
+let messages = cx.signal(vec![ChatMessage::assistant("How can I help?")]);
+let draft = cx.signal(String::new());
+let panel = ChatPanel::new(draft, move || messages.get(), move |question| {
+    messages.update(|m| m.push(ChatMessage::user(question)));
+    // Enqueue the host's own work here; post replies back on the UI thread.
+    draft.set(String::new());
+})
+.assistant_label("Project helper")
+.placeholder("Ask a question…")
+.view(cx);
+```
+
+Use `.busy(reader)`, `.user_label(...)`, `.empty_message(...)` and
+`.pending_message(...)` for host wording and state. Enter submits; Ctrl+J inserts
+a newline. Busy prevents duplicate submission while preserving a draft being
+prepared. `ChatMessage::author` and `meta` accept host-supplied labels; the engine
+invents neither timestamps nor provenance.
+
+`ChatTranscript::new(Vec<ChatMessage>)` is the message-only form for hosts with
+existing history/composer/stop controls. Both forms fit a Drawer, PageHost or any
+allocated pane. Explicit `follow_tail` and `offset_y` signals can preserve reading
+position across host remounts. Run `cargo run --example chat` for a local echo demo
+that needs no framework packages or network.
+
+### TextInput / TextArea — inner content inset
+
+`.inset(left, right)` adds cells inside the side strokes. It affects text,
+placeholder, selection, wrapping/scroll budgets and the TextArea caret/completion
+anchor. Negative values become zero; narrow fields reduce insets before leaving
+less than one text cell. The default is `(0, 0)` for compatibility. For a chat
+composer, use `.inset(1, 1)`.
+
 ### TextInput — masked (secret) fields
 
 `.masked(true)` renders one `•` per grapheme cluster (a ZWJ emoji

@@ -33,3 +33,12 @@ settable through the widget's style/token (no per-app arithmetic).
 Headless tests at inset 0, 1 and 2 (and a width smaller than the
 inset): drawn cells, caret cell, mouse-to-caret, wrap width, scroll;
 red without the knob.
+
+## Implementation evidence — 2026-10-30
+
+The additive `.inset(left, right)` builder is implemented on TextInput and
+TextArea with narrow-width clamping, text/placeholder/selection/cursor wrapping
+and completion-anchor geometry. Headless tests cover zero, one, two and oversized
+insets. AbstractCode uses one cell in its main composer and shared ChatPanel.
+The style/token override and mouse-to-caret behavior remain proposed; this item
+is intentionally not closed as fully implemented.

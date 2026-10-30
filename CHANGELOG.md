@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add backend-independent ChatPanel, ChatTranscript and ChatMessage components with
+  measured message bubbles, host-owned state and a multiline composer; local echo example.
+- Add configurable inner content insets to TextInput and TextArea; defaults remain zero.
+- Let unmoving horizontal Scroll keys reach ancestor navigation.
+- Recover a pointer press after an overlay intercepted its release, so a later click
+  reaches the control under the pointer without activating the abandoned control.
+
 ## [0.7.0] - 2026-10-28
 
 A minor bump for two additive app-chrome surfaces: semantic hit targets

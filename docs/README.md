@@ -42,3 +42,5 @@ mosaic), software-rasterized 3D (GLB), themes, and animation.
   the reactive model, rendering, terminal/input, theming, testing), and
   [`adr/`](adr/) — the architecture decision records behind the API
   stability, styling, extensibility, and extension-packaging policies.
+
+- [Agent skill](../skills/abstracttui/SKILL.md): component selection, reactive ownership and host-owned chat.

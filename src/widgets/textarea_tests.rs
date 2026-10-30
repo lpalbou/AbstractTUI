@@ -766,3 +766,41 @@ fn the_wheel_scrolls_the_window_without_moving_the_caret() {
         "a wheel at the top passes through to an outer pane"
     );
 }
+
+#[test]
+fn content_inset_moves_typed_text_wrap_and_the_completion_anchor_together() {
+    for inset in [0, 1, 2, 99] {
+        let size = Size::new(12, 4);
+        let saved = Rc::new(RefCell::new(None));
+        let out = saved.clone();
+        let (root, mut tree) = mount_widget(size, move |cx| {
+            let state = TextAreaState::new(cx);
+            *out.borrow_mut() = Some(state.clone());
+            TextArea::new()
+                .state(&state)
+                .inset(inset, inset)
+                .rows(1, 4)
+                .element(cx, &default_theme().tokens)
+                .build()
+        });
+        key(&mut tree, Key::Tab);
+        type_str(&mut tree, "hello world");
+        key_mod(&mut tree, Key::Home, Mods::CTRL);
+        let canvas = render(&mut tree, size);
+        let left = inset.min(9);
+        assert_eq!(canvas.cell(Point::new(0, 0)).unwrap().0, '▐');
+        assert_eq!(canvas.cell(Point::new(11, 0)).unwrap().0, '▌');
+        for x in 1..=left {
+            assert_eq!(canvas.cell(Point::new(x, 0)).unwrap().0, ' ');
+        }
+        assert_eq!(canvas.cell(Point::new(left + 1, 0)).unwrap().0, 'h');
+        let state = saved.borrow().clone().unwrap();
+        assert_eq!(
+            state.caret_cell().get_untracked(),
+            Some(Point::new(left + 1, 0))
+        );
+        key(&mut tree, Key::Right);
+        assert!(state.caret_cell().get_untracked().unwrap().x > left);
+        root.dispose();
+    }
+}

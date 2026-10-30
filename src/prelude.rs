@@ -140,3 +140,5 @@ pub use crate::widgets::{ThinkingFold, ThinkingFoldState};
 // id its items (and any draw closure) tag spans with.
 pub use crate::ui::ActionId;
 pub use crate::widgets::{BarFit, BarItem, Slot, StatusBar};
+
+pub use crate::widgets::{ChatMessage, ChatPanel, ChatRole, ChatTranscript};

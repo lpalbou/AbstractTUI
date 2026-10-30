@@ -183,6 +183,7 @@ impl TextAreaState {
 pub struct TextArea {
     state: Option<TextAreaState>,
     placeholder: String,
+    inset: (i32, i32),
     placeholder_while_focused: bool,
     min_rows: i32,
     max_rows: i32,
@@ -199,6 +200,7 @@ impl TextArea {
         TextArea {
             state: None,
             placeholder: String::new(),
+            inset: (0, 0),
             placeholder_while_focused: false,
             min_rows: 1,
             max_rows: 6,
@@ -214,6 +216,14 @@ impl TextArea {
     /// Bind durable state (value/caret/focus/history) owned elsewhere.
     pub fn state(mut self, state: &TextAreaState) -> TextArea {
         self.state = Some(state.clone());
+        self
+    }
+
+    /// Inner breathing room between the side strokes and editable content.
+    /// Negative values become zero; at narrow widths insets shrink before
+    /// the text area falls below one cell. Default: no inset.
+    pub fn inset(mut self, left: i32, right: i32) -> TextArea {
+        self.inset = (left.max(0), right.max(0));
         self
     }
 
@@ -323,6 +333,7 @@ impl TextArea {
         let caret = state.inner.caret;
         let focused = state.inner.focused;
         let caret_cell = state.inner.caret_cell;
+        let inset = self.inset;
         let placeholder = self.placeholder;
         let placeholder_while_focused = self.placeholder_while_focused;
         let (min_rows, max_rows) = (self.min_rows, self.max_rows);
@@ -344,7 +355,8 @@ impl TextArea {
             let on_submit = on_submit.clone();
             let width_hint = width_hint.clone();
             move |ctx: &mut EventCtx, ev: &UiEvent| {
-                let width = (ctx.current_rect().w - 2).max(1);
+                let width =
+                    (crate::widgets::input::inset_frame(ctx.current_rect(), inset).w - 2).max(1);
                 width_hint.set(width);
                 let (consumed, owed) = match ev {
                     UiEvent::Key(k) => {
@@ -401,7 +413,12 @@ impl TextArea {
                         // dismissal keys off this).
                         let mut c = caret.get_untracked();
                         if matches!(ev, UiEvent::FocusIn) {
-                            publish_caret_cell(&state, &mut c, ctx.current_rect(), width);
+                            publish_caret_cell(
+                                &state,
+                                &mut c,
+                                crate::widgets::input::inset_frame(ctx.current_rect(), inset),
+                                width,
+                            );
                             caret.set(c);
                         } else {
                             caret_cell.set(None);
@@ -412,7 +429,12 @@ impl TextArea {
                 };
                 if consumed {
                     let mut c = caret.get_untracked();
-                    publish_caret_cell(&state, &mut c, ctx.current_rect(), width);
+                    publish_caret_cell(
+                        &state,
+                        &mut c,
+                        crate::widgets::input::inset_frame(ctx.current_rect(), inset),
+                        width,
+                    );
                     caret.set(c);
                     ctx.stop_propagation();
                     // Disposal-safety law (backlog 0297, the 0250 ruling
@@ -470,11 +492,12 @@ impl TextArea {
                 if !focused.get() {
                     return;
                 }
-                let width = (rect.w - 2).max(1);
+                let inner = crate::widgets::input::inset_frame(rect, inset);
+                let width = (inner.w - 2).max(1);
                 width_hint.set(width);
                 let before = caret.get_untracked();
                 let mut c = before;
-                publish_caret_cell(&state, &mut c, rect, width);
+                publish_caret_cell(&state, &mut c, inner, width);
                 // `publish_caret_cell` also clamps the scroll window, so
                 // it can move the caret's `top`. Write back only a real
                 // change: an unconditional set would re-render the draw
@@ -563,8 +586,9 @@ impl TextArea {
                                 &stroke_style,
                             );
                         }
-                        let tx = rect.x + 1;
-                        let tw = rect.w - 2;
+                        let inner = crate::widgets::input::inset_frame(rect, inset);
+                        let tx = inner.x + 1;
+                        let tw = inner.w - 2;
                         // Placeholder branches clip to the INTERIOR
                         // (first-app/0284): draw closures clip to damage
                         // regions, not element rects, so an unbounded
