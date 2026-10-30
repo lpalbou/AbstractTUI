@@ -771,6 +771,11 @@ a newline. Busy prevents duplicate submission while preserving a draft being
 prepared. `ChatMessage::author` and `meta` accept host-supplied labels; the engine
 invents neither timestamps nor provenance.
 
+Use `.send_label("↑")` for a compact send glyph and `.actions(move |cx| view)`
+to place host controls beside it on the same action row. Send retains an accessible
+name and a hover/focus tooltip when mounted with application overlays. Give host
+icon buttons their own accessible labels and explanatory tooltips.
+
 `ChatTranscript::new(Vec<ChatMessage>)` is the message-only form for hosts with
 existing history/composer/stop controls. Both forms fit a Drawer, PageHost or any
 allocated pane. Explicit `follow_tail` and `offset_y` signals can preserve reading

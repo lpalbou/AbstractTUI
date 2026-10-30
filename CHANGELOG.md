@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- ChatPanel supports a configurable send glyph and host controls on one shared action row.
+
 - Add backend-independent ChatPanel, ChatTranscript and ChatMessage components with
   measured message bubbles, host-owned state and a multiline composer; local echo example.
 - Add configurable inner content insets to TextInput and TextArea; defaults remain zero.

@@ -94,3 +94,22 @@ fn long_messages_scroll_to_the_tail_and_narrow_messages_stay_in_bounds() {
         root.dispose();
     }
 }
+
+#[test]
+fn send_and_host_actions_share_one_row() {
+    let size = Size::new(60, 20);
+    let (root, mut tree) = mount_widget(size, |cx| {
+        ChatPanel::new(cx.signal(String::new()), Vec::new, |_| {})
+            .send_label("↑")
+            .actions(|cx| Button::new("＋").view(cx))
+            .view(cx)
+    });
+    let canvas = settle(&mut tree, size);
+    let rows = (0..size.h).map(|y| canvas.row_text(y)).collect::<Vec<_>>();
+    assert!(
+        rows.iter()
+            .any(|line| line.contains('↑') && line.contains('＋')),
+        "{rows:?}"
+    );
+    root.dispose();
+}

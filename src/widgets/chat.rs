@@ -219,6 +219,8 @@ pub struct ChatPanel {
     placeholder: String,
     empty: String,
     pending: String,
+    send_label: String,
+    actions: Option<Rc<dyn Fn(Scope) -> View>>,
 }
 impl ChatPanel {
     pub fn new(
@@ -236,6 +238,8 @@ impl ChatPanel {
             placeholder: "Write a message…".into(),
             empty: "Start a conversation.".into(),
             pending: "Answering…".into(),
+            send_label: "Send".into(),
+            actions: None,
         }
     }
     pub fn busy(mut self, read: impl Fn() -> bool + 'static) -> Self {
@@ -260,6 +264,16 @@ impl ChatPanel {
     }
     pub fn pending_message(mut self, label: impl Into<String>) -> Self {
         self.pending = label.into();
+        self
+    }
+    /// Customize the visible send glyph/text; accessible name remains Send message.
+    pub fn send_label(mut self, label: impl Into<String>) -> Self {
+        self.send_label = label.into();
+        self
+    }
+    /// Host actions share the send row and are mounted in its reactive scope.
+    pub fn actions(mut self, build: impl Fn(Scope) -> View + 'static) -> Self {
+        self.actions = Some(Rc::new(build));
         self
     }
     pub fn view(self, cx: Scope) -> View {
@@ -287,6 +301,8 @@ impl ChatPanel {
         let assistant = self.assistant;
         let user = self.user;
         let empty = self.empty;
+        let send_label = self.send_label;
+        let actions = self.actions;
         Element::new()
             .style(
                 LayoutStyle::column()
@@ -335,7 +351,7 @@ impl ChatPanel {
                 move |scx| {
                     let submit = button_submit.clone();
                     let check = button_busy.clone();
-                    Button::new("Send")
+                    let button = Button::new(&send_label)
                         .disabled(button_busy())
                         .on_click(move || {
                             let q = draft.get_untracked();
@@ -343,7 +359,27 @@ impl ChatPanel {
                                 submit.borrow_mut()(&q);
                             }
                         })
-                        .view(scx)
+                        .element(scx, &theme.get_untracked().tokens)
+                        .access_label("Send message")
+                        .build();
+                    let button = if let Some(overlays) = scx.use_context::<crate::app::Overlays>() {
+                        Tooltip::attach(
+                            scx,
+                            &overlays,
+                            "Send message · Enter",
+                            std::time::Duration::from_millis(400),
+                            button,
+                        )
+                    } else {
+                        button
+                    };
+                    let mut row = Element::new()
+                        .style(LayoutStyle::row().gap(1))
+                        .child(button);
+                    if let Some(actions) = &actions {
+                        row = row.child(actions(scx));
+                    }
+                    row.build()
                 },
             ))
             .build()
