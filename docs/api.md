@@ -803,7 +803,9 @@ let avatar = Avatar::new(pose)
 ```
 
 Poses are `Ready`, `Thinking`, `Working`, `Listening`, `Speaking`, `Waiting` and
-`Error`. They are presentation labels, not inferred thoughts. Use `.style_signal`
+`Error`. Hover leans with a raised listening hand, rests lower with a dimmed gaze
+while waiting, and bobs with thruster sparks while working. They are presentation
+states, not inferred thoughts. Use `.style_signal`
 for a reactive `Halo` / `Hover` choice. Audio levels clamp to 0–1. Animation is off
 unless a signal enables it; moving poses then update at roughly 12 frames/second.
 Animated listening/speaking samples producer audio levels at that frame cadence,
@@ -821,6 +823,11 @@ control when less space is available.
 The widget is presentation-only: compose it inside a Button for click/keyboard
 activation and provide an accessible name for that action. Preview styles, poses,
 level and playback with `cargo run --example avatar` (no framework or assets needed).
+
+`Button` already owns a label child. When composing an avatar inside one, give
+the avatar absolute left/top-zero, full-percentage bounds rather than adding a
+second in-flow column. Place the button label row at the bottom to retain a
+visible keyboard-focus background behind the avatar's status caption.
 
 ### TextInput / TextArea — inner content inset
 

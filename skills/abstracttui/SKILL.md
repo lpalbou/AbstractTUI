@@ -93,3 +93,7 @@ below useful cell sizes. `cargo run --example avatar` demonstrates every input.
 Allocate about 28×15 cells for recognizable art or 48×25 for a detailed preview.
 Colour terminals use shaded half-blocks, with braille as a monochrome fallback;
 the widget does not require a terminal image protocol.
+When composing inside Button, position Avatar absolutely at left/top zero with
+full percentage bounds; do not add it beside Button's existing label in row flow.
+Keep the button label at the bottom for visible keyboard focus. Hover's Listening
+leans, Waiting rests still, and Working bobs with deterministic thruster sparks.

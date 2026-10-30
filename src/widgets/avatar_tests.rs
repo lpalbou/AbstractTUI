@@ -283,3 +283,108 @@ fn shaded_scene_ground_is_opaque_and_surfaces_have_continuous_tonal_detail() {
         );
     }
 }
+
+#[test]
+fn hover_listens_with_a_cocked_posture_waits_still_and_works_with_a_larger_bob() {
+    let tokens = crate::theme::default_theme().tokens;
+    let materials = Materials::new(&tokens);
+    let center = |pose, time| {
+        let mut x_sum = 0.0;
+        let mut y_sum = 0.0;
+        let mut count = 0.0;
+        for y in 0..96 {
+            for x in 0..96 {
+                if sample(
+                    AvatarStyle::Hover,
+                    pose,
+                    0.5,
+                    time,
+                    (x as f32 - 48.0) / 48.0,
+                    (y as f32 - 48.0) / 48.0,
+                    &materials,
+                ) != tokens.bg
+                {
+                    x_sum += x as f32;
+                    y_sum += y as f32;
+                    count += 1.0;
+                }
+            }
+        }
+        (x_sum / count, y_sum / count)
+    };
+    let ready = center(AvatarPose::Ready, 0.0);
+    let listening = center(AvatarPose::Listening, 0.0);
+    let waiting = center(AvatarPose::Waiting, 0.0);
+    assert!(
+        listening.0 < ready.0 - 2.0,
+        "listening should visibly turn toward the user: {ready:?} vs {listening:?}"
+    );
+    assert!(
+        waiting.1 > ready.1 + 1.5,
+        "waiting should have its own lower held posture: {ready:?} vs {waiting:?}"
+    );
+    assert_eq!(
+        waiting,
+        center(AvatarPose::Waiting, 2.0),
+        "waiting has no time-driven motion"
+    );
+    let first = center(AvatarPose::Working, 0.0);
+    let raised = center(AvatarPose::Working, 1.0);
+    assert!(
+        (raised.1 - first.1).abs() > 2.0,
+        "working hover motion should be visible: {first:?} vs {raised:?}"
+    );
+}
+
+#[test]
+fn hover_upper_silhouette_keeps_ground_as_background_in_actual_terminal_cells() {
+    use crate::{
+        app::{App, Driver, RunConfig},
+        testing::CaptureTerm,
+    };
+    let tokens = crate::theme::default_theme().tokens;
+    for size in [Size::new(32, 17), Size::new(48, 25)] {
+        let mut app = App::new(size);
+        app.mount(move |cx| {
+            Avatar::new(cx.signal(AvatarPose::Ready))
+                .style(AvatarStyle::Hover)
+                .layout(
+                    LayoutStyle::default()
+                        .width(Dimension::Cells(size.w))
+                        .height(Dimension::Cells(size.h)),
+                )
+                .element(cx, &tokens)
+                .build()
+        })
+        .unwrap();
+        let mut term = CaptureTerm::new(size);
+        let mut driver = Driver::new(
+            &mut app,
+            &mut term,
+            RunConfig {
+                probe: false,
+                caps: Some(crate::term::Capabilities::with(|c| {
+                    c.truecolor = true;
+                    c.colors_256 = true;
+                    c.unicode_ok = true
+                })),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        driver.turn(&mut app, &mut term).unwrap();
+        let edge = (0..size.h)
+            .filter_map(|y| term.screen().cell(size.w / 2, y))
+            .find(|cell| cell.paint.bg != Some(tokens.bg) || cell.paint.fg != Some(tokens.bg))
+            .expect("dome edge");
+        assert_eq!(
+            edge.ch(),
+            '▄',
+            "use lower-half ink rather than a colored background behind upper ground glyph"
+        );
+        assert!(
+            edge.paint.bg.unwrap().luminance() <= edge.paint.fg.unwrap().luminance(),
+            "upper background must be the darker ground-facing sample, not bright lower-edge metal"
+        );
+    }
+}

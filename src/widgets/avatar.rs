@@ -235,11 +235,20 @@ impl Avatar {
                         for y in 0..rows {
                             for x in 0..cols {
                                 let cell = grid.get(x, y).expect("rendered bounds");
+                                // Use lower-half foreground consistently: some
+                                // terminal/SVG fonts leave an ascender gap above ▀.
+                                // Putting the brighter lower edge in the background
+                                // would expose an orphan stripe above the silhouette.
+                                let (ch, fg, bg) = if cell.ch == '▀' {
+                                    ('▄', cell.bg, cell.fg)
+                                } else {
+                                    (cell.ch, cell.fg, cell.bg)
+                                };
                                 canvas.put(
                                     Point::new(origin.x + x as i32, origin.y + y as i32),
-                                    cell.ch,
-                                    cell.fg,
-                                    cell.bg,
+                                    ch,
+                                    fg,
+                                    bg,
                                 );
                             }
                         }
@@ -390,19 +399,26 @@ fn halo(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) -> 
     }
 }
 fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) -> Rgba {
-    let bob = if p.moves() {
+    let bob = if p == AvatarPose::Working {
+        0.10 * (time * 1.6).sin() + 0.012 * (time * 3.1).sin()
+    } else if p.moves() {
         0.025 * (time * 1.05).sin()
     } else {
         0.0
     };
-    let y = y - bob;
-    let y = y + if p == AvatarPose::Thinking {
-        0.065 * x
-    } else if p == AvatarPose::Listening {
-        -0.04 * x
-    } else {
-        0.0
-    };
+    let mut x = x;
+    let mut y = y - bob;
+    if p == AvatarPose::Listening {
+        // Cock toward the user's conversation, with a raised listening hand.
+        // This is a real head/body roll, not an almost invisible shear.
+        x += 0.075;
+        let (s, c) = (-0.24f32).sin_cos();
+        (x, y) = (c * x + s * y, -s * x + c * y);
+    } else if p == AvatarPose::Thinking {
+        y += 0.065 * x;
+    } else if p == AvatarPose::Waiting {
+        y -= 0.065;
+    }
     let dome = ((x / 0.68).powi(2) + ((y + 0.11) / 0.50).powi(2)).sqrt();
     let dome_edge = (dome - 1.0) * 0.5;
     if y < -0.11 && dome_edge < 0.025 {
@@ -438,10 +454,13 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
             0.78
         } else if p == AvatarPose::Error {
             0.40
+        } else if p == AvatarPose::Waiting {
+            0.55
         } else {
             1.0
         };
-        let d = ((x.abs() - eye_x).powi(2) + ((y - eye_y) / open).powi(2)).sqrt();
+        let gaze = if p == AvatarPose::Waiting { 0.045 } else { 0.0 };
+        let d = (((x - gaze).abs() - eye_x).powi(2) + ((y - eye_y) / open).powi(2)).sqrt();
         let radius = 0.088
             + if p == AvatarPose::Speaking {
                 level * 0.018
@@ -451,7 +470,12 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
         let eye = &m.eye;
         if d < radius {
             let core = 1.0 - d / radius;
-            return eye.sample(0.66 + 0.34 * core.powf(0.35), 1.0);
+            let brightness = if p == AvatarPose::Waiting {
+                0.52 + 0.26 * core.powf(0.35)
+            } else {
+                0.66 + 0.34 * core.powf(0.35)
+            };
+            return eye.sample(brightness, 1.0);
         }
         let shine = glow(d - radius, 0.055) * 0.54;
         return if shine > 0.03 {
@@ -482,16 +506,47 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
     }
     // Rounded arms, extending a little while tools are working.
     let reach = if p == AvatarPose::Working { 0.12 } else { 0.0 };
-    let arm = segment(x.abs(), y, 0.72, 0.06, 0.75 + reach, 0.40 - reach) - 0.055;
+    let arm = if p == AvatarPose::Listening && x < 0.0 {
+        segment(x, y, -0.72, 0.06, -0.82, -0.20) - 0.065
+    } else if p == AvatarPose::Waiting {
+        segment(x.abs(), y, 0.72, 0.06, 0.69, 0.42) - 0.055
+    } else {
+        segment(x.abs(), y, 0.72, 0.06, 0.75 + reach, 0.40 - reach) - 0.055
+    };
     if arm < 0.025 {
         return m
             .warm
             .sample((0.75 - x.abs() * 0.1).clamp(0.0, 1.0), soft(arm, 0.05));
     }
-    let plume_len = 0.14 + if p == AvatarPose::Working { 0.12 } else { 0.0 };
+    if p == AvatarPose::Waiting {
+        let dots = [-0.15f32, 0.0, 0.15]
+            .iter()
+            .map(|dx| glow(x - dx, 0.035) * glow(y - 0.76, 0.035))
+            .fold(0.0f32, f32::max);
+        if dots > 0.04 {
+            return m.warm.sample(0.55 * dots, 1.0);
+        }
+    }
+    let plume_len = 0.14
+        + if p == AvatarPose::Working {
+            0.14 + 0.025 * (time * 4.0).sin()
+        } else {
+            0.0
+        };
     let plume = glow(x.abs() - 0.32, 0.045) * glow(y - 0.59, plume_len);
     let pool = glow(x, 0.48) * glow(y - 0.91, 0.04) * 0.16;
-    let intensity = (plume * 0.65 + pool).min(0.75);
+    let mut particles = 0.0f32;
+    if p == AvatarPose::Working {
+        for side in [-1.0f32, 1.0] {
+            for i in 0..3 {
+                let age = (time * 0.7 + i as f32 * 0.31).fract();
+                let px = side * 0.32 + side * 0.12 * age;
+                let py = 0.65 + 0.34 * age;
+                particles += glow(x - px, 0.025) * glow(y - py, 0.035) * (1.0 - age) * 0.65;
+            }
+        }
+    }
+    let intensity = (plume * 0.65 + pool + particles).min(0.85);
     if intensity < 0.015 {
         m.tokens.bg
     } else {
