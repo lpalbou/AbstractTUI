@@ -100,3 +100,10 @@ Keep the button label at the bottom for visible keyboard focus. Hover's Listenin
 leans, Waiting pulses in a lower posture with sequential dots, and Working bobs
 with deterministic thruster sparks. Halo Listening takes rings inward and Speaking
 emits them outward; fixed audio input still gives distinct active motion.
+
+For shape-only overlays, opt into Avatar::transparent_background(true), remove any
+host rectangle fill, and apply Button::transparent_background(true) to a wrapping
+picture button. Empty cells preserve underlying glyphs/styles; occupied cells
+replace a whole terminal glyph, including antialiased edges. Keep the underlying
+view in the paint tree for restoration after motion/hide. Opaque previews remain
+the default; focus/press on the button retains a visible selection cue.

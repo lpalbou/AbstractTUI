@@ -77,6 +77,7 @@ pub struct Button {
     style: ButtonStyle,
     layout: Option<LayoutStyle>,
     disabled: bool,
+    transparent_background: bool,
     on_click: Option<Box<dyn FnMut()>>,
 }
 
@@ -87,6 +88,7 @@ impl Button {
             style: ButtonStyle::default(),
             layout: None,
             disabled: false,
+            transparent_background: false,
             on_click: None,
         }
     }
@@ -98,6 +100,14 @@ impl Button {
 
     pub fn layout(mut self, layout: LayoutStyle) -> Button {
         self.layout = Some(layout);
+        self
+    }
+
+    /// Draw only the label over inherited content while idle/hovered/disabled.
+    /// Focus and press retain the selection background for keyboard visibility.
+    /// An empty label performs no idle paint, useful for a custom child picture.
+    pub fn transparent_background(mut self, transparent: bool) -> Button {
+        self.transparent_background = transparent;
         self
     }
 
@@ -133,6 +143,7 @@ impl Button {
 
         let label = self.label;
         let disabled = self.disabled;
+        let transparent_background = self.transparent_background;
         let width = crate::text::width(&label) + 2; // 1-cell pad each side
         let layout = self.layout.unwrap_or_else(|| {
             // shrink 0: a default-styled control never yields its one
@@ -244,11 +255,17 @@ impl Button {
                         if rect.is_empty() {
                             return;
                         }
-                        let mut style = Style::new().fg(fg).bg(bg);
+                        let fill = !transparent_background || (!disabled && (pressed || focused));
+                        let mut style = Style::new().fg(fg);
+                        if fill {
+                            style = style.bg(bg);
+                        }
                         if bold {
                             style = style.attrs(Attrs::BOLD);
                         }
-                        canvas.fill_styled(rect, ' ', &style);
+                        if fill {
+                            canvas.fill_styled(rect, ' ', &style);
+                        }
                         let x = rect.x + ((rect.w - crate::text::width(&label)).max(0)) / 2;
                         canvas.print_styled(crate::base::Point::new(x, rect.y), &label, &style);
                     })
@@ -520,5 +537,48 @@ mod tests {
         assert_eq!(b.get(), 1);
         assert!(tree.pointer_capture().is_none());
         root.dispose();
+    }
+    #[test]
+    fn transparent_background_preserves_underlay_and_retains_focus_and_activation() {
+        let t = default_theme().tokens;
+        let size = Size::new(14, 1);
+        for label in ["Go", ""] {
+            let (count, on) = clicks();
+            let (root, mut tree) = mount_widget(size, |cx| {
+                Element::new()
+                    .draw(move |canvas, rect| {
+                        canvas.fill_styled(rect, 'X', &Style::new().fg(t.text).bg(t.bg).bold());
+                    })
+                    .child(
+                        Button::new(label)
+                            .transparent_background(true)
+                            .on_click(on)
+                            .element(cx, &t)
+                            .build(),
+                    )
+                    .build()
+            });
+            for hovered in [false, true] {
+                if hovered {
+                    mouse(&mut tree, MouseKind::Move, 0, 0);
+                }
+                let frame = render(&mut tree, size);
+                assert_eq!(frame.cell(Point::new(0, 0)).unwrap().0, 'X');
+                assert_eq!(frame.cell(Point::new(0, 0)).unwrap().2, t.bg);
+                assert!(frame.attrs_at(Point::new(0, 0)).contains(Attrs::BOLD));
+                if label.is_empty() {
+                    assert_eq!(frame.row_text(0), "X".repeat(size.w as usize));
+                }
+            }
+            key(&mut tree, Key::Tab);
+            let focused = render(&mut tree, size);
+            assert_eq!(focused.cell(Point::new(0, 0)).unwrap().2, t.selection_bg);
+            key(&mut tree, Key::Enter);
+            assert_eq!(*count.borrow(), 1);
+            mouse(&mut tree, MouseKind::Down(MouseButton::Left), 0, 0);
+            mouse(&mut tree, MouseKind::Up(MouseButton::Left), 0, 0);
+            assert_eq!(*count.borrow(), 2);
+            root.dispose();
+        }
     }
 }

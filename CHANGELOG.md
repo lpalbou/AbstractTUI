@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Avatar and Button support opt-in background transparency: empty artwork cells
+  preserve underlying text, while button focus/press keeps its selection cue.
+
 - Avatar adds low-rate Ready breathing and Waiting pulses, attentive Listening,
   scanning Thinking and fixed-level Speaking motion; hidden/reduced views stop clocks.
 

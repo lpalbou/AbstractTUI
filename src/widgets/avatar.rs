@@ -4,7 +4,7 @@
 //! of AbstractAssistant's watch Orb/OrbMachines scenes. The host supplies all
 //! activity and audio state; this widget performs no I/O or inference.
 use crate::{
-    base::{Point, Rgba},
+    base::{Point, Rect, Rgba},
     gfx::{Bitmap, MosaicMode, MosaicRenderer},
     layout::{Dimension, Style as LayoutStyle},
     reactive::{batch, interval, on_cleanup, Scope, Signal},
@@ -69,6 +69,7 @@ pub struct Avatar {
     active: Option<Signal<bool>>,
     animated: Option<Signal<bool>>,
     label: bool,
+    transparent_background: bool,
     layout: LayoutStyle,
 }
 impl Avatar {
@@ -81,6 +82,7 @@ impl Avatar {
             active: None,
             animated: None,
             label: true,
+            transparent_background: false,
             layout: LayoutStyle::default()
                 .width(Dimension::Cells(28))
                 .height(Dimension::Cells(15))
@@ -109,6 +111,14 @@ impl Avatar {
     }
     pub fn show_label(mut self, show: bool) -> Self {
         self.label = show;
+        self
+    }
+    /// Preserve content outside the visible artwork instead of painting a card.
+    /// Occupied terminal cells (including soft glow/edges) still replace the
+    /// underlying glyph; empty cells leave its text and styling untouched.
+    /// The host must repaint its background when the avatar moves or changes.
+    pub fn transparent_background(mut self, transparent: bool) -> Self {
+        self.transparent_background = transparent;
         self
     }
     pub fn layout(mut self, layout: LayoutStyle) -> Self {
@@ -181,7 +191,12 @@ impl Avatar {
         // Buffers survive reactive frame rebuilds, and allocate only on resize.
         let buffers = std::rc::Rc::new(std::cell::RefCell::new((image, renderer)));
         let palette = cx.memo(move || tokens.unwrap_or_else(|| super::theme_tokens(cx)));
-        let materials = cx.memo(move || std::rc::Rc::new(Materials::new(&palette.get())));
+        let transparent_background = self.transparent_background;
+        let materials = cx.memo(move || {
+            let mut materials = Materials::new(&palette.get());
+            materials.transparent_background = transparent_background;
+            std::rc::Rc::new(materials)
+        });
         let label = self.label;
         let child = dyn_view(
             LayoutStyle::default()
@@ -242,11 +257,19 @@ impl Avatar {
                         for y in 0..rows {
                             for x in 0..cols {
                                 let cell = grid.get(x, y).expect("rendered bounds");
-                                // Use lower-half foreground consistently: some
-                                // terminal/SVG fonts leave an ascender gap above ▀.
-                                // Putting the brighter lower edge in the background
-                                // would expose an orphan stripe above the silhouette.
-                                let (ch, fg, bg) = if cell.ch == '▀' {
+                                // Even an alpha-zero put replaces the old glyph.
+                                // Skip empty samples so overlay margins preserve
+                                // both the text and styling beneath the artwork.
+                                if cell.fg.is_transparent() && cell.bg.is_transparent() {
+                                    continue;
+                                }
+                                // Prefer lower-half foreground: some fonts leave
+                                // an ascender gap above ▀. An upper-only transparent
+                                // edge must keep ▀ so the visible ink stays in fg;
+                                // alpha-zero foreground can become terminal default.
+                                let (ch, fg, bg) = if cell.ch == '▀'
+                                    && !(transparent_background && cell.bg.is_transparent())
+                                {
                                     ('▄', cell.bg, cell.fg)
                                 } else {
                                     (cell.ch, cell.fg, cell.bg)
@@ -260,12 +283,23 @@ impl Avatar {
                             }
                         }
                         if label && rect.h > 1 {
-                            let text = crate::text::truncate_ellipsis(p.label(), rect.w);
+                            // The caption is a small independent surface, like
+                            // the host's controls. Keep it readable over text
+                            // without reviving the old full-width card/strip.
+                            let pad = i32::from(transparent_background && rect.w >= 3);
+                            let text = crate::text::truncate_ellipsis(p.label(), rect.w - pad * 2);
+                            let width = crate::text::width(&text);
+                            let x = rect.x + (rect.w - width).max(0) / 2;
+                            if transparent_background {
+                                canvas.fill(
+                                    Rect::new(x - pad, rect.bottom() - 1, width + pad * 2, 1),
+                                    ' ',
+                                    t.text_muted,
+                                    t.bg,
+                                );
+                            }
                             canvas.print(
-                                Point::new(
-                                    rect.x + (rect.w - crate::text::width(&text)).max(0) / 2,
-                                    rect.bottom() - 1,
-                                ),
+                                Point::new(x, rect.bottom() - 1),
                                 &text,
                                 t.text_muted,
                                 Rgba::TRANSPARENT,
@@ -296,10 +330,11 @@ struct Materials {
     warm: crate::theme::derive::MaterialRamp,
     eye: crate::theme::derive::MaterialRamp,
     dim: crate::theme::derive::MaterialRamp,
+    transparent_background: bool,
 }
 impl PartialEq for Materials {
     fn eq(&self, other: &Self) -> bool {
-        self.tokens == other.tokens
+        self.tokens == other.tokens && self.transparent_background == other.transparent_background
     }
 }
 impl Materials {
@@ -310,6 +345,22 @@ impl Materials {
             warm: ramp(t.bg, t.warn, t.text),
             eye: ramp(t.bg, t.error, t.text),
             dim: ramp(t.bg, t.border, t.text_muted),
+            transparent_background: false,
+        }
+    }
+    fn ground(&self) -> Rgba {
+        if self.transparent_background {
+            Rgba::TRANSPARENT
+        } else {
+            self.tokens.bg
+        }
+    }
+    fn paint(&self, ramp: &crate::theme::derive::MaterialRamp, light: f32, coverage: f32) -> Rgba {
+        if self.transparent_background {
+            let ink = ramp.sample(light, 1.0);
+            ink.with_alpha((coverage.clamp(0.0, 1.0) * 255.0).round() as u8)
+        } else {
+            ramp.sample(light, coverage)
         }
     }
     fn state(&self, p: AvatarPose) -> &crate::theme::derive::MaterialRamp {
@@ -392,7 +443,8 @@ fn halo(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) -> 
                 0.035
             };
         let heart = glow(r, radius * 0.58) * 0.18;
-        return m.warm.sample(
+        return m.paint(
+            &m.warm,
             (0.18 + 0.65 * diffuse + 0.24 * highlight + veins + heart).clamp(0.0, 1.0),
             soft(r - radius, 0.04),
         );
@@ -453,9 +505,9 @@ fn halo(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) -> 
     };
     let intensity = (rim * 0.38 + crown + arc + outer + flow).clamp(0.0, 0.88);
     if intensity < 0.012 {
-        m.tokens.bg
+        m.ground()
     } else {
-        m.state(p).sample(intensity, 1.0)
+        m.paint(m.state(p), intensity, 1.0)
     }
 }
 fn blink(time: f32, period: f32, duration: f32) -> f32 {
@@ -503,7 +555,8 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
         let light = (-0.45 * nx - 0.40 * ny + 0.73 * z).max(0.0);
         let reflection = glow(((x + 0.24).powi(2) + (y + 0.42).powi(2)).sqrt(), 0.115);
         let rim = glow(dome - 0.98, 0.04) * 0.10;
-        return m.warm.sample(
+        return m.paint(
+            &m.warm,
             (0.52 + light * 0.36 + reflection * 0.23 + rim).clamp(0.0, 1.0),
             soft(dome_edge, 0.05),
         );
@@ -511,7 +564,7 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
     // Curved polished rim along the lower dome, following the watch barrel.
     let top_rim = -0.10 + 0.055 * (x / 0.68).powi(2);
     if x.abs() < 0.69 && (y - top_rim).abs() < 0.022 {
-        return m.warm.sample(0.90, soft(x.abs() - 0.68, 0.04));
+        return m.paint(&m.warm, 0.90, soft(x.abs() - 0.68, 0.04));
     }
     if (-0.10..0.20).contains(&y) && x.abs() < 0.68 {
         let eye_y = if p == AvatarPose::Waiting {
@@ -572,13 +625,13 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
             } else {
                 0.66 + 0.34 * core.powf(0.35)
             };
-            return eye.sample(brightness, 1.0);
+            return m.paint(eye, brightness, 1.0);
         }
         let shine = glow(d - radius, 0.055) * 0.54;
         return if shine > 0.03 {
-            eye.sample(shine, 1.0)
+            m.paint(eye, shine, 1.0)
         } else {
-            m.dim.sample(0.12 + 0.08 * (1.0 - x.abs()), 1.0)
+            m.paint(&m.dim, 0.12 + 0.08 * (1.0 - x.abs()), 1.0)
         };
     }
     let hull = ((x / 0.69).powi(2) + ((y - 0.24) / 0.34).powi(2)).sqrt();
@@ -594,12 +647,13 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
             && (y - 0.35).abs() < 0.025 + (0.035 + level * 0.045) * speech(time)
         {
             return if (x * 55.0).sin() > 0.1 {
-                m.eye.sample(0.38 + 0.35 * level + 0.17 * speech(time), 1.0)
+                m.paint(&m.eye, 0.38 + 0.35 * level + 0.17 * speech(time), 1.0)
             } else {
-                m.dim.sample(0.10, 1.0)
+                m.paint(&m.dim, 0.10, 1.0)
             };
         }
-        return m.warm.sample(
+        return m.paint(
+            &m.warm,
             (lit + band * 0.18).clamp(0.0, 1.0),
             soft((hull - 1.0) * 0.35, 0.05),
         );
@@ -614,9 +668,11 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
         segment(x.abs(), y, 0.72, 0.06, 0.75 + reach, 0.40 - reach) - 0.055
     };
     if arm < 0.025 {
-        return m
-            .warm
-            .sample((0.75 - x.abs() * 0.1).clamp(0.0, 1.0), soft(arm, 0.05));
+        return m.paint(
+            &m.warm,
+            (0.75 - x.abs() * 0.1).clamp(0.0, 1.0),
+            soft(arm, 0.05),
+        );
     }
     if p == AvatarPose::Waiting {
         let hot = (time * 1.5).floor() as usize % 3;
@@ -628,7 +684,7 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
             })
             .fold(0.0f32, f32::max);
         if dots > 0.02 {
-            return m.warm.sample(dots, 1.0);
+            return m.paint(&m.warm, dots, 1.0);
         }
     }
     let plume_len = 0.14
@@ -652,9 +708,9 @@ fn hover(p: AvatarPose, level: f32, time: f32, x: f32, y: f32, m: &Materials) ->
     }
     let intensity = (plume * 0.65 + pool + particles).min(0.85);
     if intensity < 0.015 {
-        m.tokens.bg
+        m.ground()
     } else {
-        m.eye.sample(intensity, 1.0)
+        m.paint(&m.eye, intensity, 1.0)
     }
 }
 

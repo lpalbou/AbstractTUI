@@ -827,10 +827,20 @@ The widget is presentation-only: compose it inside a Button for click/keyboard
 activation and provide an accessible name for that action. Preview styles, poses,
 level and playback with `cargo run --example avatar` (no framework or assets needed).
 
+Opt in to `.transparent_background(true)` for a shape-only overlay. Empty artwork
+cells leave underlying glyphs, colors and attributes untouched; occupied cells,
+including antialiased edges and glow, replace that terminal cell. Opaque previews
+remain the default. Keep the underlying view in the normal paint tree so it is
+repainted when the avatar moves, changes pose or hides. This is cell compositing,
+not a terminal pixel-image protocol.
+
 `Button` already owns a label child. When composing an avatar inside one, give
 the avatar absolute left/top-zero, full-percentage bounds rather than adding a
 second in-flow column. Place the button label row at the bottom to retain a
-visible keyboard-focus background behind the avatar's status caption.
+visible keyboard-focus background behind the avatar's status caption. For a
+transparent composition, also use `Button::transparent_background(true)` and avoid
+a parent rectangle fill. The button then paints only its label when idle/hovered;
+focus and press retain the selection background as a visible interaction cue.
 
 ### TextInput / TextArea — inner content inset
 
