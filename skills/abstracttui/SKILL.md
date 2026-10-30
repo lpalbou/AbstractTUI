@@ -36,6 +36,8 @@ Chat widgets do not make network calls or load models.
 - `ChatTranscript`: role-labelled message bubbles, Markdown and scrolling when
   the host provides its own composer.
 - `ChatPanel`: transcript plus bound multiline composer and Send button.
+- `Avatar`: procedural Halo/Hover activity presentation; the host supplies pose,
+  amplitude and visibility. It owns no model, microphone or speaker.
 
 ## Host-owned chat
 
@@ -76,3 +78,15 @@ framework packages or network. Use `cargo run --example hello` for the basic she
 
 See [API](../../docs/api.md), [getting started](../../docs/getting-started.md),
 [architecture](../../docs/architecture.md) and [graphics](../../docs/graphics-and-3d.md).
+
+## Activity avatar recipe
+
+Inside an application mount callback, allocate `pose = cx.signal(AvatarPose::Ready)`,
+`level = cx.signal(0.0f32)`, `visible = cx.signal(true)` and `motion = cx.signal(false)`.
+Build `Avatar::new(pose).style(AvatarStyle::Halo).level(level).active(visible)
+.animated(motion).view(cx)`. Poses also include Thinking, Working, Listening,
+Speaking, Waiting and Error; style Hover draws a domed robot. Bind active to real
+host visibility and motion to user preferences. Ready/Waiting/Error are static;
+other enabled activity runs at roughly12fps, stopping its clock when hidden,
+reduced-motion or disposed. Compose in a host Button for activation and collapse
+below useful cell sizes. `cargo run --example avatar` demonstrates every input.

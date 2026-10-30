@@ -45,6 +45,7 @@ the previous one:
 | 6 · the app shell | `drawers.rs` | the drawer system alone: modal inspector vs passive nav panel |
 | 6 · the app shell | `dashboard/` | the flagship capstone: charts, log tail, sortable table, toasts, modal, pane nav |
 | 7 · graphics + 3D | `images.rs` | four mosaic families, dithering, pixel-protocol placement |
+| 7 · graphics + 3D | `avatar.rs` | procedural Halo/Hover, observed poses, voice level and cancellable motion |
 | 7 · graphics + 3D | `animation.rs` | animated GIF/APNG played in cells — and video refused by name |
 | 7 · graphics + 3D | `bigtext.rs` | text and icons several cells tall: the measured 4x3 legibility floor, the four vocabularies, and the 1:2 cell aspect that makes a "6x6" icon stretched rather than big |
 | 7 · graphics + 3D | `effects.rs` | compositor layers wearing cell shaders; transforms, toasts |

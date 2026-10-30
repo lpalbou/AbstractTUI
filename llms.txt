@@ -209,3 +209,5 @@
 
 - [Agent skill](skills/abstracttui/SKILL.md): reactive component workflow and host-owned chat.
 - [Chat panels](docs/api.md#chatpanel-and-chattranscript--host-owned-assistant-conversations): bubbles, composer and scroll without transport or inference.
+
+- [Activity avatar](docs/api.md#avatar--procedural-activity-presentation): Halo/Hover with explicit state, amplitude, visibility and motion controls.

@@ -782,6 +782,42 @@ allocated pane. Explicit `follow_tail` and `offset_y` signals can preserve readi
 position across host remounts. Run `cargo run --example chat` for a local echo demo
 that needs no framework packages or network.
 
+### Avatar — procedural activity presentation
+
+`Avatar` renders a Halo orb or Hover robot using the existing cell mosaic renderer.
+It performs no networking, inference, audio capture or playback. The application
+supplies observed state and decides where the view is visible.
+
+```rust,ignore
+let pose = cx.signal(AvatarPose::Ready);
+let level = cx.signal(0.0f32);
+let visible = cx.signal(true);
+let motion = cx.signal(false);
+let avatar = Avatar::new(pose)
+    .style(AvatarStyle::Halo)
+    .level(level)
+    .active(visible)
+    .animated(motion)
+    .layout(LayoutStyle::default().width(Dimension::Cells(18)).height(Dimension::Cells(9)))
+    .view(cx);
+```
+
+Poses are `Ready`, `Thinking`, `Working`, `Listening`, `Speaking`, `Waiting` and
+`Error`. They are presentation labels, not inferred thoughts. Use `.style_signal`
+for a reactive `Halo` / `Hover` choice. Audio levels clamp to 0–1. Animation is off
+unless a signal enables it; moving poses then update at roughly 12 frames/second.
+Animated listening/speaking samples producer audio levels at that frame cadence,
+so faster audio updates cannot reset or accelerate the animation clock. Without
+clock animation, level changes remain data-driven. Ready, Waiting and Error remain static. Hidden (`active=false`), reduced-motion
+and disposed views cancel their animation timers. The host must bind visibility;
+the component cannot determine whether a terminal window is covered or minimized.
+
+Raster work is capped at 32×16 cells and buffers are reused. Hover is clearest at
+about 12×6 cells or larger; use a compact host control when less space is available.
+The widget is presentation-only: compose it inside a Button for click/keyboard
+activation and provide an accessible name for that action. Preview styles, poses,
+level and playback with `cargo run --example avatar` (no framework or assets needed).
+
 ### TextInput / TextArea — inner content inset
 
 `.inset(left, right)` adds cells inside the side strokes. It affects text,

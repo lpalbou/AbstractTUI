@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add procedural Halo/Hover Avatar with host-supplied poses, level and visibility,
+  bounded activity animation and a standalone preview.
+
 - ChatPanel supports a configurable send glyph and host controls on one shared action row.
 
 - Add backend-independent ChatPanel, ChatTranscript and ChatMessage components with

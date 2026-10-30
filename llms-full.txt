@@ -63,6 +63,9 @@ through ordinary reactivity.*
   collapsed otherwise, reactive badge dots) — arranged by a flexbox-style solver
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
+- **Activity avatars** — procedural Halo orb and Hover robot with host-supplied
+  poses and audio level. Activity animation is bounded; idle, hidden and reduced-motion
+  views stop their animation clocks. Run `cargo run --example avatar` to preview.
 - **Chat panels** — `ChatPanel` and `ChatTranscript` provide configurable message
   bubbles, Markdown, scrolling and a bound composer; the host owns requests, history
   and permissions. Run `cargo run --example chat` for a local echo conversation.
@@ -1807,6 +1810,42 @@ existing history/composer/stop controls. Both forms fit a Drawer, PageHost or an
 allocated pane. Explicit `follow_tail` and `offset_y` signals can preserve reading
 position across host remounts. Run `cargo run --example chat` for a local echo demo
 that needs no framework packages or network.
+
+### Avatar — procedural activity presentation
+
+`Avatar` renders a Halo orb or Hover robot using the existing cell mosaic renderer.
+It performs no networking, inference, audio capture or playback. The application
+supplies observed state and decides where the view is visible.
+
+```rust,ignore
+let pose = cx.signal(AvatarPose::Ready);
+let level = cx.signal(0.0f32);
+let visible = cx.signal(true);
+let motion = cx.signal(false);
+let avatar = Avatar::new(pose)
+    .style(AvatarStyle::Halo)
+    .level(level)
+    .active(visible)
+    .animated(motion)
+    .layout(LayoutStyle::default().width(Dimension::Cells(18)).height(Dimension::Cells(9)))
+    .view(cx);
+```
+
+Poses are `Ready`, `Thinking`, `Working`, `Listening`, `Speaking`, `Waiting` and
+`Error`. They are presentation labels, not inferred thoughts. Use `.style_signal`
+for a reactive `Halo` / `Hover` choice. Audio levels clamp to 0–1. Animation is off
+unless a signal enables it; moving poses then update at roughly 12 frames/second.
+Animated listening/speaking samples producer audio levels at that frame cadence,
+so faster audio updates cannot reset or accelerate the animation clock. Without
+clock animation, level changes remain data-driven. Ready, Waiting and Error remain static. Hidden (`active=false`), reduced-motion
+and disposed views cancel their animation timers. The host must bind visibility;
+the component cannot determine whether a terminal window is covered or minimized.
+
+Raster work is capped at 32×16 cells and buffers are reused. Hover is clearest at
+about 12×6 cells or larger; use a compact host control when less space is available.
+The widget is presentation-only: compose it inside a Button for click/keyboard
+activation and provide an accessible name for that action. Preview styles, poses,
+level and playback with `cargo run --example avatar` (no framework or assets needed).
 
 ### TextInput / TextArea — inner content inset
 
@@ -7050,6 +7089,8 @@ Chat widgets do not make network calls or load models.
 - `ChatTranscript`: role-labelled message bubbles, Markdown and scrolling when
   the host provides its own composer.
 - `ChatPanel`: transcript plus bound multiline composer and Send button.
+- `Avatar`: procedural Halo/Hover activity presentation; the host supplies pose,
+  amplitude and visibility. It owns no model, microphone or speaker.
 
 ## Host-owned chat
 
@@ -7090,3 +7131,15 @@ framework packages or network. Use `cargo run --example hello` for the basic she
 
 See [API](../../docs/api.md), [getting started](../../docs/getting-started.md),
 [architecture](../../docs/architecture.md) and [graphics](../../docs/graphics-and-3d.md).
+
+## Activity avatar recipe
+
+Inside an application mount callback, allocate `pose = cx.signal(AvatarPose::Ready)`,
+`level = cx.signal(0.0f32)`, `visible = cx.signal(true)` and `motion = cx.signal(false)`.
+Build `Avatar::new(pose).style(AvatarStyle::Halo).level(level).active(visible)
+.animated(motion).view(cx)`. Poses also include Thinking, Working, Listening,
+Speaking, Waiting and Error; style Hover draws a domed robot. Bind active to real
+host visibility and motion to user preferences. Ready/Waiting/Error are static;
+other enabled activity runs at roughly12fps, stopping its clock when hidden,
+reduced-motion or disposed. Compose in a host Button for activation and collapse
+below useful cell sizes. `cargo run --example avatar` demonstrates every input.
