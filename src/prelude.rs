@@ -142,3 +142,5 @@ pub use crate::ui::ActionId;
 pub use crate::widgets::{BarFit, BarItem, Slot, StatusBar};
 
 pub use crate::widgets::{ChatMessage, ChatPanel, ChatRole, ChatTranscript};
+
+pub use crate::widgets::{Avatar, AvatarPose, AvatarStyle};

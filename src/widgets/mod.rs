@@ -18,6 +18,7 @@
 
 pub mod animated_image;
 pub mod audio_scope;
+pub mod avatar;
 pub mod badge;
 pub mod block;
 pub mod button;
@@ -60,6 +61,7 @@ pub mod viewport3d;
 /// through `gfx`.
 pub use crate::gfx::Bitmap;
 pub use animated_image::AnimatedImage;
+pub use avatar::{Avatar, AvatarPose, AvatarStyle};
 pub use badge::{Badge, Tone};
 pub use block::{Block, BorderKind, TitleAlign};
 pub use button::{Button, ButtonStyle};
@@ -192,10 +194,11 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 50] = [
+    const SOURCES: [(&str, &str); 51] = [
         ("mod.rs", include_str!("mod.rs")),
         ("status_bar.rs", include_str!("status_bar.rs")),
         ("animated_image.rs", include_str!("animated_image.rs")),
+        ("avatar.rs", include_str!("avatar.rs")),
         ("audio_scope.rs", include_str!("audio_scope.rs")),
         ("meter.rs", include_str!("meter.rs")),
         ("badge.rs", include_str!("badge.rs")),
