@@ -136,9 +136,14 @@ impl UiTree {
     /// of tab order's first pick — re-entering a form pane lands where
     /// the user left it.
     fn cycle_focus(&mut self, dir: i32) {
+        self.layout();
         let current = self.core.borrow().focus;
         let scope = current.and_then(|c| self.trap_root_of(c));
-        let order = self.focusables_within(scope);
+        let order = self
+            .focusables_within(scope)
+            .into_iter()
+            .filter(|id| !self.rect_of(*id).is_empty())
+            .collect::<Vec<_>>();
         if order.is_empty() {
             return;
         }

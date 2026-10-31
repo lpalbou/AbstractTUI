@@ -50,6 +50,7 @@ pub mod bridge;
 pub mod cell;
 pub mod color;
 pub mod compositor;
+pub mod content;
 pub mod diff;
 pub mod layer;
 pub mod md;

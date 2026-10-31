@@ -13,7 +13,7 @@ use crate::render::rich::Span;
 use crate::render::{RichLine, RichText};
 use crate::theme::TokenSet;
 
-use super::super::markdown::{BlockTypesetter, Row};
+use super::super::markdown::{content::SourceDocument, BlockTypesetter, Row};
 use super::item::{ItemBlock, RowCap, SharedDrawFn};
 
 pub(super) enum EntryKind {
@@ -113,6 +113,74 @@ impl FeedInner {
         }
     }
 
+    pub(super) fn map_content(&mut self, index: usize) {
+        let Some(tokens) = self.tokens else {
+            return;
+        };
+        let width = self.width;
+        if width <= 1 {
+            return;
+        }
+        let ts = BlockTypesetter::new(&tokens).with_rule_style(self.rule);
+        let entry = &mut self.entries[index];
+        let cached = entry
+            .segments
+            .iter()
+            .filter_map(|segment| {
+                if let Segment::Rows(rows) = segment {
+                    Some(rows)
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .find_map(|row| row.source.as_ref());
+        if let Some(cached) = cached {
+            let current = match &entry.kind {
+                EntryKind::Static(_) => true,
+                EntryKind::Stream(stream) => stream.raw == cached.source.as_ref(),
+            };
+            if current {
+                return;
+            }
+        }
+        match &entry.kind {
+            EntryKind::Static(blocks) => {
+                let mapped = typeset_static(blocks, &ts, &tokens, width, true);
+                if mapped.iter().map(Segment::height).sum::<i32>() == entry.height {
+                    entry.segments = mapped;
+                }
+            }
+            EntryKind::Stream(stream) => {
+                let mapped = super::super::markdown::content::layout(
+                    stream.raw.as_str().into(),
+                    &tokens,
+                    width,
+                    self.rule,
+                );
+                let expected: usize = entry.segments.iter().map(|s| s.height() as usize).sum();
+                if mapped.len() != expected {
+                    for segment in &mut entry.segments {
+                        if let Segment::Rows(rows) = segment {
+                            for row in rows {
+                                row.source = None;
+                            }
+                        }
+                    }
+                    return;
+                }
+                let mut sources = mapped.into_iter().map(|r| r.source);
+                for segment in &mut entry.segments {
+                    if let Segment::Rows(rows) = segment {
+                        for row in rows {
+                            row.source = sources.next().flatten();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     pub(super) fn total_rows(&self) -> i32 {
         match self.entries.len() {
             0 => 0,
@@ -149,7 +217,7 @@ impl FeedInner {
             EntryKind::Static(blocks) => {
                 if full || entry.segments.is_empty() {
                     self.blocks_typeset += blocks.len() as u64;
-                    entry.segments = typeset_static(blocks, &ts, &tokens, width);
+                    entry.segments = typeset_static(blocks, &ts, &tokens, width, false);
                     entry.recount();
                 }
             }
@@ -258,11 +326,12 @@ fn typeset_static(
     ts: &BlockTypesetter,
     tokens: &TokenSet,
     width: i32,
+    mapped: bool,
 ) -> Vec<Segment> {
     let mut segments: Vec<Segment> = Vec::new();
     let mut current: Vec<Row> = Vec::new();
     let mut any_content = false;
-    for b in blocks {
+    for (block_index, b) in blocks.iter().enumerate() {
         match b {
             ItemBlock::Text { text, cap } => {
                 if any_content && current.is_empty() {
@@ -270,7 +339,23 @@ fn typeset_static(
                 }
                 let ink = crate::render::Style::new().fg(tokens.text);
                 let lines = RichText::plain(text, ink).wrap(width.max(4)).lines;
+                let start = current.len();
+                let shown = cap
+                    .as_ref()
+                    .and_then(|c| c.max_rows)
+                    .filter(|m| lines.len() > *m)
+                    .map(|m| m.saturating_sub(1))
+                    .unwrap_or(lines.len());
                 push_capped(&mut current, lines, cap.as_ref(), tokens);
+                if mapped {
+                    super::super::markdown::content::map_plain(
+                        &mut current[start..start + shown],
+                        &RichText::plain(text, ink),
+                        Some(text),
+                        block_index,
+                        width,
+                    );
+                }
                 any_content = true;
             }
             ItemBlock::Rich { text, cap } => {
@@ -286,7 +371,23 @@ fn typeset_static(
                     current.push(Row::plain(RichLine::new()));
                 }
                 let lines = text.wrap(width.max(4)).lines;
+                let start = current.len();
+                let shown = cap
+                    .as_ref()
+                    .and_then(|c| c.max_rows)
+                    .filter(|m| lines.len() > *m)
+                    .map(|m| m.saturating_sub(1))
+                    .unwrap_or(lines.len());
                 push_capped(&mut current, lines, cap.as_ref(), tokens);
+                if mapped {
+                    super::super::markdown::content::map_plain(
+                        &mut current[start..start + shown],
+                        text,
+                        None,
+                        block_index,
+                        width,
+                    );
+                }
                 any_content = true;
             }
             ItemBlock::Markdown { src, cap } => {
@@ -297,8 +398,25 @@ fn typeset_static(
                 // mosaic), task lists — one recipe with MarkdownView
                 // (`layout_doc` walks the same parse + typeset pair).
                 let start = current.len();
-                for block in md::parse_doc(src, ts.styles()) {
-                    ts.push_doc_block(&mut current, &block, width, true);
+                if mapped {
+                    let source: std::rc::Rc<str> = src.as_str().into();
+                    for (block, map) in md::parse_doc_sourced(src, ts.styles()) {
+                        ts.push_sourced_doc(
+                            &mut current,
+                            &block,
+                            SourceDocument {
+                                mapping: &map,
+                                source: &source,
+                                block: block_index,
+                            },
+                            width,
+                            true,
+                        );
+                    }
+                } else {
+                    for block in md::parse_doc(src, ts.styles()) {
+                        ts.push_doc_block(&mut current, &block, width, true);
+                    }
                 }
                 cap_typeset_rows(&mut current, start, cap.as_ref(), tokens);
                 any_content = true;
@@ -312,7 +430,42 @@ fn typeset_static(
                     lines: source.split('\n').map(str::to_string).collect(),
                 };
                 let start = current.len();
-                ts.push_block(&mut current, &block, width, true);
+                if mapped {
+                    let raw: std::rc::Rc<str> = source.as_str().into();
+                    let scope = 0..source.len();
+                    let mut cursor = 0;
+                    let parts = source
+                        .split('\n')
+                        .map(|line| {
+                            let mut part = crate::render::content::SourcePart::literal(
+                                cursor..cursor + line.len(),
+                                crate::render::content::ContentKind::CodeBlock,
+                            );
+                            part.scope = scope.clone();
+                            part.context = Some(std::rc::Rc::new(
+                                crate::render::content::ContentContext::Code {
+                                    language: lang.as_str().into(),
+                                    lines: 1..source.lines().count() + 1,
+                                },
+                            ));
+                            cursor += line.len() + 1;
+                            part
+                        })
+                        .collect();
+                    ts.push_sourced_doc(
+                        &mut current,
+                        &DocBlock::Core(block),
+                        SourceDocument {
+                            mapping: &crate::render::content::SourceBlock { parts },
+                            source: &raw,
+                            block: block_index,
+                        },
+                        width,
+                        true,
+                    );
+                } else {
+                    ts.push_block(&mut current, &block, width, true);
+                }
                 cap_typeset_rows(&mut current, start, cap.as_ref(), tokens);
                 any_content = true;
             }

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Add opt-in logical Feed selection with source ranges, Unicode word/sentence and
+  paragraph units, table header/row/column identity, code language/lines, retained
+  highlights and scoped follow-tail holds. Custom/unmapped rows keep screen-copy
+  fallback. Applications own context actions; selection never sends or runs tools.
+- Add point-sensitive `Element::drag_hit_test`; keyboard Tab skips zero-area views.
+
+- Avatar uses shared multi-material RGBA compositing and resolution-aware antialiasing.
+  Theme ramps retain 3 KiB instead of three coverage lookup grids. Default glyph families
+  follow terminal capabilities; `.mode(...)` selects another family. Pointer presses can
+  feed gaze through `AvatarPointer::pressed` without consuming the host action.
+
+- Add dependency-free `FramePlayer` for live RGBA bitmap streams. Procedural
+  avatar convenience widgets use the separate AbstractAvatar generator behind
+  the default-off `avatar` Cargo feature; applications using `Avatar` enable it.
+
 - Avatar and Button support opt-in background transparency: empty artwork cells
   preserve underlying text, while button focus/press keeps its selection cue.
 

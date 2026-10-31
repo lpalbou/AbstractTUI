@@ -232,7 +232,7 @@ impl RichText {
         for line in &self.lines {
             pieces.clear();
             collect_pieces(line, &mut pieces);
-            wrap_pieces(&pieces, max_width, &mut out);
+            wrap_pieces(&pieces, max_width, &mut out, None);
         }
         RichText { lines: out }
     }
@@ -310,6 +310,37 @@ fn resolve_link(s: &mut Surface, span: &Span) -> Style {
 // Span-preserving wrap internals
 // ---------------------------------------------------------------------------
 
+pub(crate) type MappedPiece = (i32, std::ops::Range<usize>);
+pub(crate) type MappedRichLine = (RichLine, Vec<MappedPiece>);
+
+/// The ordinary wrapper with provenance callbacks, used only by opt-in content mapping.
+pub(crate) fn wrap_mapped(line: &RichLine, width: i32) -> Vec<MappedRichLine> {
+    let mut pieces = Vec::new();
+    collect_pieces(line, &mut pieces);
+    let mut rows = Vec::new();
+    let mut origins: Vec<Vec<(i32, std::ops::Range<usize>)>> = Vec::new();
+    wrap_pieces(
+        &pieces,
+        width.max(1),
+        &mut rows,
+        Some(&mut |row, column, bytes| {
+            while origins.len() <= row {
+                origins.push(Vec::new());
+            }
+            origins[row].push((column, bytes));
+        }),
+    );
+    rows.into_iter()
+        .enumerate()
+        .map(|(i, line)| {
+            let mut map = origins.get_mut(i).map(std::mem::take).unwrap_or_default();
+            let width = line.width();
+            map.retain(|(col, _)| *col < width);
+            (line, map)
+        })
+        .collect()
+}
+
 /// One measured cluster carrying its span's ink. `Style` is `Copy`; the
 /// link is borrowed and cloned only when a piece lands in an output span.
 struct Piece<'a> {
@@ -318,6 +349,7 @@ struct Piece<'a> {
     style: Style,
     link: &'a Option<String>,
     is_space: bool,
+    bytes: std::ops::Range<usize>,
 }
 
 impl Piece<'_> {
@@ -327,6 +359,7 @@ impl Piece<'_> {
 }
 
 fn collect_pieces<'a>(line: &'a RichLine, out: &mut Vec<Piece<'a>>) {
+    let mut base = 0;
     for span in &line.spans {
         for seg in text::segments(&span.text) {
             // Controls have no place in a visual line; strip here so the
@@ -340,15 +373,27 @@ fn collect_pieces<'a>(line: &'a RichLine, out: &mut Vec<Piece<'a>>) {
                 style: span.style,
                 link: &span.link,
                 is_space: seg.cluster.chars().next().is_some_and(char::is_whitespace),
+                bytes: base + (seg.cluster.as_ptr() as usize - span.text.as_ptr() as usize)
+                    ..base
+                        + (seg.cluster.as_ptr() as usize - span.text.as_ptr() as usize)
+                        + seg.cluster.len(),
             });
         }
+        base += span.text.len();
     }
 }
 
 /// Greedy word wrap over pieces; emits coalesced rich lines. Contract
 /// parity with `text::wrap` is test-pinned (`wrap_matches_plain_text_wrap`).
-fn wrap_pieces(pieces: &[Piece<'_>], max_width: i32, out: &mut Vec<RichLine>) {
+fn wrap_pieces(
+    pieces: &[Piece<'_>],
+    max_width: i32,
+    out: &mut Vec<RichLine>,
+    mut trace: Option<&mut dyn FnMut(usize, i32, std::ops::Range<usize>)>,
+) {
     let rows_before = out.len();
+    let mut traced_row = usize::MAX;
+    let mut traced_column = 0;
     let mut current = RichLine::new();
     let mut current_w = 0i32;
 
@@ -382,6 +427,14 @@ fn wrap_pieces(pieces: &[Piece<'_>], max_width: i32, out: &mut Vec<RichLine>) {
             }
             if current_w > 0 && current_w + w <= max_width {
                 for p in &pieces[start..i] {
+                    if let Some(trace) = trace.as_mut() {
+                        if traced_row != out.len() {
+                            traced_row = out.len();
+                            traced_column = 0;
+                        }
+                        trace(out.len(), traced_column, p.bytes.clone());
+                        traced_column += p.width;
+                    }
                     p.emit(&mut current);
                 }
                 current_w += w;
@@ -403,6 +456,14 @@ fn wrap_pieces(pieces: &[Piece<'_>], max_width: i32, out: &mut Vec<RichLine>) {
         }
         if w <= max_width {
             for p in &pieces[start..i] {
+                if let Some(trace) = trace.as_mut() {
+                    if traced_row != out.len() {
+                        traced_row = out.len();
+                        traced_column = 0;
+                    }
+                    trace(out.len(), traced_column, p.bytes.clone());
+                    traced_column += p.width;
+                }
                 p.emit(&mut current);
             }
             current_w += w;
@@ -412,6 +473,14 @@ fn wrap_pieces(pieces: &[Piece<'_>], max_width: i32, out: &mut Vec<RichLine>) {
             for p in &pieces[start..i] {
                 if current_w > 0 && current_w + p.width > max_width {
                     flush(&mut current, &mut current_w, out);
+                }
+                if let Some(trace) = trace.as_mut() {
+                    if traced_row != out.len() {
+                        traced_row = out.len();
+                        traced_column = 0;
+                    }
+                    trace(out.len(), traced_column, p.bytes.clone());
+                    traced_column += p.width;
                 }
                 p.emit(&mut current);
                 current_w += p.width;

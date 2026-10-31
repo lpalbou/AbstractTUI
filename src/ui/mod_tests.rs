@@ -1329,3 +1329,33 @@ fn ui_frame_cost_table() {
         );
     }
 }
+
+#[test]
+fn tab_traversal_skips_zero_area_focusable_content() {
+    let (root, mut tree) = mounted(Size::new(20, 4), |_| {
+        Element::new()
+            .style(Style::column())
+            .child(focusable_box(20, 1).access_label("first").build())
+            .child(focusable_box(20, 0).access_label("empty").build())
+            .child(focusable_box(20, 1).access_label("last").build())
+            .build()
+    });
+    tree.layout();
+    tree.focus_first();
+    tree.focus_next();
+    assert_eq!(tree.accessibility_tree().focused().unwrap().label, "last");
+    tree.focus_prev();
+    assert_eq!(tree.accessibility_tree().focused().unwrap().label, "first");
+    let empty = {
+        let core = tree.core.borrow();
+        core.insts.get(core.root.unwrap().0).unwrap().children[1]
+    };
+    assert!(tree.rect_of(empty).is_empty());
+    tree.set_focus(Some(empty));
+    assert_eq!(
+        tree.focused(),
+        Some(empty),
+        "explicit focus authority is unchanged"
+    );
+    root.dispose();
+}

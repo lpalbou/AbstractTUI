@@ -179,13 +179,26 @@ pub fn material_ramp(ground: Rgba, midtone: Rgba, highlight: Rgba) -> MaterialRa
     MaterialRamp {
         colors: std::array::from_fn(|shade| {
             let value = shade as f32 / 255.0;
-            let ink = if value < 0.65 {
-                mix(ground, midtone, value / 0.65)
-            } else {
-                mix(midtone, highlight, (value - 0.65) / 0.35)
-            };
+            let ink = material_ink(ground, midtone, highlight, value);
             std::array::from_fn(|coverage| mix(ground, ink, coverage as f32 / 31.0))
         }),
+    }
+}
+
+/// Packed 0xRRGGBBAA material shades for a procedural RGBA source. Unlike
+/// `MaterialRamp`, this table leaves coverage compositing to the source/player.
+pub fn material_palette(ground: Rgba, midtone: Rgba, highlight: Rgba) -> [u32; 256] {
+    std::array::from_fn(|index| {
+        let c = material_ink(ground, midtone, highlight, index as f32 / 255.0);
+        u32::from_be_bytes([c.r, c.g, c.b, c.a])
+    })
+}
+
+fn material_ink(ground: Rgba, midtone: Rgba, highlight: Rgba, light: f32) -> Rgba {
+    if light < 0.65 {
+        mix(ground, midtone, light / 0.65)
+    } else {
+        mix(midtone, highlight, (light - 0.65) / 0.35)
     }
 }
 

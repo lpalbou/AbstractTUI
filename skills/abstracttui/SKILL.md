@@ -36,8 +36,10 @@ Chat widgets do not make network calls or load models.
 - `ChatTranscript`: role-labelled message bubbles, Markdown and scrolling when
   the host provides its own composer.
 - `ChatPanel`: transcript plus bound multiline composer and Send button.
-- `Avatar`: six procedural activity designs from `AvatarStyle::ALL`; the host supplies pose,
-  amplitude and visibility. It owns no model, microphone or speaker.
+- `FramePlayer`: dependency-free presentation of live `Signal<Arc<Bitmap>>` RGBA frames.
+  The producer owns generation and timing; hidden views do not subscribe to frames.
+- `Avatar`: opt-in convenience widget through Cargo feature `avatar`, using the
+  independent AbstractAvatar catalog. The host supplies pose, amplitude and visibility.
 
 ## Host-owned chat
 
@@ -65,6 +67,18 @@ labels from the host; the widget does not invent timestamps.
 Run `cargo run --example chat` for a complete local echo application with no
 framework packages or network. Use `cargo run --example hello` for the basic shell.
 
+## Logical source selection
+
+Use `widgets::ContentSelection::new(cx)` and bind it with
+`Feed::content_selection(selection.clone())` for Markdown, plain/rich text,
+code blocks and streamed Markdown. Read `selection.value()` for application
+controls; release retains the selection and performs no send or clipboard action.
+`clear()` cancels it; `expand(ContentKind::Sentence)` changes the unit around the
+original clicked anchor. Table hits carry header/row/column identity and code hits
+carry language/lines. Preserve the source snapshot and use producer-owned geometry;
+never guess Markdown source from composed glyphs. Unsupported custom rows keep
+screen-copy fallback. See [the API](../../docs/api.md#feed--logical-content-selection).
+
 ## Sharp edges
 
 - Nested `grow` regions divide available space: a brief introduction should not
@@ -76,10 +90,14 @@ framework packages or network. Use `cargo run --example hello` for the basic she
   pixel protocols are unavailable. The library supplies presentation, not speech
   synthesis, microphone recognition or an assistant service.
 
-See [API](../../docs/api.md), [getting started](../../docs/getting-started.md),
-[architecture](../../docs/architecture.md) and [graphics](../../docs/graphics-and-3d.md).
+See [API](https://raw.githubusercontent.com/lpalbou/AbstractTUI/main/docs/api.md), [getting started](https://raw.githubusercontent.com/lpalbou/AbstractTUI/main/docs/getting-started.md),
+[architecture](https://raw.githubusercontent.com/lpalbou/AbstractTUI/main/docs/architecture.md) and [graphics](https://raw.githubusercontent.com/lpalbou/AbstractTUI/main/docs/graphics-and-3d.md).
 
 ## Activity avatar recipe
+
+Enable `abstracttui`'s default-off Cargo feature `avatar` before importing the
+Avatar convenience types. Base TUI applications can use `FramePlayer` with any
+RGBA producer and carry no avatar generator in their compiled dependency graph.
 
 Inside an application mount callback, allocate `pose = cx.signal(AvatarPose::Ready)`,
 `level = cx.signal(0.0f32)`, `visible = cx.signal(true)` and `motion = cx.signal(false)`.
@@ -90,10 +108,13 @@ host visibility and motion to user preferences. Enabled Ready breathes at2fps,
 Waiting pulses at6fps, active phases run at roughly12fps, and Error is static.
 Animation stops its clock when hidden,
 reduced-motion or disposed. Compose in a host Button for activation and collapse
-below useful cell sizes. `cargo run --example avatar` demonstrates every input.
+below useful cell sizes. `cargo run --features avatar --example avatar` demonstrates every input.
 Allocate about 28×15 cells for recognizable art or 48×25 for a detailed preview.
-Colour terminals use shaded half-blocks, with braille as a monochrome fallback;
-the widget does not require a terminal image protocol.
+Colour terminals use shaded quadrants, with braille as a monochrome fallback
+and half blocks for legacy environments. Use `.mode(MosaicMode::HalfBlock)` to
+select a specific glyph family, or sextants only when the terminal font supports
+them. The widget uses shared composited RGBA, antialiasing and theme-cached ramps;
+it does not require or automatically place a terminal image protocol.
 When composing inside Button, position Avatar absolutely at left/top zero with
 full percentage bounds; do not add it beside Button's existing label in row flow.
 Keep the button label at the bottom for visible keyboard focus. Hover's Listening
@@ -110,7 +131,9 @@ the default; focus/press on the button retains a visible selection cue.
 
 Ready pointer tracking is opt-in: create `AvatarPointer::new(cx)`, pass
 `.follow_pointer(pointer)`, and forward actual `MouseKind::Move` positions through
-`pointer.moved(pos)`. It expires after2s, ignores non-Ready/reduced motion and samples
+`pointer.moved(pos)`. Forward actual presses through `pointer.pressed(pos)` without
+consuming the host event. It expires after2s, ignores non-Ready/reduced motion and samples
 at12fps without polling. Clear on host hide. Error faces show red X eyes. Geometry
-and catalog live in `crates/abstract-avatar`, independently usable through Rust/C/Wasm;
-never copy shaders into a client. See that crate's README and ADR0006.
+and the 44-design catalog live in the independent AbstractAvatar repository,
+usable through Rust/C/Wasm/Python. Never copy generation equations into a client.
+See [the API](https://raw.githubusercontent.com/lpalbou/AbstractTUI/main/docs/api.md) and ADR0006.

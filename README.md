@@ -57,9 +57,14 @@ through ordinary reactivity.*
   collapsed otherwise, reactive badge dots) — arranged by a flexbox-style solver
   (row/column, `grow`, `gap`, padding) and a track-based grid
   (`fr`/cells/percent, spans).
-- **Activity avatars** — six procedural watch-inspired designs (Halo, Hover, Vortex, Eclipse, Eye, Rover) with host-supplied
-  poses and audio level. Optional motion uses 2fps for Ready,6fps for Waiting and
-  up to12fps for active poses and Ready cursor tracking; hidden and reduced-motion views stop their clocks. Run `cargo run --example avatar` to preview. `cargo run --example avatar_catalog -- /tmp/avatars.png error` exports a headless catalog. Geometry/catalog are shared with web/native hosts through the independent [abstract-avatar core](crates/abstract-avatar/README.md).
+- **Live raster frames** — `FramePlayer` presents application-supplied RGBA bitmaps using the image
+  renderer. The producer owns generation and its clock; the player needs no avatar dependency.
+- **Optional activity avatars** — enable the default-off `avatar` feature to use the shared
+  [AbstractAvatar](https://github.com/lpalbou/AbstractAvatar) catalog with host-supplied activity
+  and audio levels. Motion uses 2 fps for Ready, 6 fps for Waiting and up to 12 fps for active
+  states; hidden and reduced-motion views stop their clocks. Run
+  `cargo run --features avatar --example avatar` to preview, or
+  `cargo run --features avatar --example avatar_catalog -- /tmp/avatars.png error` for a PNG.
 - **Chat panels** — `ChatPanel` and `ChatTranscript` provide configurable message
   bubbles, Markdown, scrolling and a bound composer; the host owns requests, history
   and permissions. Run `cargo run --example chat` for a local echo conversation.

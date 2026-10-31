@@ -96,6 +96,7 @@ fn mapping_round_trips_at_cluster_boundaries() {
         l
     };
     let row = Row {
+        source: None,
         line,
         indent: 3,
         ground: None,

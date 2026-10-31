@@ -782,9 +782,34 @@ allocated pane. Explicit `follow_tail` and `offset_y` signals can preserve readi
 position across host remounts. Run `cargo run --example chat` for a local echo demo
 that needs no framework packages or network.
 
-### Avatar — procedural activity presentation
+### FramePlayer — live RGBA media
 
-`Avatar` renders Halo, Hover, Vortex, Eclipse, Eye or Rover using the existing cell mosaic renderer.
+`FramePlayer::new(frames)` displays a `Signal<Arc<Bitmap>>` using the existing
+image fit and terminal mosaic capabilities. The bitmap is row-major RGBA with
+straight alpha. A decoder, capture source or procedural renderer supplies each
+frame; the engine needs no knowledge of that producer's design catalog or equations.
+
+```rust,ignore
+let frames = cx.signal(Arc::new(Bitmap::new(64, 64, Rgba::TRANSPARENT)));
+FramePlayer::new(frames)
+    .active(visible)
+    .fit(ImageFit::Contain)
+    .view(cx);
+```
+
+Publish another bitmap to `frames` to display it. The player creates no timer and
+does not execute descriptors, scripts or Wasm. Hidden players stop subscribing to
+frames and clear their view. Producers own their clocks and should stop generation
+while hidden or reduced motion is requested. `FramePlayer` is available without
+optional features or an avatar dependency.
+
+### Avatar — optional procedural activity presentation
+
+Enable the default-off `avatar` Cargo feature to use `Avatar`, `AvatarStyle` and
+the convenience state/pointer types. This adapter uses the separate
+[AbstractAvatar](https://github.com/lpalbou/AbstractAvatar) generator and the
+existing cell mosaic renderer. Base AbstractTUI does not compile that generator.
+The catalog includes shaded forms, Watch designs and the iPhone woven orb.
 `AvatarStyle::ALL` provides stable keys, labels, descriptions and watch reference codes.
 It performs no networking, inference, audio capture or playback. The application
 supplies observed state and decides where the view is visible.
@@ -819,28 +844,36 @@ and disposed views cancel their animation timers. The host must bind visibility;
 the component cannot determine whether a terminal window is covered or minimized.
 
 Ready can optionally follow pointer activity. Create `pointer = AvatarPointer::new(cx)`,
-pass `.follow_pointer(pointer)`, and call `pointer.moved(mouse.pos)` only on actual
-`MouseKind::Move` events in a host capture handler. It requests terminal motion via
+pass `.follow_pointer(pointer)`, and call `pointer.moved(mouse.pos)` on actual
+`MouseKind::Move` events or `pointer.pressed(mouse.pos)` on `MouseKind::Down`
+in a host capture handler. Neither call consumes the event or activates content.
+It requests terminal motion via
 the existing Overlays context; hosts without that context must enable motion themselves.
 Face designs move their eyes; abstract orbs turn subtly. Targets clamp to the frame
-and expire after two seconds without movement. Tracking samples at about12fps,
+and expire after two seconds without pointer activity. Tracking samples at about12fps,
 then returns to2fps; other poses/reduced motion ignore gaze. Clear the pointer when
 the host hides it. Error draws red X eyes for Hover/Rover and a central X for Eye.
 
-Shared geometry lives in the dependency-free [abstract-avatar crate](../crates/abstract-avatar/README.md).
+Shared geometry lives in the independent [AbstractAvatar](https://github.com/lpalbou/AbstractAvatar) library.
 Its optional C/Wasm ABI supports Canvas/React and native Qt hosts, with the same
 styles, poses and gaze; application state, timers, themes and preferences stay host-owned.
 
-Shaded materials, soft glow and antialiased silhouettes use half-block cells on
-colour terminals and a braille fallback where colour is unavailable. These are
-terminal cells, not a pixel graphics protocol. Raster work is capped at 64×32
-cells with reused buffers and theme-cached material ramps. Use about 28×15 cells
+Shaded materials, overlapping colored light and resolution-aware antialiased
+silhouettes come from AbstractAvatar's shared RGBA generator. The default mosaic
+family follows terminal capabilities: quadrants on color terminals, braille where
+color is unavailable, and half blocks for legacy locales. Pin `.mode(MosaicMode::HalfBlock)`
+for the simpler two-part glyphs or `.mode(MosaicMode::Sextant)` when the terminal
+font supports Unicode 13 sextants. These are terminal cells, not a pixel graphics
+protocol. Raster work is capped at 64×32 cells with reused buffers and theme-cached
+256-shade material palettes. Unchanged host repaints reuse the cached raster and
+mosaic grid; only changed frame inputs, theme, size or glyph family regenerate art.
+Use about 28×15 cells
 or larger for the main avatar and 48×25 for a detailed preview; use a compact host
 control when less space is available.
 The widget is presentation-only: compose it inside a Button for click/keyboard
 activation and provide an accessible name for that action. Preview styles, poses,
-level and playback with `cargo run --example avatar` (no framework or assets needed).
-Export a headless terminal catalog with `cargo run --example avatar_catalog -- /tmp/avatars.png error`.
+level and playback with `cargo run --features avatar --example avatar`.
+Export a headless terminal catalog with `cargo run --features avatar --example avatar_catalog -- /tmp/avatars.png error`.
 
 Opt in to `.transparent_background(true)` for a shape-only overlay. Empty artwork
 cells leave underlying glyphs, colors and attributes untouched; occupied cells,
@@ -1050,6 +1083,62 @@ inverse of `row_of`) for apps with their own pointer logic. The
 callback runs after the feed releases its state borrow, so it may
 mutate the `FeedState` (re-push the pressed item) or dispose the
 feed's scope.
+
+### Feed — logical content selection
+
+This API describes the unreleased source checkout.
+
+Bind a `ContentSelection` to select application source rather than terminal rows:
+
+```rust
+use abstracttui::widgets::{ContentKind, ContentSelection, Feed, FeedItem, FeedState};
+
+let selected = ContentSelection::new(cx);
+let feed = FeedState::new(cx);
+feed.push("answer", FeedItem::markdown("A **formatted** answer.\n\nMore detail."));
+let view = Feed::new(&feed).content_selection(selected.clone()).view(cx);
+// An application action can inspect selected.value().get_untracked(),
+// selected.expand(ContentKind::Sentence), or selected.clear().
+```
+
+A click selects a word, a second click selects its sentence, and a third selects
+its paragraph. A table click selects its cell; a code click selects its block.
+Dragging selects an exact source span, including across visual wraps. Release
+retains the highlight; it does not copy or send. Esc cancels. Ordinary clicks
+still reach application controls, links keep their link behavior, and scrollbars
+retain their drag ownership. Unmapped custom artwork keeps the engine's existing
+screen-selection fallback when `app::selection::selection()` is enabled.
+
+`FeedState::content_at(column, row)` returns `Option<ContentHit>` in the Feed's
+content coordinates. `ContentHit::select(kind)` resolves Unicode word/sentence
+boundaries. `SelectedContent` includes the owner key, source-block index, immutable
+source snapshot, UTF-8 byte range and logical text. `ContentContext::TableCell`
+adds its zero-based body row (`None` for a header), column and header text;
+`ContentContext::Code` adds language and a one-based, end-exclusive line range.
+These identities describe the supplied source; they do not infer a filesystem path.
+
+`ContentSelection::value()` is a `Signal<Option<SelectedContent>>` for application
+controls. `expand(kind)` retains the original clicked anchor, including after
+changing units. A drag within one logical unit retains its whole-unit context;
+a cross-unit span carries its exact source range without claiming one cell's
+identity. `SelectedContent::surrounding(max_chars)` returns a bounded excerpt
+centered at the selection plus separate earlier/later-omission flags.
+
+Mapping is generated lazily for the interacted item, from parser offsets and the
+same wrap/table fold that draws it. Changing width remaps the retained source;
+changing or removing its source invalidates it and releases pointer capture.
+Active logical selections hold follow-tail without disabling its armed state.
+The hold composes with screen/manual selection and ends on clear or owner teardown.
+The widget owns no AI, network, clipboard-read or send action.
+
+Other widgets can use `ContentSelection::bind(element, resolver)`: the resolver
+receives current element-relative coordinates and returns a producer-authored
+`ContentHit` or `None`. `ContentHit::from_source(...)` rejects invalid UTF-8 ranges;
+`select` checks them again. The producer supplies its geometry and highlight.
+`Element::drag_hit_test(rect, point)` is the point-sensitive alternative to
+`drag_zone`; return false for chrome or unsupported source regions. The callback
+uses untracked state and runs outside the tree borrow. See
+[ADR 0007](adr/0007-logical-content-selection.md) for ownership and fallback policy.
 
 ### Disclosure — the fold/unfold card
 

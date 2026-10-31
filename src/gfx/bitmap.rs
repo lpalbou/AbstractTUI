@@ -8,6 +8,15 @@
 
 use crate::base::Rgba;
 
+/// Decode a generated straight-alpha RGBA pixel, optionally compositing it
+/// against a host-owned ground. Pixel conversion stays in the graphics layer.
+#[cfg(feature = "avatar")]
+pub(crate) fn rgba_pixel(bytes: [u8; 4], ground: Option<Rgba>) -> Rgba {
+    let [r, g, b, a] = bytes;
+    let ink = Rgba::new(r, g, b, a);
+    ground.map_or(ink, |ground| ink.over(ground))
+}
+
 /// Owned RGBA image. Width/height are `u32` (pixel spaces are never
 /// negative; cell spaces use `i32` geometry from `base`).
 ///

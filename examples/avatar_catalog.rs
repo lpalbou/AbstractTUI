@@ -1,5 +1,6 @@
 //! Headless visual fixture: cargo run --example avatar_catalog -- /tmp/catalog.png error
 //! Uses the real terminal adapter, layout and VT cell renderer, without a Gateway.
+//! This static preview supplies an explicit sample envelope of 0.6.
 use abstracttui::{app::Driver, prelude::*, testing::CaptureTerm};
 fn main() -> abstracttui::base::Result<()> {
     let args: Vec<_> = std::env::args().collect();
@@ -15,7 +16,8 @@ fn main() -> abstracttui::base::Result<()> {
         })
         .unwrap_or(AvatarPose::Ready);
     abstracttui::app::set_theme_by_id("abstract-dark");
-    let size = Size::new(114, 42);
+    let rows = AvatarStyle::ALL.len().div_ceil(3);
+    let size = Size::new(114, (rows * 21) as i32);
     let mut app = App::new(size);
     app.mount(move |cx| {
         let pose = cx.signal(pose);
@@ -31,6 +33,7 @@ fn main() -> abstracttui::base::Result<()> {
                         .child(
                             Avatar::new(pose)
                                 .style(style)
+                                .level(cx.signal(0.6))
                                 .animated(cx.signal(false))
                                 .layout(
                                     LayoutStyle::default()

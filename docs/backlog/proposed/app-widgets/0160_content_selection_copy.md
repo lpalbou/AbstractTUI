@@ -2,10 +2,33 @@
 
 ## Metadata
 - Created: 2026-07-21
-- Status: Proposed (needs a design ruling on the selection model's home —
-  per-widget vs a screen-level layer — before it is planned)
+- Status: Proposed (remaining surfaces; source-aware Feed selection implemented)
 - Track: app-widgets
 - Completed: N/A
+
+## 2026-10-31 — source-aware Feed slice implemented
+
+[ADR 0007](../../../adr/0007-logical-content-selection.md) accepts producer-authored
+logical source mapping alongside existing screen copying. `ContentSelection`,
+`ContentHit` and `SelectedContent` provide retained Unicode word/sentence/paragraph
+and drag-span selections. Feed Markdown/Text/Rich/Code and streamed Markdown carry
+parser offsets through their actual wrap/table fold; tables retain header/row/column
+and code retains language/line metadata. `Element::drag_hit_test` preserves source
+selection on mapped regions and legacy screen-copy fallback elsewhere.
+
+Evidence: `src/widgets/content_selection_tests.rs`, `tests/content_selection.rs`,
+existing `tests/adv_selection.rs`, and AbstractCode's actual Driver/composer integration
+in `tui/tests/content_selection.rs`. Context actions append to an existing draft and
+require explicit normal submission. Source invalidation/cancel/teardown releases
+capture; scoped follow-tail holds compose with screen/manual freezes. See
+[public API](../../../api.md#feed--logical-content-selection).
+
+Remaining item scope: a public rectangle-to-screen-text extraction API; built-in
+logical selection bindings for standalone MarkdownView/other readers; and
+producer-authored geometry for custom blocks such as UserCard/tool/JSON renderers.
+`ContentSelection::bind` provides the generic resolver seam; it cannot infer source
+from arbitrary draw callbacks. Root item 1082 records the implemented Code flow;
+root proposed 1086 tracks custom-content geometry. This broad item stays open.
 
 ## 2026-07-22 — screen-level v1 landed via 0270 (scope note)
 
@@ -32,11 +55,10 @@ the same custody path (0150's clipboard leg). What this item still owns:
   candidate to generalize when search lands.
 
 ## ADR status
-- Governing ADRs: None — this repo has no ADR system yet (see 0170).
-  ADR impact: touches one recorded stance that must NOT change — OSC 52
-  clipboard is write-only by design (the read form is an exfiltration
-  vector, src/term/verbs.rs:82-86); this item is egress-only and any ADR
-  from 0170 capturing that stance governs it.
+
+Governing ADRs: [0005](../../../adr/0005-content-rendering-responsibilities.md)
+(content ownership) and [0007](../../../adr/0007-logical-content-selection.md)
+(logical provenance alongside screen fallback). Clipboard reads remain excluded.
 
 ## Context
 Terminal users expect to take text out of anything they can see: a chat
@@ -52,7 +74,7 @@ copy-message (`reviews/cycle11/robustness-and-chat-port.md`, Part 2), and
 The port epics (0200 `/copy`, 0210 copy-message) are the first
 validators, not the design targets.
 
-## Current code reality
+## Original code reality (2026-07-21)
 - Egress exists and is capability-honest: `Terminal::clipboard_copy`
   (src/term/mod.rs:211) emits OSC 52 (src/term/verbs.rs:87,
   `clipboard_copy_bytes`), gated by `Capabilities::osc52_copy`
@@ -131,6 +153,6 @@ at once.
 ## Progress checklist
 - [ ] Layer 1: command-copy recipe in docs + one example
 - [ ] Layer 2: region text-extraction API over the snapshot walk
-- [ ] Design ruling: per-widget vs screen-layer selection
-- [ ] Layer 3: drag selection + selection inks + copy wiring
+- [x] Design ruling: per-widget logical mapping alongside screen-layer copying (ADR0007)
+- [x] Layer 3: screen drag selection + selection inks + copy wiring (0270)
 - [ ] Extraction/acceptance/idle tests

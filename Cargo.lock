@@ -3,14 +3,14 @@
 version = 4
 
 [[package]]
-name = "abstract-avatar"
+name = "abstractavatar"
 version = "0.1.0"
 
 [[package]]
 name = "abstracttui"
 version = "0.7.1"
 dependencies = [
- "abstract-avatar",
+ "abstractavatar",
  "abstracttui-graph",
  "abstracttui-mermaid",
  "libc",

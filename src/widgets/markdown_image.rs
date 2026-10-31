@@ -106,6 +106,7 @@ pub(crate) fn push_image_rows(out: &mut Vec<Row>, image: &ImageBlock, width: i32
             });
             for row in 0..rows {
                 out.push(Row {
+                    source: None,
                     fence: None,
                     line: RichLine::new(),
                     indent: 0,

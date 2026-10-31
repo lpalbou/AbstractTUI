@@ -177,47 +177,12 @@ impl BlockTypesetter {
         if n == 0 {
             return;
         }
-        // Natural width per column: the widest cell (header included).
-        let mut natural = vec![0i32; n];
-        for (i, cell) in table.header.iter().enumerate() {
-            natural[i] = natural[i].max(cell.width());
-        }
-        for row in &table.rows {
-            for (i, cell) in row.iter().enumerate() {
-                natural[i] = natural[i].max(cell.width());
-            }
-        }
-        let align = effective_alignments(table);
-        let gaps = (n as i32 - 1).max(0);
-        let usable = (width - gaps).max(0);
-        let total_natural: i32 = natural.iter().sum();
-        let cols: Vec<i32> = if total_natural <= usable {
-            // Fits: natural sizes through the shared solver (the
-            // 1-cell-gap contract with the Table widget).
-            let widths: Vec<ColWidth> = natural.iter().map(|w| ColWidth::Cells(*w)).collect();
-            solve_columns(&widths, width.max(1))
-        } else {
-            // Overflow: floor first, then grow toward natural
-            // proportionally to remaining need (largest-remainder
-            // tiling — the browser algorithm in miniature). The old
-            // fair-share/Flex mix let first-come fixed columns starve
-            // the rightmost ones to ZERO width, which rendered as
-            // silently missing cells — the operator's "tables don't
-            // render in panels" crush shape.
-            let floors: Vec<i32> = natural.iter().map(|w| (*w).min(MIN_COL_FLOOR)).collect();
-            let floor_sum: i32 = floors.iter().sum();
-            if floor_sum > usable {
-                self.push_records(out, table, width);
-                return;
-            }
-            let need: Vec<f64> = natural
-                .iter()
-                .zip(&floors)
-                .map(|(nat, fl)| (nat - fl) as f64)
-                .collect();
-            let grow = crate::layout::distribute(usable - floor_sum, &need);
-            floors.iter().zip(&grow).map(|(f, g)| f + g).collect()
+        let Some(cols) = table_columns(table, width) else {
+            self.push_records(out, table, width);
+            return;
         };
+        let gaps = (n as i32 - 1).max(0);
+        let align = effective_alignments(table);
         let table_w = cols.iter().sum::<i32>() + gaps;
 
         // Header: bold over the cell's own inline styles.
@@ -317,6 +282,7 @@ impl BlockTypesetter {
         }
         for (i, wrapped) in wrap_line(line, width - indent).into_iter().enumerate() {
             out.push(Row {
+                source: None,
                 line: wrapped,
                 indent: indent + if i > 0 { 2 } else { 0 },
                 ground: None,
@@ -327,6 +293,51 @@ impl BlockTypesetter {
             });
         }
     }
+}
+
+/// One column solver for drawing and source mapping. None means record layout.
+pub(super) fn table_columns(table: &TableBlock, width: i32) -> Option<Vec<i32>> {
+    let n = table.columns();
+    // Natural width per column: the widest cell (header included).
+    let mut natural = vec![0i32; n];
+    for (i, cell) in table.header.iter().enumerate() {
+        natural[i] = natural[i].max(cell.width());
+    }
+    for row in &table.rows {
+        for (i, cell) in row.iter().enumerate() {
+            natural[i] = natural[i].max(cell.width());
+        }
+    }
+    let gaps = (n as i32 - 1).max(0);
+    let usable = (width - gaps).max(0);
+    let total_natural: i32 = natural.iter().sum();
+    let cols: Vec<i32> = if total_natural <= usable {
+        // Fits: natural sizes through the shared solver (the
+        // 1-cell-gap contract with the Table widget).
+        let widths: Vec<ColWidth> = natural.iter().map(|w| ColWidth::Cells(*w)).collect();
+        solve_columns(&widths, width.max(1))
+    } else {
+        // Overflow: floor first, then grow toward natural
+        // proportionally to remaining need (largest-remainder
+        // tiling — the browser algorithm in miniature). The old
+        // fair-share/Flex mix let first-come fixed columns starve
+        // the rightmost ones to ZERO width, which rendered as
+        // silently missing cells — the operator's "tables don't
+        // render in panels" crush shape.
+        let floors: Vec<i32> = natural.iter().map(|w| (*w).min(MIN_COL_FLOOR)).collect();
+        let floor_sum: i32 = floors.iter().sum();
+        if floor_sum > usable {
+            return None;
+        }
+        let need: Vec<f64> = natural
+            .iter()
+            .zip(&floors)
+            .map(|(nat, fl)| (nat - fl) as f64)
+            .collect();
+        let grow = crate::layout::distribute(usable - floor_sum, &need);
+        floors.iter().zip(&grow).map(|(f, g)| f + g).collect()
+    };
+    Some(cols)
 }
 
 /// The per-column width floor under overflow: two clusters + the
@@ -340,7 +351,7 @@ const MIN_COL_FLOOR: i32 = 3;
 /// human lays out a numbers column. Explicit `:--`/`:-:`/`--:` is
 /// always honored verbatim; header cells are labels and never vote;
 /// empty cells abstain; an all-empty column stays left.
-fn effective_alignments(table: &TableBlock) -> Vec<CellAlign> {
+pub(super) fn effective_alignments(table: &TableBlock) -> Vec<CellAlign> {
     (0..table.columns())
         .map(|i| {
             let declared = table.declared.get(i).copied().unwrap_or(false);
@@ -414,7 +425,7 @@ fn push_cell(line: &mut RichLine, cell: &RichLine, w: i32, align: CellAlign) {
 /// `max_width - 1` columns, then `…` in the last kept span's style
 /// (mirrors the draw-time rule in `render::rich`, but produces a LINE —
 /// table cells are typeset, not clipped at draw).
-fn truncate_rich(line: &RichLine, max_width: i32) -> RichLine {
+pub(super) fn truncate_rich(line: &RichLine, max_width: i32) -> RichLine {
     if line.width() <= max_width {
         return line.clone();
     }

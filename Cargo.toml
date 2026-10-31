@@ -24,10 +24,23 @@ exclude = ["reviews/", "docs/captures/", "docs/media/", ".github/", ".cursor/", 
 # low-level, MIT/Apache-licensed set below. Everything else is hand-rolled.
 # This manifest is owned by the integrator; agents request additions via reviews/.
 [dependencies]
-abstract-avatar = { version = "0.1.0", path = "crates/abstract-avatar" }
+abstractavatar = { version = "0.1.0", optional = true }
 unicode-width = "0.2"
 unicode-segmentation = "1"
 miniz_oxide = "0.9"
+
+[features]
+default = []
+# The generic FramePlayer is always available; avatar generation is opt-in.
+avatar = ["dep:abstractavatar"]
+
+[[example]]
+name = "avatar"
+required-features = ["avatar"]
+
+[[example]]
+name = "avatar_catalog"
+required-features = ["avatar"]
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -65,5 +78,5 @@ abstracttui-mermaid = { path = "extensions/mermaid" }
 # `abstracttui`; members publish separately (core first, family the
 # same day). See extensions/README.md.
 [workspace]
-members = ["extensions/*", "crates/*"]
+members = ["extensions/*"]
 resolver = "2"

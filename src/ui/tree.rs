@@ -57,7 +57,7 @@ pub(super) struct Inst {
     /// screen-text selection layer stands down over it (see
     /// [`Element::drag_zone`](super::Element::drag_zone)). Consulted by
     /// `UiTree::press_probe_at` at mouse-down only.
-    pub(super) drag_zone: Option<super::view::DragZoneFn>,
+    pub(super) drag_zone: Option<Box<super::view::DragOwner>>,
     pub(super) access: super::access::AccessProps,
     pub(super) payload: InstPayload,
 }

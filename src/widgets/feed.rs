@@ -86,6 +86,9 @@ use super::markdown::md_styles;
 mod item;
 pub use item::{CustomBlock, FeedBlock, FeedItem};
 
+#[path = "feed_content.rs"]
+mod content;
+
 // The Signal<Vec<T>> -> keyed-feed diffing bridge (backlog 0104).
 #[path = "feed_sync.rs"]
 mod sync;
@@ -422,6 +425,7 @@ pub struct Feed {
     gap: i32,
     selected: Option<Signal<Option<String>>>,
     on_item_press: Option<ItemPressFn>,
+    content_selection: Option<super::ContentSelection>,
     layout: Option<LayoutStyle>,
     rule: crate::widgets::MdRuleStyle,
 }
@@ -433,9 +437,17 @@ impl Feed {
             gap: 1,
             selected: None,
             on_item_press: None,
+            content_selection: None,
             layout: None,
             rule: crate::widgets::MdRuleStyle::default(),
         }
+    }
+
+    /// Opt into logical source selection. Plain clicks still bubble to application
+    /// controls; this feed owns content drags instead of screen-copy selection.
+    pub fn content_selection(mut self, selection: super::ContentSelection) -> Self {
+        self.content_selection = Some(selection);
+        self
     }
 
     /// Set the `---` policy for markdown item blocks
@@ -600,6 +612,10 @@ impl Feed {
         }
         let _ = rows;
 
+        if let Some(selection) = self.content_selection.clone() {
+            el = content::bind(el, _cx, state.clone(), selection);
+        }
+
         // Item press hit info (0850): attached ONLY when bound — an
         // unwired feed keeps zero handlers. Row math: the element rect
         // IS the content rect in both modes (content-sized feeds are
@@ -624,6 +640,7 @@ impl Feed {
 
         let version = state.version;
         let selected = self.selected;
+        let content_selection = self.content_selection;
         el.child(dyn_view(
             LayoutStyle::default()
                 .width(Dimension::Percent(1.0))
@@ -633,6 +650,7 @@ impl Feed {
                                // Selection is a tracked read too: a key change
                                // repaints (draw closures never read signals — RT1-2).
                 let sel = selected.and_then(|s| s.get());
+                let content = content_selection.as_ref().and_then(|s| s.value().get());
                 let state = state.clone();
                 Element::new()
                     .style(
@@ -641,7 +659,14 @@ impl Feed {
                             .height(Dimension::Percent(1.0)),
                     )
                     .draw(move |canvas, rect| {
-                        draw_feed(&state, &tokens, sel.as_deref(), canvas, rect)
+                        draw_feed(
+                            &state,
+                            &tokens,
+                            sel.as_deref(),
+                            content.as_ref(),
+                            canvas,
+                            rect,
+                        )
                     })
                     .build()
             },

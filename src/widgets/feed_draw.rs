@@ -21,6 +21,7 @@ pub(super) fn draw_feed(
     state: &FeedState,
     t: &TokenSet,
     selected: Option<&str>,
+    content: Option<&crate::widgets::SelectedContent>,
     canvas: &mut dyn StyledCanvas,
     rect: Rect,
 ) {
@@ -52,6 +53,11 @@ pub(super) fn draw_feed(
         }
         let first_row = band.y - rect.y;
         let last_row = first_row + band.h; // exclusive
+        if let Some(selected) = content {
+            if let Some(index) = inner.index.get(&selected.owner).copied() {
+                inner.map_content(index);
+            }
+        }
         let inner = &*inner;
         // Selection highlight: ground the selected item's band FIRST —
         // rows paint over with transparent backgrounds, so item inks
@@ -99,6 +105,14 @@ pub(super) fn draw_feed(
                                     Rect::new(rect.x, y, rect.w, (visible - skip) as i32),
                                     t,
                                     &rows[skip..visible],
+                                );
+                                super::super::markdown::content::highlight(
+                                    canvas,
+                                    Rect::new(rect.x, y, rect.w, (visible - skip) as i32),
+                                    t,
+                                    &rows[skip..visible],
+                                    &entry.key,
+                                    content,
                                 );
                             }
                         }

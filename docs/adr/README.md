@@ -28,3 +28,4 @@ supersession discipline). Conventions:
 | [0004](0004-extension-packaging.md) | Extension packaging: feature classes, sibling-crate family, dependency inheritance | Accepted |
 | [0005](0005-content-rendering-responsibilities.md) | Content rendering responsibilities: markdown/code/data text is core | Accepted |
 | [0006](0006-shared-avatar-rendering.md) | Shared native/web avatar geometry and bounded adapters | Accepted |
+| [0007](0007-logical-content-selection.md) | Logical content selection preserves source provenance and host-owned actions | Accepted |

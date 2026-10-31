@@ -46,7 +46,7 @@
 
 use crate::render::rich::RichLine;
 
-use super::{find_close, list_marker, parse, parse_inline, Block, Marker, MdStyles};
+use super::{find_close, list_marker, Block, Marker, MdStyles};
 
 /// Per-column alignment from the delimiter row (`:--` left, `:-:`
 /// center, `--:` right; bare `---` defaults left). Exhaustive on
@@ -201,28 +201,95 @@ pub enum DocBlock {
 /// assert!(matches!(blocks[0], DocBlock::Table(_)));
 /// ```
 pub fn parse_doc(src: &str, styles: &MdStyles) -> Vec<DocBlock> {
+    parse_doc_impl(src, styles, false)
+        .into_iter()
+        .map(|(block, _)| block)
+        .collect()
+}
+
+pub(crate) fn parse_doc_sourced(
+    src: &str,
+    styles: &MdStyles,
+) -> Vec<(DocBlock, crate::render::content::SourceBlock)> {
+    parse_doc_impl(src, styles, true)
+}
+
+fn parse_doc_impl(
+    src: &str,
+    styles: &MdStyles,
+    mapped: bool,
+) -> Vec<(DocBlock, crate::render::content::SourceBlock)> {
+    use crate::render::content::{ContentKind, SourceBlock, SourcePart};
     let lines: Vec<&str> = src.lines().collect();
-    let mut out: Vec<DocBlock> = Vec::new();
-    // Pending core-source lines, flushed through `parse` at extended
-    // block boundaries: ONE core parser, never a re-implementation.
-    let mut core: Vec<&str> = Vec::new();
+    let line_starts: Vec<usize> = if mapped {
+        std::iter::once(0)
+            .chain(src.match_indices('\n').map(|(i, _)| i + 1))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let offset = |s: &str| s.as_ptr() as usize - src.as_ptr() as usize;
+    let mut out = Vec::new();
+    let mut core: Option<std::ops::Range<usize>> = None;
     let mut in_fence = false;
     let mut i = 0;
-
-    let flush = |core: &mut Vec<&str>, out: &mut Vec<DocBlock>, styles: &MdStyles| {
-        if core.is_empty() {
-            return;
+    let flush = |core: &mut Option<std::ops::Range<usize>>,
+                 out: &mut Vec<(DocBlock, SourceBlock)>| {
+        if let Some(range) = core.take() {
+            for (block, mut map) in super::parse_core(&src[range.clone()], styles, mapped) {
+                map.parts = map
+                    .parts
+                    .into_iter()
+                    .map(|p| {
+                        p.shifted(
+                            range.start,
+                            line_starts.partition_point(|start| *start < range.start),
+                        )
+                    })
+                    .collect();
+                out.push((DocBlock::Core(block), map));
+            }
         }
-        let seg = core.join("\n");
-        out.extend(parse(&seg, styles).into_iter().map(DocBlock::Core));
-        core.clear();
     };
-
+    let add_core = |core: &mut Option<std::ops::Range<usize>>, raw: &str| {
+        let start = offset(raw);
+        let end = start + raw.len();
+        if let Some(range) = core {
+            range.end = end;
+        } else {
+            *core = Some(start..end);
+        }
+    };
+    let cell_line = |raw: &str, n: usize| {
+        let mut cells = Vec::new();
+        let mut parts = Vec::new();
+        for cell in raw_row_cells(raw).into_iter().take(n) {
+            let (line, mut part) =
+                super::inline_source(cell, styles, styles.base, offset(cell), mapped);
+            part.kind = ContentKind::TableCell;
+            cells.push(line);
+            if mapped {
+                parts.push(part);
+            }
+        }
+        while cells.len() < n {
+            cells.push(RichLine::new());
+            if mapped {
+                parts.push(SourcePart {
+                    context: None,
+                    scope: 0..0,
+                    kind: ContentKind::TableCell,
+                    runs: vec![],
+                });
+            }
+        }
+        (cells, parts)
+    };
     while i < lines.len() {
         let raw = lines[i];
         let trimmed = raw.trim_end().trim_start();
         if in_fence {
-            core.push(raw);
+            add_core(&mut core, raw);
             if trimmed.starts_with("```") {
                 in_fence = false;
             }
@@ -232,26 +299,33 @@ pub fn parse_doc(src: &str, styles: &MdStyles) -> Vec<DocBlock> {
         match doc_line_class(raw) {
             DocLineClass::FenceOpen => {
                 in_fence = true;
-                core.push(raw);
+                add_core(&mut core, raw);
                 i += 1;
             }
             DocLineClass::Image => {
-                // Class guarantees the shape; parse is infallible here.
                 let (alt, src_ref) = image_line(trimmed).expect("classified image line");
-                flush(&mut core, &mut out, styles);
-                out.push(DocBlock::Image(ImageBlock::new(alt, src_ref)));
+                flush(&mut core, &mut out);
+                out.push((
+                    DocBlock::Image(ImageBlock::new(alt, src_ref)),
+                    SourceBlock { parts: vec![] },
+                ));
                 i += 1;
             }
             DocLineClass::Task => {
-                let line = raw.trim_end();
-                let indent = line.len() - line.trim_start().len();
+                flush(&mut core, &mut out);
                 let (checked, rest) = task_item(trimmed).expect("classified task line");
-                flush(&mut core, &mut out, styles);
-                out.push(DocBlock::Task(TaskBlock::new(
-                    checked,
-                    (indent / 2).min(8) as u8,
-                    parse_inline(rest, styles, styles.base),
-                )));
+                let (content, part) =
+                    super::inline_source(rest, styles, styles.base, offset(rest), mapped);
+                out.push((
+                    DocBlock::Task(TaskBlock::new(
+                        checked,
+                        ((raw.len() - raw.trim_start().len()) / 2).min(8) as u8,
+                        content,
+                    )),
+                    SourceBlock {
+                        parts: if mapped { vec![part] } else { Vec::new() },
+                    },
+                ));
                 i += 1;
             }
             DocLineClass::PipeText
@@ -259,39 +333,71 @@ pub fn parse_doc(src: &str, styles: &MdStyles) -> Vec<DocBlock> {
                     .get(i + 1)
                     .is_some_and(|next| table_opens(trimmed, next)) =>
             {
-                flush(&mut core, &mut out, styles);
-                let spec = delimiter_alignments(lines[i + 1].trim_end().trim_start())
-                    .expect("table_opens verified the delimiter");
+                flush(&mut core, &mut out);
+                let spec =
+                    delimiter_alignments(lines[i + 1].trim()).expect("table delimiter verified");
                 let (align, declared): (Vec<CellAlign>, Vec<bool>) = spec.into_iter().unzip();
-                let header = split_row_cells(trimmed)
-                    .into_iter()
-                    .map(|c| parse_inline(&c, styles, styles.base))
-                    .collect();
-                i += 2; // header + delimiter consumed
+                let n = align.len();
+                let (header, mut parts) = cell_line(trimmed, n);
+                i += 2;
                 let mut rows = Vec::new();
                 while i < lines.len() && doc_line_class(lines[i]) == DocLineClass::PipeText {
-                    rows.push(
-                        split_row_cells(lines[i].trim_end().trim_start())
-                            .into_iter()
-                            .map(|c| parse_inline(&c, styles, styles.base))
-                            .collect(),
-                    );
+                    let (row, p) = cell_line(lines[i].trim(), n);
+                    rows.push(row);
+                    parts.extend(p);
                     i += 1;
                 }
-                out.push(DocBlock::Table(
-                    TableBlock::new(align, header, rows).with_declared(declared),
+                if mapped {
+                    let headers: Vec<std::rc::Rc<str>> =
+                        header.iter().map(|cell| cell.plain().into()).collect();
+                    for (index, part) in parts.iter_mut().enumerate() {
+                        part.context = Some(std::rc::Rc::new(
+                            crate::render::content::ContentContext::TableCell {
+                                row: (index / n).checked_sub(1),
+                                column: index % n,
+                                header: headers[index % n].clone(),
+                            },
+                        ));
+                    }
+                }
+                out.push((
+                    DocBlock::Table(TableBlock::new(align, header, rows).with_declared(declared)),
+                    SourceBlock { parts },
                 ));
             }
-            // Pipe line without a delimiter next, or any core line:
-            // core markdown.
             _ => {
-                core.push(raw);
+                add_core(&mut core, raw);
                 i += 1;
             }
         }
     }
-    flush(&mut core, &mut out, styles);
+    flush(&mut core, &mut out);
     out
+}
+
+/// Borrow the actual source cells; escaped pipes stay attached to their source bytes.
+fn raw_row_cells(trimmed: &str) -> Vec<&str> {
+    let inner = trimmed.strip_prefix('|').unwrap_or(trimmed);
+    let mut cells = Vec::new();
+    let mut start = 0;
+    let mut i = 0;
+    let bytes = inner.as_bytes();
+    while i < bytes.len() {
+        if bytes[i] == b'\\' && i + 1 < bytes.len() {
+            i += 1;
+            i = next_char_boundary(inner, i);
+        } else if bytes[i] == b'|' {
+            cells.push(inner[start..i].trim());
+            i += 1;
+            start = i;
+        } else {
+            i = next_char_boundary(inner, i);
+        }
+    }
+    if start < inner.len() || cells.is_empty() {
+        cells.push(inner[start..].trim());
+    }
+    cells
 }
 
 /// Line classification for the DOC dispatch — shared verbatim between
@@ -501,7 +607,7 @@ pub(super) fn task_item(trimmed: &str) -> Option<(bool, &str)> {
         return None;
     };
     match rest.as_bytes().get(3) {
-        None => Some((checked, "")),
+        None => Some((checked, &rest[3..])),
         Some(b' ') => Some((checked, rest[4..].trim_start())),
         Some(_) => None, // "[ ]x" is ordinary list text
     }

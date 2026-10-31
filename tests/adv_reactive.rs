@@ -376,7 +376,13 @@ fn shortcut_disposing_focused_subtree_keeps_focus_sane() {
             })
             .child(dyn_view(Style::default(), move || {
                 if open.get() {
-                    Element::new().focusable().draw(|_c, _r| {}).build()
+                    // A real tab target needs visible geometry; this test
+                    // exercises disposal rather than zero-area traversal.
+                    Element::new()
+                        .style(Style::line(1))
+                        .focusable()
+                        .draw(|_c, _r| {})
+                        .build()
                 } else {
                     text("gone")
                 }

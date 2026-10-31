@@ -271,6 +271,7 @@ impl KeyChord {
 /// invoked while the tree is traversed).
 #[derive(Default)]
 pub struct EventCtx {
+    pub(super) tree: std::rc::Weak<std::cell::RefCell<super::tree::TreeCore>>,
     pub(crate) stopped: bool,
     pub(crate) focus_request: Option<super::tree::ViewId>,
     pub(crate) damage_all: bool,
@@ -305,7 +306,32 @@ pub struct EventCtx {
     pub(crate) host_actions: Vec<super::action::ActionId>,
 }
 
+/// Internal ownership-checked release token for a retained gesture. It carries
+/// no terminal or input authority and never cancels another widget's capture.
+#[derive(Clone)]
+pub(crate) struct PointerRelease {
+    tree: std::rc::Weak<std::cell::RefCell<super::tree::TreeCore>>,
+    owner: super::tree::ViewId,
+}
+impl PointerRelease {
+    pub(crate) fn release(&self) {
+        if let Some(tree) = self.tree.upgrade() {
+            let mut tree = tree.borrow_mut();
+            if tree.capture == Some(self.owner) {
+                tree.capture = None;
+                tree.capture_pos = None;
+            }
+        }
+    }
+}
+
 impl EventCtx {
+    pub(crate) fn pointer_release_handle(&self, owner: super::tree::ViewId) -> PointerRelease {
+        PointerRelease {
+            tree: self.tree.clone(),
+            owner,
+        }
+    }
     /// Stop routing after the current phase step (like stopPropagation).
     pub fn stop_propagation(&mut self) {
         self.stopped = true;

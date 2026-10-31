@@ -26,6 +26,8 @@ mod jpeg_dsp;
 mod jpeg_entropy;
 pub mod mosaic;
 mod mosaic_fit;
+#[cfg(feature = "avatar")]
+pub(crate) use mosaic_fit::SEXTANT_CHARS;
 pub mod pipeline;
 pub mod png;
 pub mod png_encode;

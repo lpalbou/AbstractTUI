@@ -8,7 +8,7 @@
 
 use std::rc::Rc;
 
-use crate::base::Rect;
+use crate::base::{Point, Rect};
 use crate::layout::Style;
 use crate::reactive::Signal;
 
@@ -29,6 +29,20 @@ pub type DrawFn = Box<dyn FnMut(&mut dyn StyledCanvas, Rect)>;
 /// the handle OUT of the tree borrow before calling it, so user code
 /// never runs while the core is borrowed.
 pub type DragZoneFn = Rc<dyn Fn(Rect) -> Option<Rect>>;
+
+#[derive(Clone)]
+pub(crate) enum DragOwner {
+    Zone(DragZoneFn),
+    Hit(Rc<dyn Fn(Rect, Point) -> bool>),
+}
+impl DragOwner {
+    pub(crate) fn contains(&self, rect: Rect, point: Point) -> bool {
+        match self {
+            Self::Zone(zone) => zone(rect).is_some_and(|zone| zone.contains(point)),
+            Self::Hit(hit) => hit(rect, point),
+        }
+    }
+}
 
 /// Event handler attached to an element for a given phase.
 pub type HandlerFn = Box<dyn FnMut(&mut EventCtx, &UiEvent)>;
@@ -147,7 +161,7 @@ pub struct Element {
     /// exactly like a text leaf's measurement. See [`Element::measure`].
     pub(crate) measure: Option<crate::layout::MeasureFn>,
     /// Sub-rect that owns pointer drags — see [`Element::drag_zone`].
-    pub(crate) drag_zone: Option<DragZoneFn>,
+    pub(crate) drag_zone: Option<Box<DragOwner>>,
     pub(crate) draw: Option<DrawFn>,
     pub(crate) handlers: Vec<Handler>,
     pub(crate) shortcuts: Vec<Shortcut>,
@@ -323,7 +337,16 @@ impl Element {
     /// [`Element::measure`] carries). Reads of reactive state inside it
     /// should be untracked: this is a hit test, not a render.
     pub fn drag_zone(mut self, f: impl Fn(Rect) -> Option<Rect> + 'static) -> Element {
-        self.drag_zone = Some(Rc::new(f));
+        self.drag_zone = Some(Box::new(DragOwner::Zone(Rc::new(f))));
+        self
+    }
+
+    /// Point-sensitive drag ownership for sparse logical content. The callback
+    /// has the same pure/untracked contract as `drag_zone`; it runs outside the
+    /// tree borrow. Return false for links, chrome or unmapped content so the
+    /// engine's normal screen-selection fallback can own that gesture.
+    pub fn drag_hit_test(mut self, f: impl Fn(Rect, Point) -> bool + 'static) -> Element {
+        self.drag_zone = Some(Box::new(DragOwner::Hit(Rc::new(f))));
         self
     }
 

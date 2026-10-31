@@ -12,7 +12,7 @@ use crate::{
     ui::{dyn_view, Element, Role, View},
 };
 
-pub use abstract_avatar::{AvatarPose, AvatarStyle, Gaze as AvatarGaze};
+pub use abstractavatar::{AvatarPose, AvatarStyle, Gaze as AvatarGaze};
 
 /// Host-fed cursor activity. One cancellable idle expiry, no polling or input capture.
 #[derive(Clone, Copy)]
@@ -40,6 +40,11 @@ impl AvatarPointer {
     pub fn moved(self, position: Point) {
         self.point.set(Some(position));
     }
+    /// Look toward an actual host pointer press. This records attention only:
+    /// it neither consumes the event nor activates content beneath it.
+    pub fn pressed(self, position: Point) {
+        self.point.set(Some(position));
+    }
     pub fn clear(self) {
         self.point.set_if_changed(None);
     }
@@ -61,6 +66,7 @@ pub struct Avatar {
     animated: Option<Signal<bool>>,
     label: bool,
     transparent_background: bool,
+    mode: Option<MosaicMode>,
     layout: LayoutStyle,
 }
 impl Avatar {
@@ -75,6 +81,7 @@ impl Avatar {
             animated: None,
             label: true,
             transparent_background: false,
+            mode: None,
             layout: LayoutStyle::default()
                 .width(Dimension::Cells(28))
                 .height(Dimension::Cells(15))
@@ -116,6 +123,13 @@ impl Avatar {
     /// The host must repaint its background when the avatar moves or changes.
     pub fn transparent_background(mut self, transparent: bool) -> Self {
         self.transparent_background = transparent;
+        self
+    }
+    /// Pin a mosaic glyph family. The default follows terminal capabilities:
+    /// quadrants on color terminals, braille without color and half blocks for
+    /// legacy locales. Sextants require a font with Unicode 13 coverage.
+    pub fn mode(mut self, mode: MosaicMode) -> Self {
+        self.mode = Some(mode);
         self
     }
     pub fn layout(mut self, layout: LayoutStyle) -> Self {
@@ -210,10 +224,9 @@ impl Avatar {
                 normalized(levels.map(|s| s.get()).unwrap_or(0.0))
             }
         });
-        let image = Bitmap::default();
-        let renderer = MosaicRenderer::new();
-        // Buffers survive reactive frame rebuilds, and allocate only on resize.
-        let buffers = std::rc::Rc::new(std::cell::RefCell::new((image, renderer)));
+        // Both raster and mosaic survive unrelated host paints. The key omits
+        // placement so moving an unchanged avatar does not regenerate its art.
+        let buffers = std::rc::Rc::new(std::cell::RefCell::new(RenderCache::default()));
         let palette = cx.memo(move || tokens.unwrap_or_else(|| super::theme_tokens(cx)));
         let transparent_background = self.transparent_background;
         let materials = cx.memo(move || {
@@ -222,6 +235,7 @@ impl Avatar {
             std::rc::Rc::new(materials)
         });
         let label = self.label;
+        let mode = self.mode;
         let child = dyn_view(
             LayoutStyle::default()
                 .width(Dimension::Percent(1.0))
@@ -255,31 +269,20 @@ impl Avatar {
                         let art_h = (rect.h - i32::from(label && rect.h > 1)).max(1);
                         let cols = rect.w.min(64) as u32;
                         let rows = art_h.min(32) as u32;
-                        let mode = match super::Image::resolved_mode(None) {
-                            MosaicMode::Braille => MosaicMode::Braille,
-                            _ => MosaicMode::HalfBlock,
-                        };
-                        let (sx, sy) = mode.cell_pixels();
-                        // Supersample the existing cell renderer; no pixel protocol
-                        // or larger terminal resolution is assumed.
-                        let (sx, sy) = (sx * 2, sy * 2);
+                        let mode = super::Image::resolved_mode(mode);
                         let mut buffers = buffers.borrow_mut();
-                        let (image, renderer) = &mut *buffers;
-                        if image.width() != cols * sx || image.height() != rows * sy {
-                            *image = Bitmap::new(cols * sx, rows * sy, Rgba::TRANSPARENT);
-                        }
-                        let radius = (cols as f32).min(rows as f32 * 2.0) * 0.5;
-                        let frame = abstract_avatar::Frame::new(style, p, level, phase, gaze);
-                        for y in 0..image.height() {
-                            for x in 0..image.width() {
-                                let nx =
-                                    ((x as f32 + 0.5) / sx as f32 - cols as f32 * 0.5) / radius;
-                                let ny = ((y as f32 + 0.5) / sy as f32 - rows as f32 * 0.5) * 2.0
-                                    / radius;
-                                image.set(x, y, materials.color(frame.sample(nx, ny)));
-                            }
-                        }
-                        let grid = renderer.render(image, cols, rows, mode);
+                        buffers.prepare(RenderKey {
+                            style,
+                            pose: p,
+                            level,
+                            time: phase,
+                            gaze,
+                            cols,
+                            rows,
+                            mode,
+                            materials: materials.clone(),
+                        });
+                        let grid = buffers.renderer.grid();
                         let origin = Point::new(
                             rect.x + (rect.w - cols as i32) / 2,
                             rect.y + (art_h - rows as i32) / 2,
@@ -297,13 +300,8 @@ impl Avatar {
                                 // an ascender gap above ▀. An upper-only transparent
                                 // edge must keep ▀ so the visible ink stays in fg;
                                 // alpha-zero foreground can become terminal default.
-                                let (ch, fg, bg) = if cell.ch == '▀'
-                                    && !(transparent_background && cell.bg.is_transparent())
-                                {
-                                    ('▄', cell.bg, cell.fg)
-                                } else {
-                                    (cell.ch, cell.fg, cell.bg)
-                                };
+                                let (ch, fg, bg) =
+                                    display_cell(*cell, mode, transparent_background);
                                 canvas.put(
                                     Point::new(origin.x + x as i32, origin.y + y as i32),
                                     ch,
@@ -358,13 +356,79 @@ fn normalized(level: f32) -> f32 {
         0.0
     }
 }
+
+#[derive(PartialEq)]
+struct RenderKey {
+    style: AvatarStyle,
+    pose: AvatarPose,
+    level: f32,
+    time: f32,
+    gaze: AvatarGaze,
+    cols: u32,
+    rows: u32,
+    mode: MosaicMode,
+    materials: std::rc::Rc<Materials>,
+}
+
+#[derive(Default)]
+struct RenderCache {
+    key: Option<RenderKey>,
+    image: Bitmap,
+    renderer: MosaicRenderer,
+}
+
+impl RenderCache {
+    fn prepare(&mut self, key: RenderKey) {
+        if self.key.as_ref() == Some(&key) {
+            return;
+        }
+        let RenderKey {
+            style,
+            pose,
+            level,
+            time,
+            gaze,
+            cols,
+            rows,
+            mode,
+            ref materials,
+        } = key;
+        let (sx, sy) = mode.cell_pixels();
+        let (sx, sy) = (sx * 2, sy * 2);
+        if self.image.width() != cols * sx || self.image.height() != rows * sy {
+            self.image = Bitmap::new(cols * sx, rows * sy, Rgba::TRANSPARENT);
+        }
+        let radius = (cols as f32).min(rows as f32 * 2.0) * 0.5;
+        let pixel_size = ((1.0 / sx as f32).max(2.0 / sy as f32) / radius).min(0.125);
+        let frame = abstractavatar::Frame::new(style, pose, level, time, gaze);
+        for y in 0..self.image.height() {
+            for x in 0..self.image.width() {
+                let nx = ((x as f32 + 0.5) / sx as f32 - cols as f32 * 0.5) / radius;
+                let ny = ((y as f32 + 0.5) / sy as f32 - rows as f32 * 0.5) * 2.0 / radius;
+                self.image
+                    .set(x, y, materials.rgba(&frame, nx, ny, pixel_size));
+            }
+        }
+        self.renderer.render(&self.image, cols, rows, mode);
+        self.key = Some(key);
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static RASTER_SAMPLES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 // All colors come from theme-owned material ramps, prepared once per theme.
 struct Materials {
     tokens: TokenSet,
+    #[cfg(test)]
     warm: crate::theme::derive::MaterialRamp,
+    #[cfg(test)]
     eye: crate::theme::derive::MaterialRamp,
+    #[cfg(test)]
     dim: crate::theme::derive::MaterialRamp,
     transparent_background: bool,
+    palette: [[u32; 256]; 3],
 }
 impl PartialEq for Materials {
     fn eq(&self, other: &Self) -> bool {
@@ -373,26 +437,45 @@ impl PartialEq for Materials {
 }
 impl Materials {
     fn new(t: &TokenSet) -> Self {
-        let ramp = crate::theme::derive::material_ramp;
+        let palette = [
+            (t.warn, t.text),
+            (t.error, t.text),
+            (t.border, t.text_muted),
+        ]
+        .map(|(mid, highlight)| crate::theme::derive::material_palette(t.bg, mid, highlight));
         Self {
             tokens: *t,
-            warm: ramp(t.bg, t.warn, t.text),
-            eye: ramp(t.bg, t.error, t.text),
-            dim: ramp(t.bg, t.border, t.text_muted),
+            #[cfg(test)]
+            warm: crate::theme::derive::material_ramp(t.bg, t.warn, t.text),
+            #[cfg(test)]
+            eye: crate::theme::derive::material_ramp(t.bg, t.error, t.text),
+            #[cfg(test)]
+            dim: crate::theme::derive::material_ramp(t.bg, t.border, t.text_muted),
             transparent_background: false,
+            palette,
         }
     }
-    fn color(&self, sample: abstract_avatar::Sample) -> Rgba {
+    fn rgba(&self, frame: &abstractavatar::Frame, x: f32, y: f32, pixel_size: f32) -> Rgba {
+        #[cfg(test)]
+        RASTER_SAMPLES.with(|samples| samples.set(samples.get() + 1));
+        crate::gfx::bitmap::rgba_pixel(
+            frame.rgba(x, y, pixel_size, &self.palette),
+            (!self.transparent_background).then_some(self.tokens.bg),
+        )
+    }
+    #[cfg(test)]
+    fn color(&self, sample: abstractavatar::Sample) -> Rgba {
         if sample.coverage == 0.0 {
             return self.ground();
         }
         let ramp = match sample.material {
-            abstract_avatar::Material::Warm => &self.warm,
-            abstract_avatar::Material::Eye => &self.eye,
-            abstract_avatar::Material::Dim => &self.dim,
+            abstractavatar::Material::Warm => &self.warm,
+            abstractavatar::Material::Eye => &self.eye,
+            abstractavatar::Material::Dim => &self.dim,
         };
         self.paint(ramp, sample.light, sample.coverage)
     }
+    #[cfg(test)]
     fn ground(&self) -> Rgba {
         if self.transparent_background {
             Rgba::TRANSPARENT
@@ -400,6 +483,7 @@ impl Materials {
             self.tokens.bg
         }
     }
+    #[cfg(test)]
     fn paint(&self, ramp: &crate::theme::derive::MaterialRamp, light: f32, coverage: f32) -> Rgba {
         if self.transparent_background {
             let ink = ramp.sample(light, 1.0);
@@ -408,6 +492,30 @@ impl Materials {
             ramp.sample(light, coverage)
         }
     }
+}
+
+/// Keep every visible glyph's foreground explicit. An alpha-zero foreground
+/// can become the terminal default ink even though its background is colored.
+fn display_cell(
+    cell: crate::gfx::MosaicCell,
+    mode: MosaicMode,
+    transparent: bool,
+) -> (char, Rgba, Rgba) {
+    if cell.ch == '▀' && !(transparent && cell.bg.is_transparent()) {
+        return ('▄', cell.bg, cell.fg);
+    }
+    if cell.ch != ' ' && cell.fg.is_transparent() && !cell.bg.is_transparent() {
+        let chars: &[char] = match mode {
+            MosaicMode::Quadrant => &crate::canvas::QUADRANT_CHARS,
+            MosaicMode::Sextant => &crate::gfx::SEXTANT_CHARS,
+            MosaicMode::Braille => return (' ', cell.fg, cell.bg),
+            MosaicMode::HalfBlock => return (' ', cell.fg, cell.bg),
+        };
+        if let Some(index) = chars.iter().position(|ch| *ch == cell.ch) {
+            return (chars[chars.len() - 1 - index], cell.bg, cell.fg);
+        }
+    }
+    (cell.ch, cell.fg, cell.bg)
 }
 #[cfg(test)]
 fn sample(
@@ -419,9 +527,13 @@ fn sample(
     y: f32,
     m: &Materials,
 ) -> Rgba {
-    m.color(abstract_avatar::sample(style, pose, level, time, x, y))
+    m.color(abstractavatar::sample(style, pose, level, time, x, y))
 }
 
 #[cfg(test)]
 #[path = "avatar_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "avatar_presentation_tests.rs"]
+mod presentation_tests;

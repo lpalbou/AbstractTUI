@@ -59,6 +59,7 @@ pub use stream::StreamSession;
 /// (which shipped exhaustive and cannot grow variants).
 #[path = "md_doc.rs"]
 mod doc;
+pub(crate) use doc::parse_doc_sourced;
 pub use doc::{parse_doc, CellAlign, DocBlock, ImageBlock, TableBlock, TaskBlock};
 
 /// Streaming session for the doc vocabulary (0142).
@@ -181,84 +182,187 @@ impl MdStyles {
 /// Parses a document. Every input parses — degradation is always "treat
 /// as literal text", never an error.
 pub fn parse(src: &str, styles: &MdStyles) -> Vec<Block> {
+    parse_core(src, styles, false)
+        .into_iter()
+        .map(|(block, _)| block)
+        .collect()
+}
+
+pub(crate) fn inline_source(
+    src: &str,
+    styles: &MdStyles,
+    style: Style,
+    base: usize,
+    enabled: bool,
+) -> (RichLine, super::content::SourcePart) {
+    use super::content::{ContentKind, SourcePart, SourceRun};
+    let mut runs = Vec::new();
+    let line = parse_inline_traced(src, styles, style, |range, display| {
+        if enabled {
+            runs.push(SourceRun {
+                display: display..display + range.len(),
+                source: base + range.start..base + range.end,
+            });
+        }
+    });
+    (
+        line,
+        SourcePart {
+            context: None,
+            scope: base..base + src.len(),
+            kind: ContentKind::Paragraph,
+            runs,
+        },
+    )
+}
+
+pub(crate) fn parse_core(
+    src: &str,
+    styles: &MdStyles,
+    mapped: bool,
+) -> Vec<(Block, super::content::SourceBlock)> {
+    use super::content::{ContentKind, SourceBlock, SourcePart};
     let mut blocks = Vec::new();
     let mut lines = src.lines().peekable();
-    // Paragraph accumulation: consecutive non-blank plain lines join with
-    // a space (soft wrap), emitted on blank/block boundary.
-    let mut para: Option<RichLine> = None;
-
+    let line_starts: Vec<usize> = if mapped {
+        std::iter::once(0)
+            .chain(src.match_indices('\n').map(|(i, _)| i + 1))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let mut para: Option<(RichLine, SourcePart, usize)> = None;
+    let offset = |s: &str| s.as_ptr() as usize - src.as_ptr() as usize;
+    let flush = |para: &mut Option<(RichLine, SourcePart, usize)>,
+                 blocks: &mut Vec<(Block, SourceBlock)>| {
+        if let Some((line, part, _)) = para.take() {
+            blocks.push((
+                Block::Paragraph(line),
+                SourceBlock {
+                    parts: if mapped { vec![part] } else { Vec::new() },
+                },
+            ));
+        }
+    };
     while let Some(raw) = lines.next() {
         let line = raw.trim_end();
         let trimmed = line.trim_start();
-
-        // Fence open?
         if let Some(rest) = trimmed.strip_prefix("```") {
-            flush_para(&mut para, &mut blocks);
-            let lang = rest.trim().to_string();
+            flush(&mut para, &mut blocks);
             let mut body = Vec::new();
+            let mut parts = Vec::new();
+            let mut scope = offset(raw) + raw.len()..offset(raw) + raw.len();
             for l in lines.by_ref() {
                 if l.trim_start().starts_with("```") {
-                    break; // fence close (EOF also closes: honest recovery)
+                    break;
+                }
+                let range = offset(l)..offset(l) + l.len();
+                if parts.is_empty() {
+                    scope.start = range.start;
+                }
+                scope.end = range.end;
+                if mapped {
+                    parts.push(SourcePart::literal(range, ContentKind::CodeBlock));
                 }
                 body.push(l.to_string());
             }
-            blocks.push(Block::CodeFence { lang, lines: body });
+            if mapped {
+                let context = std::rc::Rc::new(super::content::ContentContext::Code {
+                    language: rest.trim().into(),
+                    lines: line_starts.partition_point(|start| *start <= scope.start)
+                        ..line_starts.partition_point(|start| *start <= scope.end) + 1,
+                });
+                for part in &mut parts {
+                    part.scope = scope.clone();
+                    part.context = Some(context.clone());
+                }
+            }
+            blocks.push((
+                Block::CodeFence {
+                    lang: rest.trim().into(),
+                    lines: body,
+                },
+                SourceBlock { parts },
+            ));
             continue;
         }
         if trimmed.is_empty() {
-            flush_para(&mut para, &mut blocks);
+            flush(&mut para, &mut blocks);
             continue;
         }
         if trimmed == "---" || trimmed == "***" {
-            flush_para(&mut para, &mut blocks);
-            blocks.push(Block::Rule);
+            flush(&mut para, &mut blocks);
+            blocks.push((Block::Rule, SourceBlock { parts: vec![] }));
             continue;
         }
-        // Heading: 1-6 '#' then a space.
         if let Some(h) = heading_level(trimmed) {
-            flush_para(&mut para, &mut blocks);
-            let content = &trimmed[h as usize + 1..];
-            let block_style = styles.base.merge(styles.heading);
-            blocks.push(Block::Heading {
-                level: h,
-                content: parse_inline(content.trim_start(), styles, block_style),
-            });
+            flush(&mut para, &mut blocks);
+            let content = trimmed[h as usize + 1..].trim_start();
+            let (content, part) = inline_source(
+                content,
+                styles,
+                styles.base.merge(styles.heading),
+                offset(content),
+                mapped,
+            );
+            blocks.push((
+                Block::Heading { level: h, content },
+                SourceBlock {
+                    parts: if mapped { vec![part] } else { Vec::new() },
+                },
+            ));
             continue;
         }
-        // Blockquote: strip one or more '>' (nesting folds — documented).
         if trimmed.starts_with('>') {
-            flush_para(&mut para, &mut blocks);
+            flush(&mut para, &mut blocks);
             let mut rest = trimmed;
             while let Some(r) = rest.strip_prefix('>') {
                 rest = r.trim_start();
             }
-            blocks.push(Block::Blockquote(parse_inline(rest, styles, styles.base)));
+            let (content, part) = inline_source(rest, styles, styles.base, offset(rest), mapped);
+            blocks.push((
+                Block::Blockquote(content),
+                SourceBlock {
+                    parts: if mapped { vec![part] } else { Vec::new() },
+                },
+            ));
             continue;
         }
-        // List item: bullet or "N." followed by a space.
         if let Some((marker, rest)) = list_marker(trimmed) {
-            flush_para(&mut para, &mut blocks);
-            let indent = line.len() - trimmed.len();
-            blocks.push(Block::ListItem {
-                depth: (indent / 2).min(8) as u8,
-                marker,
-                content: parse_inline(rest, styles, styles.base),
-            });
+            flush(&mut para, &mut blocks);
+            let (content, part) = inline_source(rest, styles, styles.base, offset(rest), mapped);
+            blocks.push((
+                Block::ListItem {
+                    depth: ((line.len() - trimmed.len()) / 2).min(8) as u8,
+                    marker,
+                    content,
+                },
+                SourceBlock {
+                    parts: if mapped { vec![part] } else { Vec::new() },
+                },
+            ));
             continue;
         }
-        // Paragraph text: soft-join with the accumulator.
-        let inline = parse_inline(trimmed, styles, styles.base);
+        let (inline, part) = inline_source(trimmed, styles, styles.base, offset(trimmed), mapped);
+        let count = inline.spans.iter().map(|s| s.text.len()).sum::<usize>();
         match &mut para {
-            Some(acc) => {
+            Some((acc, accumulated, display)) => {
                 acc.push(Span::new(" ", styles.base));
                 for s in inline.spans {
                     acc.push(s);
                 }
+                for mut run in part.runs {
+                    run.display.start += *display + 1;
+                    run.display.end += *display + 1;
+                    accumulated.runs.push(run);
+                }
+                accumulated.scope.end = part.scope.end;
+                *display += count + 1;
             }
-            None => para = Some(inline),
+            None => para = Some((inline, part, count)),
         }
     }
-    flush_para(&mut para, &mut blocks);
+    flush(&mut para, &mut blocks);
     blocks
 }
 
@@ -311,12 +415,6 @@ pub fn to_rich_text(blocks: &[Block], styles: &MdStyles) -> RichText {
     RichText::from_lines(lines)
 }
 
-fn flush_para(para: &mut Option<RichLine>, blocks: &mut Vec<Block>) {
-    if let Some(l) = para.take() {
-        blocks.push(Block::Paragraph(l));
-    }
-}
-
 fn heading_level(line: &str) -> Option<u8> {
     let hashes = line.bytes().take_while(|b| *b == b'#').count();
     if (1..=6).contains(&hashes) && line.as_bytes().get(hashes) == Some(&b' ') {
@@ -346,23 +444,47 @@ fn list_marker(line: &str) -> Option<(Marker, &str)> {
 /// Inline parser: single pass, no nesting. `block_style` is the base every
 /// span starts from; markers merge onto it. Unclosed markers emit
 /// literally.
+#[cfg(test)]
 fn parse_inline(src: &str, styles: &MdStyles, block_style: Style) -> RichLine {
+    parse_inline_traced(src, styles, block_style, |_, _| {})
+}
+
+type InlineEmitter<'a> = dyn FnMut(&mut RichLine, std::ops::Range<usize>, Style, Option<&str>) + 'a;
+
+fn parse_inline_traced(
+    src: &str,
+    styles: &MdStyles,
+    block_style: Style,
+    mut trace: impl FnMut(std::ops::Range<usize>, usize),
+) -> RichLine {
+    let mut display = 0;
+    let mut emit =
+        |out: &mut RichLine, range: std::ops::Range<usize>, style: Style, link: Option<&str>| {
+            trace(range.clone(), display);
+            display += range.len();
+            let mut span = Span::new(&src[range], style);
+            if let Some(link) = link {
+                span = span.with_link(link);
+            }
+            out.push(span);
+        };
     let mut out = RichLine::new();
     let b = src.as_bytes();
     let mut plain_start = 0;
     let mut i = 0;
 
-    let flush_plain = |out: &mut RichLine, upto: usize, from: usize| {
-        if upto > from {
-            out.push(Span::new(&src[from..upto], block_style));
-        }
-    };
+    let flush_plain =
+        |out: &mut RichLine, upto: usize, from: usize, emit: &mut InlineEmitter<'_>| {
+            if upto > from {
+                emit(out, from..upto, block_style, None);
+            }
+        };
 
     while i < b.len() {
         match b[i] {
             b'\\' if i + 1 < b.len() && is_escapable(b[i + 1]) => {
-                flush_plain(&mut out, i, plain_start);
-                out.push(Span::new(&src[i + 1..i + 2], block_style));
+                flush_plain(&mut out, i, plain_start, &mut emit);
+                emit(&mut out, i + 1..i + 2, block_style, None);
                 i += 2;
                 plain_start = i;
             }
@@ -377,8 +499,8 @@ fn parse_inline(src: &str, styles: &MdStyles, block_style: Style) -> RichLine {
                 match find_close(b, i + open_len, close) {
                     // Empty emphasis ("**" alone) stays literal.
                     Some(end) if end > i + open_len => {
-                        flush_plain(&mut out, i, plain_start);
-                        out.push(Span::new(&src[i + open_len..end], block_style.merge(style)));
+                        flush_plain(&mut out, i, plain_start, &mut emit);
+                        emit(&mut out, i + open_len..end, block_style.merge(style), None);
                         i = end + open_len;
                         plain_start = i;
                     }
@@ -392,11 +514,13 @@ fn parse_inline(src: &str, styles: &MdStyles, block_style: Style) -> RichLine {
                 match find_close(b, i + 2, b"~~") {
                     // Empty ("~~~~" alone) stays literal.
                     Some(end) if end > i + 2 => {
-                        flush_plain(&mut out, i, plain_start);
-                        out.push(Span::new(
-                            &src[i + 2..end],
+                        flush_plain(&mut out, i, plain_start, &mut emit);
+                        emit(
+                            &mut out,
+                            i + 2..end,
                             block_style.merge(Style::new().attrs(Attrs::STRIKE)),
-                        ));
+                            None,
+                        );
                         i = end + 2;
                         plain_start = i;
                     }
@@ -405,8 +529,8 @@ fn parse_inline(src: &str, styles: &MdStyles, block_style: Style) -> RichLine {
             }
             b'`' => match find_close(b, i + 1, b"`") {
                 Some(end) if end > i + 1 => {
-                    flush_plain(&mut out, i, plain_start);
-                    out.push(Span::new(&src[i + 1..end], block_style.merge(styles.code)));
+                    flush_plain(&mut out, i, plain_start, &mut emit);
+                    emit(&mut out, i + 1..end, block_style.merge(styles.code), None);
                     i = end + 1;
                     plain_start = i;
                 }
@@ -414,8 +538,13 @@ fn parse_inline(src: &str, styles: &MdStyles, block_style: Style) -> RichLine {
             },
             b'[' => match parse_link(src, i) {
                 Some((text, url, consumed)) => {
-                    flush_plain(&mut out, i, plain_start);
-                    out.push(Span::new(text, block_style.merge(styles.link)).with_link(url));
+                    flush_plain(&mut out, i, plain_start, &mut emit);
+                    emit(
+                        &mut out,
+                        i + 1..i + 1 + text.len(),
+                        block_style.merge(styles.link),
+                        Some(url),
+                    );
                     i += consumed;
                     plain_start = i;
                 }
@@ -424,14 +553,14 @@ fn parse_inline(src: &str, styles: &MdStyles, block_style: Style) -> RichLine {
             _ => i += 1,
         }
     }
-    flush_plain(&mut out, b.len(), plain_start);
+    flush_plain(&mut out, b.len(), plain_start, &mut emit);
     out
 }
 
 fn is_escapable(b: u8) -> bool {
     matches!(
         b,
-        b'*' | b'~' | b'`' | b'[' | b']' | b'(' | b')' | b'\\' | b'#'
+        b'*' | b'~' | b'`' | b'[' | b']' | b'(' | b')' | b'\\' | b'#' | b'|'
     )
 }
 

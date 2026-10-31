@@ -94,6 +94,7 @@ thread_local! {
     /// component scope that reads it, and disposing the root would
     /// invalidate the handle each `Scroll` captured.
     static FOLLOW_FROZEN: Cell<Option<Signal<bool>>> = const { Cell::new(None) };
+    static CONTENT_HOLDS: Cell<Option<Signal<usize>>> = const { Cell::new(None) };
 }
 
 fn follow_frozen_signal() -> Signal<bool> {
@@ -106,6 +107,30 @@ fn follow_frozen_signal() -> Signal<bool> {
         slot.set(Some(sig));
         sig
     })
+}
+
+fn content_holds_signal() -> Signal<usize> {
+    CONTENT_HOLDS.with(|slot| {
+        if let Some(signal) = slot.get() {
+            return signal;
+        }
+        let (root, signal) = create_root(|cx| cx.signal(0usize));
+        std::mem::forget(root);
+        slot.set(Some(signal));
+        signal
+    })
+}
+/// Scoped logical selections compose with the existing manual/screen freeze.
+/// Each ContentSelection increments on its inactive→active edge and releases
+/// once on clear or owner teardown, independently of other selection owners.
+pub(crate) fn adjust_content_hold(on: bool) {
+    content_holds_signal().update(|count| {
+        if on {
+            *count += 1;
+        } else {
+            *count = count.saturating_sub(1);
+        }
+    });
 }
 
 /// Hold every follow-tail [`Scroll`] on this thread STILL: while frozen,
@@ -132,7 +157,7 @@ pub fn freeze_follow_tail(on: bool) {
 /// Whether follow-tail is currently frozen ([`freeze_follow_tail`]).
 /// Reads inside a tracked computation re-run it on the next flip.
 pub fn follow_tail_frozen() -> bool {
-    follow_frozen_signal().get()
+    follow_frozen_signal().get() || content_holds_signal().get() > 0
 }
 
 /// A clipped viewport over oversized mounted content: wheel, arrows,
@@ -378,7 +403,7 @@ impl Scroll {
             let tail_pinned = vertical
                 && follow.map(|f| f.get()).unwrap_or(false)
                 && oy.get() > 0
-                && !follow_frozen_signal().get();
+                && !follow_tail_frozen();
             // RENDER-side clamp (field-agora/0895). The repair effect
             // below owns the app's signal and is deliberately slow to
             // write it; this owns where the content is DRAWN and is
@@ -500,7 +525,7 @@ impl Scroll {
                 // the early return — thawing re-runs this effect, which
                 // re-tracks extent/view and pins to the tail as it
                 // stands then (one settle turn, no jump backwards).
-                if follow_frozen_signal().get() {
+                if follow_tail_frozen() {
                     return;
                 }
                 let content_h = extent.get().1;
@@ -649,7 +674,8 @@ impl Scroll {
                 // they are mid-drag over. Read untracked — a gesture is
                 // not a computation.
                 let base = if follow.is_some_and(|f| f.get_untracked())
-                    && !follow_frozen_signal().get_untracked()
+                    && !(follow_frozen_signal().get_untracked()
+                        || content_holds_signal().get_untracked() > 0)
                 {
                     max_off
                 } else {

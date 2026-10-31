@@ -32,6 +32,7 @@ mod click;
 pub mod compose;
 mod draw;
 mod event;
+pub(crate) use event::PointerRelease;
 mod focus;
 mod mount;
 mod tree;

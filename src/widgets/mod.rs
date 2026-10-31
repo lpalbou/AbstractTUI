@@ -18,6 +18,7 @@
 
 pub mod animated_image;
 pub mod audio_scope;
+#[cfg(feature = "avatar")]
 pub mod avatar;
 pub mod badge;
 pub mod block;
@@ -26,11 +27,13 @@ pub mod chart;
 pub mod chat;
 pub mod checkbox;
 pub mod code;
+pub mod content_selection;
 pub mod disclosure;
 pub mod drawer_dock;
 pub(crate) mod edit_keys;
 pub mod feed;
 pub mod file_picker;
+pub mod frame_player;
 pub mod grid;
 pub mod image;
 pub mod input;
@@ -62,6 +65,7 @@ pub mod viewport3d;
 /// through `gfx`.
 pub use crate::gfx::Bitmap;
 pub use animated_image::AnimatedImage;
+#[cfg(feature = "avatar")]
 pub use avatar::{Avatar, AvatarGaze, AvatarPointer, AvatarPose, AvatarStyle};
 pub use badge::{Badge, Tone};
 pub use block::{Block, BorderKind, TitleAlign};
@@ -69,7 +73,11 @@ pub use button::{Button, ButtonStyle};
 pub use chart::{BarChart, LineChart, Sparkline};
 pub use checkbox::Checkbox;
 pub use code::{code_token_color, CodeView};
+pub use content_selection::{
+    ContentContext, ContentHit, ContentKind, ContentSelection, SelectedContent,
+};
 pub use feed::{CustomBlock, Feed, FeedBlock, FeedItem, FeedState};
+pub use frame_player::FramePlayer;
 pub use grid::Grid;
 pub use image::{Image, ImageAlign, ImageFit};
 pub use input::TextInput;
@@ -196,10 +204,12 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 52] = [
+    const SOURCES: [(&str, &str); 56] = [
+        ("session_card.rs", include_str!("session_card.rs")),
         ("mod.rs", include_str!("mod.rs")),
         ("status_bar.rs", include_str!("status_bar.rs")),
         ("animated_image.rs", include_str!("animated_image.rs")),
+        ("frame_player.rs", include_str!("frame_player.rs")),
         ("avatar.rs", include_str!("avatar.rs")),
         ("audio_scope.rs", include_str!("audio_scope.rs")),
         ("meter.rs", include_str!("meter.rs")),
@@ -214,6 +224,9 @@ mod lint_tests {
         ("chart_time.rs", include_str!("chart_time.rs")),
         ("checkbox.rs", include_str!("checkbox.rs")),
         ("code.rs", include_str!("code.rs")),
+        ("content_selection.rs", include_str!("content_selection.rs")),
+        ("feed_content.rs", include_str!("feed_content.rs")),
+        ("markdown_content.rs", include_str!("markdown_content.rs")),
         ("disclosure.rs", include_str!("disclosure.rs")),
         ("drawer_dock.rs", include_str!("drawer_dock.rs")),
         ("feed.rs", include_str!("feed.rs")),
@@ -256,7 +269,6 @@ mod lint_tests {
         // listed by hand like feed_typeset.rs.
         ("scrollbar.rs", include_str!("scrollbar.rs")),
         ("separator.rs", include_str!("separator.rs")),
-        ("session_card.rs", include_str!("session_card.rs")),
         ("spinner.rs", include_str!("spinner.rs")),
         ("table.rs", include_str!("table.rs")),
         ("tabs.rs", include_str!("tabs.rs")),

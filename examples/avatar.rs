@@ -14,7 +14,11 @@ fn main() -> abstracttui::base::Result<()> {
         let level=cx.signal(0.5f32);let animated=cx.signal(true);let active=cx.signal(true);
         let mut root=Element::new().on(abstracttui::ui::Phase::Capture,move|_,event| {
             if let abstracttui::ui::UiEvent::Mouse(mouse)=event {
-                if matches!(mouse.kind,abstracttui::ui::MouseKind::Move) { pointer.moved(mouse.pos); }
+                match mouse.kind {
+                    abstracttui::ui::MouseKind::Move => pointer.moved(mouse.pos),
+                    abstracttui::ui::MouseKind::Down(_) => pointer.pressed(mouse.pos),
+                    _ => {}
+                }
             }
         }).style(LayoutStyle::column().gap(1).padding(Edges::all(1)))
             .shortcut(KeyChord::plain(Key::Char('q')),move |_|quit.quit())

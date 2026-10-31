@@ -127,7 +127,7 @@ impl UiTree {
         // the walk and call them AFTER the core borrow is released (the
         // held-borrow contract — a zone that touched the tree would
         // otherwise panic).
-        let mut zones: Vec<(super::super::view::DragZoneFn, Rect)> = Vec::new();
+        let mut zones: Vec<(super::super::view::DragOwner, Rect)> = Vec::new();
         let pane = {
             let core = self.core.borrow();
             let Some(root) = core.root else {
@@ -145,7 +145,7 @@ impl UiTree {
             while let Some(inst) = core.insts.get(current.0) {
                 if want_zones {
                     if let Some(zone) = &inst.drag_zone {
-                        zones.push((zone.clone(), core.layout.rect(inst.layout)));
+                        zones.push((zone.as_ref().clone(), core.layout.rect(inst.layout)));
                     }
                 }
                 if let Some(style) = core.layout.style(inst.layout) {
@@ -178,9 +178,7 @@ impl UiTree {
             }
             pane.unwrap_or(root_rect)
         };
-        let drag_owner = zones
-            .into_iter()
-            .any(|(zone, rect)| zone(rect).is_some_and(|z| z.contains(p)));
+        let drag_owner = zones.into_iter().any(|(zone, rect)| zone.contains(rect, p));
         PressProbe {
             pane: Some(pane),
             drag_owner,
@@ -345,6 +343,7 @@ impl UiTree {
         let path = self.path_to(target);
 
         let mut ctx = EventCtx {
+            tree: Rc::downgrade(&self.core),
             target: Some(target),
             target_rect: self.rect_of(target),
             click_count,

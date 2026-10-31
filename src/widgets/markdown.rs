@@ -189,10 +189,14 @@ pub(crate) struct RuleRow {
     pub(crate) gap_after: i32,
 }
 
+#[path = "markdown_content.rs"]
+pub(crate) mod content;
+
 /// One typeset row: a rich line plus its chrome. Crate-shared: the Feed
 /// widget caches these per item/block (backlog 0100) — ONE row recipe,
 /// so a feed item and a MarkdownView can never typeset differently.
 pub(crate) struct Row {
+    pub(crate) source: Option<Box<crate::render::content::RowSource>>,
     pub(crate) line: RichLine,
     pub(crate) indent: i32,
     /// Full-width ground override (code fences).
@@ -275,6 +279,7 @@ impl WidthCache {
 impl Row {
     pub(crate) fn plain(line: RichLine) -> Row {
         Row {
+            source: None,
             line,
             indent: 0,
             ground: None,
@@ -826,6 +831,7 @@ impl BlockTypesetter {
                     // restyle two block kinds (pinned by
                     // `rule_policy_leaves_the_h1_underline_alone`).
                     out.push(Row {
+                        source: None,
                         line: RichLine::new(),
                         indent: 0,
                         ground: None,
@@ -859,6 +865,7 @@ impl BlockTypesetter {
                 }
                 for (i, wrapped) in wrap_line(line, width - indent).into_iter().enumerate() {
                     out.push(Row {
+                        source: None,
                         line: wrapped,
                         // Continuation rows hang past the marker.
                         indent: indent + if i > 0 { 2 } else { 0 },
@@ -885,6 +892,7 @@ impl BlockTypesetter {
                 }
                 for wrapped in wrap_line(muted, width - 2) {
                     out.push(Row {
+                        source: None,
                         line: wrapped,
                         indent: 2,
                         ground: None,
@@ -906,6 +914,7 @@ impl BlockTypesetter {
                         let source = Rc::new(source);
                         for row in 0..rows.max(0) {
                             out.push(Row {
+                                source: None,
                                 line: RichLine::new(),
                                 indent: 0,
                                 ground: None,
@@ -950,6 +959,7 @@ impl BlockTypesetter {
                         padded.push(span);
                     }
                     out.push(Row {
+                        source: None,
                         line: padded,
                         indent: 1,
                         ground: Some(t.surface_raised),
@@ -971,6 +981,7 @@ impl BlockTypesetter {
                     }
                 }
                 out.push(Row {
+                    source: None,
                     line: RichLine::new(),
                     indent: 0,
                     ground: None,

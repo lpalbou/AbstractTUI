@@ -1,27 +1,33 @@
 # 0006 — Share avatar geometry across native and web renderers
 
-Status: Accepted. Date: 2026-10-30.
+Status: Accepted. Date: 2026-10-30. Updated: 2026-10-31 (standalone ownership and opt-in integration).
 
 ## Context
 
-AbstractTUI has two procedural avatars; watch SwiftUI has a larger design catalog.
-Web/Qt clients should recognize the same styles without copying their geometry or
-coupling generic rendering to Gateway, inference, microphone or preferences.
+Terminal, web and native clients need shared procedural designs without copying geometry.
+AbstractTUI is a general-purpose UI engine; its base must not require an avatar catalog or
+application-specific activity behavior. Watch/iPhone implementations are design references and
+remain outside this migration.
 
 ## Decision
 
-Own platform-independent geometry, pose vocabulary and style metadata in the
-zero-dependency `abstract-avatar` crate under `crates/abstract-avatar`. AbstractTUI
-consumes it natively and retains terminal mosaic conversion, theme materials,
-visibility/timing, captions and interaction. Optional bounded C/Wasm exports reuse
-that exact core; AbstractUIC ships a generated Wasm artifact and thin Canvas/React
-adapters. Native/Qt hosts can use the same optional C ABI. Application integrations
-and existing watch implementation are migrated separately; watch codes are catalog
-provenance, not new preference authority. Existing halo/hover keys stay valid. Cursor coordinates remain host-fed transient
+Own platform-independent geometry, pose vocabulary and style metadata in the standalone
+[AbstractAvatar](https://github.com/lpalbou/AbstractAvatar) repository and `abstractavatar` crate.
+AbstractTUI's generic `FramePlayer` consumes application-provided RGBA bitmaps with no generator
+dependency. The convenience `Avatar` widget is behind the default-off `avatar` feature and
+optional `abstractavatar` dependency. No separate adapter crate is introduced.
+
+AbstractTUI retains terminal mosaic conversion, theme materials, visibility/timing, captions and
+interaction. Native C/Python and WebAssembly builds execute the same procedural core;
+AbstractUIC presents frames through Canvas/React. Hosts need no independent geometry interpreter.
+Watch codes are catalog provenance, not new preference authority. Existing halo/hover keys stay
+valid. Cursor coordinates remain host-fed transient
 view state, never identity or a global mouse listener inside the core. Ready gaze
 expires after two seconds at the adapter; other phases/reduced motion ignore it.
 
-The renderer accepts explicit pose/time/level/gaze and emits material/light/coverage.
+The renderer accepts explicit pose/time/level/gaze and optional audio bands, and emits
+material/light/coverage samples or bounded RGBA frames. A versioned descriptor selects trusted
+built-in generation; it is not executable code or a new scene language.
 Hosts supply palette lookup values; no literal application colors or UI toolkit
 enter shared geometry. No registry/service/model or network call is introduced.
 ABI handles bound dimensions and live buffers; destroy releases owned buffers.
@@ -42,8 +48,9 @@ protocol upgrades or silent alternate identity on failure.
 
 ## Validation and migration
 
-Preserve old Halo/Hover behavior, transparency, clock budgets and cleanup. Exercise
-all six styles/seven poses, small terminal/large canvas, reduced motion and bad
+Preserve existing style behavior, transparency, clock budgets and cleanup. Exercise
+the full runtime catalog across seven states, small terminal/large canvas, reduced motion and bad
 ABI inputs. Compare native core/Wasm output using identical palette/inputs. Supply
-terminal and browser galleries. Entity identity/voice ownership remains Gateway's
-existing separate responsibility; broad watch/Qt/app migration is follow-up work.
+terminal and browser galleries. The base crate must compile without the avatar feature and its
+dependency in the compilation graph. Entity identity/voice ownership remains Gateway's existing
+separate responsibility; watch/iPhone adoption requires a separate authorized task.

@@ -47,6 +47,10 @@
 > crate, five small dependencies (unicode-width, unicode-segmentation, miniz_oxide, plus
 > libc on unix / windows-sys on Windows). MIT licensed.
 
+`ContentSelection` adds opt-in logical Feed selection with source ranges,
+Unicode units and table/code identity. Applications own the context actions.
+See [logical source selection](docs/api.md#feed--logical-content-selection).
+
 ## Core docs
 
 - [README](README.md): Project overview — the pitch, highlights, a 16-line first app,
