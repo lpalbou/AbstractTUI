@@ -3372,3 +3372,12 @@ selection advice and worked examples is
   onto `abstracttui-graph`, solverless sequence diagrams, atomic
   fallback to the verbatim code fence with a named reason and a
   mermaid.live escape link.
+
+## Session cards
+
+`widgets::SessionCard` (also in the prelude) is a controlled compact presenter. Set `title`,
+`turns`, `tools`, `time_label`, `counts_partial`, `selected`, `unread`, `needs_attention` and
+`working`; render with `.view(cx)` or `.element(tokens)`. Orange attention takes priority over
+unread, while selection remains independent. It wraps titles to two lines and fits narrow
+terminal widths. Hosts own read receipts, routing, human-wait facts and archive actions.
+This addition provides the native abstraction; it does not enable unread tracking in Code TUI.

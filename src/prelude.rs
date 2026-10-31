@@ -32,7 +32,7 @@ pub use crate::theme::{Theme, TokenId, TokenSet};
 // the display set DESIGN ships.
 pub use crate::widgets::{
     Badge, Bitmap, Block, BorderKind, Button, Checkbox, Grid, Image, List, ListContext, Logo,
-    Progress, RadioGroup, Scroll, Separator, Spinner, Table, Tabs, TextInput, Viewport3D,
+    Progress, RadioGroup, Scroll, Separator, SessionCard, Spinner, Table, Tabs, TextInput, Viewport3D,
 };
 
 pub use crate::app::{

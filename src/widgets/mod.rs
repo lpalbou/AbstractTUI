@@ -48,6 +48,7 @@ pub mod scroll;
 /// paint) behind `Scroll`, `List`, `Table` and `FilePicker`.
 mod scrollbar;
 pub mod separator;
+pub mod session_card;
 pub mod spinner;
 pub mod status_bar;
 pub mod table;
@@ -81,6 +82,7 @@ pub use richtext::RichTextView;
 pub use row_select::RowSelect;
 pub use scroll::Scroll;
 pub use separator::Separator;
+pub use session_card::SessionCard;
 pub use spinner::{Spinner, SpinnerKind};
 pub use table::{ColWidth, Column, Table};
 pub use tabs::Tabs;
@@ -194,7 +196,7 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 51] = [
+    const SOURCES: [(&str, &str); 52] = [
         ("mod.rs", include_str!("mod.rs")),
         ("status_bar.rs", include_str!("status_bar.rs")),
         ("animated_image.rs", include_str!("animated_image.rs")),
@@ -254,6 +256,7 @@ mod lint_tests {
         // listed by hand like feed_typeset.rs.
         ("scrollbar.rs", include_str!("scrollbar.rs")),
         ("separator.rs", include_str!("separator.rs")),
+        ("session_card.rs", include_str!("session_card.rs")),
         ("spinner.rs", include_str!("spinner.rs")),
         ("table.rs", include_str!("table.rs")),
         ("tabs.rs", include_str!("tabs.rs")),
