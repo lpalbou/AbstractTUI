@@ -7,44 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- Add opt-in logical Feed selection with source ranges, Unicode word/sentence and
-  paragraph units, table header/row/column identity, code language/lines, retained
-  highlights and scoped follow-tail holds. Custom/unmapped rows keep screen-copy
-  fallback. Applications own context actions; selection never sends or runs tools.
-- Add point-sensitive `Element::drag_hit_test`; keyboard Tab skips zero-area views.
+## [0.7.1] - 2026-11-02
 
-- Avatar uses shared multi-material RGBA compositing and resolution-aware antialiasing.
-  Theme ramps retain 3 KiB instead of three coverage lookup grids. Default glyph families
-  follow terminal capabilities; `.mode(...)` selects another family. Pointer presses can
-  feed gaze through `AvatarPointer::pressed` without consuming the host action.
+An additive release: host-owned chat components, live RGBA frame playback,
+optional procedural activity avatars, a compact session card, and logical
+source selection in `Feed`. Nothing that compiled against 0.7.0 needs
+changing. The extension crates are unchanged in this release and stay at
+`abstracttui-graph` 0.6.0 and `abstracttui-mermaid` 0.6.0.
 
-- Add dependency-free `FramePlayer` for live RGBA bitmap streams. Procedural
-  avatar convenience widgets use the separate AbstractAvatar generator behind
-  the default-off `avatar` Cargo feature; applications using `Avatar` enable it.
+### Added — chat components
 
-- Avatar and Button support opt-in background transparency: empty artwork cells
-  preserve underlying text, while button focus/press keeps its selection cue.
+- `ChatPanel`, `ChatTranscript`, `ChatMessage` and `ChatRole` (all in the
+  prelude): measured, width-aware message bubbles, assistant Markdown through
+  the existing document renderer, scrolling, and a multiline composer. The
+  host owns requests, history, busy state and permissions; the widget keeps
+  the draft until the host clears it. Enter submits, Ctrl+J inserts a newline.
+- `ChatPanel::send_label` sets a compact send glyph and `ChatPanel::actions`
+  places host controls on the same action row; Send keeps an accessible name
+  and tooltip.
+- `cargo run --example chat` runs a local echo conversation with no network.
+- `TextInput::inset(left, right)` and `TextArea::inset(left, right)` add inner
+  content insets inside the side strokes. The default stays `(0, 0)`.
 
-- Avatar adds low-rate Ready breathing and Waiting pulses, attentive Listening,
-  scanning Thinking and fixed-level Speaking motion; hidden/reduced views stop clocks.
+### Added — live frames and optional activity avatars
 
-- Hover has distinct listening/waiting/working postures and bounded working
-  particles. Half-block edge rendering avoids detached silhouette stripes.
+- `FramePlayer` (in the prelude) presents a `Signal<Arc<Bitmap>>` of
+  straight-alpha RGBA frames through the existing image fit and mosaic
+  renderer. It creates no timer, executes nothing, and needs no optional
+  feature.
+- A default-off `avatar` Cargo feature adds `Avatar`, `AvatarStyle`,
+  `AvatarPose`, `AvatarGaze` and `AvatarPointer`, backed by the
+  [AbstractAvatar](https://github.com/lpalbou/AbstractAvatar) 0.1 crate. The
+  procedural catalog (44 designs, `AvatarStyle::ALL`) is the same one web and
+  native hosts render, so a terminal, a browser and a desktop app show the
+  same avatar. `AvatarPose`, `AvatarStyle` and `AvatarGaze` are re-exported
+  from `abstractavatar`.
+- Avatar motion is opt-in and pose-paced: Ready breathes at 2 fps, Waiting
+  pulses at about 6 fps, active poses update at up to 12 fps, Error is static.
+  Listening and Speaking sample audio levels at the frame cadence, so faster
+  level updates never reset or accelerate the clock. Hidden, reduced-motion
+  and disposed views cancel their timers.
+- Avatar artwork uses shaded multi-material RGBA compositing with
+  resolution-aware antialiasing, capped at a 64×32-cell raster with cached
+  frames. The default glyph family follows terminal capabilities;
+  `Avatar::mode(...)` selects another.
+- `Avatar::transparent_background(true)` draws a shape-only overlay: empty
+  artwork cells keep the underlying text, colors and attributes.
+  `Button::transparent_background(true)` pairs with it, keeping the
+  focus/press selection cue.
+- `AvatarPointer::moved` / `pressed` / `clear` let Ready follow host pointer
+  activity without consuming the event.
+- `theme::MaterialRamp`, `theme::material_ramp` and `theme::material_palette`
+  derive shaded material ramps from theme colors for procedural RGBA sources.
+- Examples: `cargo run --features avatar --example avatar` (interactive
+  preview) and `cargo run --features avatar --example avatar_catalog -- <out.png> [pose]`
+  (headless PNG catalog).
 
-- Avatar uses shaded, antialiased Halo/Hover artwork with warm materials and
-  soft glow; larger previews retain detail within a bounded 64×32-cell raster.
+### Added — session cards
 
-- Add procedural Halo/Hover Avatar with host-supplied poses, level and visibility,
-  bounded activity animation and a standalone preview.
+- `SessionCard` (in the prelude): a controlled compact presenter for a session
+  list row with `title`, `turns`, `tools`, `time_label`, `counts_partial`,
+  `selected`, `unread`, `needs_attention` and `working`. Attention takes
+  priority over unread; selection is independent. Titles wrap to two lines and
+  the card fits narrow widths. The host owns read state, routing and actions.
 
-- ChatPanel supports a configurable send glyph and host controls on one shared action row.
+### Added — logical content selection
 
-- Add backend-independent ChatPanel, ChatTranscript and ChatMessage components with
-  measured message bubbles, host-owned state and a multiline composer; local echo example.
-- Add configurable inner content insets to TextInput and TextArea; defaults remain zero.
-- Let unmoving horizontal Scroll keys reach ancestor navigation.
-- Recover a pointer press after an overlay intercepted its release, so a later click
-  reaches the control under the pointer without activating the abandoned control.
+- `ContentSelection` (with `ContentHit`, `ContentKind`, `ContentContext` and
+  `SelectedContent`) adds opt-in logical `Feed` selection with source ranges,
+  Unicode word, sentence and paragraph units, table header/row/column identity,
+  code language and line ranges, retained highlights and scoped follow-tail
+  holds. Custom and unmapped rows keep the screen-copy fallback. Applications
+  own the context actions; selection never sends or runs anything.
+- `Element::drag_hit_test` makes drag starts point-sensitive.
+
+### Changed
+
+- Keyboard Tab skips views with zero area.
+- A horizontal arrow key that cannot move a `Scroll` horizontally now reaches
+  ancestor handlers (for example global tab navigation). Vertical keys and
+  horizontal keys that do scroll are still consumed.
+
+### Fixed
+
+- A pointer press whose release was intercepted by an overlay is recovered, so
+  a later click reaches the control under the pointer without activating the
+  abandoned control.
+
+### Migration notes
+
+- To use `Avatar` and its types, enable the feature:
+  `abstracttui = { version = "0.7.1", features = ["avatar"] }`. Applications
+  that do not enable it carry no avatar dependency.
+- If an ancestor of a `Scroll` binds Left/Right, it now receives those keys
+  whenever the scroll region cannot move sideways.
 
 ## [0.7.0] - 2026-10-28
 
@@ -3348,7 +3404,8 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
-[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/lpalbou/abstracttui/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/lpalbou/abstracttui/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/lpalbou/abstracttui/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/lpalbou/abstracttui/compare/v0.4.1...v0.5.0

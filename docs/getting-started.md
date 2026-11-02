@@ -15,10 +15,16 @@ Windows with a deliberately small dependency set (`unicode-width`,
 `unicode-segmentation`, `miniz_oxide`, plus the platform FFI crate). There is no
 native library to install and no GPU requirement.
 
+The procedural `Avatar` widget sits behind the default-off `avatar` feature
+(`cargo add abstracttui --features avatar`), which adds the
+[AbstractAvatar](https://github.com/lpalbou/AbstractAvatar) generator. Without
+it, `FramePlayer` still presents RGBA frames from any producer — see
+[api.md](api.md#frameplayer--live-rgba-media).
+
 Building against a working copy instead of a release — `[patch.crates-io]`
 pointing at a `path`, which is how a sibling app tracks the engine — has one
 rule that is not obvious: **pin the version requirement to the exact version
-the checkout carries** (`abstracttui = "0.7.0"`, not `"0.7"`). A patch whose
+the checkout carries** (`abstracttui = "0.7.1"`, not `"0.7"`). A patch whose
 version falls outside your requirement is not an error; cargo ignores it and
 resolves from crates.io instead, so you build against a published version
 while believing you build against your tree. The symptom and a check that

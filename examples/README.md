@@ -37,6 +37,7 @@ the previous one:
 | 4 · interaction | `hovercard.rs` | `Tooltip` and rich hover cards on citation chips — reachable by hover AND by Tab, dismissed by Escape, with the `… N more` marker on a card the viewport cannot fit |
 | 5 · content + live data | `feed.rs` | background threads → bounded ingestion → `Feed` with follow-tail |
 | 5 · content + live data | `transcript.rs` | streaming markdown chat: tables render live, composer with completion |
+| 5 · content + live data | `chat.rs` | `ChatPanel`: measured bubbles, assistant Markdown and a bound composer over a local echo — no network |
 | 5 · content + live data | `attachments.rs` | file attachments: terminal drops classified out of pastes into chips, `FilePicker` in a modal |
 | 5 · content + live data | `reader.rs` | the document surface: GFM tables, in-flow images, TOC, search |
 | 5 · content + live data | `reasoning.rs` | the reasoning controls: `ThinkingFold` streaming (last-wins), `ReasoningSelect` three capability states |
@@ -45,7 +46,8 @@ the previous one:
 | 6 · the app shell | `drawers.rs` | the drawer system alone: modal inspector vs passive nav panel |
 | 6 · the app shell | `dashboard/` | the flagship capstone: charts, log tail, sortable table, toasts, modal, pane nav |
 | 7 · graphics + 3D | `images.rs` | four mosaic families, dithering, pixel-protocol placement |
-| 7 · graphics + 3D | `avatar.rs` | procedural Halo/Hover, observed poses, voice level and cancellable motion |
+| 7 · graphics + 3D | `avatar.rs` | procedural Halo/Hover, observed poses, voice level and cancellable motion (`--features avatar`) |
+| 7 · graphics + 3D | `avatar_catalog.rs` (tool) | a headless PNG catalog of the avatar styles in one pose (`--features avatar`) |
 | 7 · graphics + 3D | `animation.rs` | animated GIF/APNG played in cells — and video refused by name |
 | 7 · graphics + 3D | `bigtext.rs` | text and icons several cells tall: the measured 4x3 legibility floor, the four vocabularies, and the 1:2 cell aspect that makes a "6x6" icon stretched rather than big |
 | 7 · graphics + 3D | `effects.rs` | compositor layers wearing cell shaders; transforms, toasts |
@@ -308,6 +310,18 @@ dropdown at the caret.
 - Looks like: a chat client answering itself — markdown typesetting
   live under a composer that completes your commands.
 
+## chat
+
+The host-owned conversation surface: `ChatPanel` lays out measured,
+width-aware bubbles (assistant replies typeset as Markdown), scrolls to
+the latest message, and binds a multiline composer to a draft signal.
+The example's "host" echoes each message locally, so it needs no
+framework package, model or network.
+
+- Keys: Enter send · Ctrl+J newline · Ctrl+Q quit.
+- Needs: any tty.
+- Looks like: a messaging pane that answers by quoting you.
+
 ## attachments
 
 File attachments in a composer, both doors. Terminals have no drop
@@ -465,6 +479,22 @@ Takes a PNG/JPEG path or generates a procedural test card.
   `--caps` prints the capability report.
 - Needs: any tty; pixel protocols where the terminal offers one.
 - Looks like: the same picture four ways, sharpening left to right.
+
+## avatar
+
+The procedural activity avatar behind the default-off `avatar` feature:
+`cargo run --features avatar --example avatar`. The host drives pose,
+audio level, visibility and motion; the widget only presents them.
+
+- Keys: `1`–`7` pose · `s` style · space animation · `+`/`-` level ·
+  `h` visibility · `q` quit.
+- Needs: any tty; the `avatar` feature.
+- Looks like: a shaded Halo or Hover figure breathing, listening or
+  speaking in terminal cells.
+
+`avatar_catalog` is the headless companion: `cargo run --features avatar
+--example avatar_catalog -- /tmp/avatars.png error` renders every style in
+one pose through the real cell renderer and writes a PNG — no tty needed.
 
 ## animation
 

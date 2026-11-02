@@ -6,6 +6,10 @@ Expanded companion to llms.txt. The source pages below are canonical.
 
 # AbstractTUI
 
+[![crates.io](https://img.shields.io/crates/v/abstracttui.svg)](https://crates.io/crates/abstracttui)
+[![docs.rs](https://img.shields.io/docsrs/abstracttui)](https://docs.rs/abstracttui)
+[![CI](https://github.com/lpalbou/AbstractTUI/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lpalbou/AbstractTUI/actions/workflows/ci.yml)
+
 **The terminal, composed.** A reactive, compositor-grade terminal UI engine for Rust.
 
 AbstractTUI is built on fine-grained reactive signals — not immediate mode, not a
@@ -190,14 +194,26 @@ Windows, and nothing else. ANSI emission, input parsing, the layout solver, the
 signals runtime, PNG/JPEG decoding, glTF parsing, and the 3D rasterizer are all
 implemented in-crate.
 
+Procedural activity avatars are opt-in. The default-off `avatar` feature adds the
+`Avatar` widget and its one extra dependency, the
+[AbstractAvatar](https://github.com/lpalbou/AbstractAvatar) generator:
+
+```sh
+cargo add abstracttui --features avatar
+```
+
 The extension family installs only when you need it (same MIT license,
 same dependency discipline, public core API only —
 [ADR-0004](docs/adr/0004-extension-packaging.md)):
 
 ```sh
-cargo add abstracttui-graph      # 0.2 — graph auto-layout + GraphView
-cargo add abstracttui-mermaid    # 0.2 — mermaid subset renderer
+cargo add abstracttui-graph      # 0.6 — graph auto-layout + GraphView
+cargo add abstracttui-mermaid    # 0.6 — mermaid subset renderer
 ```
+
+**What's new in 0.7.1:** chat panels, live RGBA frames with `FramePlayer`,
+optional activity avatars, `SessionCard`, and logical content selection in
+`Feed`. See [CHANGELOG.md](CHANGELOG.md#071---2026-11-02).
 
 ## Run the examples
 
@@ -297,10 +313,16 @@ Windows with a deliberately small dependency set (`unicode-width`,
 `unicode-segmentation`, `miniz_oxide`, plus the platform FFI crate). There is no
 native library to install and no GPU requirement.
 
+The procedural `Avatar` widget sits behind the default-off `avatar` feature
+(`cargo add abstracttui --features avatar`), which adds the
+[AbstractAvatar](https://github.com/lpalbou/AbstractAvatar) generator. Without
+it, `FramePlayer` still presents RGBA frames from any producer — see
+[api.md](api.md#frameplayer--live-rgba-media).
+
 Building against a working copy instead of a release — `[patch.crates-io]`
 pointing at a `path`, which is how a sibling app tracks the engine — has one
 rule that is not obvious: **pin the version requirement to the exact version
-the checkout carries** (`abstracttui = "0.7.0"`, not `"0.7"`). A patch whose
+the checkout carries** (`abstracttui = "0.7.1"`, not `"0.7"`). A patch whose
 version falls outside your requirement is not an error; cargo ignores it and
 resolves from crates.io instead, so you build against a published version
 while believing you build against your tree. The symptom and a check that
@@ -722,6 +744,8 @@ graph BT
 
     testing["testing<br/>capture terminal, VT model, harnesses"]
 
+    avatarcrate["abstractavatar crate<br/>optional, avatar feature only:<br/>procedural RGBA avatar frames"]
+
     base --> terminal
     terminal --> drawing
     drawing --> reactive
@@ -734,6 +758,7 @@ graph BT
     testing -. exercises every layer .-> terminal
     testing -.-> drawing
     testing -.-> app
+    avatarcrate -. "feature avatar" .-> widgets
 ```
 
 The engine is deliberately standalone. Runtime dependencies are limited to
@@ -742,6 +767,14 @@ The engine is deliberately standalone. Runtime dependencies are limited to
 parsing, the flexbox solver, the signals runtime, JSON parsing (for glTF),
 PNG chunking and defiltering, base64, sixel encoding, and the 3D math and
 rasterizer are all implemented in-crate.
+
+One optional dependency sits outside that set: the default-off `avatar` feature
+pulls in the [AbstractAvatar](https://github.com/lpalbou/AbstractAvatar) crate,
+the procedural avatar generator that web and native hosts share. It produces
+straight-alpha RGBA frames; the `widgets::Avatar` adapter presents them through
+the same mosaic renderer as any other bitmap. The generic `FramePlayer`, which
+displays RGBA frames from any producer, is part of the base crate and needs no
+feature.
 
 Above the crate sits one more deliberate layer: the **sibling-crate
 extension family** ([ADR-0004](adr/0004-extension-packaging.md)).
@@ -1884,8 +1917,8 @@ in a host capture handler. Neither call consumes the event or activates content.
 It requests terminal motion via
 the existing Overlays context; hosts without that context must enable motion themselves.
 Face designs move their eyes; abstract orbs turn subtly. Targets clamp to the frame
-and expire after two seconds without pointer activity. Tracking samples at about12fps,
-then returns to2fps; other poses/reduced motion ignore gaze. Clear the pointer when
+and expire after two seconds without pointer activity. Tracking samples at about 12 fps,
+then returns to 2 fps; other poses/reduced motion ignore gaze. Clear the pointer when
 the host hides it. Error draws red X eyes for Hover/Rover and a central X for Eye.
 
 Shared geometry lives in the independent [AbstractAvatar](https://github.com/lpalbou/AbstractAvatar) library.
@@ -4502,8 +4535,8 @@ selection advice and worked examples is
 `turns`, `tools`, `time_label`, `counts_partial`, `selected`, `unread`, `needs_attention` and
 `working`; render with `.view(cx)` or `.element(tokens)`. Orange attention takes priority over
 unread, while selection remains independent. It wraps titles to two lines and fits narrow
-terminal widths. Hosts own read receipts, routing, human-wait facts and archive actions.
-This addition provides the native abstraction; it does not enable unread tracking in Code TUI.
+terminal widths. Hosts own read receipts, routing, human-wait facts and archive actions:
+the card renders the flags you set and tracks no state of its own.
 
 ===== FILE: docs/theming.md =====
 

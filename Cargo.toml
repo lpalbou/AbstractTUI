@@ -34,6 +34,10 @@ default = []
 # The generic FramePlayer is always available; avatar generation is opt-in.
 avatar = ["dep:abstractavatar"]
 
+# docs.rs documents the optional Avatar widget too.
+[package.metadata.docs.rs]
+features = ["avatar"]
+
 [[example]]
 name = "avatar"
 required-features = ["avatar"]

@@ -53,6 +53,8 @@ graph BT
 
     testing["testing<br/>capture terminal, VT model, harnesses"]
 
+    avatarcrate["abstractavatar crate<br/>optional, avatar feature only:<br/>procedural RGBA avatar frames"]
+
     base --> terminal
     terminal --> drawing
     drawing --> reactive
@@ -65,6 +67,7 @@ graph BT
     testing -. exercises every layer .-> terminal
     testing -.-> drawing
     testing -.-> app
+    avatarcrate -. "feature avatar" .-> widgets
 ```
 
 The engine is deliberately standalone. Runtime dependencies are limited to
@@ -73,6 +76,14 @@ The engine is deliberately standalone. Runtime dependencies are limited to
 parsing, the flexbox solver, the signals runtime, JSON parsing (for glTF),
 PNG chunking and defiltering, base64, sixel encoding, and the 3D math and
 rasterizer are all implemented in-crate.
+
+One optional dependency sits outside that set: the default-off `avatar` feature
+pulls in the [AbstractAvatar](https://github.com/lpalbou/AbstractAvatar) crate,
+the procedural avatar generator that web and native hosts share. It produces
+straight-alpha RGBA frames; the `widgets::Avatar` adapter presents them through
+the same mosaic renderer as any other bitmap. The generic `FramePlayer`, which
+displays RGBA frames from any producer, is part of the base crate and needs no
+feature.
 
 Above the crate sits one more deliberate layer: the **sibling-crate
 extension family** ([ADR-0004](adr/0004-extension-packaging.md)).

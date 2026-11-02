@@ -104,8 +104,8 @@ Inside an application mount callback, allocate `pose = cx.signal(AvatarPose::Rea
 Build `Avatar::new(pose).style(AvatarStyle::Halo).level(level).active(visible)
 .animated(motion).view(cx)`. Poses also include Thinking, Working, Listening,
 Speaking, Waiting and Error; styles include Halo, Hover, Vortex, Eclipse, Eye and Rover. Bind active to real
-host visibility and motion to user preferences. Enabled Ready breathes at2fps,
-Waiting pulses at6fps, active phases run at roughly12fps, and Error is static.
+host visibility and motion to user preferences. Enabled Ready breathes at 2 fps,
+Waiting pulses at about 6 fps, active phases run at roughly 12 fps, and Error is static.
 Animation stops its clock when hidden,
 reduced-motion or disposed. Compose in a host Button for activation and collapse
 below useful cell sizes. `cargo run --features avatar --example avatar` demonstrates every input.
@@ -132,8 +132,8 @@ the default; focus/press on the button retains a visible selection cue.
 Ready pointer tracking is opt-in: create `AvatarPointer::new(cx)`, pass
 `.follow_pointer(pointer)`, and forward actual `MouseKind::Move` positions through
 `pointer.moved(pos)`. Forward actual presses through `pointer.pressed(pos)` without
-consuming the host event. It expires after2s, ignores non-Ready/reduced motion and samples
-at12fps without polling. Clear on host hide. Error faces show red X eyes. Geometry
+consuming the host event. It expires after 2 s, ignores non-Ready/reduced motion and samples
+at 12 fps without polling. Clear on host hide. Error faces show red X eyes. Geometry
 and the 44-design catalog live in the independent AbstractAvatar repository,
 usable through Rust/C/Wasm/Python. Never copy generation equations into a client.
-See [the API](https://raw.githubusercontent.com/lpalbou/AbstractTUI/main/docs/api.md) and ADR0006.
+See [the API](https://raw.githubusercontent.com/lpalbou/AbstractTUI/main/docs/api.md) and ADR-0006.

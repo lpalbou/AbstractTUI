@@ -50,6 +50,8 @@
 `ContentSelection` adds opt-in logical Feed selection with source ranges,
 Unicode units and table/code identity. Applications own the context actions.
 See [logical source selection](docs/api.md#feed--logical-content-selection).
+`FramePlayer` presents live RGBA frames from any producer; the default-off `avatar`
+feature adds the procedural `Avatar` widget backed by the AbstractAvatar crate.
 
 ## Core docs
 
@@ -158,9 +160,9 @@ See [logical source selection](docs/api.md#feed--logical-content-selection).
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, **0.7.0** (2026-10-28) the current one.
-  The extension family is at `abstracttui-graph` 0.5.0 and
-  `abstracttui-mermaid` 0.5.0, each with its own changelog under `extensions/`.
+  (2026-07-21) is the first public release, **0.7.1** (2026-11-02) the current one.
+  The extension family is at `abstracttui-graph` 0.6.0 and
+  `abstracttui-mermaid` 0.6.0, each with its own changelog under `extensions/`.
 - [Contributing](CONTRIBUTING.md): Building, the test suite (~2,500 core tests; ~2,730
   with the extension family via `--workspace`, the CI gate) and the explicitly-run suites
   (live pty, two release-mode perf-budget suites with byte-emission ratchets, plus the
@@ -214,4 +216,6 @@ See [logical source selection](docs/api.md#feed--logical-content-selection).
 - [Agent skill](skills/abstracttui/SKILL.md): reactive component workflow and host-owned chat.
 - [Chat panels](docs/api.md#chatpanel-and-chattranscript--host-owned-assistant-conversations): bubbles, composer and scroll without transport or inference.
 
-- [Activity avatar](docs/api.md#avatar--procedural-activity-presentation): Halo/Hover with explicit state, amplitude, visibility and motion controls.
+- [Live frames](docs/api.md#frameplayer--live-rgba-media): `FramePlayer` presents a `Signal<Arc<Bitmap>>` of RGBA frames; no optional feature needed.
+- [Activity avatar](docs/api.md#avatar--optional-procedural-activity-presentation): Halo/Hover and the shared 44-design catalog behind the `avatar` feature, with explicit state, amplitude, visibility and motion controls and shape-only overlays.
+- [Session cards](docs/api.md#session-cards): `SessionCard`, a controlled compact presenter for session lists.

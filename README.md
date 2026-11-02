@@ -1,5 +1,9 @@
 # AbstractTUI
 
+[![crates.io](https://img.shields.io/crates/v/abstracttui.svg)](https://crates.io/crates/abstracttui)
+[![docs.rs](https://img.shields.io/docsrs/abstracttui)](https://docs.rs/abstracttui)
+[![CI](https://github.com/lpalbou/AbstractTUI/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/lpalbou/AbstractTUI/actions/workflows/ci.yml)
+
 **The terminal, composed.** A reactive, compositor-grade terminal UI engine for Rust.
 
 AbstractTUI is built on fine-grained reactive signals — not immediate mode, not a
@@ -184,14 +188,26 @@ Windows, and nothing else. ANSI emission, input parsing, the layout solver, the
 signals runtime, PNG/JPEG decoding, glTF parsing, and the 3D rasterizer are all
 implemented in-crate.
 
+Procedural activity avatars are opt-in. The default-off `avatar` feature adds the
+`Avatar` widget and its one extra dependency, the
+[AbstractAvatar](https://github.com/lpalbou/AbstractAvatar) generator:
+
+```sh
+cargo add abstracttui --features avatar
+```
+
 The extension family installs only when you need it (same MIT license,
 same dependency discipline, public core API only —
 [ADR-0004](docs/adr/0004-extension-packaging.md)):
 
 ```sh
-cargo add abstracttui-graph      # 0.2 — graph auto-layout + GraphView
-cargo add abstracttui-mermaid    # 0.2 — mermaid subset renderer
+cargo add abstracttui-graph      # 0.6 — graph auto-layout + GraphView
+cargo add abstracttui-mermaid    # 0.6 — mermaid subset renderer
 ```
+
+**What's new in 0.7.1:** chat panels, live RGBA frames with `FramePlayer`,
+optional activity avatars, `SessionCard`, and logical content selection in
+`Feed`. See [CHANGELOG.md](CHANGELOG.md#071---2026-11-02).
 
 ## Run the examples
 

@@ -850,8 +850,8 @@ in a host capture handler. Neither call consumes the event or activates content.
 It requests terminal motion via
 the existing Overlays context; hosts without that context must enable motion themselves.
 Face designs move their eyes; abstract orbs turn subtly. Targets clamp to the frame
-and expire after two seconds without pointer activity. Tracking samples at about12fps,
-then returns to2fps; other poses/reduced motion ignore gaze. Clear the pointer when
+and expire after two seconds without pointer activity. Tracking samples at about 12 fps,
+then returns to 2 fps; other poses/reduced motion ignore gaze. Clear the pointer when
 the host hides it. Error draws red X eyes for Hover/Rover and a central X for Eye.
 
 Shared geometry lives in the independent [AbstractAvatar](https://github.com/lpalbou/AbstractAvatar) library.
@@ -3468,5 +3468,5 @@ selection advice and worked examples is
 `turns`, `tools`, `time_label`, `counts_partial`, `selected`, `unread`, `needs_attention` and
 `working`; render with `.view(cx)` or `.element(tokens)`. Orange attention takes priority over
 unread, while selection remains independent. It wraps titles to two lines and fits narrow
-terminal widths. Hosts own read receipts, routing, human-wait facts and archive actions.
-This addition provides the native abstraction; it does not enable unread tracking in Code TUI.
+terminal widths. Hosts own read receipts, routing, human-wait facts and archive actions:
+the card renders the flags you set and tracks no state of its own.
