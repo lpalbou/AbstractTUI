@@ -439,6 +439,14 @@ impl EventCtx {
     }
 }
 
+// EventCtx is public: it keeps the auto traits it had in 0.7.0
+// (the semver gate checks the same thing against the registry baseline).
+#[cfg(test)]
+const _: () = {
+    const fn unwind_safe<T: std::panic::UnwindSafe + std::panic::RefUnwindSafe>() {}
+    unwind_safe::<EventCtx>();
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -504,11 +512,3 @@ mod tests {
         assert!(!KeyEvent::new(Key::Char('a'), Mods::CTRL).means_char('a'));
     }
 }
-
-// EventCtx is public: it keeps the auto traits it had in 0.7.0
-// (the semver gate checks the same thing against the registry baseline).
-#[cfg(test)]
-const _: () = {
-    const fn unwind_safe<T: std::panic::UnwindSafe + std::panic::RefUnwindSafe>() {}
-    unwind_safe::<EventCtx>();
-};

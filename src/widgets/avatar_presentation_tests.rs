@@ -260,7 +260,9 @@ fn host_repaints_reuse_art_while_observed_inputs_invalidate_it() {
     previous = samples();
     motion.set(true);
     driver.turn(&mut app, &mut term).unwrap();
-    now.set(start + Duration::from_millis(100));
+    // The motion effect arms its interval outside a driven turn, from the
+    // real clock; advance the fake clock past that base, not past `start`.
+    now.set(Instant::now().max(start) + Duration::from_millis(100));
     driver.turn(&mut app, &mut term).unwrap();
     assert!(
         samples() > previous,
