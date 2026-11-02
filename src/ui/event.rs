@@ -271,7 +271,12 @@ impl KeyChord {
 /// invoked while the tree is traversed).
 #[derive(Default)]
 pub struct EventCtx {
-    pub(super) tree: std::rc::Weak<std::cell::RefCell<super::tree::TreeCore>>,
+    /// Weak handle used only to hand out [`PointerRelease`] tokens. The
+    /// wrapper keeps `EventCtx` `UnwindSafe`/`RefUnwindSafe` as in 0.7.0:
+    /// a token only clears a capture its own owner still holds, so an
+    /// unwind cannot expose a half-updated tree through it.
+    pub(super) tree:
+        std::panic::AssertUnwindSafe<std::rc::Weak<std::cell::RefCell<super::tree::TreeCore>>>,
     pub(crate) stopped: bool,
     pub(crate) focus_request: Option<super::tree::ViewId>,
     pub(crate) damage_all: bool,
@@ -328,7 +333,7 @@ impl PointerRelease {
 impl EventCtx {
     pub(crate) fn pointer_release_handle(&self, owner: super::tree::ViewId) -> PointerRelease {
         PointerRelease {
-            tree: self.tree.clone(),
+            tree: (*self.tree).clone(),
             owner,
         }
     }
@@ -499,3 +504,11 @@ mod tests {
         assert!(!KeyEvent::new(Key::Char('a'), Mods::CTRL).means_char('a'));
     }
 }
+
+// EventCtx is public: it keeps the auto traits it had in 0.7.0
+// (the semver gate checks the same thing against the registry baseline).
+#[cfg(test)]
+const _: () = {
+    const fn unwind_safe<T: std::panic::UnwindSafe + std::panic::RefUnwindSafe>() {}
+    unwind_safe::<EventCtx>();
+};

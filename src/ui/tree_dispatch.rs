@@ -343,7 +343,7 @@ impl UiTree {
         let path = self.path_to(target);
 
         let mut ctx = EventCtx {
-            tree: Rc::downgrade(&self.core),
+            tree: std::panic::AssertUnwindSafe(Rc::downgrade(&self.core)),
             target: Some(target),
             target_rect: self.rect_of(target),
             click_count,
