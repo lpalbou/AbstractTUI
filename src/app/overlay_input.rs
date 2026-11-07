@@ -34,7 +34,11 @@ impl Overlays {
                 })
                 .collect()
         };
-        targets.sort_by_key(|(_, _, _, z, _)| std::cmp::Reverse(*z));
+        // Topmost first. Equal z (two `Modal`s both at MODAL_Z) resolves
+        // like the compositor paints: the later layer is on top, so it
+        // comes first here (stable ascending sort, then reversed).
+        targets.sort_by_key(|(_, _, _, z, _)| *z);
+        targets.reverse();
         let mut fell_through_press = false;
         for (tree, modal, bounds, _, id) in targets.iter() {
             let mut tree = tree.handle();
@@ -58,6 +62,13 @@ impl Overlays {
                         local.pos = Point::new(m.pos.x - bounds.x, m.pos.y - bounds.y);
                         let consumed = tree.dispatch(&UiEvent::Mouse(local));
                         if modal {
+                            // The modal wheel rule: a wheel nothing under
+                            // the pointer took (title, padding, outside
+                            // the panel) scrolls the modal's main scroll
+                            // region — never the page below.
+                            if !consumed {
+                                tree.dispatch_wheel_fallback(&UiEvent::Mouse(local));
+                            }
                             return Some(true); // modals swallow even misses
                         }
                         // The panel is OPAQUE: pointer events over it are

@@ -538,6 +538,10 @@ impl ChoicePrompt {
                 },
             )
         });
+        // A decision gate has explicit endings only: an outside press
+        // is swallowed, never a dismissal (and never a silent close that
+        // would skip `on_resolve`).
+        modal.set_close_on_outside(false);
         *modal_slot.borrow_mut() = Some(modal);
         handle
     }

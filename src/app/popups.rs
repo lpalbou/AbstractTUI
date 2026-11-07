@@ -13,6 +13,8 @@
 //! does not poll), then slide out and REMOVE their layer (idle returns
 //! to zero bytes; acceptance-pinned).
 
+use std::cell::Cell as Flag;
+use std::rc::Rc;
 use std::time::Duration;
 
 use crate::anim::Easing;
@@ -38,10 +40,23 @@ pub const MODAL_Z: i32 = 1000;
 pub const TOAST_Z: i32 = 2000;
 
 /// A centered, focus-trapped overlay panel. Input is fully owned while
-/// open (mouse outside the panel is swallowed, keys route inside, Tab
-/// cycles the panel's focusables). Close explicitly — dropping the
-/// handle does NOT close (handles are `Clone`; lifetime is the app's
-/// decision, not drop order's).
+/// open (keys route inside, Tab cycles the panel's focusables, nothing
+/// reaches the page below). Close explicitly — dropping the handle does
+/// NOT close (handles are `Clone`; lifetime is the app's decision, not
+/// drop order's).
+///
+/// Pointer defaults:
+/// - A press OUTSIDE the panel closes the modal (dismiss). The press is
+///   swallowed — it never also acts on the page below. A modal that must
+///   be answered (a blocking confirmation) opts out with
+///   [`Modal::set_close_on_outside`]`(false)`; the press is then
+///   only swallowed. An app that needs its own rule (an unsaved-changes
+///   guard) replaces the hook with
+///   [`Overlays::on_outside_press`]`(modal.layer(), ...)`.
+/// - The mouse wheel scrolls the modal's content: over a scroll region
+///   it scrolls that region; anywhere else (the title, the padding,
+///   outside the panel) it scrolls the panel's largest visible scroll
+///   region. It never scrolls the page under the modal.
 ///
 /// Geometry: the panel clamps inside the viewport at open and
 /// RE-CLAMPS on every terminal resize (the Drawer contract) — a panel
@@ -50,6 +65,8 @@ pub const TOAST_Z: i32 = 2000;
 pub struct Modal {
     layer: LayerHandle,
     scope: Scope,
+    /// Read by the outside-press hook installed at open.
+    close_on_outside: Rc<Flag<bool>>,
 }
 
 impl Modal {
@@ -94,6 +111,19 @@ impl Modal {
             .child(content)
             .build();
         let layer = overlays.layer_tree(MODAL_Z, bounds, true, scope, panel);
+        // Dismiss on an outside press (the default). The overlay router
+        // fires this only for the TOPMOST modal and swallows the press,
+        // so exactly one modal closes and nothing below acts on it.
+        let close_on_outside = Rc::new(Flag::new(true));
+        {
+            let (on, panel_layer) = (close_on_outside.clone(), layer.clone());
+            overlays.on_outside_press(&layer, move || {
+                if on.get() {
+                    panel_layer.remove();
+                    scope.dispose();
+                }
+            });
+        }
         // Resize re-clamps (the Drawer contract, extended to modals —
         // size/ratio sweep, wave 10): the panel re-solves against the
         // fresh viewport from the SAME size request, re-centering and
@@ -131,11 +161,25 @@ impl Modal {
             // the old rect for the compositor (the drawer F1 rule).
             ov.damage_root_under_rect(old);
         });
-        Modal { layer, scope }
+        Modal {
+            layer,
+            scope,
+            close_on_outside,
+        }
     }
 
     pub fn layer(&self) -> &LayerHandle {
         &self.layer
+    }
+
+    /// Whether a press outside the panel closes the modal. Default
+    /// `true`. Pass `false` for a modal that must be answered through
+    /// its own controls (a blocking confirmation): the outside press is
+    /// then swallowed and nothing else happens. Shared by every handle
+    /// to the same modal ([`Modal::share`]). Has no effect once an app
+    /// installed its own hook with [`Overlays::on_outside_press`].
+    pub fn set_close_on_outside(&self, close: bool) {
+        self.close_on_outside.set(close);
     }
 
     /// Remove the panel and dispose its state. The vacated region
@@ -154,6 +198,7 @@ impl Modal {
         Modal {
             layer: self.layer.clone(),
             scope: self.scope,
+            close_on_outside: self.close_on_outside.clone(),
         }
     }
 }

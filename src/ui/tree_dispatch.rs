@@ -289,10 +289,92 @@ impl UiTree {
         // the batch close (a completion controller reacting to a caret
         // write) still see the dispatching tree's truth ambiently.
         let _origin = super::publish_layer_origin(self.core.borrow().layer_origin);
-        batch(|| self.dispatch_inner(event))
+        batch(|| self.dispatch_inner(event, None))
     }
 
-    fn dispatch_inner(&mut self, event: &UiEvent) -> bool {
+    /// The modal wheel rule (crate-internal; `Overlays::dispatch` runs
+    /// it for a MODAL layer's tree after a wheel event it did not
+    /// consume): when the pointer is over nothing that scrolls — the
+    /// dialog's title, its padding, outside the panel — the wheel goes
+    /// to the tree's main scroll region, the largest visible node whose
+    /// role scrolls by wheel (`ScrollArea`, `List`, `Table`,
+    /// `TextArea`). A pointer over such a node already had its say
+    /// (a pane at its edge stays put; its ancestors chained), so the
+    /// rule stands down there. The event keeps its real position:
+    /// routing goes to the region directly, hover does not move.
+    /// Returns whether something consumed the wheel.
+    pub(crate) fn dispatch_wheel_fallback(&mut self, event: &UiEvent) -> bool {
+        let UiEvent::Mouse(m) = event else {
+            return false;
+        };
+        if !matches!(
+            m.kind,
+            MouseKind::ScrollUp
+                | MouseKind::ScrollDown
+                | MouseKind::ScrollLeft
+                | MouseKind::ScrollRight
+        ) {
+            return false;
+        }
+        self.layout();
+        if let Some(hit) = self.hit_test(m.pos) {
+            let over_scroller = {
+                let path = self.path_to(hit);
+                let core = self.core.borrow();
+                path.iter().any(|id| {
+                    core.insts
+                        .get(id.0)
+                        .is_some_and(|i| scrolls_by_wheel(i.access.role))
+                })
+            };
+            if over_scroller {
+                return false;
+            }
+        }
+        let Some(target) = self.main_scroller() else {
+            return false;
+        };
+        let _origin = super::publish_layer_origin(self.core.borrow().layer_origin);
+        batch(|| self.dispatch_inner(event, Some(target)))
+    }
+
+    /// The largest visible wheel-scrollable node (first in document
+    /// order on a tie). Visibility honours clipping ancestors, so a
+    /// region scrolled out of an outer pane does not count.
+    fn main_scroller(&self) -> Option<ViewId> {
+        let core = self.core.borrow();
+        let root = core.root?;
+        let mut best: Option<(i32, ViewId)> = None;
+        let mut stack: Vec<(ViewId, Rect)> = vec![(root, Rect::from_size(core.viewport))];
+        while let Some((id, clip)) = stack.pop() {
+            let Some(inst) = core.insts.get(id.0) else {
+                continue;
+            };
+            let rect = core.layout.rect(inst.layout);
+            if scrolls_by_wheel(inst.access.role) {
+                let visible = rect.intersect(clip);
+                let area = if visible.is_empty() {
+                    0
+                } else {
+                    visible.w * visible.h
+                };
+                if area > 0 && best.is_none_or(|(a, _)| area > a) {
+                    best = Some((area, id));
+                }
+            }
+            let child_clip = match core.layout.style(inst.layout) {
+                Some(style) if style.clips_children() => clip.intersect(rect),
+                _ => clip,
+            };
+            // Reverse push keeps document order under the pop.
+            for &child in inst.children.iter().rev() {
+                stack.push((child, child_clip));
+            }
+        }
+        best.map(|(_, id)| id)
+    }
+
+    fn dispatch_inner(&mut self, event: &UiEvent, forced: Option<ViewId>) -> bool {
         self.layout(); // hit testing needs fresh rects
                        // Multi-click synthesis: fold every mouse event into the tree's
                        // chain BEFORE routing, so the count is readable by every
@@ -311,6 +393,9 @@ impl UiTree {
             _ => 0,
         };
         let target = match event {
+            // A directed dispatch (the modal wheel rule) names its
+            // target: no hit test, no capture, no hover change.
+            UiEvent::Mouse(_) if forced.is_some() => forced,
             UiEvent::Mouse(m) => {
                 // Capture redirects every mouse event; a capture whose
                 // instance was disposed HEALS by re-pointing at the
@@ -581,4 +666,14 @@ impl UiTree {
             }
         }
     }
+}
+
+/// Roles whose widgets scroll by wheel (the modal wheel rule's
+/// candidates): `Scroll`'s viewport, `List`, `Table`, `TextArea`.
+fn scrolls_by_wheel(role: Option<super::super::access::Role>) -> bool {
+    use super::super::access::Role;
+    matches!(
+        role,
+        Some(Role::ScrollArea | Role::List | Role::Table | Role::TextArea)
+    )
 }

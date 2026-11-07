@@ -7,7 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Modal::set_close_on_outside(bool)`: whether a press outside the panel
+  closes the modal. Default `true`. A modal that must be answered through
+  its own controls passes `false`. `ChoicePrompt` does, so a decision gate
+  still has explicit endings only.
+
 ### Changed
+
+- A press outside a `Modal` closes it. Only the top modal closes, and the
+  press is swallowed: it never also reaches the widget under the pointer.
+  Before, the press was only swallowed and the modal stayed open.
+- The mouse wheel scrolls a modal's content wherever the pointer is. Over a
+  scroll region it scrolls that region, as before. Over the title, the
+  padding or outside the panel, where it used to do nothing, it now scrolls
+  the modal's largest visible scroll region (`Scroll`, `List`, `Table` or
+  `TextArea`). This holds for every modal overlay tree, `Modal`, `Popup` and
+  modal `Drawer` included. The page under a modal never scrolls.
 
 - A left press inside a `TextInput` puts the cursor on the character under
   the pointer (either cell of a wide character lands before it; past the end
@@ -21,6 +38,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its press at that release. 0.7.1 recovered only at the next press in that
   tree, so until then the wheel, motion and drags there still went to the
   opener.
+- Two overlays at the same z (two `Modal`s, both at `MODAL_Z`) route input
+  to the one drawn on top, the later one. Before, the lower one received it.
+
+### Migration notes
+
+- A `Modal` that guards unsaved changes on Esc must guard the outside press
+  too, or opt out. Either call `modal.set_close_on_outside(false)`, or
+  route the press through the same guard with
+  `overlays.on_outside_press(modal.layer(), ...)`, which replaces the
+  default rule.
+- An app that tracks "a modal is open" in its own state should read
+  `modal.layer().is_alive()`, or install its own outside-press hook as
+  above: an outside press now closes the modal without going through the
+  app's closer.
 
 ## [0.7.1] - 2026-11-02
 

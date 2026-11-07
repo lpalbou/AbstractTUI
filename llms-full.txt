@@ -1400,7 +1400,7 @@ outlier is `Drawer::bind(Signal<bool>)`. The catalog:
 
 - **Block** — the bordered panel primitive: title, fill, focus ring, `BorderKind`, and an opt-in close affordance (`on_close` — a mouse-only ✕ on the title row; see the Block section below).
 - **Button** — clickable label; hover/pressed/focused/disabled visuals; Enter/Space or mouse fires `on_click`.
-- **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
+- **TextInput** — single-line editor: grapheme-cluster-atomic cursoring, selection, word jumps, click-to-cursor (a press puts the cursor on the character under the pointer and never selects), `on_change`/`on_submit`; `.masked(true)` for secret fields (bullets on screen AND in the accessibility export).
 - **TextArea** — multiline composer: soft wrap, vertical caret with goal column, grow-to-content between `rows(min, max)`, submit-vs-newline policy, history recall, block paste, wheel scrolling (the window moves, the caret stays; any edit re-attaches), and a caret-cell anchor for completion dropdowns (`TextAreaState` is the app wire).
 - **List** — virtualized selectable list; variable-height items, sticky selection by key, `scroll_to`, bindable `selection`/`offset_y`, hover ink. Removable rows in one call (`on_remove`), or the general trailing accessory column (`row_accessory`, `on_accessory_click`), styled body labels (`rich_items`), timed double-click on the body (`on_row_double_click`), and non-selecting right-click/Shift+F10 row context requests (`on_context_menu`) that pair with `ContextMenu`. Vocabulary: `on_select` = selection changed (fires on movement); `on_activate` = the user committed this row (Enter/Space/click-on-selected); `on_row_double_click` = Table-style timed double-click when bound.
 - **RowSelect** — `List`'s keyboard over rows the engine does NOT render: wrap a `Scroll` of arbitrary (multi-line) `Element`s and it gains arrows, Home/End, Page keys, click-to-select, Enter/Space activation, ensure-visible by CONTENT rows, and sticky selection by key. The rows stay yours; the selection core is literally `List`'s (see [its own section](#rowselect--keyboard-selection-over-rows-you-render)).
@@ -3074,7 +3074,13 @@ Around the core loop the module provides:
   `ImageHandle`) for popups, menus, and pixel images.
 - **Modal** — a centered, focus-trapped overlay panel: input is fully owned
   while open, Tab cycles inside, state created in the modal's scope dies on
-  close. **Toast** — top-right chips that slide in, park for their duration
+  close. A press outside the panel closes it (only the top modal, and the
+  press never reaches the page below); `set_close_on_outside(false)` keeps
+  a modal open until it is answered, and `Overlays::on_outside_press(
+  modal.layer(), ...)` replaces the rule (for an unsaved-changes guard).
+  The mouse wheel scrolls the modal's content: the region under the
+  pointer, or, over the title, the padding or outside the panel, its
+  largest scroll region; never the page below. **Toast** — top-right chips that slide in, park for their duration
   at zero frame cost, then slide out and remove their layer.
 - **AnchoredPanel / Popup / Tooltip** (`app::anchored`) — the three
   routing modes of the anchored-popup substrate, one placement engine
