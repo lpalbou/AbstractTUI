@@ -418,7 +418,7 @@ fn every_nonerror_pose_has_visible_motion_at_main_and_preview_sizes_with_fixed_a
     for size in [Size::new(32, 17), Size::new(48, 25)] {
         // The shaded catalog promises continuous pose motion. A source-derived
         // scene may have a deliberately static Ready pose (for example Lens).
-        for style in AvatarStyle::ALL.into_iter().take(6) {
+        for style in shaded_styles() {
             for pose in [
                 AvatarPose::Ready,
                 AvatarPose::Thinking,
@@ -542,7 +542,7 @@ fn transparent_art_preserves_underlying_text_attributes_and_ink_outside_its_shap
         }
         // These four coordinates are known margins of the shaded silhouettes.
         // Other media, such as Ocean waves, can legitimately reach a frame edge.
-        for style in AvatarStyle::ALL.into_iter().take(6) {
+        for style in shaded_styles() {
             for pose in [
                 AvatarPose::Ready,
                 AvatarPose::Listening,
@@ -647,7 +647,8 @@ fn transparent_animation_damage_restores_old_silhouette_and_hidden_underlay() {
         let out = shared.clone();
         let (initial_pose, target_pose) = match style {
             AvatarStyle::Vortex | AvatarStyle::Eclipse => (AvatarPose::Working, AvatarPose::Ready),
-            AvatarStyle::Eye => (AvatarPose::Listening, AvatarPose::Waiting),
+            // By id, not the `Eye` variant: abstractavatar 0.2.0 retires `eye`.
+            s if s.id() == "eye" => (AvatarPose::Listening, AvatarPose::Waiting),
             AvatarStyle::Rover => (AvatarPose::Listening, AvatarPose::Ready),
             _ => (AvatarPose::Waiting, AvatarPose::Listening),
         };
@@ -724,7 +725,7 @@ fn transparent_animation_damage_restores_old_silhouette_and_hidden_underlay() {
             .zip(&baseline)
             .filter(|((old, current), base)| old != base && current == base)
             .count();
-        if AvatarStyle::ALL[..6].contains(&style) {
+        if shaded_styles().contains(&style) {
             assert!(
                 restored > 0,
                 "pose change restores cells occupied only by old pose: {style:?}"
@@ -890,6 +891,87 @@ fn reducing_motion_recenters_an_existing_gaze_immediately() {
         colors(&settle(&mut tree, size)),
         base,
         "reduced motion clears stored gaze"
+    );
+    root.dispose();
+}
+
+/// The shaded analytic designs, by id rather than catalog position or variant: the
+/// abstractavatar 0.1.0 catalog starts halo, hover, vortex, eclipse, eye, rover; 0.2.0 retires
+/// `eye`, so its sixth entry is the stroke-scene `watch-halo`.
+fn shaded_styles() -> Vec<AvatarStyle> {
+    ["halo", "hover", "vortex", "eclipse", "eye", "rover"]
+        .into_iter()
+        .filter_map(AvatarStyle::from_id)
+        .collect()
+}
+
+/// Stands in for `AvatarStyle::ready()` while the pinned abstractavatar (0.1.0) lacks it. An
+/// inherent associated function wins over a trait one, so on a crate that has `ready()` the
+/// call below reaches the crate's real ready list and this probe is never used.
+#[allow(dead_code)]
+trait ReadyProbe {
+    fn ready() -> std::vec::IntoIter<AvatarStyle> {
+        Vec::new().into_iter()
+    }
+}
+impl ReadyProbe for AvatarStyle {}
+
+#[test]
+fn offered_designs_are_the_crate_ready_list_and_the_allowlist_goes_when_it_exists() {
+    let offered = avatar_ready_styles();
+    let ids: Vec<_> = offered.iter().map(|s| s.id()).collect();
+    assert_eq!(
+        ids,
+        [
+            "watch-halo",
+            "watch-rings",
+            "watch-wave",
+            "watch-well",
+            "watch-murmuration",
+            "watch-hover",
+            "iphone-weave",
+        ]
+    );
+    assert!(offered.contains(&AVATAR_DEFAULT_STYLE));
+    let from_crate: Vec<AvatarStyle> = AvatarStyle::ready().collect();
+    if !from_crate.is_empty() {
+        assert_eq!(
+            offered, from_crate,
+            "the allowlist disagrees with abstractavatar"
+        );
+        panic!(
+            "abstractavatar now exposes AvatarStyle::ready(): delete READY_AVATAR_IDS and \
+             ReadyProbe, and make avatar_ready_styles() return AvatarStyle::ready().collect()"
+        );
+    }
+}
+
+#[test]
+fn an_experimental_design_set_explicitly_still_renders() {
+    let style = AvatarStyle::from_id("vortex").unwrap();
+    assert!(!avatar_ready_styles().contains(&style));
+    let size = Size::new(28, 15);
+    let (root, mut tree) = mount_widget(size, move |cx| {
+        let unset = Avatar::new(cx.signal(AvatarPose::Ready));
+        assert_eq!(
+            unset.style, AVATAR_DEFAULT_STYLE,
+            "the default is a ready design"
+        );
+        Avatar::new(cx.signal(AvatarPose::Speaking))
+            .style(style)
+            .level(cx.signal(0.8))
+            .show_label(false)
+            .layout(
+                LayoutStyle::default()
+                    .width(Dimension::Percent(1.0))
+                    .height(Dimension::Percent(1.0)),
+            )
+            .view(cx)
+    });
+    let canvas = settle(&mut tree, size);
+    assert!(
+        (0..size.h).any(|y| canvas.row_text(y).trim() != ""),
+        "an explicit experimental style draws"
     );
     root.dispose();
 }

@@ -14,6 +14,37 @@ use crate::{
 
 pub use abstractavatar::{AvatarPose, AvatarStyle, Gaze as AvatarGaze};
 
+/// The avatar designs a user may choose from, in catalog order. Offer only these in a
+/// picker, a cycling shortcut or a default. Any other active design (experimental) still
+/// renders when a host sets it explicitly with [`Avatar::style`] or [`Avatar::style_signal`].
+pub fn avatar_ready_styles() -> Vec<AvatarStyle> {
+    AvatarStyle::ALL
+        .into_iter()
+        .filter(|s| READY_AVATAR_IDS.contains(&s.id()))
+        .collect()
+}
+
+/// The design an [`Avatar`] draws when the host sets none: a ready design.
+pub const AVATAR_DEFAULT_STYLE: AvatarStyle = AvatarStyle::WatchHalo;
+
+/// TEMPORARY allowlist of the seven ready designs (operator decision, 2026-11-08).
+///
+/// The pinned abstractavatar 0.1.0 has no design status. Its next release (0.2.0) marks
+/// these seven `ready` and exposes them as `AvatarStyle::ready()`. When the pin moves to it,
+/// delete this list and make [`avatar_ready_styles`] return
+/// `AvatarStyle::ready().collect()`; the test
+/// `offered_designs_are_the_crate_ready_list_and_the_allowlist_goes_when_it_exists` fails
+/// on that crate to make sure this happens.
+const READY_AVATAR_IDS: [&str; 7] = [
+    "watch-halo",
+    "watch-rings",
+    "watch-wave",
+    "watch-well",
+    "watch-murmuration",
+    "watch-hover",
+    "iphone-weave",
+];
+
 /// Host-fed cursor activity. One cancellable idle expiry, no polling or input capture.
 #[derive(Clone, Copy)]
 pub struct AvatarPointer {
@@ -73,7 +104,7 @@ impl Avatar {
     pub fn new(pose: Signal<AvatarPose>) -> Self {
         Self {
             pose,
-            style: AvatarStyle::Halo,
+            style: AVATAR_DEFAULT_STYLE,
             styles: None,
             level: None,
             pointer: None,

@@ -811,6 +811,11 @@ the convenience state/pointer types. This adapter uses the separate
 existing cell mosaic renderer. Base AbstractTUI does not compile that generator.
 The catalog includes shaded forms, Watch designs and the iPhone woven orb.
 `AvatarStyle::ALL` provides stable keys, labels, descriptions and watch reference codes.
+Offer users only `avatar_ready_styles()`: the seven ready designs (`watch-halo`,
+`watch-rings`, `watch-wave`, `watch-well`, `watch-murmuration`, `watch-hover`,
+`iphone-weave`). The other designs are experimental: an `Avatar` still draws one when the
+host sets it explicitly (a stored choice, for example), but no picker or default offers it.
+`Avatar` draws `AVATAR_DEFAULT_STYLE` (`watch-halo`) when no style is set.
 It performs no networking, inference, audio capture or playback. The application
 supplies observed state and decides where the view is visible.
 
@@ -820,7 +825,7 @@ let level = cx.signal(0.0f32);
 let visible = cx.signal(true);
 let motion = cx.signal(false);
 let avatar = Avatar::new(pose)
-    .style(AvatarStyle::Halo)
+    .style(AVATAR_DEFAULT_STYLE)
     .level(level)
     .active(visible)
     .animated(motion)
@@ -832,7 +837,7 @@ Poses are `Ready`, `Thinking`, `Working`, `Listening`, `Speaking`, `Waiting` and
 `Error`. Hover leans with a raised listening hand, rests lower with a dimmed gaze
 while waiting, and bobs with thruster sparks while working. They are presentation
 states, not inferred thoughts. Use `.style_signal`
-for a reactive choice from `AvatarStyle::ALL`. Audio levels clamp to 0–1. Animation is off
+for a reactive choice from `avatar_ready_styles()`. Audio levels clamp to 0–1. Animation is off
 unless a signal enables it. Ready breathes at 2 frames/second, Waiting pulses at
 roughly 6, and active poses update at roughly 12. Error remains static.
 Animated listening/speaking samples producer audio levels at that frame cadence,

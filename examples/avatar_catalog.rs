@@ -16,13 +16,15 @@ fn main() -> abstracttui::base::Result<()> {
         })
         .unwrap_or(AvatarPose::Ready);
     abstracttui::app::set_theme_by_id("abstract-dark");
-    let rows = AvatarStyle::ALL.len().div_ceil(3);
+    // The designs a user may choose from; experimental designs are not shown.
+    let styles = avatar_ready_styles();
+    let rows = styles.len().div_ceil(3);
     let size = Size::new(114, (rows * 21) as i32);
     let mut app = App::new(size);
     app.mount(move |cx| {
         let pose = cx.signal(pose);
         let mut root = Element::new().style(LayoutStyle::column().gap(1));
-        for choices in AvatarStyle::ALL.chunks(3) {
+        for choices in styles.chunks(3) {
             let mut row =
                 Element::new().style(LayoutStyle::row().height(Dimension::Cells(20)).gap(2));
             for &style in choices {

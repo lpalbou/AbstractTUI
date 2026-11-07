@@ -10,7 +10,9 @@ fn main() -> abstracttui::base::Result<()> {
     let quit = app.quitter();
     app.mount(move|cx| {
         let pointer=AvatarPointer::new(cx);
-        let pose=cx.signal(AvatarPose::Ready);let style=cx.signal(AvatarStyle::Halo);
+        let pose=cx.signal(AvatarPose::Ready);let style=cx.signal(AVATAR_DEFAULT_STYLE);
+        // `s` cycles through the ready designs only; experimental ones are never offered.
+        let choices=avatar_ready_styles();
         let level=cx.signal(0.5f32);let animated=cx.signal(true);let active=cx.signal(true);
         let mut root=Element::new().on(abstracttui::ui::Phase::Capture,move|_,event| {
             if let abstracttui::ui::UiEvent::Mouse(mouse)=event {
@@ -22,7 +24,7 @@ fn main() -> abstracttui::base::Result<()> {
             }
         }).style(LayoutStyle::column().gap(1).padding(Edges::all(1)))
             .shortcut(KeyChord::plain(Key::Char('q')),move |_|quit.quit())
-            .shortcut(KeyChord::plain(Key::Char('s')),move |_|style.set(AvatarStyle::ALL[(AvatarStyle::ALL.iter().position(|s| *s==style.get_untracked()).unwrap_or(0)+1)%AvatarStyle::ALL.len()]))
+            .shortcut(KeyChord::plain(Key::Char('s')),move |_|style.set(choices[choices.iter().position(|s| *s==style.get_untracked()).map_or(0,|i|i+1)%choices.len()]))
             .shortcut(KeyChord::plain(Key::Char(' ')),move |_|animated.update(|x|*x = !*x))
             .shortcut(KeyChord::plain(Key::Char('h')),move |_|active.update(|x|*x = !*x))
             .shortcut(KeyChord::plain(Key::Char('+')),move |_|level.update(|x|*x=(*x+0.1).min(1.0)))

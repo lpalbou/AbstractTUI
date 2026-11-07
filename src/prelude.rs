@@ -146,4 +146,7 @@ pub use crate::widgets::{ChatMessage, ChatPanel, ChatRole, ChatTranscript};
 
 pub use crate::widgets::FramePlayer;
 #[cfg(feature = "avatar")]
-pub use crate::widgets::{Avatar, AvatarGaze, AvatarPointer, AvatarPose, AvatarStyle};
+pub use crate::widgets::{
+    avatar_ready_styles, Avatar, AvatarGaze, AvatarPointer, AvatarPose, AvatarStyle,
+    AVATAR_DEFAULT_STYLE,
+};

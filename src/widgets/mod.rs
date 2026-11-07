@@ -66,7 +66,10 @@ pub mod viewport3d;
 pub use crate::gfx::Bitmap;
 pub use animated_image::AnimatedImage;
 #[cfg(feature = "avatar")]
-pub use avatar::{Avatar, AvatarGaze, AvatarPointer, AvatarPose, AvatarStyle};
+pub use avatar::{
+    avatar_ready_styles, Avatar, AvatarGaze, AvatarPointer, AvatarPose, AvatarStyle,
+    AVATAR_DEFAULT_STYLE,
+};
 pub use badge::{Badge, Tone};
 pub use block::{Block, BorderKind, TitleAlign};
 pub use button::{Button, ButtonStyle};

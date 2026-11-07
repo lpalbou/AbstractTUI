@@ -9,12 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `avatar_ready_styles()` (the `avatar` feature): the avatar designs a user may
+  choose from, the seven ready ones (`watch-halo`, `watch-rings`, `watch-wave`,
+  `watch-well`, `watch-murmuration`, `watch-hover`, `iphone-weave`), in catalog
+  order. Pickers, cycling shortcuts and defaults offer only these; every other
+  design is experimental and still renders when the host sets it explicitly.
+  `AVATAR_DEFAULT_STYLE` is `watch-halo`. The pinned abstractavatar 0.1.0 has
+  no design status, so the list is a fixed allowlist for now. abstractavatar
+  0.2.0 exposes the ready list as `AvatarStyle::ready()`; a test fails on that
+  crate until the allowlist is deleted and `avatar_ready_styles()` returns the
+  crate's list.
+
 - `Modal::set_close_on_outside(bool)`: whether a press outside the panel
   closes the modal. Default `true`. A modal that must be answered through
   its own controls passes `false`. `ChoicePrompt` does, so a decision gate
   still has explicit endings only.
 
 ### Changed
+
+- `Avatar` draws `watch-halo` when no style is set (was the shaded `halo`,
+  now an experimental design). The `avatar` example's `s` key cycles through
+  the ready designs only, and the `avatar_catalog` fixture shows only them.
+- Avatar tests select the shaded designs and the `eye` special case by id, not
+  by catalog position or the `Eye` variant, so they compile and pass on
+  abstractavatar 0.2.0, which retires `eye`.
 
 - A press outside a `Modal` closes it. Only the top modal closes, and the
   press is swallowed: it never also reaches the widget under the pointer.
