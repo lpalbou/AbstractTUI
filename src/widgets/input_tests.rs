@@ -542,3 +542,76 @@ fn content_inset_keeps_strokes_selection_and_scroll_in_one_geometry() {
         root.dispose();
     }
 }
+
+/// Click-to-cursor: a press inside the text puts the cursor on the
+/// cluster under the pointer; past the end, at the end. Column 0 is the
+/// left stroke, the text starts at column 1.
+#[test]
+fn a_click_puts_the_cursor_under_the_pointer_and_past_the_end_at_the_end() {
+    use crate::widgets::itest_util::click;
+    let size = Size::new(16, 1);
+    let (_root, mut tree, value) = focused_input(size);
+    type_str(&mut tree, "hello");
+    render(&mut tree, size);
+    click(&mut tree, 3, 0); // the cell of "l" (cluster 2)
+    type_str(&mut tree, "X");
+    assert_eq!(value.get_untracked(), "heXllo");
+    click(&mut tree, 13, 0); // past the end
+    type_str(&mut tree, "!");
+    assert_eq!(value.get_untracked(), "heXllo!");
+    click(&mut tree, 1, 0); // the first cell
+    type_str(&mut tree, "<");
+    assert_eq!(value.get_untracked(), "<heXllo!");
+}
+
+/// A wide cluster is one position: a click on either of its cells lands
+/// before it; a click never starts a selection.
+#[test]
+fn a_click_on_a_wide_cluster_lands_before_it_and_never_selects() {
+    use crate::widgets::itest_util::click;
+    let size = Size::new(16, 1);
+    let (_root, mut tree, value) = focused_input(size);
+    type_str(&mut tree, "a界b");
+    render(&mut tree, size);
+    click(&mut tree, 3, 0); // the second cell of 界 (cols 2-3)
+    type_str(&mut tree, "|");
+    assert_eq!(value.get_untracked(), "a|界b");
+    // Select everything (End, then Shift+Home: anchor at the end), then
+    // click AWAY from the anchor (cluster 1): the selection goes, typing
+    // inserts instead of replacing.
+    key(&mut tree, Key::End);
+    key_mod(&mut tree, Key::Home, Mods::SHIFT);
+    click(&mut tree, 2, 0);
+    type_str(&mut tree, "^");
+    assert_eq!(value.get_untracked(), "a^|界b");
+}
+
+/// The click maps through the content inset: with `inset(2, 0)` the text
+/// starts at column 3, so a click there lands before the first cluster
+/// and a click in the inset itself clamps to the start.
+#[test]
+fn a_click_honours_the_content_inset() {
+    use crate::widgets::itest_util::click;
+    let size = Size::new(16, 1);
+    let holder: Rc<RefCell<Option<Signal<String>>>> = Rc::new(RefCell::new(None));
+    let h = holder.clone();
+    let (_root, mut tree) = mount_widget(size, move |cx| {
+        let value = cx.signal(String::new());
+        *h.borrow_mut() = Some(value);
+        TextInput::new()
+            .value(value)
+            .inset(2, 0)
+            .element(cx, &default_theme().tokens)
+            .build()
+    });
+    key(&mut tree, Key::Tab);
+    let value = holder.borrow().expect("value signal");
+    type_str(&mut tree, "abc");
+    render(&mut tree, size);
+    click(&mut tree, 4, 0); // "b"
+    type_str(&mut tree, "-");
+    assert_eq!(value.get_untracked(), "a-bc");
+    click(&mut tree, 1, 0); // inside the inset: the start
+    type_str(&mut tree, ">");
+    assert_eq!(value.get_untracked(), ">a-bc");
+}

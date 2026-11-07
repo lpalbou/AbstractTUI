@@ -133,6 +133,20 @@ impl ClusterMap {
     pub(crate) fn cluster_after(&self, byte_end: usize) -> usize {
         self.bounds.partition_point(|&b| b < byte_end)
     }
+
+    /// The cursor position for display column `col`: the cluster whose
+    /// cells hold `col` (either cell of a wide cluster lands before it),
+    /// or the end when `col` is past the text.
+    pub(crate) fn cluster_at_col(&self, col: i32) -> usize {
+        let mut start = 0;
+        for (i, &w) in self.widths.iter().enumerate() {
+            if w > 0 && col < start + w {
+                return i;
+            }
+            start += w;
+        }
+        self.len()
+    }
 }
 
 impl TextInput {
@@ -331,6 +345,27 @@ impl TextInput {
                         insert_text(&clean, value, caret, width);
                         notify(&on_change, value);
                         ctx.stop_propagation();
+                    }
+                    // Click-to-cursor: a left press puts the cursor on
+                    // the cluster under the pointer, past the end when
+                    // the press is past the text. A click never starts
+                    // a selection (any selection is dropped, like a
+                    // plain cursor move). The press still routes on:
+                    // focus is the tree's job.
+                    UiEvent::Mouse(m)
+                        if matches!(
+                            m.kind,
+                            crate::ui::MouseKind::Down(crate::ui::MouseButton::Left)
+                        ) =>
+                    {
+                        let text_x = inset_frame(ctx.current_rect(), inset).x + 1;
+                        let rel = m.pos.x - text_x;
+                        caret.update(|c| {
+                            let col = (rel + c.scroll).max(0);
+                            c.cursor =
+                                value.with_untracked(|v| ClusterMap::of(v).cluster_at_col(col));
+                            c.anchor = None;
+                        });
                     }
                     _ => {}
                 }
