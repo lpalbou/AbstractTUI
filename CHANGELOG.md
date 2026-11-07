@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of the text, at the end). The press drops any selection and never starts
   one. Before, a click focused the field but left the cursor where it was.
 
+### Fixed
+
+- A press that opens a modal or popup no longer leaves the opener holding
+  the pointer. The release goes to the new layer; every other tree now drops
+  its press at that release. 0.7.1 recovered only at the next press in that
+  tree, so until then the wheel, motion and drags there still went to the
+  opener.
+
 ## [0.7.1] - 2026-11-02
 
 An additive release: host-owned chat components, live RGBA frame playback,
