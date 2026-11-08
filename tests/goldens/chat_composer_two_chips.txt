@@ -1,0 +1,33 @@
+
+ Start a conversation.
+
+
+
+
+
+
+
+
+
+▐ ask @Castor and @Basic agent about the release               ▌
+
+ Send Castor and Basic agent will read this conversation's hist…
+
+--- styles ---
+ 1| Start a conversation.|
+   0..23 fg=eeeeee bg=0f3460 attrs=0
+   23..63 fg=ffffff bg=000000 attrs=0
+   63..64 fg=16213e bg=16213e attrs=0
+11|▐ ask @Castor and @Basic agent about the release               ▌|
+   0..1 fg=e94560 bg=16213e attrs=0
+   1..6 fg=eeeeee bg=16213e attrs=0
+   6..13 fg=e94560 bg=0f3460 attrs=1
+   13..18 fg=eeeeee bg=16213e attrs=0
+   18..30 fg=e94560 bg=0f3460 attrs=1
+   30..48 fg=eeeeee bg=16213e attrs=0
+   48..49 fg=16213e bg=e94560 attrs=0
+   49..63 fg=eeeeee bg=16213e attrs=0
+   63..64 fg=e94560 bg=16213e attrs=0
+13| Send Castor and Basic agent will read this conversation's hist…|
+   0..6 fg=eeeeee bg=0f3460 attrs=0
+   6..64 fg=aaaaaa bg=000000 attrs=0

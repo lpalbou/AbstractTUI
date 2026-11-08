@@ -776,6 +776,57 @@ to place host controls beside it on the same action row. Send retains an accessi
 name and a hover/focus tooltip when mounted with application overlays. Give host
 icon buttons their own accessible labels and explanatory tooltips.
 
+#### `@` mentions and who answered
+
+`.mentions(candidates)` turns on `@` mentions in the composer. `candidates`
+returns the host's list of `MentionCandidate { id, name, kind, hint }`
+(`MentionKind::Entity` or `MentionKind::Agent`). Typing `@` opens a popup over
+that list, filtered by what follows the `@` (name or id, case-insensitive,
+prefix matches first). Picking a row inserts one chip: it shows `@name` in the
+chip style, Backspace or Delete removes it whole, and the caret cannot enter it.
+A mention exists only as a pick. A typed `@castor` that was never picked stays
+plain text, and nothing reads mentions out of the text on send.
+
+`.on_send(|value: &ComposerSubmission| ...)` receives the structured value:
+`text` with every chip spelled `@name`, and `mentions` in text order, each
+`Mention { id, name, kind, index }`, where `index` is the chip's position among
+the message's mentions (the send order). It replaces the constructor's `&str`
+callback. Without it, that callback receives `text`, which is the draft itself
+when it holds no chips. Before the first message that names someone in a
+session, the send row reads "Castor will read this conversation's history."
+Pass `.mention_notices(signal)` with one `Signal<Vec<String>>` per conversation
+session so the notice is shown once per session. The panel appends each
+mentioned id when a message is sent. The popup needs the app's `Overlays`, so a
+panel with mentions must be mounted inside an `App`; `view` panics otherwise.
+
+```rust,ignore
+let roster = vec![
+    MentionCandidate::new("ent-castor", "Castor", MentionKind::Entity).hint("awake"),
+    MentionCandidate::new("basic-agent", "Basic agent", MentionKind::Agent),
+];
+let told = cx.signal(Vec::<String>::new()); // one per conversation session
+ChatPanel::new(draft, move || messages.get(), |_| {})
+    .mentions(move || roster.clone())
+    .mention_notices(told)
+    .on_send(move |value| {
+        // value.text == "ask @Castor about the release"
+        // value.mentions == [Mention { id: "ent-castor", index: 0, .. }]
+        draft.set(String::new());
+    })
+    .view(cx);
+```
+
+`ChatMessage::authored_by(ChatAuthor)` names who wrote a row, with the fields of
+the gateway turn's `author` object: `kind` (`AuthorKind::Entity`, `Agent` or
+`Person`), `name`, `entity_id`, `identity_ref` and `avatar: {style, color}`. The
+heading then reads `● Castor · entity`. An entity's `●` uses its avatar colour
+(`#rrggbb`), lifted just enough to stay readable on the bubble, or the theme
+accent when there is no colour. An agent's mark is `✦`, and a person has none.
+The kind tag is muted. When `name` is empty, the row's `author` label (or the
+role's default) is shown instead. A row without `authored_by` renders exactly
+as before. The crate parses no JSON, so the host maps the turn's `author` onto
+`ChatAuthor`.
+
 `ChatTranscript::new(Vec<ChatMessage>)` is the message-only form for hosts with
 existing history/composer/stop controls. Both forms fit a Drawer, PageHost or any
 allocated pane. Explicit `follow_tail` and `offset_y` signals can preserve reading
@@ -1528,6 +1579,16 @@ fn composer_with_commands(cx: Scope, app: &App) -> View {
         .attach(cx, &app.overlays(), &state, composer)
 }
 ```
+
+`Completion::mentions('@', candidates)` registers a mention trigger instead of
+a text one. `candidates` returns the host's `Vec<MentionCandidate>`. The
+controller filters the list by the query and shows each row as `@name` with its
+kind and hint. Accepting a row replaces the token with one atomic chip
+(`TextAreaState::insert_mention`) rather than text. Read the composer's value
+with `TextAreaState::submission()`, which returns `ComposerSubmission { text,
+mentions }` with chips spelled `@name`. `TextAreaState::value()` and `text()`
+stay the raw buffer, where each chip is a single private-use marker character.
+`ChatPanel::mentions` is this, already wired.
 
 Triggers fire for whitespace-delimited tokens; `Completion::trigger_at(char, TriggerPosition, provider)` additionally scopes WHERE the token may sit — `StartOfInput` (the draft's first token, leading whitespace tolerated: slash commands), `StartOfLine` (a line's first token), or the `Anywhere` default that plain `trigger` registers — and a token outside its policy never opens the dropdown nor consults the provider.
 

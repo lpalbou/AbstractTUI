@@ -529,3 +529,8 @@ fn panel_follows_the_caret_anchor() {
 // budget) sharing this rig through `super::*`.
 #[path = "anchored_policy_tests.rs"]
 mod policy;
+
+// Mention picks (the @entity wave): the '@' popup over a host list
+// inserts one atomic chip — a child module sharing this rig.
+#[path = "anchored_mention_tests.rs"]
+mod mention;

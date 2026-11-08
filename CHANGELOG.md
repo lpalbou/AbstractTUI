@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `@` mentions as inline chips. `Completion::mentions('@', candidates)` opens a
+  popup over the host's `MentionCandidate { id, name, kind, hint }` list
+  (`MentionKind::Entity` or `Agent`, filtered by name or id). Accepting a row
+  inserts one chip through `TextAreaState::insert_mention`. The chip shows
+  `@name` in its own style, Backspace or Delete removes it whole, and the caret
+  cannot enter it. `TextAreaState::submission()` returns
+  `ComposerSubmission { text, mentions }`: chips spelled `@name` in `text`, and
+  `Mention { id, name, kind, index }` in text order. A typed `@word` that was
+  never picked stays text.
+- `ChatPanel::mentions(candidates)`, `ChatPanel::on_send(|&ComposerSubmission|)`
+  and `ChatPanel::mention_notices(signal)`: the same chips in the chat
+  composer, a structured send, and a one-time notice per session and name in
+  the send row, "Castor will read this conversation's history."
+  `history_notice(names)` returns that sentence for hosts with their own
+  composer.
+- `ChatMessage::authored_by(ChatAuthor)`, with `ChatAuthor { kind, name,
+  entity_id, identity_ref, avatar: Option<AuthorAvatar { style, color }> }`, the
+  gateway turn's `author` object. The heading reads `● Castor · entity`: an
+  entity's mark in its avatar colour, `✦` for an agent, no mark for a person,
+  and a muted kind tag. `theme::derive::identity_ink` turns an `#rrggbb`
+  identity colour into a mark ink that stays readable on its ground.
+
 - `avatar_ready_styles()` (the `avatar` feature): the avatar designs a user may
   choose from, the seven ready ones (`watch-halo`, `watch-rings`, `watch-wave`,
   `watch-well`, `watch-murmuration`, `watch-hover`, `iphone-weave`), in catalog
@@ -26,6 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   still has explicit endings only.
 
 ### Changed
+
+- `ChatMessage` has a new public field, `authored_by` (default `None`). Code
+  that builds `ChatMessage` with a struct literal must add it. A row without an
+  author renders exactly as before (pinned by a golden).
 
 - `Avatar` draws `watch-halo` when no style is set (was the shaded `halo`,
   now an experimental design). The `avatar` example's `s` key cycles through

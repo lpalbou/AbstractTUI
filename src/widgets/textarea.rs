@@ -45,9 +45,15 @@ use crate::widgets::input::{
 #[path = "textarea_model.rs"]
 mod model;
 
+#[path = "textarea_chips.rs"]
+mod chips;
+
 pub use model::SubmitPolicy;
 pub(crate) use model::{adjust_top, Caret, RowMap};
 use model::{insert_at_caret, selection_range, snap_boundary, EditOutcome, History};
+
+use crate::widgets::mention::{ComposerSubmission, MentionCandidate};
+use chips::{ChipRegistry, ChipTable};
 
 /// Default history capacity (entries beyond it drop oldest-first).
 const HISTORY_CAP: usize = 128;
@@ -58,6 +64,8 @@ struct StateInner {
     focused: Signal<bool>,
     caret_cell: Signal<Option<Point>>,
     history: RefCell<History>,
+    /// Mention chips issued by this state (textarea_chips.rs).
+    chips: RefCell<ChipRegistry>,
 }
 
 /// Durable, cloneable composer state — create once on a stable scope,
@@ -77,18 +85,57 @@ impl TextAreaState {
                 focused: cx.signal(false),
                 caret_cell: cx.signal(None),
                 history: RefCell::new(History::new(HISTORY_CAP)),
+                chips: RefCell::new(ChipRegistry::default()),
             }),
         }
     }
 
-    /// The buffer signal (tracked reads re-render/re-run readers).
+    /// The buffer signal (tracked reads re-render/re-run readers). The
+    /// RAW buffer: each mention chip is one private-use marker scalar
+    /// here — read [`TextAreaState::submission`] for the `@name` text.
     pub fn value(&self) -> Signal<String> {
         self.inner.value
     }
 
-    /// Current buffer text (untracked snapshot).
+    /// Current buffer text (untracked snapshot; raw, like [`value`](Self::value)).
     pub fn text(&self) -> String {
         self.inner.value.get_untracked()
+    }
+
+    /// Replace `range` (byte offsets, snapped to cluster boundaries)
+    /// with ONE atomic mention chip for `candidate`, followed by a
+    /// space; the caret lands after the space. The chip renders as
+    /// `@name` in the chip style, is removed whole by Backspace or
+    /// Delete, and cannot be edited from inside. The completion
+    /// controller's mention accept path (`Completion::mentions`); a
+    /// host may also call it directly for a pick made elsewhere.
+    ///
+    /// # Panics
+    /// When one state has registered 65 534 DISTINCT candidates (the
+    /// private-use marker range is exhausted).
+    pub fn insert_mention(&self, range: std::ops::Range<usize>, candidate: &MentionCandidate) {
+        let marker =
+            self.inner.chips.borrow_mut().marker_for(candidate).expect(
+                "TextAreaState: mention chip markers exhausted (65 534 distinct candidates)",
+            );
+        let mut insert = String::new();
+        insert.push(marker);
+        insert.push(' ');
+        self.replace_range(range, &insert);
+    }
+
+    /// The composer's value as a host sends it: the text with every
+    /// chip spelled `@name`, and the chips in text order with their
+    /// 0-based `index`. A typed `@word` that was never picked is plain
+    /// text and is not a mention. Untracked snapshot.
+    pub fn submission(&self) -> ComposerSubmission {
+        let raw = self.inner.value.get_untracked();
+        self.inner.chips.borrow().submission(&raw)
+    }
+
+    /// Chip widths/labels for this state's buffer (model + renderer).
+    pub(crate) fn chip_table(&self) -> ChipTable {
+        self.inner.chips.borrow().table()
     }
 
     /// Replace the whole buffer; caret lands at the end.
@@ -523,6 +570,7 @@ impl TextArea {
         // still overflows names itself in the notices lane.
         let layout = self.layout.clone();
         let growth = {
+            let state = state.clone();
             move || {
                 if let Some(fixed) = layout.clone() {
                     return fixed;
@@ -530,7 +578,7 @@ impl TextArea {
                 let text = value.get();
                 let w = width_hint.get();
                 let rows = if w > 0 {
-                    RowMap::build(&text, w).len() as i32
+                    RowMap::build_with(&text, w, &state.chip_table()).len() as i32
                 } else {
                     // Pre-layout estimate: logical lines (no wrap yet).
                     text.split('\n').count() as i32
@@ -546,7 +594,10 @@ impl TextArea {
             .style_signal(growth)
             .role(crate::ui::Role::TextArea)
             .access_label(placeholder.clone())
-            .access_value(move || value.get_untracked());
+            .access_value({
+                let state = state.clone();
+                move || state.submission().text
+            });
         if !disabled {
             el = el
                 .focusable()
@@ -554,6 +605,13 @@ impl TextArea {
                 .rect_signal(solved)
                 .on(Phase::Bubble, handler);
         }
+        // Chip ink (style guide: accent label on the raised ground, bold)
+        // — distinct from typed text at a glance, tokens only.
+        let chip_style = Style::new()
+            .fg(t.accent)
+            .bg(t.surface_raised)
+            .attrs(crate::render::Attrs::BOLD);
+        let draw_state = state.clone();
         el.child(dyn_view(
             LayoutStyle::default()
                 .width(Dimension::Percent(1.0))
@@ -561,6 +619,7 @@ impl TextArea {
             move || {
                 let text = value.get();
                 let c = caret.get();
+                let chips = draw_state.chip_table();
                 let focused = focused.get() && !disabled;
                 let placeholder = placeholder.clone();
                 Element::new()
@@ -618,7 +677,7 @@ impl TextArea {
                                 &Style::new().fg(placeholder_fg).bg(bg),
                             );
                         }
-                        let rows = RowMap::build(&text, tw);
+                        let rows = RowMap::build_with(&text, tw, &chips);
                         let total = rows.len() as i32;
                         let top = c.top.clamp(0, (total - rect.h).max(0));
                         let (crow, ccol) = rows.visual(&text, c.byte, c.sticky);
@@ -632,15 +691,45 @@ impl TextArea {
                             let slice = &text[row.start..row.text_end];
                             let mut col = 0i32;
                             for seg in crate::text::segments(slice) {
-                                if seg.width == 0 {
+                                let seg_width = chips.seg_width(&seg);
+                                if seg_width == 0 {
                                     continue; // control/zero-width: invisible
-                                }
-                                if col + seg.width > tw {
-                                    break; // hanging whitespace clips here
                                 }
                                 let byte = row.start + seg.offset;
                                 let selected = byte >= sel_lo && byte < sel_hi;
                                 let at_cursor = focused && row_idx == crow && byte == c.byte;
+                                if let Some(label) = chips.label(seg.cluster) {
+                                    // A mention chip: its label, whole, in
+                                    // the chip style (cut with an ellipsis
+                                    // only when wider than the row).
+                                    let room = tw - col;
+                                    let shown = crate::text::truncate_ellipsis(label, room);
+                                    let style = if selected {
+                                        Style::new().fg(sel_fg).bg(sel_bg)
+                                    } else {
+                                        chip_style
+                                    };
+                                    let at = Point::new(tx + col, rect.y + vis);
+                                    canvas.print_styled(at, &shown, &style);
+                                    if at_cursor {
+                                        // The caret sits BEFORE the chip:
+                                        // its block covers the first cell.
+                                        let first: String = shown.chars().take(1).collect();
+                                        canvas.print_styled(
+                                            at,
+                                            &first,
+                                            &Style::new().fg(bg).bg(cursor_bg),
+                                        );
+                                    }
+                                    col += seg_width;
+                                    if col > tw {
+                                        break;
+                                    }
+                                    continue;
+                                }
+                                if col + seg_width > tw {
+                                    break; // hanging whitespace clips here
+                                }
                                 let style = if at_cursor {
                                     Style::new().fg(bg).bg(cursor_bg)
                                 } else if selected {
@@ -653,7 +742,7 @@ impl TextArea {
                                     seg.cluster,
                                     &style,
                                 );
-                                col += seg.width;
+                                col += seg_width;
                             }
                         }
                         // Caret past its row's content (end of row/doc,
@@ -705,7 +794,7 @@ fn scroll_window(
     max_rows: i32,
 ) -> bool {
     let text = state.inner.value.get_untracked();
-    let rows = RowMap::build(&text, width);
+    let rows = RowMap::build_with(&text, width, &state.chip_table());
     let visible = (rows.len() as i32).clamp(min_rows, max_rows);
     let max_top = (rows.len() as i32 - visible).max(0);
     let mut c = state.inner.caret.get_untracked();
@@ -729,7 +818,7 @@ fn finish_edit(state: &TextAreaState, c: &mut Caret, width: i32, min_rows: i32, 
     // leave a detached window behind.
     c.detached = false;
     let text = state.inner.value.get_untracked();
-    let rows = RowMap::build(&text, width);
+    let rows = RowMap::build_with(&text, width, &state.chip_table());
     let (crow, _) = rows.visual(&text, c.byte, c.sticky);
     let visible = (rows.len() as i32).clamp(min_rows, max_rows);
     adjust_top(c, crow as i32, rows.len() as i32, visible);
@@ -739,7 +828,7 @@ fn finish_edit(state: &TextAreaState, c: &mut Caret, width: i32, min_rows: i32, 
 /// solved rect available inside handlers.
 fn publish_caret_cell(state: &TextAreaState, c: &mut Caret, rect: crate::base::Rect, width: i32) {
     let text = state.inner.value.get_untracked();
-    let rows = RowMap::build(&text, width);
+    let rows = RowMap::build_with(&text, width, &state.chip_table());
     let (crow, ccol) = rows.visual(&text, c.byte, c.sticky);
     let visible = (rows.len() as i32).clamp(1, rect.h.max(1));
     adjust_top(c, crow as i32, rows.len() as i32, visible);
@@ -778,7 +867,8 @@ fn handle_key(
     // user is back at their cursor, wherever they had scrolled to.
     c.detached = false;
     let mut text = value.get_untracked();
-    let outcome = model::apply_key(&mut text, &mut c, key, mods, width, policy);
+    let widths = state.chip_table();
+    let outcome = model::apply_key_with(&mut text, &mut c, key, mods, width, policy, &widths);
     match outcome {
         EditOutcome::Handled { edited } => {
             if edited {
@@ -834,3 +924,7 @@ mod placeholder_tests;
 #[cfg(test)]
 #[path = "textarea_paste_tests.rs"]
 mod paste_tests;
+
+#[cfg(test)]
+#[path = "textarea_chips_tests.rs"]
+mod chips_tests;

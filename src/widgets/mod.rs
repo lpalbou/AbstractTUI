@@ -40,6 +40,7 @@ pub mod input;
 pub mod list;
 pub mod logo;
 pub mod markdown;
+pub mod mention;
 pub mod meter;
 pub mod page_host;
 pub mod progress;
@@ -207,7 +208,7 @@ mod lint_tests {
     /// below enforces against the module declarations above; private
     /// SHIPPED siblings — `feed_typeset.rs`, split for file-size
     /// discipline — join the list by hand, they are widget source too.)
-    const SOURCES: [(&str, &str); 56] = [
+    const SOURCES: [(&str, &str); 59] = [
         ("session_card.rs", include_str!("session_card.rs")),
         ("mod.rs", include_str!("mod.rs")),
         ("status_bar.rs", include_str!("status_bar.rs")),
@@ -224,6 +225,9 @@ mod lint_tests {
         ("button.rs", include_str!("button.rs")),
         ("chart.rs", include_str!("chart.rs")),
         ("chat.rs", include_str!("chat.rs")),
+        // Chat's author-heading sibling (the @entity wave): widget
+        // source too, listed by hand like feed_typeset.rs.
+        ("chat_author.rs", include_str!("chat_author.rs")),
         ("chart_time.rs", include_str!("chart_time.rs")),
         ("checkbox.rs", include_str!("checkbox.rs")),
         ("code.rs", include_str!("code.rs")),
@@ -259,6 +263,7 @@ mod lint_tests {
         ("markdown_doc.rs", include_str!("markdown_doc.rs")),
         ("markdown_image.rs", include_str!("markdown_image.rs")),
         ("markdown_search.rs", include_str!("markdown_search.rs")),
+        ("mention.rs", include_str!("mention.rs")),
         // PageHost's private shipped sibling (bar geometry) joins by
         // hand, like feed_typeset.rs.
         ("page_host.rs", include_str!("page_host.rs")),
@@ -277,6 +282,8 @@ mod lint_tests {
         ("tabs.rs", include_str!("tabs.rs")),
         ("textarea.rs", include_str!("textarea.rs")),
         ("textarea_model.rs", include_str!("textarea_model.rs")),
+        // TextArea's mention-chip sibling (the @entity wave), by hand.
+        ("textarea_chips.rs", include_str!("textarea_chips.rs")),
         ("thinking_fold.rs", include_str!("thinking_fold.rs")),
         ("viewport3d.rs", include_str!("viewport3d.rs")),
     ];
@@ -326,3 +333,7 @@ mod lint_tests {
 }
 
 pub use chat::{ChatMessage, ChatPanel, ChatRole, ChatTranscript};
+// Appended (the @entity wave, 2026-11-08): the turn author on chat rows
+// and the structured mention picks a composer submits.
+pub use chat::{AuthorAvatar, AuthorKind, ChatAuthor};
+pub use mention::{history_notice, ComposerSubmission, Mention, MentionCandidate, MentionKind};

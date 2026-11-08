@@ -1,0 +1,54 @@
+ 0|                                    You|
+   0..35 fg=ffffff bg=000000 attrs=0
+   35..36 fg=eeeeee bg=0f3460 attrs=0
+   36..39 fg=e94560 bg=0f3460 attrs=1
+   39..47 fg=eeeeee bg=0f3460 attrs=0
+   47..48 fg=16213e bg=16213e attrs=0
+ 1|                                    A question|
+   0..35 fg=ffffff bg=000000 attrs=0
+   35..47 fg=eeeeee bg=0f3460 attrs=0
+   47..48 fg=16213e bg=16213e attrs=0
+ 4| Assistant|
+   0..1 fg=eeeeee bg=0f3460 attrs=0
+   1..10 fg=eeeeee bg=0f3460 attrs=1
+   10..12 fg=eeeeee bg=0f3460 attrs=0
+   12..47 fg=ffffff bg=000000 attrs=0
+   47..48 fg=16213e bg=16213e attrs=0
+ 5| An answer.|
+   0..12 fg=eeeeee bg=0f3460 attrs=0
+   12..47 fg=ffffff bg=000000 attrs=0
+   47..48 fg=16213e bg=16213e attrs=0
+ 8| Castor · 10:42|
+   0..1 fg=eeeeee bg=0f3460 attrs=0
+   1..15 fg=eeeeee bg=0f3460 attrs=1
+   15..18 fg=eeeeee bg=0f3460 attrs=0
+   18..47 fg=ffffff bg=000000 attrs=0
+   47..48 fg=16213e bg=16213e attrs=0
+ 9| Labelled answer.|
+   0..18 fg=eeeeee bg=0f3460 attrs=0
+   18..47 fg=ffffff bg=000000 attrs=0
+   47..48 fg=16213e bg=16213e attrs=0
+13| A notice.|
+   0..11 fg=eeeeee bg=0f3460 attrs=0
+   11..47 fg=ffffff bg=000000 attrs=0
+   47..48 fg=16213e bg=16213e attrs=0
+16| Could not answer|
+   0..1 fg=eeeeee bg=0f3460 attrs=0
+   1..17 fg=e74c3c bg=0f3460 attrs=1
+   17..18 fg=eeeeee bg=0f3460 attrs=0
+   18..47 fg=ffffff bg=000000 attrs=0
+   47..48 fg=16213e bg=16213e attrs=0
+17| It failed.|
+   0..18 fg=eeeeee bg=0f3460 attrs=0
+   18..47 fg=ffffff bg=000000 attrs=0
+   47..48 fg=16213e bg=16213e attrs=0
+20|                            Laurent|
+   0..27 fg=ffffff bg=000000 attrs=0
+   27..28 fg=eeeeee bg=0f3460 attrs=0
+   28..35 fg=e94560 bg=0f3460 attrs=1
+   35..47 fg=eeeeee bg=0f3460 attrs=0
+   47..48 fg=16213e bg=16213e attrs=0
+21|                            Labelled question.|
+   0..27 fg=ffffff bg=000000 attrs=0
+   27..47 fg=eeeeee bg=0f3460 attrs=0
+   47..48 fg=16213e bg=16213e attrs=0

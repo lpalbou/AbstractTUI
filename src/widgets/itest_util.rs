@@ -77,3 +77,38 @@ pub(crate) fn click(tree: &mut UiTree, x: i32, y: i32) {
     mouse(tree, MouseKind::Down(MouseButton::Left), x, y);
     mouse(tree, MouseKind::Up(MouseButton::Left), x, y);
 }
+
+/// Style-annotated capture: each row's text, then the row's style runs
+/// as `x0..x1 fg=rrggbb bg=rrggbb attrs=N` (only rows with visible
+/// glyphs). A golden of this pins colours and weights, not just text —
+/// the shape "today's rendering, exactly" needs.
+pub(crate) fn styled_rows(canvas: &BufferCanvas, size: Size) -> String {
+    let hex = |c: crate::base::Rgba| format!("{:02x}{:02x}{:02x}", c.r, c.g, c.b);
+    let mut out = String::new();
+    for y in 0..size.h {
+        let text = canvas.row_text(y);
+        if text.trim().is_empty() {
+            continue;
+        }
+        out.push_str(&format!("{y:>2}|{}|\n", text.trim_end()));
+        let mut x = 0;
+        while x < size.w {
+            let key = |x: i32| {
+                let (_, fg, bg) = canvas.cell(Point::new(x, y)).expect("in bounds");
+                (fg, bg, canvas.attrs_at(Point::new(x, y)).bits())
+            };
+            let start = x;
+            let k = key(x);
+            while x < size.w && key(x) == k {
+                x += 1;
+            }
+            let (fg, bg, attrs) = k;
+            out.push_str(&format!(
+                "   {start}..{x} fg={} bg={} attrs={attrs}\n",
+                hex(fg),
+                hex(bg)
+            ));
+        }
+    }
+    out
+}

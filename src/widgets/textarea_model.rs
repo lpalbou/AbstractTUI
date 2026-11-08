@@ -19,6 +19,8 @@
 use crate::ui::{Key, Mods};
 use crate::widgets::input::{word_step, ClusterMap};
 
+use super::chips::ChipTable;
+
 /// Enter-key policy (builder-owned; backlog 0120 §3). Alt+Enter always
 /// inserts a newline (works on every wire); Shift+Enter also inserts
 /// where the kitty keyboard protocol reports it — legacy terminals
@@ -87,10 +89,20 @@ pub(crate) struct Row {
 /// caret needs a home).
 pub(crate) struct RowMap {
     pub rows: Vec<Row>,
+    /// Chip widths the map was built with: a mention chip's single
+    /// marker cluster measures as its `@name` label everywhere this
+    /// map answers a column question.
+    widths: ChipTable,
 }
 
 impl RowMap {
+    /// The map without chips (every cluster at its natural width).
+    #[cfg(test)]
     pub fn build(text: &str, width: i32) -> RowMap {
+        RowMap::build_with(text, width, &ChipTable::default())
+    }
+
+    pub fn build_with(text: &str, width: i32, widths: &ChipTable) -> RowMap {
         let width = width.max(1);
         let mut rows: Vec<Row> = Vec::new();
         let mut start = 0usize; // current row start byte
@@ -99,6 +111,7 @@ impl RowMap {
                             // cluster + the accumulated width at that position.
         let mut break_at: Option<(usize, i32)> = None;
         for seg in crate::text::segments(text) {
+            let seg_width = widths.seg_width(&seg);
             let seg_end = seg.offset + seg.cluster.len();
             let first = seg.cluster.chars().next();
             let is_ws = first.is_some_and(char::is_whitespace);
@@ -125,7 +138,7 @@ impl RowMap {
             // hangs at the row edge (clipped), so wrapped output shows
             // "hello world" / "next", never a leading space (visual
             // parity with text::wrap without losing the bytes).
-            if !is_ws && col + seg.width > width && col > 0 {
+            if !is_ws && col + seg_width > width && col > 0 {
                 match break_at {
                     Some((b, bcol)) if b > start && b <= seg.offset => {
                         rows.push(Row {
@@ -150,7 +163,7 @@ impl RowMap {
                 }
                 break_at = None;
             }
-            col += seg.width;
+            col += seg_width;
             if is_ws {
                 break_at = Some((seg_end, col));
             }
@@ -171,7 +184,10 @@ impl RowMap {
                 end: text.len(),
             });
         }
-        RowMap { rows }
+        RowMap {
+            rows,
+            widths: widths.clone(),
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -201,7 +217,7 @@ impl RowMap {
         let row = self.rows[row_idx];
         let slice = &text[row.start..row.text_end];
         let rel = byte.saturating_sub(row.start).min(slice.len());
-        crate::text::width(&slice[..rel])
+        self.widths.width(&slice[..rel])
     }
 
     /// Caret byte closest to `goal` columns into row `row_idx` (snaps to
@@ -211,10 +227,11 @@ impl RowMap {
         let slice = &text[row.start..row.text_end];
         let mut col = 0i32;
         for seg in crate::text::segments(slice) {
-            if seg.width > 0 && col + seg.width > goal {
+            let w = self.widths.seg_width(&seg);
+            if w > 0 && col + w > goal {
                 return row.start + seg.offset;
             }
-            col += seg.width;
+            col += w;
         }
         row.text_end
     }
@@ -303,8 +320,8 @@ pub(crate) enum EditOutcome {
     Ignored,
 }
 
-/// Apply one key to the buffer + caret. Pure over its arguments; the
-/// decision table is pinned by textarea_tests.rs.
+/// [`apply_key_with`] over a chip-free buffer (the model tests' form).
+#[cfg(test)]
 pub(crate) fn apply_key(
     text: &mut String,
     c: &mut Caret,
@@ -312,6 +329,22 @@ pub(crate) fn apply_key(
     mods: Mods,
     width: i32,
     policy: SubmitPolicy,
+) -> EditOutcome {
+    apply_key_with(text, c, key, mods, width, policy, &ChipTable::default())
+}
+
+/// Apply one key to the buffer + caret. Pure over its arguments; the
+/// decision table is pinned by textarea_tests.rs. `widths` carries the
+/// buffer's mention-chip widths so row/column motion sees each chip at
+/// its label's width.
+pub(crate) fn apply_key_with(
+    text: &mut String,
+    c: &mut Caret,
+    key: Key,
+    mods: Mods,
+    width: i32,
+    policy: SubmitPolicy,
+    widths: &ChipTable,
 ) -> EditOutcome {
     let shift = mods.contains(Mods::SHIFT);
     let alt = mods.contains(Mods::ALT);
@@ -400,7 +433,7 @@ pub(crate) fn apply_key(
         // Home/End with the readline chords, and it is what iTerm2's
         // "Natural Text Editing" preset sends for Cmd+←/Cmd+→.
         Key::Char('a') if ctrl && !alt => {
-            let rows = RowMap::build(text, width);
+            let rows = RowMap::build_with(text, width, widths);
             let target = rows.rows[rows.row_of(c.byte, c.sticky)].start;
             move_to(c, target, false);
             c.goal = None;
@@ -410,7 +443,7 @@ pub(crate) fn apply_key(
             let target = if ctrl {
                 0
             } else {
-                let rows = RowMap::build(text, width);
+                let rows = RowMap::build_with(text, width, widths);
                 rows.rows[rows.row_of(c.byte, c.sticky)].start
             };
             move_to(c, target, false);
@@ -418,7 +451,7 @@ pub(crate) fn apply_key(
             EditOutcome::Handled { edited: false }
         }
         Key::Char('e') if ctrl && !alt => {
-            let rows = RowMap::build(text, width);
+            let rows = RowMap::build_with(text, width, widths);
             let row = rows.rows[rows.row_of(c.byte, c.sticky)];
             let sticky = row_end_has_room(&rows, text, row, width);
             move_to(c, row.text_end, sticky);
@@ -429,7 +462,7 @@ pub(crate) fn apply_key(
             let (target, sticky) = if ctrl {
                 (text.len(), false)
             } else {
-                let rows = RowMap::build(text, width);
+                let rows = RowMap::build_with(text, width, widths);
                 let row = rows.rows[rows.row_of(c.byte, c.sticky)];
                 // Soft rows with SPARE width: land ON the boundary with
                 // end affinity (the caret renders in this row's empty
@@ -444,7 +477,7 @@ pub(crate) fn apply_key(
 
         // ---- vertical motion (goal column; history at the edges) ------
         Key::Up | Key::Down => {
-            let rows = RowMap::build(text, width);
+            let rows = RowMap::build_with(text, width, widths);
             let (row, col) = rows.visual(text, c.byte, c.sticky);
             let goal = c.goal.unwrap_or(col);
             if key == Key::Up {
@@ -545,10 +578,10 @@ fn soft_row_end(rows: &RowMap, text: &str, row: usize, byte: usize, width: i32) 
 /// End affinity is only honest when the row's rendered content leaves a
 /// spare column for the caret block (columns are 0..width-1; a full row
 /// has no margin cell — its boundary byte lives on the next row).
-fn row_end_has_room(_rows: &RowMap, text: &str, row: Row, width: i32) -> bool {
+fn row_end_has_room(rows: &RowMap, text: &str, row: Row, width: i32) -> bool {
     row.text_end == row.end
         && row.end > row.start
-        && crate::text::width(&text[row.start..row.text_end]) < width
+        && rows.widths.width(&text[row.start..row.text_end]) < width
 }
 
 /// Word jump over the WHOLE document in byte space (newline clusters are

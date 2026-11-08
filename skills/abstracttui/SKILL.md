@@ -64,6 +64,14 @@ authentication and persistence remain host responsibilities. Keep distinct
 conversations in distinct host state. `ChatMessage::author` and `.meta` accept
 labels from the host; the widget does not invent timestamps.
 
+For `@` mentions, give `ChatPanel::mentions(...)` the host's
+`MentionCandidate` list and read `.on_send(|value| ...)`: `value.text` spells
+each chip `@name` and `value.mentions` lists the picks in text order with their
+`index`. Only a pick from the popup is a mention; never parse `@` out of the
+text yourself. Name who answered a row with `ChatMessage::authored_by(ChatAuthor)`
+mapped from the gateway turn's `author`. Hosts with their own composer use
+`Completion::mentions` and `TextAreaState::submission()`.
+
 Run `cargo run --example chat` for a complete local echo application with no
 framework packages or network. Use `cargo run --example hello` for the basic shell.
 

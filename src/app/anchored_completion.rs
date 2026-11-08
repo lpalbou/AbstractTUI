@@ -22,7 +22,7 @@ use crate::layout::{Dimension, Style as LayoutStyle};
 use crate::reactive::{Scope, Signal};
 use crate::render::Style;
 use crate::ui::{dyn_view, Element, EventCtx, Key, Mods, Phase, Role, UiEvent, View};
-use crate::widgets::TextAreaState;
+use crate::widgets::{MentionCandidate, TextAreaState};
 
 use super::super::overlays::Overlays;
 use super::super::viewport::use_viewport;
@@ -54,6 +54,37 @@ impl CompletionCandidate {
 }
 
 type Provider = Rc<dyn Fn(&str) -> Vec<CompletionCandidate>>;
+type MentionSource = Rc<dyn Fn() -> Vec<MentionCandidate>>;
+
+/// What a trigger's rows do on accept: insert text, or insert a
+/// mention CHIP (`TextAreaState::insert_mention`).
+#[derive(Clone)]
+enum Source {
+    Text(Provider),
+    Mentions(MentionSource),
+}
+
+/// One live dropdown's rows: what renders, and — for mention rows —
+/// the structured pick each row inserts (aligned by index).
+fn rows_for(source: &Source, query: &str) -> (Vec<CompletionCandidate>, Vec<MentionCandidate>) {
+    match source {
+        Source::Text(provider) => (provider(query), Vec::new()),
+        Source::Mentions(list) => {
+            let picks = crate::widgets::mention::filter_candidates(query, list());
+            let rows = picks
+                .iter()
+                .map(|m| {
+                    let detail = match &m.hint {
+                        Some(h) => format!("{} · {h}", m.kind.as_str()),
+                        None => m.kind.as_str().to_string(),
+                    };
+                    CompletionCandidate::new(m.label(), m.label()).detail(detail)
+                })
+                .collect();
+            (rows, picks)
+        }
+    }
+}
 
 /// Where a trigger token must SIT in the draft for its provider to
 /// fire (first-app/0292). Every trigger already requires a token
@@ -99,7 +130,7 @@ fn position_allows(at: TriggerPosition, text: &str, token_start: usize) -> bool 
 struct Trigger {
     ch: char,
     at: TriggerPosition,
-    provider: Provider,
+    source: Source,
 }
 
 /// Session state behind the controller (one live token at a time).
@@ -183,7 +214,31 @@ impl Completion {
         self.triggers.push(Trigger {
             ch: trigger,
             at,
-            provider: Rc::new(provider),
+            source: Source::Text(Rc::new(provider)),
+        });
+        self
+    }
+
+    /// Mention completion (the `@entity` wave): `candidates` returns
+    /// the host's list (`{id, name, kind, hint}`), the controller
+    /// filters it by the typed query (case-insensitive name or id,
+    /// prefix hits first), and accepting a row replaces the token with
+    /// ONE atomic chip ([`TextAreaState::insert_mention`]) instead of
+    /// text. The pick is the only way a chip appears: a fully typed
+    /// `@name` that is never accepted stays plain text, and
+    /// [`TextAreaState::submission`] never reads mentions out of text.
+    /// Fires `Anywhere` (mid-sentence mentions are wanted). A tracked
+    /// read inside `candidates` (a roster signal) refreshes an open
+    /// dropdown when the list changes.
+    pub fn mentions(
+        mut self,
+        trigger: char,
+        candidates: impl Fn() -> Vec<MentionCandidate> + 'static,
+    ) -> Completion {
+        self.triggers.push(Trigger {
+            ch: trigger,
+            at: TriggerPosition::Anywhere,
+            source: Source::Mentions(Rc::new(candidates)),
         });
         self
     }
@@ -229,6 +284,9 @@ impl Completion {
         }));
         // Reused across sessions: zero per-session signal accumulation.
         let candidates: Signal<Vec<CompletionCandidate>> = cx.signal(Vec::new());
+        // Mention rows' structured picks, index-aligned with
+        // `candidates` (empty for a text trigger).
+        let picks: Rc<RefCell<Vec<MentionCandidate>>> = Rc::new(RefCell::new(Vec::new()));
         let highlight: Signal<usize> = cx.signal(0usize);
         // The composer tree's SCREEN origin (P1 fix): `caret_cell`
         // publishes LAYER-LOCAL (the textarea's own `current_rect`),
@@ -267,20 +325,22 @@ impl Completion {
         let composer_origin: Signal<Point> = cx.signal(Point::ZERO);
         let seen_origin: Rc<Cell<Point>> = Rc::new(Cell::new(Point::ZERO));
 
-        // Accept: replace the token (trigger included) with the pick.
+        // Accept: replace the token (trigger included) with the pick —
+        // text for a text trigger, one atomic chip for a mention row.
         let accept: Rc<dyn Fn(usize)> = Rc::new({
             let session = session.clone();
             let state = state.clone();
+            let picks = picks.clone();
             move |idx: usize| {
                 let picked = {
                     let s = session.borrow();
                     let Some(open) = &s.open else { return };
-                    candidates
-                        .get_untracked()
-                        .get(idx)
-                        .map(|c| (open.token_start, c.insert.clone()))
+                    candidates.get_untracked().get(idx).map(|c| {
+                        let chip = picks.borrow().get(idx).cloned();
+                        (open.token_start, c.insert.clone(), chip)
+                    })
                 };
-                let Some((start, insert)) = picked else {
+                let Some((start, insert, chip)) = picked else {
                     return;
                 };
                 {
@@ -289,7 +349,10 @@ impl Completion {
                     close_open(&mut s);
                 }
                 let caret = state.caret_byte();
-                state.replace_range(start..caret, &insert);
+                match chip {
+                    Some(mention) => state.insert_mention(start..caret, &mention),
+                    None => state.replace_range(start..caret, &insert),
+                }
             }
         });
 
@@ -429,7 +492,8 @@ impl Completion {
                 }
                 session.borrow_mut().muted_at = None;
                 // Provider runs OUTSIDE any session borrow (user code).
-                let cands = (triggers[trigger_idx].provider)(&query);
+                let (cands, row_picks) = rows_for(&triggers[trigger_idx].source, &query);
+                *picks.borrow_mut() = row_picks;
                 if cands.is_empty() {
                     let mut s = session.borrow_mut();
                     close_open(&mut s);

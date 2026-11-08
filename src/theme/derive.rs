@@ -101,9 +101,52 @@ pub fn tint_until_readable(
     }
 }
 
+/// Contrast floor an identity mark must clear on its ground (the 3:1
+/// non-text graphics floor: the mark is a glyph, never body text).
+pub const IDENTITY_MARK_FLOOR: f32 = 3.0;
+
+/// The ink for a mark drawn in someone's OWN colour (an entity's avatar
+/// colour, `#rrggbb`, host data — not a theme choice): parsed, then
+/// walked toward `toward` (the theme's text ink) by the smallest mix
+/// that clears [`IDENTITY_MARK_FLOOR`] on `ground`, so an identity dark
+/// on a dark theme still reads and keeps its hue as far as it can.
+/// `fallback` (the theme accent) answers a missing or unparseable
+/// colour. Widgets call this instead of parsing colours themselves (the
+/// widget token rule).
+pub fn identity_ink(color: Option<&str>, ground: Rgba, toward: Rgba, fallback: Rgba) -> Rgba {
+    match color.map(str::trim).and_then(Rgba::from_hex) {
+        Some(c) => mix_until_contrast(
+            c.with_alpha(255),
+            toward,
+            ground,
+            0.0,
+            0.05,
+            IDENTITY_MARK_FLOOR,
+        ),
+        None => fallback,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn identity_ink_keeps_a_readable_colour_and_lifts_a_dark_one() {
+        let ground = Rgba::rgb(0x0f, 0x34, 0x60);
+        let text = Rgba::rgb(0xee, 0xee, 0xee);
+        let accent = Rgba::rgb(0xe9, 0x45, 0x60);
+        // Readable already: returned as given.
+        let gold = identity_ink(Some("#f5c542"), ground, text, accent);
+        assert_eq!(gold, Rgba::rgb(0xf5, 0xc5, 0x42));
+        // Nearly the ground: lifted to the floor, never left invisible.
+        let dark = identity_ink(Some("#10305a"), ground, text, accent);
+        assert!(contrast_ratio(dark, ground) >= IDENTITY_MARK_FLOOR);
+        assert_ne!(dark, text, "the smallest lift, not the text ink");
+        // Missing or not a colour: the theme's accent.
+        assert_eq!(identity_ink(None, ground, text, accent), accent);
+        assert_eq!(identity_ink(Some("teal"), ground, text, accent), accent);
+    }
 
     #[test]
     fn mix_endpoints_are_exact() {

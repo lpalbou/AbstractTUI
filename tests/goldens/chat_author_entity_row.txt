@@ -1,0 +1,13 @@
+ 0| ● Castor · entity · 10:42|
+   0..1 fg=eeeeee bg=0f3460 attrs=0
+   1..3 fg=f5c542 bg=0f3460 attrs=1
+   3..9 fg=eeeeee bg=0f3460 attrs=1
+   9..18 fg=aaaaaa bg=0f3460 attrs=0
+   18..26 fg=eeeeee bg=0f3460 attrs=1
+   26..29 fg=eeeeee bg=0f3460 attrs=0
+   29..47 fg=ffffff bg=000000 attrs=0
+   47..48 fg=16213e bg=16213e attrs=0
+ 1| I read the thread. Ship it.|
+   0..29 fg=eeeeee bg=0f3460 attrs=0
+   29..47 fg=ffffff bg=000000 attrs=0
+   47..48 fg=16213e bg=16213e attrs=0

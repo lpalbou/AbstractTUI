@@ -14,6 +14,12 @@ use crate::{
 };
 use std::{cell::RefCell, rc::Rc};
 
+#[path = "chat_author.rs"]
+mod author;
+pub use author::{AuthorAvatar, AuthorKind, ChatAuthor};
+
+use super::mention::{history_notice, ComposerSubmission, MentionCandidate};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ChatRole {
     User,
@@ -27,6 +33,10 @@ pub struct ChatMessage {
     pub text: String,
     pub author: String,
     pub meta: String,
+    /// Who wrote the row, as the gateway's turn `author` names it. When
+    /// set, the heading reads `mark name · kind` (module `chat_author`);
+    /// `None` renders exactly as before the field existed.
+    pub authored_by: Option<ChatAuthor>,
 }
 impl ChatMessage {
     pub fn new(role: ChatRole, text: impl Into<String>) -> Self {
@@ -35,6 +45,7 @@ impl ChatMessage {
             text: text.into(),
             author: String::new(),
             meta: String::new(),
+            authored_by: None,
         }
     }
     pub fn user(text: impl Into<String>) -> Self {
@@ -49,6 +60,14 @@ impl ChatMessage {
     }
     pub fn meta(mut self, label: impl Into<String>) -> Self {
         self.meta = label.into();
+        self
+    }
+    /// The turn's `author` (kind tag + name; an entity's mark in its
+    /// avatar colour, the agent's mark). Its name wins over
+    /// [`author`](Self::author) and the role default, which stay the
+    /// fallback for an empty name.
+    pub fn authored_by(mut self, author: ChatAuthor) -> Self {
+        self.authored_by = Some(author);
         self
     }
 }
@@ -91,13 +110,34 @@ fn message_item(mut message: ChatMessage, t: TokenSet, assistant: &str, user: &s
         }
         .into();
     }
+    let ink = match message.role {
+        ChatRole::Error => t.error,
+        ChatRole::Notice => t.text_muted,
+        ChatRole::User => t.accent,
+        ChatRole::Assistant => t.text,
+    };
+    // An authored row's heading as styled spans; `None` keeps today's
+    // single bold string, byte for byte (golden-pinned).
+    let spans = message.authored_by.as_ref().map(|a| {
+        author::heading_spans(a, &message.author, &message.meta, ink, t.surface_raised, &t)
+    });
+    let label_width = match &spans {
+        // The tag is part of the name line: size the bubble for it
+        // (meta stays outside, exactly like the unauthored heading).
+        Some(spans) => spans
+            .iter()
+            .take(spans.len() - usize::from(!message.meta.is_empty()))
+            .map(|(s, _)| crate::text::width(s))
+            .sum(),
+        None => crate::text::width(&message.author),
+    };
     let preferred = message
         .text
         .lines()
         .map(crate::text::width)
         .max()
         .unwrap_or(0)
-        .max(crate::text::width(&message.author))
+        .max(label_width)
         + 2;
     let heading = if message.meta.is_empty() {
         message.author.clone()
@@ -130,17 +170,21 @@ fn message_item(mut message: ChatMessage, t: TokenSet, assistant: &str, user: &s
             let bubble = Rect::new(x, rect.y, width, rect.h);
             let bg = t.surface_raised;
             canvas.fill(bubble, ' ', t.text, bg);
-            let ink = match message.role {
-                ChatRole::Error => t.error,
-                ChatRole::Notice => t.text_muted,
-                ChatRole::User => t.accent,
-                ChatRole::Assistant => t.text,
-            };
-            canvas.print_styled(
-                Point::new(x + 1, rect.y),
-                &crate::text::truncate_ellipsis(&heading, (width - 2).max(1)),
-                &Style::new().fg(ink).bg(bg).attrs(Attrs::BOLD),
-            );
+            match &spans {
+                Some(spans) => author::print_spans(
+                    canvas,
+                    Point::new(x + 1, rect.y),
+                    spans,
+                    (width - 2).max(1),
+                ),
+                None => {
+                    canvas.print_styled(
+                        Point::new(x + 1, rect.y),
+                        &crate::text::truncate_ellipsis(&heading, (width - 2).max(1)),
+                        &Style::new().fg(ink).bg(bg).attrs(Attrs::BOLD),
+                    );
+                }
+            }
             markdown::draw_rows(
                 canvas,
                 Rect::new(x + 1, rect.y + 1, (width - 2).max(1), (rect.h - 2).max(1)),
@@ -206,6 +250,8 @@ impl ChatTranscript {
 type ReadMessages = Rc<dyn Fn() -> Vec<ChatMessage>>;
 type ReadBusy = Rc<dyn Fn() -> bool>;
 type Submit = Rc<RefCell<dyn FnMut(&str)>>;
+type SendFn = Rc<RefCell<dyn FnMut(&ComposerSubmission)>>;
+type ReadCandidates = Rc<dyn Fn() -> Vec<MentionCandidate>>;
 /// A composable chat page. Supply tracked readers and a draft signal; the
 /// component neither sends requests nor clears the draft before host acceptance.
 /// Mount inside a Drawer, PageHost or any allocated pane.
@@ -221,6 +267,9 @@ pub struct ChatPanel {
     pending: String,
     send_label: String,
     actions: Option<Rc<dyn Fn(Scope) -> View>>,
+    mentions: Option<ReadCandidates>,
+    send: Option<SendFn>,
+    told: Option<Signal<Vec<String>>>,
 }
 impl ChatPanel {
     pub fn new(
@@ -240,6 +289,9 @@ impl ChatPanel {
             pending: "Answering…".into(),
             send_label: "Send".into(),
             actions: None,
+            mentions: None,
+            send: None,
+            told: None,
         }
     }
     pub fn busy(mut self, read: impl Fn() -> bool + 'static) -> Self {
@@ -276,6 +328,37 @@ impl ChatPanel {
         self.actions = Some(Rc::new(build));
         self
     }
+    /// `@` mentions in the composer: typing `@` opens a popup over
+    /// `candidates` (the host's `{id, name, kind, hint}` list, filtered
+    /// by the query); a pick inserts one atomic chip. A typed `@word`
+    /// that is never picked stays text. Before the first send naming
+    /// someone in this session, the send row says
+    /// "`<name>` will read this conversation's history."
+    ///
+    /// # Panics
+    /// At `view` when the panel is not mounted under the app's
+    /// `Overlays` context (the popup's layer); mount it inside an `App`.
+    pub fn mentions(mut self, candidates: impl Fn() -> Vec<MentionCandidate> + 'static) -> Self {
+        self.mentions = Some(Rc::new(candidates));
+        self
+    }
+    /// Structured submit: the host receives `{text, mentions}` (chips
+    /// spelled `@name` in `text`, mentions in text order with their
+    /// index) INSTEAD of the constructor's `&str` callback. Without it
+    /// that callback receives `text` — the draft itself when it holds
+    /// no chips.
+    pub fn on_send(mut self, send: impl FnMut(&ComposerSubmission) + 'static) -> Self {
+        self.send = Some(Rc::new(RefCell::new(send)));
+        self
+    }
+    /// The ids already told "`<name>` will read this conversation's
+    /// history" in this session. Give one signal per conversation
+    /// session so the notice survives remounts; the panel appends each
+    /// mentioned id when a message is sent. Default: one set per mount.
+    pub fn mention_notices(mut self, told: Signal<Vec<String>>) -> Self {
+        self.told = Some(told);
+        self
+    }
     pub fn view(self, cx: Scope) -> View {
         let theme = use_theme(cx);
         let follow = cx.signal(true);
@@ -290,7 +373,39 @@ impl ChatPanel {
             }
         });
         let busy = self.busy;
-        let submit = self.submit;
+        let told = self.told.unwrap_or_else(|| cx.signal(Vec::new()));
+        // One send path for Enter and the button: the submission is
+        // read from the editor (chips spelled `@name`), the notice set
+        // learns who was mentioned, then the host callback runs LAST.
+        let submit: Submit = {
+            let text_submit = self.submit;
+            let send = self.send;
+            let editor = editor.clone();
+            Rc::new(RefCell::new(move |_raw: &str| {
+                let value = editor.submission();
+                let new: Vec<String> = told.with_untracked(|seen| {
+                    value
+                        .mentions
+                        .iter()
+                        .map(|m| m.id.clone())
+                        .filter(|id| !seen.contains(id))
+                        .collect()
+                });
+                if !new.is_empty() {
+                    told.update(|seen| {
+                        for id in new {
+                            if !seen.contains(&id) {
+                                seen.push(id);
+                            }
+                        }
+                    });
+                }
+                match &send {
+                    Some(send) => send.borrow_mut()(&value),
+                    None => text_submit.borrow_mut()(&value.text),
+                }
+            }))
+        };
         let enter_busy = busy.clone();
         let enter_submit = submit.clone();
         let button_busy = busy.clone();
@@ -303,6 +418,36 @@ impl ChatPanel {
         let empty = self.empty;
         let send_label = self.send_label;
         let actions = self.actions;
+        let mentions = self.mentions;
+        let has_mentions = mentions.is_some();
+        let notice_editor = editor.clone();
+        let composer = TextArea::new()
+            .state(&editor)
+            .rows(1, 4)
+            .inset(1, 1)
+            .placeholder(self.placeholder)
+            .placeholder_while_focused(true)
+            .on_change(move |s| draft.set(s.into()))
+            .on_submit(move |s| {
+                if !enter_busy() && !s.trim().is_empty() {
+                    enter_submit.borrow_mut()(s);
+                }
+            })
+            .element(cx, &theme.get_untracked().tokens)
+            .autofocus()
+            .build();
+        let composer = match mentions {
+            Some(candidates) => {
+                let overlays = cx.use_context::<crate::app::Overlays>().expect(
+                    "ChatPanel::mentions needs the app's Overlays context: mount the panel inside an App",
+                );
+                crate::app::anchored::Completion::new()
+                    .mentions('@', move || candidates())
+                    .placement(crate::app::anchored::PanelPlacement::AbovePreferred)
+                    .attach(cx, &overlays, &editor, composer)
+            }
+            None => composer,
+        };
         Element::new()
             .style(
                 LayoutStyle::column()
@@ -329,23 +474,7 @@ impl ChatPanel {
                         .view(scx)
                 },
             ))
-            .child(
-                TextArea::new()
-                    .state(&editor)
-                    .rows(1, 4)
-                    .inset(1, 1)
-                    .placeholder(self.placeholder)
-                    .placeholder_while_focused(true)
-                    .on_change(move |s| draft.set(s.into()))
-                    .on_submit(move |s| {
-                        if !enter_busy() && !s.trim().is_empty() {
-                            enter_submit.borrow_mut()(s);
-                        }
-                    })
-                    .element(cx, &theme.get_untracked().tokens)
-                    .autofocus()
-                    .build(),
-            )
+            .child(composer)
             .child(dyn_view_scoped(
                 LayoutStyle::line(1).shrink(0.0),
                 move |scx| {
@@ -379,6 +508,9 @@ impl ChatPanel {
                     if let Some(actions) = &actions {
                         row = row.child(actions(scx));
                     }
+                    if has_mentions {
+                        row = row.child(mention_notice(scx, notice_editor.clone(), told));
+                    }
                     row.build()
                 },
             ))
@@ -386,6 +518,45 @@ impl ChatPanel {
     }
 }
 
+/// The send row's notice: "`<name>` will read this conversation's
+/// history." for every chip in the draft whose id this session has not
+/// been told yet (the set grows on send). Empty and zero-width otherwise.
+fn mention_notice(cx: Scope, editor: TextAreaState, told: Signal<Vec<String>>) -> View {
+    let muted = use_theme(cx).get_untracked().tokens.text_muted;
+    dyn_view_scoped(LayoutStyle::default().grow(1.0).shrink(1.0), move |_| {
+        let _ = editor.value().get();
+        let value = editor.submission();
+        let names: Vec<String> = told.with(|seen| {
+            let mut names: Vec<String> = Vec::new();
+            for m in &value.mentions {
+                if !seen.contains(&m.id) && !names.contains(&m.name) {
+                    names.push(m.name.clone());
+                }
+            }
+            names
+        });
+        let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+        let line = history_notice(&refs);
+        Element::new()
+            .style(LayoutStyle::line(1).grow(1.0))
+            .access_label(line.clone())
+            .draw(move |canvas, rect| {
+                if !line.is_empty() {
+                    canvas.print_styled(
+                        Point::new(rect.x, rect.y),
+                        &crate::text::truncate_ellipsis(&line, rect.w.max(1)),
+                        &Style::new().fg(muted),
+                    );
+                }
+            })
+            .build()
+    })
+}
+
 #[cfg(test)]
 #[path = "chat_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "chat_author_tests.rs"]
+mod author_tests;
