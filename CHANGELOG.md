@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-10
+
+A minor bump: `@` mention chips and a structured send in the chat composer,
+named authors on chat rows, the ready avatar designs, and new pointer defaults
+for modals and text inputs. Two changes break code or behaviour that 0.7.1
+documented (ADR-0001 counts a documented-behaviour change as a break), so
+upgrade deliberately: see "Breaking / upgrade" first. The extension crates move
+their dependency floor to `0.8`, releasing as `abstracttui-graph` 0.7.0 and
+`abstracttui-mermaid` 0.7.0 in the same tag.
+
+### Breaking / upgrade
+
+- **A press outside a `Modal` closes it.** Only the top modal closes, and the
+  press is swallowed: it never also reaches the widget under the pointer. In
+  0.7.1 the press was only swallowed and the modal stayed open. A modal that
+  must be answered through its own controls (a blocking prompt or a decision
+  gate) calls `modal.set_close_on_outside(false)`; `ChoicePrompt` already does.
+  A modal that guards unsaved changes on Esc must guard the outside press too:
+  either opt out as above, or route the press through the same guard with
+  `overlays.on_outside_press(modal.layer(), ...)`, which replaces the default
+  rule. An app that tracks "a modal is open" in its own state should read
+  `modal.layer().is_alive()`, or install its own outside-press hook, because an
+  outside press now closes the modal without going through the app's closer.
+- **`ChatMessage` has a new public field, `authored_by: Option<ChatAuthor>`**
+  (default `None`). Code that builds messages with `ChatMessage::user(...)`,
+  `ChatMessage::assistant(...)` and the builder methods compiles unchanged; a
+  struct literal must add `authored_by: None`. A row without an author renders
+  exactly as before.
+- **Upgrade all three crates together.** Requirements on `"0.7"` /
+  `"0.7.1"` do not pick up 0.8.0. Use `abstracttui = "0.8"`,
+  `abstracttui-graph = "0.7"` and `abstracttui-mermaid = "0.7"`. Neither
+  extension crate's own API changed.
+- The other documented-behaviour changes below need no code change, but you
+  will see them: the wheel scrolls a modal's content wherever the pointer is,
+  a click in a `TextInput` moves the cursor, and `Avatar` draws `watch-halo`
+  when no style is set.
+
 ### Added
 
 - `@` mentions as inline chips. `Completion::mentions('@', candidates)` opens a
@@ -30,18 +67,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entity's mark in its avatar colour, `✦` for an agent, no mark for a person,
   and a muted kind tag. `theme::derive::identity_ink` turns an `#rrggbb`
   identity colour into a mark ink that stays readable on its ground.
-
 - `avatar_ready_styles()` (the `avatar` feature): the avatar designs a user may
   choose from, the seven ready ones (`watch-halo`, `watch-rings`, `watch-wave`,
   `watch-well`, `watch-murmuration`, `watch-hover`, `iphone-weave`), in catalog
   order. Pickers, cycling shortcuts and defaults offer only these; every other
   design is experimental and still renders when the host sets it explicitly.
-  `AVATAR_DEFAULT_STYLE` is `watch-halo`. The pinned abstractavatar 0.1.0 has
-  no design status, so the list is a fixed allowlist for now. abstractavatar
-  0.2.0 exposes the ready list as `AvatarStyle::ready()`; a test fails on that
-  crate until the allowlist is deleted and `avatar_ready_styles()` returns the
-  crate's list.
-
+  `AVATAR_DEFAULT_STYLE` is `watch-halo`.
 - `Modal::set_close_on_outside(bool)`: whether a press outside the panel
   closes the modal. Default `true`. A modal that must be answered through
   its own controls passes `false`. `ChoicePrompt` does, so a decision gate
@@ -49,31 +80,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `ChatMessage` has a new public field, `authored_by` (default `None`). Code
-  that builds `ChatMessage` with a struct literal must add it. A row without an
-  author renders exactly as before (pinned by a golden).
-
-- `Avatar` draws `watch-halo` when no style is set (was the shaded `halo`,
-  now an experimental design). The `avatar` example's `s` key cycles through
-  the ready designs only, and the `avatar_catalog` fixture shows only them.
-- Avatar tests select the shaded designs and the `eye` special case by id, not
-  by catalog position or the `Eye` variant, so they compile and pass on
-  abstractavatar 0.2.0, which retires `eye`.
-
-- A press outside a `Modal` closes it. Only the top modal closes, and the
-  press is swallowed: it never also reaches the widget under the pointer.
-  Before, the press was only swallowed and the modal stayed open.
 - The mouse wheel scrolls a modal's content wherever the pointer is. Over a
   scroll region it scrolls that region, as before. Over the title, the
   padding or outside the panel, where it used to do nothing, it now scrolls
   the modal's largest visible scroll region (`Scroll`, `List`, `Table` or
   `TextArea`). This holds for every modal overlay tree, `Modal`, `Popup` and
   modal `Drawer` included. The page under a modal never scrolls.
-
 - A left press inside a `TextInput` puts the cursor on the character under
   the pointer (either cell of a wide character lands before it; past the end
   of the text, at the end). The press drops any selection and never starts
   one. Before, a click focused the field but left the cursor where it was.
+- `Avatar` draws `watch-halo` when no style is set (was the shaded `halo`,
+  now an experimental design). The `avatar` example's `s` key cycles through
+  the ready designs only, and the `avatar_catalog` fixture shows only them.
 
 ### Fixed
 
@@ -84,18 +103,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opener.
 - Two overlays at the same z (two `Modal`s, both at `MODAL_Z`) route input
   to the one drawn on top, the later one. Before, the lower one received it.
-
-### Migration notes
-
-- A `Modal` that guards unsaved changes on Esc must guard the outside press
-  too, or opt out. Either call `modal.set_close_on_outside(false)`, or
-  route the press through the same guard with
-  `overlays.on_outside_press(modal.layer(), ...)`, which replaces the
-  default rule.
-- An app that tracks "a modal is open" in its own state should read
-  `modal.layer().is_alive()`, or install its own outside-press hook as
-  above: an outside press now closes the modal without going through the
-  app's closer.
 
 ## [0.7.1] - 2026-11-02
 
@@ -3494,7 +3501,8 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
-[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/lpalbou/abstracttui/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/lpalbou/abstracttui/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/lpalbou/abstracttui/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/lpalbou/abstracttui/compare/v0.5.0...v0.6.0

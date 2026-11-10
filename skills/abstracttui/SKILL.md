@@ -3,7 +3,7 @@ name: abstracttui
 description: Build terminal interfaces with the abstracttui Rust library. Use for reactive widgets, application shells, Markdown and chat panels, keyboard and mouse controls, or terminal rendering.
 license: MIT
 metadata:
-  package-version: "unreleased"
+  package-version: "0.8.0"
 ---
 
 # Use AbstractTUI
@@ -14,7 +14,7 @@ Chat widgets do not make network calls or load models.
 
 ## Workflow
 
-1. Add `abstracttui` to your Cargo dependencies. Use `abstracttui::prelude::*`.
+1. Add `abstracttui = "0.8"` to your Cargo dependencies. Use `abstracttui::prelude::*`.
 2. Create `App::new(Size::new(width, height))`, then `app.mount(move |cx| { ... })?`.
 3. Allocate persistent state with `cx.signal(value)` outside reactive child rebuilds.
    Read signals inside `Element::dyn_child` to rebuild only their dependent region.
@@ -69,8 +69,10 @@ For `@` mentions, give `ChatPanel::mentions(...)` the host's
 each chip `@name` and `value.mentions` lists the picks in text order with their
 `index`. Only a pick from the popup is a mention; never parse `@` out of the
 text yourself. Name who answered a row with `ChatMessage::authored_by(ChatAuthor)`
-mapped from the gateway turn's `author`. Hosts with their own composer use
-`Completion::mentions` and `TextAreaState::submission()`.
+mapped from the gateway turn's `author`; a struct literal of `ChatMessage` must
+set `authored_by: None`. Hosts with their own composer use `Completion::mentions`,
+`TextAreaState::submission()` and `widgets::history_notice(&names)` for the
+"will read this conversation's history" sentence.
 
 Run `cargo run --example chat` for a complete local echo application with no
 framework packages or network. Use `cargo run --example hello` for the basic shell.
@@ -94,6 +96,11 @@ screen-copy fallback. See [the API](../../docs/api.md#feed--logical-content-sele
 - Set `.busy` from real backend state; a rendering indicator alone cannot protect
   application actions against duplicates.
 - Default input inset is zero. Explicitly set it on composers that need spacing.
+- A press outside a `Modal` closes it. Call `modal.set_close_on_outside(false)` for a
+  prompt that must be answered through its own controls, or
+  `overlays.on_outside_press(modal.layer(), ...)` to route the press through an
+  unsaved-changes guard. Read `modal.layer().is_alive()` rather than tracking
+  "modal open" yourself.
 - Terminal image support depends on the terminal; use cell-based rendering when
   pixel protocols are unavailable. The library supplies presentation, not speech
   synthesis, microphone recognition or an assistant service.
@@ -109,9 +116,12 @@ RGBA producer and carry no avatar generator in their compiled dependency graph.
 
 Inside an application mount callback, allocate `pose = cx.signal(AvatarPose::Ready)`,
 `level = cx.signal(0.0f32)`, `visible = cx.signal(true)` and `motion = cx.signal(false)`.
-Build `Avatar::new(pose).style(AvatarStyle::Halo).level(level).active(visible)
+Build `Avatar::new(pose).style(AVATAR_DEFAULT_STYLE).level(level).active(visible)
 .animated(motion).view(cx)`. Poses also include Thinking, Working, Listening,
-Speaking, Waiting and Error; styles include Halo, Hover, Vortex, Eclipse, Eye and Rover. Bind active to real
+Speaking, Waiting and Error. Offer users only `avatar_ready_styles()`, the seven ready
+designs (`watch-halo`, the default, `watch-rings`, `watch-wave`, `watch-well`,
+`watch-murmuration`, `watch-hover`, `iphone-weave`); the other designs are
+experimental and draw only when the host sets one explicitly. Bind active to real
 host visibility and motion to user preferences. Enabled Ready breathes at 2 fps,
 Waiting pulses at about 6 fps, active phases run at roughly 12 fps, and Error is static.
 Animation stops its clock when hidden,

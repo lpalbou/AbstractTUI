@@ -796,7 +796,8 @@ when it holds no chips. Before the first message that names someone in a
 session, the send row reads "Castor will read this conversation's history."
 Pass `.mention_notices(signal)` with one `Signal<Vec<String>>` per conversation
 session so the notice is shown once per session. The panel appends each
-mentioned id when a message is sent. The popup needs the app's `Overlays`, so a
+mentioned id when a message is sent. A host with its own composer shows the same
+sentence with `widgets::history_notice(&names)`. The popup needs the app's `Overlays`, so a
 panel with mentions must be mounted inside an `App`; `view` panics otherwise.
 
 ```rust,ignore
@@ -821,7 +822,11 @@ the gateway turn's `author` object: `kind` (`AuthorKind::Entity`, `Agent` or
 `Person`), `name`, `entity_id`, `identity_ref` and `avatar: {style, color}`. The
 heading then reads `● Castor · entity`. An entity's `●` uses its avatar colour
 (`#rrggbb`), lifted just enough to stay readable on the bubble, or the theme
-accent when there is no colour. An agent's mark is `✦`, and a person has none.
+accent when there is no colour. A host that draws its own rows gets the same ink
+from `theme::derive::identity_ink(color, ground, text_ink, accent)`: the colour
+mixed toward `text_ink` by the smallest step that clears the 3:1 mark floor
+(`IDENTITY_MARK_FLOOR`) on `ground`, or `accent` when the colour is missing or
+does not parse as hex. An agent's mark is `✦`, and a person has none.
 The kind tag is muted. When `name` is empty, the row's `author` label (or the
 role's default) is shown instead. A row without `authored_by` renders exactly
 as before. The crate parses no JSON, so the host maps the turn's `author` onto

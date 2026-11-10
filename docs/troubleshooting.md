@@ -303,6 +303,22 @@ double-click timing), or opt a bare tree in with
 embed their own `ui::ClickChain`. The full convention:
 [api.md § "Double-click"](api.md#double-click).
 
+## A modal closes when I click outside it
+
+**Cause**: the default. A press outside a `Modal` closes the top modal and
+is swallowed, so it never reaches the widget under the pointer. That suits
+menus and informational panels, not a prompt that must be answered, and
+not a form that guards unsaved changes on Esc: the outside press closes it
+without going through your closer.
+
+**Fix**: for a modal that must be answered through its own controls, call
+`modal.set_close_on_outside(false)` (`ChoicePrompt` does this for you). To
+keep the press but route it through your own guard, install
+`overlays.on_outside_press(modal.layer(), ...)`, which replaces the default
+rule. If your app tracks "a modal is open" in its own state, read
+`modal.layer().is_alive()` instead. See
+[api.md § "app — the runtime"](api.md#app--the-runtime).
+
 ## My screenshot shows a labeled veil where an image should be
 
 **Cause**: honesty, not loss. Cells under a kitty/iTerm2/sixel placement

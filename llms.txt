@@ -95,7 +95,7 @@ feature adds the procedural `Avatar` widget backed by the AbstractAvatar crate.
   pluggable `FileSource` seam), the `canvas` sub-cell vector layer (braille/quadrant dot grids,
   Bresenham/bezier/arc strokes, eighth-block fills, the cell-color z-order rule), the
   app runtime (overlays,
-  modal, toast, edge-anchored `Drawer` panels, the anchored-popup substrate and the
+  modal (an outside press closes it unless `set_close_on_outside(false)`), toast, edge-anchored `Drawer` panels, the anchored-popup substrate and the
   Select/Combobox/MultiSelect pickers,
   completion, the `ThemeSwitcher` menu/toggle control, hooks, key press/release
   state and `PushToTalk`), theme, render
@@ -152,7 +152,8 @@ feature adds the procedural `Avatar` widget backed by the AbstractAvatar crate.
   washed-out colors, flicker/tearing,
   Ctrl+Enter behaving like Enter, the splash not playing, slow frames, wide-character
   misalignment, rows vanishing on small terminals, an input panel that is a row short
-  and stops following the caret, double-click not activating, file
+  and stops following the caret, double-click not activating, a modal that closes
+  on an outside click, file
   drops pasting a path instead of attaching, text selection under mouse capture,
   copies not reaching the clipboard, hover highlights that never light up
   (`RunConfig::hover_ink`), and tests that hang.
@@ -160,9 +161,9 @@ feature adds the procedural `Avatar` widget backed by the AbstractAvatar crate.
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, **0.7.1** (2026-11-02) the current one.
-  The extension family is at `abstracttui-graph` 0.6.0 and
-  `abstracttui-mermaid` 0.6.0, each with its own changelog under `extensions/`.
+  (2026-07-21) is the first public release, **0.8.0** (2026-11-10) the current one.
+  The extension family is at `abstracttui-graph` 0.7.0 and
+  `abstracttui-mermaid` 0.7.0, each with its own changelog under `extensions/`.
 - [Contributing](CONTRIBUTING.md): Building, the test suite (~2,500 core tests; ~2,730
   with the extension family via `--workspace`, the CI gate) and the explicitly-run suites
   (live pty, two release-mode perf-budget suites with byte-emission ratchets, plus the
@@ -217,5 +218,5 @@ feature adds the procedural `Avatar` widget backed by the AbstractAvatar crate.
 - [Chat panels](docs/api.md#chatpanel-and-chattranscript--host-owned-assistant-conversations): bubbles, composer and scroll without transport or inference; `@` mention chips with a structured `{text, mentions}` send, and the turn author (kind tag, entity colour mark).
 
 - [Live frames](docs/api.md#frameplayer--live-rgba-media): `FramePlayer` presents a `Signal<Arc<Bitmap>>` of RGBA frames; no optional feature needed.
-- [Activity avatar](docs/api.md#avatar--optional-procedural-activity-presentation): Halo/Hover and the shared 44-design catalog behind the `avatar` feature, with explicit state, amplitude, visibility and motion controls and shape-only overlays.
+- [Activity avatar](docs/api.md#avatar--optional-procedural-activity-presentation): the shared 44-design catalog behind the `avatar` feature, of which `avatar_ready_styles()` offers the seven ready designs (default `watch-halo`), with explicit state, amplitude, visibility and motion controls and shape-only overlays.
 - [Session cards](docs/api.md#session-cards): `SessionCard`, a controlled compact presenter for session lists.

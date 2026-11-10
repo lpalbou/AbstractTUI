@@ -5,6 +5,14 @@ own their changelogs; core's CHANGELOG covers the engine). The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 SemVer.
 
+## [0.7.0] - 2026-11-10
+
+### Changed
+
+- Requires `abstracttui` **0.8** (an engine minor with two breaks: a press
+  outside a `Modal` closes it, and `ChatMessage` gained a public field). No API
+  change in this crate.
+
 ## [0.6.0] - 2026-10-28
 
 ### Changed

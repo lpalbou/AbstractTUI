@@ -70,8 +70,9 @@ through ordinary reactivity.*
   `cargo run --features avatar --example avatar` to preview, or
   `cargo run --features avatar --example avatar_catalog -- /tmp/avatars.png error` for a PNG.
 - **Chat panels** — `ChatPanel` and `ChatTranscript` provide configurable message
-  bubbles, Markdown, scrolling and a bound composer; the host owns requests, history
-  and permissions. Run `cargo run --example chat` for a local echo conversation.
+  bubbles, Markdown, scrolling and a bound composer with `@` mention chips and named
+  authors on rows; the host owns requests, history and permissions. Run
+  `cargo run --example chat` for a local echo conversation.
 - **Transcripts and documents** — `Feed` renders append-only conversations
   and logs with keyed rich blocks (markdown, code with syntax and diff
   tinting, multi-ink rich lines, custom draw); streaming markdown items
@@ -201,13 +202,15 @@ same dependency discipline, public core API only —
 [ADR-0004](docs/adr/0004-extension-packaging.md)):
 
 ```sh
-cargo add abstracttui-graph      # 0.6 — graph auto-layout + GraphView
-cargo add abstracttui-mermaid    # 0.6 — mermaid subset renderer
+cargo add abstracttui-graph      # 0.7 — graph auto-layout + GraphView
+cargo add abstracttui-mermaid    # 0.7 — mermaid subset renderer
 ```
 
-**What's new in 0.7.1:** chat panels, live RGBA frames with `FramePlayer`,
-optional activity avatars, `SessionCard`, and logical content selection in
-`Feed`. See [CHANGELOG.md](CHANGELOG.md#071---2026-11-02).
+**What's new in 0.8.0:** `@` mention chips with a structured send in the chat
+composer, named authors on chat rows, the ready avatar designs, and new modal
+pointer defaults: a press outside a `Modal` closes it unless you call
+`set_close_on_outside(false)`. Upgrading from 0.7 needs a look at the
+[breaking changes](CHANGELOG.md#080---2026-11-10).
 
 ## Run the examples
 

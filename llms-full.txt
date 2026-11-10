@@ -76,8 +76,9 @@ through ordinary reactivity.*
   `cargo run --features avatar --example avatar` to preview, or
   `cargo run --features avatar --example avatar_catalog -- /tmp/avatars.png error` for a PNG.
 - **Chat panels** — `ChatPanel` and `ChatTranscript` provide configurable message
-  bubbles, Markdown, scrolling and a bound composer; the host owns requests, history
-  and permissions. Run `cargo run --example chat` for a local echo conversation.
+  bubbles, Markdown, scrolling and a bound composer with `@` mention chips and named
+  authors on rows; the host owns requests, history and permissions. Run
+  `cargo run --example chat` for a local echo conversation.
 - **Transcripts and documents** — `Feed` renders append-only conversations
   and logs with keyed rich blocks (markdown, code with syntax and diff
   tinting, multi-ink rich lines, custom draw); streaming markdown items
@@ -207,13 +208,15 @@ same dependency discipline, public core API only —
 [ADR-0004](docs/adr/0004-extension-packaging.md)):
 
 ```sh
-cargo add abstracttui-graph      # 0.6 — graph auto-layout + GraphView
-cargo add abstracttui-mermaid    # 0.6 — mermaid subset renderer
+cargo add abstracttui-graph      # 0.7 — graph auto-layout + GraphView
+cargo add abstracttui-mermaid    # 0.7 — mermaid subset renderer
 ```
 
-**What's new in 0.7.1:** chat panels, live RGBA frames with `FramePlayer`,
-optional activity avatars, `SessionCard`, and logical content selection in
-`Feed`. See [CHANGELOG.md](CHANGELOG.md#071---2026-11-02).
+**What's new in 0.8.0:** `@` mention chips with a structured send in the chat
+composer, named authors on chat rows, the ready avatar designs, and new modal
+pointer defaults: a press outside a `Modal` closes it unless you call
+`set_close_on_outside(false)`. Upgrading from 0.7 needs a look at the
+[breaking changes](CHANGELOG.md#080---2026-11-10).
 
 ## Run the examples
 
@@ -322,7 +325,7 @@ it, `FramePlayer` still presents RGBA frames from any producer — see
 Building against a working copy instead of a release — `[patch.crates-io]`
 pointing at a `path`, which is how a sibling app tracks the engine — has one
 rule that is not obvious: **pin the version requirement to the exact version
-the checkout carries** (`abstracttui = "0.7.1"`, not `"0.7"`). A patch whose
+the checkout carries** (`abstracttui = "0.8.0"`, not `"0.8"`). A patch whose
 version falls outside your requirement is not an error; cargo ignores it and
 resolves from crates.io instead, so you build against a published version
 while believing you build against your tree. The symptom and a check that
@@ -1863,7 +1866,8 @@ when it holds no chips. Before the first message that names someone in a
 session, the send row reads "Castor will read this conversation's history."
 Pass `.mention_notices(signal)` with one `Signal<Vec<String>>` per conversation
 session so the notice is shown once per session. The panel appends each
-mentioned id when a message is sent. The popup needs the app's `Overlays`, so a
+mentioned id when a message is sent. A host with its own composer shows the same
+sentence with `widgets::history_notice(&names)`. The popup needs the app's `Overlays`, so a
 panel with mentions must be mounted inside an `App`; `view` panics otherwise.
 
 ```rust,ignore
@@ -1888,7 +1892,11 @@ the gateway turn's `author` object: `kind` (`AuthorKind::Entity`, `Agent` or
 `Person`), `name`, `entity_id`, `identity_ref` and `avatar: {style, color}`. The
 heading then reads `● Castor · entity`. An entity's `●` uses its avatar colour
 (`#rrggbb`), lifted just enough to stay readable on the bubble, or the theme
-accent when there is no colour. An agent's mark is `✦`, and a person has none.
+accent when there is no colour. A host that draws its own rows gets the same ink
+from `theme::derive::identity_ink(color, ground, text_ink, accent)`: the colour
+mixed toward `text_ink` by the smallest step that clears the 3:1 mark floor
+(`IDENTITY_MARK_FLOOR`) on `ground`, or `accent` when the colour is missing or
+does not parse as hex. An agent's mark is `✦`, and a person has none.
 The kind tag is muted. When `name` is empty, the row's `author` label (or the
 role's default) is shown instead. A row without `authored_by` renders exactly
 as before. The crate parses no JSON, so the host maps the turn's `author` onto
@@ -5734,9 +5742,9 @@ the mermaid parser is hand-rolled).
 
 ```toml
 [dependencies]
-abstracttui = "0.5"
-abstracttui-graph = "0.4"    # graph layout + GraphView
-abstracttui-mermaid = "0.4"  # mermaid subset (depends on -graph)
+abstracttui = "0.8"
+abstracttui-graph = "0.7"    # graph layout + GraphView
+abstracttui-mermaid = "0.7"  # mermaid subset (depends on -graph)
 ```
 
 ## The one data contract: `GraphDesc -> Layout`
@@ -7071,6 +7079,22 @@ double-click timing), or opt a bare tree in with
 `ui::set_event_time(Some(t))`. Custom input paths outside tree dispatch
 embed their own `ui::ClickChain`. The full convention:
 [api.md § "Double-click"](api.md#double-click).
+
+## A modal closes when I click outside it
+
+**Cause**: the default. A press outside a `Modal` closes the top modal and
+is swallowed, so it never reaches the widget under the pointer. That suits
+menus and informational panels, not a prompt that must be answered, and
+not a form that guards unsaved changes on Esc: the outside press closes it
+without going through your closer.
+
+**Fix**: for a modal that must be answered through its own controls, call
+`modal.set_close_on_outside(false)` (`ChoicePrompt` does this for you). To
+keep the press but route it through your own guard, install
+`overlays.on_outside_press(modal.layer(), ...)`, which replaces the default
+rule. If your app tracks "a modal is open" in its own state, read
+`modal.layer().is_alive()` instead. See
+[api.md § "app — the runtime"](api.md#app--the-runtime).
 
 ## My screenshot shows a labeled veil where an image should be
 
