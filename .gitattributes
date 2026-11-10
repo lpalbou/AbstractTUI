@@ -1,0 +1,8 @@
+# Golden snapshots are byte-exact expected output: src/testing/snapshot.rs
+# compares the golden's bytes with the rendered string. Git must never
+# rewrite their line endings. Without this, a Windows checkout
+# (core.autocrlf=true, the Git for Windows default used by actions/checkout)
+# turned every LF into CRLF and failed each golden the lib tests read
+# (CI run 42736083911 on main after v0.8.0). `-text` rather than `eol=lf`:
+# screenshot_scene_ansi.txt carries literal CR bytes that must stay as they are.
+tests/goldens/** -text
