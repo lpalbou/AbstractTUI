@@ -2662,6 +2662,15 @@ platform note: job-control suspend (`Ctrl+Z`) re-enters with the original
 options, re-arming reporting — suspend again after resume if you keep it
 off.
 
+`Terminal::set_mouse_mode(MouseMode)` CHANGES the session's tracking mode
+(where `set_mouse_reporting` only suspends and resumes the entered one) and
+returns the mode it replaced, so a temporary owner of the pointer can put
+the session back exactly. Like `set_kitty_keyboard`, it updates the
+terminal's session accounting: `leave` disarms whatever is armed at that
+moment, suspend re-arms the current mode, and the panic-hook restore
+disarms a mode armed after enter. The boot splash uses it so a click skips
+the splash even in a session entered with `MouseMode::Off`.
+
 ## app — the full-redraw verb (Ctrl+L class)
 
 The damage contract trusts the terminal to keep every cell the engine

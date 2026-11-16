@@ -533,6 +533,30 @@ impl Terminal for WindowsTerminal {
         })
     }
 
+    fn set_mouse_mode(
+        &mut self,
+        mode: super::options::MouseMode,
+    ) -> Result<super::options::MouseMode> {
+        // Mirrors the unix backend: the saved options are the truth leave
+        // and the panic hook read; the VT wire carries the delta
+        // (ENABLE_VIRTUAL_TERMINAL_INPUT, as in set_mouse_reporting).
+        let Some(saved) = &mut self.saved else {
+            return Err(Error::Term(
+                "set_mouse_mode outside a session — enter() first".into(),
+            ));
+        };
+        let prev = saved.opts.mouse;
+        if prev == mode {
+            return Ok(prev);
+        }
+        saved.opts.mouse = mode;
+        if mode != super::options::MouseMode::Off {
+            Self::append_emergency_leave(mode.disarm_bytes());
+        }
+        self.write(&super::options::MouseMode::retarget_bytes(prev, mode))?;
+        Ok(prev)
+    }
+
     fn set_kitty_keyboard(&mut self, flags: super::options::KittyFlags) -> Result<()> {
         // Mirrors the unix backend: the accounting lives in the saved
         // options, so leave pops what was pushed with zero extra state.

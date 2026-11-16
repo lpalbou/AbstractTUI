@@ -288,6 +288,24 @@ impl Terminal for CaptureTerm {
         )
     }
 
+    /// Mirrors the platform backends: the delta goes through the ordinary
+    /// write path (byte log + VT model see it) and the STORED options
+    /// update, so `leave` disarms whatever is armed at that moment.
+    fn set_mouse_mode(&mut self, mode: crate::term::MouseMode) -> Result<crate::term::MouseMode> {
+        let Some(opts) = &mut self.entered else {
+            return Err(crate::base::Error::Term(
+                "set_mouse_mode outside a session — enter() first".into(),
+            ));
+        };
+        let prev = opts.mouse;
+        if prev == mode {
+            return Ok(prev);
+        }
+        opts.mouse = mode;
+        Terminal::write(self, &crate::term::MouseMode::retarget_bytes(prev, mode))?;
+        Ok(prev)
+    }
+
     /// Job-control suspend modeled in-memory (the I-2 acceptance
     /// surface): emits the leave bytes, "stops" (nothing — a scripted
     /// terminal has no process to signal), then re-enters with the

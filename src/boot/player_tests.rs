@@ -316,3 +316,128 @@ fn fade_dims_cells_toward_ground() {
     assert_ne!(cell.bg, theme.tokens.bg);
     assert_ne!(cell.bg, theme.tokens.accent);
 }
+
+// ---------------------------------------------------------------------------
+// Click-to-skip on the real-terminal adapter
+// ---------------------------------------------------------------------------
+
+use crate::term::EnterOptions;
+use crate::testing::CaptureTerm;
+
+/// An entered capture terminal with the given mouse posture.
+fn entered_term(mouse: MouseMode) -> CaptureTerm {
+    let mut t = CaptureTerm::new(Size::new(20, 6));
+    t.enter(&EnterOptions {
+        mouse,
+        ..EnterOptions::default()
+    })
+    .expect("enter");
+    t
+}
+
+/// A left press then its release, SGR-encoded (what a terminal sends for
+/// one click once mode 1002 + 1006 is armed).
+const CLICK: &[u8] = b"\x1b[<0;5;3M\x1b[<0;5;3m";
+
+/// The bug this guards: an app enters its boot session with
+/// `MouseMode::Off`, so the terminal reports no click and only a key could
+/// skip. The adapter must arm press reporting itself, the click must skip,
+/// its release must not leak to the app, and the session must end as it
+/// was entered (mouse off) once the adapter is finished.
+#[test]
+fn a_click_skips_even_when_the_session_entered_without_mouse() {
+    let mut term = entered_term(MouseMode::Off);
+    assert!(
+        !term.screen().modes().is_set(1002),
+        "precondition: no tracking"
+    );
+    term.push_input(CLICK);
+
+    let mut io = TerminalIo::new(&mut term);
+    let ts = Rc::new(RefCell::new(Vec::new()));
+    let mut source = RecordingSource::new(Size::new(20, 6), ts.clone());
+    let mut clock = VClock::new(vec![0, 0, 40, 80, 100, 140, 160, 180, 210]);
+    let mut now = move || clock.tick();
+    let out = play(
+        &mut io,
+        &mut source,
+        default_theme(),
+        &PresentCaps::FULL,
+        &opts(),
+        &mut now,
+    )
+    .expect("play");
+    let (carry, _parser) = io.finish();
+
+    assert_eq!(out, SplashOutcome::Skipped, "a click must skip like a key");
+    assert!(
+        carry.iter().all(|e| !matches!(e, Event::Mouse(_))),
+        "the skip click's release must not reach the app: {carry:?}"
+    );
+    let log = String::from_utf8_lossy(term.bytes()).into_owned();
+    let armed = log
+        .find("\x1b[?1002h\x1b[?1006h")
+        .expect("splash armed press reporting");
+    let disarmed = log
+        .rfind("\x1b[?1006l\x1b[?1002l")
+        .expect("splash disarmed it");
+    assert!(armed < disarmed, "arm before disarm: {log:?}");
+    assert!(
+        !term.screen().modes().is_set(1002) && !term.screen().modes().sgr_mouse(),
+        "the session ends the splash with mouse tracking off, as entered"
+    );
+    assert_eq!(
+        term.set_mouse_mode(MouseMode::Off).unwrap(),
+        MouseMode::Off,
+        "the stored session posture is back to the entered mode"
+    );
+}
+
+/// A session that already reports presses is left untouched (no bytes),
+/// and a richer mode (any-motion) is narrowed for the splash, then put
+/// back exactly.
+#[test]
+fn the_entered_mouse_mode_is_restored_exactly() {
+    let mut term = entered_term(MouseMode::ButtonDrag);
+    let before = term.bytes().len();
+    let io = TerminalIo::new(&mut term);
+    let _ = io.finish();
+    assert_eq!(term.bytes().len(), before, "ButtonDrag needs no retarget");
+    assert!(term.screen().modes().is_set(1002));
+
+    let mut term = entered_term(MouseMode::AnyMotion);
+    {
+        let _io = TerminalIo::new(&mut term);
+    } // dropped without finish (an early return): Drop restores
+    assert!(term.screen().modes().is_set(1003), "any-motion is re-armed");
+    assert_eq!(
+        term.set_mouse_mode(MouseMode::Off).unwrap(),
+        MouseMode::AnyMotion
+    );
+}
+
+/// The terminal verb itself: delta bytes, stored posture, and `leave`
+/// disarming a mode armed after enter.
+#[test]
+fn set_mouse_mode_retargets_and_leave_disarms_it() {
+    let mut term = entered_term(MouseMode::Off);
+    assert_eq!(
+        term.set_mouse_mode(MouseMode::ButtonDrag).unwrap(),
+        MouseMode::Off
+    );
+    assert!(term.screen().modes().is_set(1002));
+    assert_eq!(
+        term.set_mouse_mode(MouseMode::ButtonDrag).unwrap(),
+        MouseMode::ButtonDrag,
+        "same mode: no-op"
+    );
+    term.leave().expect("leave");
+    assert!(
+        !term.screen().modes().is_set(1002) && !term.screen().modes().sgr_mouse(),
+        "leave disarms the retargeted mode"
+    );
+    assert!(
+        term.set_mouse_mode(MouseMode::ButtonDrag).is_err(),
+        "outside a session the verb refuses"
+    );
+}

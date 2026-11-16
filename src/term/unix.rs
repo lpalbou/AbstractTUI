@@ -478,6 +478,34 @@ impl Terminal for UnixTerminal {
         })
     }
 
+    fn set_mouse_mode(
+        &mut self,
+        mode: super::options::MouseMode,
+    ) -> Result<super::options::MouseMode> {
+        // Same accounting as set_kitty_keyboard: the entered options are
+        // the truth leave and suspend read, so updating them keeps both
+        // symmetric with zero extra state.
+        let Some(state) = &mut self.entered else {
+            return Err(Error::Term(
+                "set_mouse_mode outside a session — enter() first".into(),
+            ));
+        };
+        let prev = state.opts.mouse;
+        if prev == mode {
+            return Ok(prev);
+        }
+        state.opts.mouse = mode;
+        if mode != super::options::MouseMode::Off {
+            // The panic hook captured the ENTERED mode's leave bytes; it
+            // must also disarm a mode armed after enter. Mouse modes are
+            // global, not per screen buffer, so appending is correct, and
+            // a stale extra disarm is harmless (DECRST of a reset mode).
+            sys::append_emergency_leave(mode.disarm_bytes());
+        }
+        self.write(&super::options::MouseMode::retarget_bytes(prev, mode))?;
+        Ok(prev)
+    }
+
     fn set_kitty_keyboard(&mut self, flags: super::options::KittyFlags) -> Result<()> {
         // The push/pop accounting lives in the entered options: leave
         // derives its pop from them, and suspend re-enters with them, so

@@ -198,8 +198,8 @@ when the capability report classifies the terminal as dumb.
 tty (`cargo run --example splash` to verify; `ABSTRACTTUI_NO_SPLASH=0`
 explicitly opts back in under wrapper scripts that set it). The gate
 function returns the skip reason as a string — log it and the answer reads
-itself. Also remember any keypress skips the splash with a fast fade; a
-buffered keystroke at launch can end it almost immediately.
+itself. Also remember any keypress or mouse click skips the splash with a
+fast fade; a buffered keystroke at launch can end it almost immediately.
 
 ## Frames are slow
 

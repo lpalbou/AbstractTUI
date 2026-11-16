@@ -132,7 +132,7 @@ through ordinary reactivity.*
 - **Motion** — cell shaders (shimmer, dissolve, hue-drift, and more) that cost
   work only where damage exists, plus tweens, easings, and timelines.
 - **A boot identity** — a 2-second animated splash (3D mark with a pure-cell 2D
-  fallback), skippable with any key, auto-disabled on non-TTY, `NO_COLOR`, and
+  fallback), skippable with any key or click, auto-disabled on non-TTY, `NO_COLOR`, and
   `TERM=dumb`.
 - **Headless testing** — drive the production pipeline against a captured
   terminal and assert on the rendered screen. No pty required.
@@ -206,9 +206,10 @@ cargo add abstracttui-graph      # 0.7 — graph auto-layout + GraphView
 cargo add abstracttui-mermaid    # 0.7 — mermaid subset renderer
 ```
 
-**What's new in 0.8.0:** `@` mention chips with a structured send in the chat
-composer, named authors on chat rows, the ready avatar designs, and new modal
-pointer defaults: a press outside a `Modal` closes it unless you call
+**What's new in 0.8.1:** a mouse click skips the boot splash, like a key
+(`Terminal::set_mouse_mode` is the new verb underneath). 0.8.0 brought `@`
+mention chips with a structured send in the chat composer, named authors on
+chat rows, the ready avatar designs, and new modal pointer defaults: a press outside a `Modal` closes it unless you call
 `set_close_on_outside(false)`. Upgrading from 0.7 needs a look at the
 [breaking changes](CHANGELOG.md#080---2026-11-10).
 

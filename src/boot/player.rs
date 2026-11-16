@@ -41,7 +41,7 @@ use std::time::{Duration, Instant};
 use crate::base::{Point, Result, Size};
 use crate::input::{Event, KeyEventKind, MouseKind, Parser};
 use crate::render::{Cell, FrameDiff, PresentCaps, Presenter, Surface};
-use crate::term::{Capabilities, TermRead, Terminal};
+use crate::term::{Capabilities, MouseMode, TermRead, Terminal};
 use crate::theme::Theme;
 
 use super::identity;
@@ -322,27 +322,74 @@ fn fade_toward_ground(buf: &mut Surface, frame: &Surface, theme: &Theme, k: f32)
 /// chatter) for the application. The splash must never eat the active
 /// probe's answers (RT1-6): call [`TerminalIo::finish`] after `play` and
 /// feed the carryover into the app's event path.
+///
+/// **A click skips like a key, whatever the session was entered with.**
+/// A terminal reports no click unless mouse tracking is armed, and an
+/// app may well enter its boot session with `MouseMode::Off`. So the
+/// adapter arms press reporting ([`MouseMode::ButtonDrag`]) for the
+/// splash's lifetime through [`Terminal::set_mouse_mode`], and puts the
+/// session's own mode back when it is finished or dropped (an early
+/// return or an unwinding panic included). The pointer chatter that
+/// belongs to the skip gesture (the release, a drag) is consumed with
+/// it, never handed to the app as an orphan release.
 pub struct TerminalIo<'a> {
     term: &'a mut dyn Terminal,
     parser: Parser,
     carryover: Vec<Event>,
+    /// The mode to restore: `Some` only when the adapter changed it.
+    restore_mouse: Option<MouseMode>,
 }
 
 impl<'a> TerminalIo<'a> {
+    /// Wrap an ENTERED terminal. Arms press reporting when the session's
+    /// mode cannot report a press. A terminal that cannot retarget its
+    /// mouse mode (a scripted test terminal) is left as it is: keys still
+    /// skip; the platform backends always retarget.
     pub fn new(term: &'a mut dyn Terminal) -> Self {
+        let restore_mouse = match term.set_mouse_mode(MouseMode::ButtonDrag) {
+            Ok(prev) if prev != MouseMode::ButtonDrag => Some(prev),
+            _ => None,
+        };
+        if restore_mouse.is_some() {
+            let _ = term.flush();
+        }
         TerminalIo {
             term,
             parser: Parser::new(),
             carryover: Vec::new(),
+            restore_mouse,
         }
     }
 
     /// Hand back what the splash swallowed but the app owns: retained
     /// non-deliberate events (probe replies…) and the parser (it may hold
-    /// mid-escape state that the app's reader must continue from).
-    pub fn finish(self) -> (Vec<Event>, Parser) {
-        (self.carryover, self.parser)
+    /// mid-escape state that the app's reader must continue from). The
+    /// session's mouse mode is restored before this returns.
+    pub fn finish(mut self) -> (Vec<Event>, Parser) {
+        let carryover = std::mem::take(&mut self.carryover);
+        let parser = std::mem::take(&mut self.parser);
+        drop(self); // restores the mouse mode (Drop)
+        (carryover, parser)
     }
+}
+
+impl Drop for TerminalIo<'_> {
+    fn drop(&mut self) {
+        if let Some(prev) = self.restore_mouse.take() {
+            // Best effort: a failed write here must not mask the splash's
+            // own result; `leave` still disarms whatever stayed armed.
+            let _ = self.term.set_mouse_mode(prev);
+            let _ = self.term.flush();
+        }
+    }
+}
+
+/// Pointer chatter: mouse events that are not themselves a skip gesture
+/// (a release, a drag, a hover move). During the splash they can only be
+/// the tail of a skip click or a pointer the app has not asked about yet;
+/// handing them over would deliver a release without its press.
+fn is_pointer_chatter(event: &Event) -> bool {
+    matches!(event, Event::Mouse(_)) && !is_deliberate(event)
 }
 
 impl SplashIo for TerminalIo<'_> {
@@ -367,7 +414,7 @@ impl SplashIo for TerminalIo<'_> {
                 for e in events {
                     if is_deliberate(&e) {
                         deliberate.push(e);
-                    } else {
+                    } else if !is_pointer_chatter(&e) {
                         self.carryover.push(e);
                     }
                 }

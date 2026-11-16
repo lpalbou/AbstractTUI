@@ -1,5 +1,5 @@
 //! AbstractTUI visual identity: the ~2s boot splash (3D mark rendered by
-//! `three`, themed by `theme`, animated by `anim`), skippable on any key,
+//! `three`, themed by `theme`, animated by `anim`), skippable on any key or click,
 //! auto-skipped when not a TTY or when ABSTRACTTUI_NO_SPLASH is set.
 //!
 //! `identity` holds the brand constants (timeline, easing, ramp, wordmark,

@@ -402,8 +402,12 @@ The sequence runs 2.0 s in four beats: **arrival** (three planes fly in,
 staggered, on an ease-out curve), **alignment** (at 0.9 s the planes lock
 into the mark and a 12-spark burst fires), **reveal** (at 1.4 s the
 wordmark tracks open from 4 cells of letter-spacing to 1), **hold**
-(settle, then done). Any key skips with a fast 120 ms fade, and a hard
-2.5 s wall cutoff bounds the whole thing.
+(settle, then done). Any key, mouse press or wheel skips with a fast
+120 ms fade, and a hard 2.5 s wall cutoff bounds the whole thing. A click
+skips even when the app entered its boot session with `MouseMode::Off`:
+`boot::TerminalIo` arms press reporting for the splash through
+`Terminal::set_mouse_mode` and restores the session's own mode when it
+finishes, and the click's release never reaches the app.
 
 Two render paths read the same identity constants: a 3D path (the mark
 rendered by the `three` rasterizer, chosen on truecolor terminals) and a

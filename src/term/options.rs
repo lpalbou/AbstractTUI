@@ -44,6 +44,19 @@ impl MouseMode {
             MouseMode::AnyMotion => b"\x1b[?1006l\x1b[?1003l",
         }
     }
+
+    /// Bytes moving a live session from `prev` to `next`: disarm the old
+    /// mode, then arm the new one (empty when they are equal). Shared by
+    /// every backend's `Terminal::set_mouse_mode` so the retarget can
+    /// never drift from enter/leave.
+    pub(crate) fn retarget_bytes(prev: MouseMode, next: MouseMode) -> Vec<u8> {
+        let mut b = Vec::with_capacity(32);
+        if prev != next {
+            b.extend_from_slice(prev.disarm_bytes());
+            b.extend_from_slice(next.arm_bytes());
+        }
+        b
+    }
 }
 
 /// Kitty keyboard protocol progressive-enhancement flags

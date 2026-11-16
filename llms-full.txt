@@ -138,7 +138,7 @@ through ordinary reactivity.*
 - **Motion** — cell shaders (shimmer, dissolve, hue-drift, and more) that cost
   work only where damage exists, plus tweens, easings, and timelines.
 - **A boot identity** — a 2-second animated splash (3D mark with a pure-cell 2D
-  fallback), skippable with any key, auto-disabled on non-TTY, `NO_COLOR`, and
+  fallback), skippable with any key or click, auto-disabled on non-TTY, `NO_COLOR`, and
   `TERM=dumb`.
 - **Headless testing** — drive the production pipeline against a captured
   terminal and assert on the rendered screen. No pty required.
@@ -212,9 +212,10 @@ cargo add abstracttui-graph      # 0.7 — graph auto-layout + GraphView
 cargo add abstracttui-mermaid    # 0.7 — mermaid subset renderer
 ```
 
-**What's new in 0.8.0:** `@` mention chips with a structured send in the chat
-composer, named authors on chat rows, the ready avatar designs, and new modal
-pointer defaults: a press outside a `Modal` closes it unless you call
+**What's new in 0.8.1:** a mouse click skips the boot splash, like a key
+(`Terminal::set_mouse_mode` is the new verb underneath). 0.8.0 brought `@`
+mention chips with a structured send in the chat composer, named authors on
+chat rows, the ready avatar designs, and new modal pointer defaults: a press outside a `Modal` closes it unless you call
 `set_close_on_outside(false)`. Upgrading from 0.7 needs a look at the
 [breaking changes](CHANGELOG.md#080---2026-11-10).
 
@@ -325,7 +326,7 @@ it, `FramePlayer` still presents RGBA frames from any producer — see
 Building against a working copy instead of a release — `[patch.crates-io]`
 pointing at a `path`, which is how a sibling app tracks the engine — has one
 rule that is not obvious: **pin the version requirement to the exact version
-the checkout carries** (`abstracttui = "0.8.0"`, not `"0.8"`). A patch whose
+the checkout carries** (`abstracttui = "0.8.1"`, not `"0.8"`). A patch whose
 version falls outside your requirement is not an error; cargo ignores it and
 resolves from crates.io instead, so you build against a published version
 while believing you build against your tree. The symptom and a check that
@@ -3732,6 +3733,15 @@ platform note: job-control suspend (`Ctrl+Z`) re-enters with the original
 options, re-arming reporting — suspend again after resume if you keep it
 off.
 
+`Terminal::set_mouse_mode(MouseMode)` CHANGES the session's tracking mode
+(where `set_mouse_reporting` only suspends and resumes the entered one) and
+returns the mode it replaced, so a temporary owner of the pointer can put
+the session back exactly. Like `set_kitty_keyboard`, it updates the
+terminal's session accounting: `leave` disarms whatever is armed at that
+moment, suspend re-arms the current mode, and the panic-hook restore
+disarms a mode armed after enter. The boot splash uses it so a click skips
+the splash even in a session entered with `MouseMode::Off`.
+
 ## app — the full-redraw verb (Ctrl+L class)
 
 The damage contract trusts the terminal to keep every cell the engine
@@ -5642,8 +5652,12 @@ The sequence runs 2.0 s in four beats: **arrival** (three planes fly in,
 staggered, on an ease-out curve), **alignment** (at 0.9 s the planes lock
 into the mark and a 12-spark burst fires), **reveal** (at 1.4 s the
 wordmark tracks open from 4 cells of letter-spacing to 1), **hold**
-(settle, then done). Any key skips with a fast 120 ms fade, and a hard
-2.5 s wall cutoff bounds the whole thing.
+(settle, then done). Any key, mouse press or wheel skips with a fast
+120 ms fade, and a hard 2.5 s wall cutoff bounds the whole thing. A click
+skips even when the app entered its boot session with `MouseMode::Off`:
+`boot::TerminalIo` arms press reporting for the splash through
+`Terminal::set_mouse_mode` and restores the session's own mode when it
+finishes, and the click's release never reaches the app.
 
 Two render paths read the same identity constants: a 3D path (the mark
 rendered by the `three` rasterizer, chosen on truecolor terminals) and a
@@ -6975,8 +6989,8 @@ when the capability report classifies the terminal as dumb.
 tty (`cargo run --example splash` to verify; `ABSTRACTTUI_NO_SPLASH=0`
 explicitly opts back in under wrapper scripts that set it). The gate
 function returns the skip reason as a string — log it and the answer reads
-itself. Also remember any keypress skips the splash with a fast fade; a
-buffered keystroke at launch can end it almost immediately.
+itself. Also remember any keypress or mouse click skips the splash with a
+fast fade; a buffered keystroke at launch can end it almost immediately.
 
 ## Frames are slow
 

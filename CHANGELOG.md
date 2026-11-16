@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-16
+
+A patch: a mouse click now skips the boot splash, and a new terminal verb,
+`Terminal::set_mouse_mode`, makes that possible in any session. Nothing to
+change in your code; the extension crates stay at 0.7.0.
+
+### Fixed
+
+- **A mouse click now skips the boot splash, like a key.** The splash
+  player always counted a press or wheel as a skip, but a terminal reports
+  no click unless mouse tracking is armed, and an app that entered its boot
+  session with `MouseMode::Off` got a splash only a key could end.
+  `boot::TerminalIo` now arms press reporting for the splash's lifetime and
+  puts the session's own mode back when it is finished or dropped. The
+  click's release (and any drag) is consumed with it, so the app never
+  receives a release without its press.
+
+### Added
+
+- **`Terminal::set_mouse_mode(MouseMode) -> Result<MouseMode>`** changes a
+  live session's mouse tracking mode and returns the mode it replaced.
+  Like `set_kitty_keyboard`, it updates the session's accounting: `leave`
+  disarms whatever is armed, suspend re-arms the current mode, and the
+  panic-hook restore disarms a mode armed after enter. Implemented by
+  `UnixTerminal`, `WindowsTerminal` and `testing::CaptureTerm`; the trait
+  default refuses with `Error::Unsupported`, so custom `Terminal`
+  implementations compile unchanged.
+
 ## [0.8.0] - 2026-11-10
 
 A minor bump: `@` mention chips and a structured send in the chat composer,
@@ -3501,7 +3529,8 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
-[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/lpalbou/abstracttui/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/lpalbou/abstracttui/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/lpalbou/abstracttui/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/lpalbou/abstracttui/compare/v0.6.0...v0.7.0

@@ -537,7 +537,7 @@ truecolor terminals and the pure-cell 2D fallback (with its own particle
 field) elsewhere; both read the same `boot::identity` constants (the
 drift test pins the shared beats). The brand sign-off surface.
 
-- Keys: any key skips (fast fade).
+- Keys: any key or mouse click skips (fast fade).
 - Needs: any tty; truecolor for the 3D source. Force with
   `--3d`/`--2d`/`ABSTRACTTUI_SPLASH`; `ABSTRACTTUI_NO_SPLASH=1`,
   `TERM=dumb`, `NO_COLOR` auto-skip. `ABSTRACTTUI_THEME=<id>` grounds it.

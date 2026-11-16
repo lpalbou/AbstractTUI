@@ -3,7 +3,7 @@ name: abstracttui
 description: Build terminal interfaces with the abstracttui Rust library. Use for reactive widgets, application shells, Markdown and chat panels, keyboard and mouse controls, or terminal rendering.
 license: MIT
 metadata:
-  package-version: "0.8.0"
+  package-version: "0.8.1"
 ---
 
 # Use AbstractTUI

@@ -241,6 +241,32 @@ pub trait Terminal {
         ))
     }
 
+    /// Retarget the session's mouse tracking mode mid-session and return
+    /// the mode it replaced, so a caller that needs the pointer for a
+    /// while (the boot splash: a click must skip it like a key) can put
+    /// the session back exactly as it found it.
+    ///
+    /// Contract (mirrors [`Terminal::set_kitty_keyboard`]): the terminal
+    /// emits the exact delta (disarm the old mode, arm the new one;
+    /// nothing when they are equal) and updates its entered options, so
+    /// `leave` disarms whatever is armed at that moment, job-control
+    /// [`Terminal::suspend`] re-arms the current mode, and the panic-hook
+    /// restore disarms a mode armed after enter. Unlike
+    /// [`Terminal::set_mouse_reporting`], which only suspends and resumes
+    /// the entered mode, this changes it. The default is an honest
+    /// refusal for scripted terminals that do not track a session
+    /// posture; both platform backends and `testing::CaptureTerm`
+    /// implement it.
+    fn set_mouse_mode(&mut self, mode: MouseMode) -> Result<MouseMode> {
+        let _ = mode;
+        Err(Error::Unsupported(
+            "set_mouse_mode needs a terminal that tracks its entered session \
+             posture (the platform backends and testing::CaptureTerm do; this \
+             scripted terminal does not)"
+                .into(),
+        ))
+    }
+
     /// Retarget the session's kitty keyboard progressive-enhancement
     /// flags mid-session — the capability-upgrade verb (backlog 0293):
     /// the driver calls this when the active probe PROVES the protocol

@@ -7,7 +7,7 @@
 //! constants, so timeline and wordmark can never drift.
 //!
 //! Source pick: `--3d` / `--2d` flags (or `ABSTRACTTUI_SPLASH=3d|2d`);
-//! default AUTO = 3D on truecolor terminals, 2D otherwise. Any key skips.
+//! default AUTO = 3D on truecolor terminals, 2D otherwise. Any key or click skips.
 //! Safe anywhere: exits instantly when not a tty / NO_COLOR / TERM=dumb.
 //!
 //! Try: `ABSTRACTTUI_THEME=catppuccin-mocha cargo run --example splash`

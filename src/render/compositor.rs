@@ -177,8 +177,8 @@ impl Compositor {
             }
         }
         if self.debug_damage {
-            for di in 0..self.damage.len() {
-                outline_damage(frame, self.damage[di]);
+            for &rect in &self.damage {
+                outline_damage(frame, rect);
             }
         }
         &self.damage
