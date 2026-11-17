@@ -13,10 +13,15 @@ fn cached_palette_matches_theme_owned_material_ramps() {
         .into_iter()
         .enumerate()
     {
-        for index in 0..256 {
+        assert_eq!(
+            materials.palette[row].len(),
+            256,
+            "one entry per coverage step"
+        );
+        for (index, packed) in materials.palette[row].iter().enumerate() {
             let expected = ramp.sample(index as f32 / 255.0, 1.0);
             assert_eq!(
-                materials.palette[row][index].to_be_bytes(),
+                packed.to_be_bytes(),
                 [expected.r, expected.g, expected.b, expected.a]
             );
         }

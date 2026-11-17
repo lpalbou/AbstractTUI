@@ -97,9 +97,15 @@ pub struct Avatar {
     animated: Option<Signal<bool>>,
     label: bool,
     transparent_background: bool,
+    tint_below: f32,
     mode: Option<MosaicMode>,
     layout: LayoutStyle,
 }
+
+/// Default [`Avatar::tint_below`]: cells under half coverage tint the
+/// content beneath instead of replacing it.
+pub const AVATAR_TINT_BELOW: f32 = 0.5;
+
 impl Avatar {
     pub fn new(pose: Signal<AvatarPose>) -> Self {
         Self {
@@ -112,6 +118,7 @@ impl Avatar {
             animated: None,
             label: true,
             transparent_background: false,
+            tint_below: AVATAR_TINT_BELOW,
             mode: None,
             layout: LayoutStyle::default()
                 .width(Dimension::Cells(28))
@@ -149,11 +156,27 @@ impl Avatar {
         self
     }
     /// Preserve content outside the visible artwork instead of painting a card.
-    /// Occupied terminal cells (including soft glow/edges) still replace the
-    /// underlying glyph; empty cells leave its text and styling untouched.
-    /// The host must repaint its background when the avatar moves or changes.
+    /// Empty cells leave the text and styling beneath untouched. Faint cells
+    /// (soft glow, anti-aliased edges: strongest coverage below
+    /// [`Avatar::tint_below`]) TINT the content beneath and keep its text
+    /// readable; only cells with real ink replace the character there (a
+    /// terminal cell holds one character). The host must repaint its
+    /// background when the avatar moves or changes.
     pub fn transparent_background(mut self, transparent: bool) -> Self {
         self.transparent_background = transparent;
+        self
+    }
+    /// With a transparent background: the coverage (0.0..=1.0) under which a
+    /// cell tints the content beneath instead of drawing a mosaic character
+    /// over it. Default [`AVATAR_TINT_BELOW`] (0.5). `0.0` draws every
+    /// touched cell (glow included erases text, the 0.8 behavior); `1.0`
+    /// tints everything except fully solid ink. No effect on an opaque card.
+    pub fn tint_below(mut self, coverage: f32) -> Self {
+        self.tint_below = if coverage.is_finite() {
+            coverage.clamp(0.0, 1.0)
+        } else {
+            AVATAR_TINT_BELOW
+        };
         self
     }
     /// Pin a mosaic glyph family. The default follows terminal capabilities:
@@ -267,6 +290,9 @@ impl Avatar {
         });
         let label = self.label;
         let mode = self.mode;
+        // Alpha floor (0..=255) for drawing a character; below it a cell
+        // tints. Only meaningful with a transparent background.
+        let tint_floor = (self.tint_below * 255.0).round() as u16;
         let child = dyn_view(
             LayoutStyle::default()
                 .width(Dimension::Percent(1.0))
@@ -327,18 +353,28 @@ impl Avatar {
                                 if cell.fg.is_transparent() && cell.bg.is_transparent() {
                                     continue;
                                 }
+                                let at = Point::new(origin.x + x as i32, origin.y + y as i32);
+                                // Faint art (glow, soft edges) tints what is
+                                // beneath and keeps its text; a character
+                                // here would erase a whole cell of it.
+                                if transparent_background {
+                                    let strong = if cell.fg.a >= cell.bg.a {
+                                        cell.fg
+                                    } else {
+                                        cell.bg
+                                    };
+                                    if u16::from(strong.a) < tint_floor {
+                                        canvas.tint(at, strong);
+                                        continue;
+                                    }
+                                }
                                 // Prefer lower-half foreground: some fonts leave
                                 // an ascender gap above ▀. An upper-only transparent
                                 // edge must keep ▀ so the visible ink stays in fg;
                                 // alpha-zero foreground can become terminal default.
                                 let (ch, fg, bg) =
                                     display_cell(*cell, mode, transparent_background);
-                                canvas.put(
-                                    Point::new(origin.x + x as i32, origin.y + y as i32),
-                                    ch,
-                                    fg,
-                                    bg,
-                                );
+                                canvas.put(at, ch, fg, bg);
                             }
                         }
                         if label && rect.h > 1 {

@@ -293,7 +293,7 @@ fn detail_rows_render_muted_under_the_label() {
     r.key(Key::Down);
     let (fg, bg) = r.ink_at("the working copies").expect("detail cell");
     assert_eq!(fg, t.text_muted, "unhighlighted detail is muted");
-    assert_eq!(bg, t.overlay, "on the modal ground");
+    assert_eq!(bg, t.surface_raised, "on the modal ground");
 }
 
 #[test]

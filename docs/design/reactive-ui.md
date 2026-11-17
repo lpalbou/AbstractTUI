@@ -577,8 +577,8 @@ mark all images dirty (geometry and channel choice may change; the
 session resets slots cleanly on a channel switch).
 
 `app::popups::{Modal, Toast}` ride this API with no private privileges:
-Modal = centered focus-trapped tree overlay on the `overlay` token
-(z 1000); Toast = draw overlay chip (z 2000) that slides+fades via
+Modal = centered focus-trapped tree overlay, a solid `surface_raised`
+panel over a backdrop that dims the page with the `overlay` token (z 1000); Toast = draw overlay chip (z 2000) that slides+fades via
 `animate` driving `set_offset`/`set_opacity`, parks on a
 `reactive::after` timer, slides out and removes itself. The acceptance
 test pins the full arc: slide in over content, park at zero bytes,

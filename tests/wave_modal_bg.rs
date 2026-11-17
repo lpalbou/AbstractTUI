@@ -65,10 +65,11 @@ fn open_integrity_at(size: Size) {
         vt.to_text()
     );
 
-    // Oracle 1: outside the panel, not one cell moved. (sandbox was
-    // already NotAsked, so the page's result band is unchanged too.)
+    // Oracle 1: outside the panel, the same page under the backdrop's
+    // veil — not one glyph moved or blanked. (sandbox was already
+    // NotAsked, so the page's result band is unchanged too.)
     let panel = modal_rect(size, MODAL_SIZE);
-    let diff = screen_diff_outside(&before, &vt.screenshot(), &[panel]);
+    let diff = screen_diff_outside_veiled(&before, &vt.screenshot(), &[panel]);
     assert!(
         diff.is_empty(),
         "modal open disturbed the page outside its panel:\n  {}\n--- before ---\n{}\n--- after ---\n{}",
@@ -309,7 +310,8 @@ fn operator_session(size: Size) {
     let opened = vt.screenshot();
     {
         // Outside panel ∪ live-block band (Ready -> NotAsked shrank the
-        // page's result rows), nothing may move at open. The panel may
+        // page's result rows), nothing may move at open: only the
+        // backdrop's veil may change the page. The panel may
         // have veiled the anchors in `opened`; the block cannot move,
         // so the pre-open band stands in.
         let pre_band = live_block_band(&pre_open, size).expect("band visible pre-open");
@@ -317,7 +319,7 @@ fn operator_session(size: Size) {
             Some(b) => pre_band.union(b),
             None => pre_band,
         };
-        let diff = screen_diff_outside(&pre_open, &opened, &[panel, band]);
+        let diff = screen_diff_outside_veiled(&pre_open, &opened, &[panel, band]);
         assert!(
             diff.is_empty(),
             "[{label}] open disturbed the page outside panel+band:\n  {}\n--- before ---\n{}\n--- after ---\n{}",

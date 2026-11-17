@@ -91,7 +91,7 @@ pub(crate) fn gate_content(mcx: Scope, t: TokenSet, spec: GateSpec) -> View {
     };
     let paint = RowPaint {
         ink: t.text,
-        ground: t.overlay,
+        ground: t.surface_raised,
         muted: t.text_muted,
         accent: t.accent,
         danger: t.error,

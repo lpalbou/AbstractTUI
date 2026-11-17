@@ -69,7 +69,7 @@ pub use animated_image::AnimatedImage;
 #[cfg(feature = "avatar")]
 pub use avatar::{
     avatar_ready_styles, Avatar, AvatarGaze, AvatarPointer, AvatarPose, AvatarStyle,
-    AVATAR_DEFAULT_STYLE,
+    AVATAR_DEFAULT_STYLE, AVATAR_TINT_BELOW,
 };
 pub use badge::{Badge, Tone};
 pub use block::{Block, BorderKind, TitleAlign};

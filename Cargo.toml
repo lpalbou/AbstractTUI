@@ -1,6 +1,6 @@
 [package]
 name = "abstracttui"
-version = "0.8.1"
+version = "0.9.0"
 edition = "2021"
 # MSRV (backlog 0180): the floor is set by the library's own std usage —
 # `is_multiple_of` (1.87: gfx/png, gfx/base64, three/validate, jpeg),
@@ -13,7 +13,6 @@ license = "MIT"
 authors = ["Laurent-Philippe Albou <contact@abstractframework.ai>"]
 description = "A reactive, compositor-grade terminal UI engine: fine-grained signals, layered rendering with damage tracking, images (kitty/iTerm2/sixel/mosaic), software-rasterized 3D (GLB), themes and animation."
 repository = "https://github.com/lpalbou/abstracttui"
-homepage = "https://github.com/lpalbou/abstracttui"
 documentation = "https://docs.rs/abstracttui"
 readme = "README.md"
 categories = ["command-line-interface", "rendering", "gui", "graphics"]
@@ -44,6 +43,10 @@ required-features = ["avatar"]
 
 [[example]]
 name = "avatar_catalog"
+required-features = ["avatar"]
+
+[[example]]
+name = "avatar_overlay"
 required-features = ["avatar"]
 
 [target.'cfg(unix)'.dependencies]

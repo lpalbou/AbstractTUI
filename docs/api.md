@@ -937,9 +937,13 @@ level and playback with `cargo run --features avatar --example avatar`.
 Export a headless terminal catalog with `cargo run --features avatar --example avatar_catalog -- /tmp/avatars.png error`.
 
 Opt in to `.transparent_background(true)` for a shape-only overlay. Empty artwork
-cells leave underlying glyphs, colors and attributes untouched; occupied cells,
-including antialiased edges and glow, replace that terminal cell. Opaque previews
-remain the default. Keep the underlying view in the normal paint tree so it is
+cells leave underlying glyphs, colors and attributes untouched. Faint cells (glow,
+antialiased edges: strongest coverage below `.tint_below(..)`, default
+`AVATAR_TINT_BELOW` = 0.5) TINT the content beneath and keep its text readable;
+only cells with real ink replace that terminal cell (a cell holds one character).
+`.tint_below(0.0)` restores the 0.8 behavior where every touched cell is
+replaced. Opaque previews remain the default. Compare live, over a busy page,
+with `cargo run --features avatar --example avatar_overlay`. Keep the underlying view in the normal paint tree so it is
 repainted when the avatar moves, changes pose or hides. This is cell compositing,
 not a terminal pixel-image protocol.
 
@@ -2084,7 +2088,17 @@ Around the core loop the module provides:
   modal.layer(), ...)` replaces the rule (for an unsaved-changes guard).
   The mouse wheel scrolls the modal's content: the region under the
   pointer, or, over the title, the padding or outside the panel, its
-  largest scroll region; never the page below. **Toast** — top-right chips that slide in, park for their duration
+  largest scroll region; never the page below. The panel is SOLID
+  (`surface_raised`, the popover ground) and a backdrop lifts it off the
+  page: the theme's `overlay` scrim dims everything outside the panel
+  (the page's text stays in place, veiled — the terminal's closest thing
+  to a blurred backdrop; stacked modals each dim what is under them),
+  and an opaque plate under the panel means nothing below ever shows
+  through it, even where the panel paints a translucent color.
+  `set_scrim(false)` keeps the plate and drops the dimming. The backdrop
+  goes with the panel on every close path. Paint modal content on
+  `surface_raised` (or leave it unpainted), not on `overlay`. Try
+  `cargo run --example modal_backdrop`. **Toast** — top-right chips that slide in, park for their duration
   at zero frame cost, then slide out and remove their layer.
 - **AnchoredPanel / Popup / Tooltip** (`app::anchored`) — the three
   routing modes of the anchored-popup substrate, one placement engine

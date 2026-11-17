@@ -22,7 +22,8 @@ A theme's palette is a `TokenSet`: 36 resolved `Rgba` values, one per
 - `surface` — panel and card ground.
 - `surface_raised` — raised chrome: popovers, menus, active tabs, chips,
   and the declared ground for code blocks.
-- `overlay` — the modal scrim; deliberately carries alpha for the
+- `overlay` — the modal scrim (a `Modal`'s backdrop; never a panel ground —
+  panels use `surface_raised`); deliberately carries alpha for the
   compositor to blend over whatever it covers.
 
 **Text tiers** — three levels of copy, each with its own contrast floor.

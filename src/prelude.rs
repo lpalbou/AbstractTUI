@@ -148,5 +148,5 @@ pub use crate::widgets::FramePlayer;
 #[cfg(feature = "avatar")]
 pub use crate::widgets::{
     avatar_ready_styles, Avatar, AvatarGaze, AvatarPointer, AvatarPose, AvatarStyle,
-    AVATAR_DEFAULT_STYLE,
+    AVATAR_DEFAULT_STYLE, AVATAR_TINT_BELOW,
 };

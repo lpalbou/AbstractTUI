@@ -304,3 +304,34 @@ fn damage_accumulates_and_caps() {
     s.take_damage(&mut sink);
     assert!(sink.len() <= DAMAGE_CAP + 1);
 }
+
+#[test]
+fn tint_composites_over_a_cell_and_keeps_its_glyph() {
+    let ground = Rgba::rgb(0, 0, 200);
+    let mut s = Surface::new(Size::new(3, 1), Cell::EMPTY);
+    s.draw_text(
+        0,
+        0,
+        "ab",
+        crate::render::Style::new().fg(Rgba::WHITE).bg(ground),
+    );
+    let veil = Rgba::new(255, 0, 0, 128);
+    s.tint(0, 0, veil);
+    assert!(text_of(&s, 0).starts_with("ab"), "the glyph is kept");
+    let c = *s.get(0, 0).unwrap();
+    assert_eq!(c.bg, veil.over(ground), "background composited");
+    assert_eq!(
+        c.fg,
+        veil.over(Rgba::WHITE),
+        "ink veiled like the compositor does"
+    );
+    // An empty overlay cell stays glyph-less and translucent, so the
+    // compositor veils the layers below it.
+    s.tint(2, 0, veil);
+    let e = *s.get(2, 0).unwrap();
+    assert!(e.glyph.is_empty() && e.bg == veil, "glyph-less veil: {e:?}");
+    // Out of bounds and a transparent color are no-ops.
+    s.tint(5, 0, veil);
+    s.tint(1, 0, Rgba::TRANSPARENT);
+    assert_eq!(s.get(1, 0).unwrap().bg, ground);
+}

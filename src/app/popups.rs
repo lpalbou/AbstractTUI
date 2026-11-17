@@ -5,9 +5,11 @@
 //! and `ui` sits below `app` in the layer map (integrator ruling R4-1:
 //! no upward imports, even textual ones).
 //!
-//! Style: modal panel ground is the `overlay` token over a focus-trapped
-//! tree (Tab cycles inside; every input is swallowed while open — the
-//! §3.2 modal pattern); toasts are `surface_raised` chips in the
+//! Style: a modal is a SOLID panel (`surface_raised`, the popover ground)
+//! over a focus-trapped tree (Tab cycles inside; every input is swallowed
+//! while open — the §3.2 modal pattern), lifted off the page by a
+//! full-screen scrim (the `overlay` token, which carries alpha: the page
+//! dims and its text veils, so the panel reads at a glance); toasts are `surface_raised` chips in the
 //! top-right that slide+fade in via signal transitions, park for their
 //! duration (zero frames while parked — the dismiss timer sleeps, it
 //! does not poll), then slide out and REMOVE their layer (idle returns
@@ -62,11 +64,22 @@ pub const TOAST_Z: i32 = 2000;
 /// RE-CLAMPS on every terminal resize (the Drawer contract) — a panel
 /// requested larger than the screen centers clamped, and recovers its
 /// requested size when room returns.
+///
+/// Backdrop: every modal owns a full-screen layer directly under its
+/// panel. It dims the page with the theme's `overlay` scrim (the page's
+/// text stays in place, veiled — a terminal's closest thing to a blurred
+/// backdrop) and lays an OPAQUE plate exactly under the panel, so nothing
+/// below ever shows through the panel, even where its content paints a
+/// translucent color. [`Modal::set_scrim`]`(false)` keeps the plate and
+/// drops the dimming. The backdrop goes with the panel on every close
+/// path (`close`, the outside press, or removing [`Modal::layer`]).
 pub struct Modal {
     layer: LayerHandle,
     scope: Scope,
     /// Read by the outside-press hook installed at open.
     close_on_outside: Rc<Flag<bool>>,
+    /// The scrim + opaque plate layer under the panel.
+    backdrop: Rc<Backdrop>,
 }
 
 impl Modal {
@@ -92,8 +105,18 @@ impl Modal {
         let scope = cx.child();
         let bounds = modal_bounds(viewport, size);
         let tokens = &current_theme().tokens;
-        let ground = tokens.get(TokenId::Overlay);
+        let ground = tokens.get(TokenId::SurfaceRaised);
         let ink = tokens.get(TokenId::Text);
+        // The backdrop is created FIRST: equal z paints in insertion
+        // order, so it lands above every earlier modal and below this
+        // panel. Tokens resolve at open (the documented Modal rule).
+        let backdrop = Rc::new(Backdrop::new(
+            overlays.layer(MODAL_Z, Rect::from_size(viewport)),
+            tokens.get(TokenId::Overlay),
+            ground,
+            viewport,
+        ));
+        backdrop.paint(bounds);
         let mut content = build(scope);
         content.for_each_style_mut(&mut floor_declared_size);
         let panel = Element::new()
@@ -111,6 +134,14 @@ impl Modal {
             .child(content)
             .build();
         let layer = overlays.layer_tree(MODAL_Z, bounds, true, scope, panel);
+        backdrop.layer.belong_to(&layer);
+        {
+            // Disposal (close, outside press, the app disposing the
+            // parent scope) takes the backdrop too; `belong_to` covers a
+            // bare `layer().remove()`.
+            let backdrop = backdrop.clone();
+            scope.on_cleanup(move || backdrop.layer.remove());
+        }
         // Dismiss on an outside press (the default). The overlay router
         // fires this only for the TOPMOST modal and swallows the press,
         // so exactly one modal closes and nothing below acts on it.
@@ -136,6 +167,7 @@ impl Modal {
         let vp_sig = super::viewport::use_viewport(scope);
         let panel_layer = layer.clone();
         let ov = overlays.clone();
+        let reclamp_backdrop = backdrop.clone();
         scope.effect_labeled("modal-reclamp", move || {
             let vp = vp_sig.get(); // tracked: re-runs per resize
             if vp.w <= 0 || vp.h <= 0 {
@@ -145,6 +177,10 @@ impl Modal {
             let Some(old) = panel_layer.bounds() else {
                 return; // layer removed mid-flush
             };
+            // The backdrop spans the viewport, so it follows every
+            // resize even when the panel's own bounds do not move.
+            reclamp_backdrop.viewport.set(vp);
+            reclamp_backdrop.paint(want);
             if want == old {
                 return;
             }
@@ -165,6 +201,7 @@ impl Modal {
             layer,
             scope,
             close_on_outside,
+            backdrop,
         }
     }
 
@@ -182,12 +219,25 @@ impl Modal {
         self.close_on_outside.set(close);
     }
 
+    /// Whether the page behind the modal is dimmed. Default `true`.
+    /// `false` keeps only the opaque plate under the panel (the panel
+    /// stays solid; the page around it stays at full brightness). Shared
+    /// by every handle to the same modal.
+    pub fn set_scrim(&self, on: bool) {
+        if self.backdrop.scrim.replace(on) == on {
+            return;
+        }
+        if let Some(bounds) = self.layer.bounds() {
+            self.backdrop.paint(bounds);
+        }
+    }
+
     /// Remove the panel and dispose its state. The vacated region
     /// repaints from the layers below. Idempotent (`&self`: a shortcut
     /// INSIDE the modal — Esc-to-close — holds a shared handle; layer
     /// removal and scope disposal both shrug at a second call).
     pub fn close(&self) {
-        self.layer.remove();
+        self.layer.remove(); // the backdrop belongs to it and goes too
         self.scope.dispose();
     }
 
@@ -199,6 +249,64 @@ impl Modal {
             layer: self.layer.clone(),
             scope: self.scope,
             close_on_outside: self.close_on_outside.clone(),
+            backdrop: self.backdrop.clone(),
+        }
+    }
+}
+
+/// A modal's backdrop: one MANUAL, full-viewport layer directly under the
+/// panel. Glyph-less cells only, so the compositor does the work: the
+/// scrim cells blend the `overlay` token over the page and veil its text
+/// (kept in place, dimmed), and the plate cells under the panel are
+/// opaque, erasing whatever is below so nothing shows through the panel.
+/// Painted at open, on resize and on `set_scrim` — never per frame.
+struct Backdrop {
+    layer: LayerHandle,
+    scrim: Flag<bool>,
+    veil: Cell,
+    plate: Cell,
+    viewport: Flag<Size>,
+}
+
+impl Backdrop {
+    fn new(
+        layer: LayerHandle,
+        scrim: crate::base::Rgba,
+        plate: crate::base::Rgba,
+        vp: Size,
+    ) -> Self {
+        let mut veil = Cell::EMPTY;
+        veil.bg = scrim;
+        let mut solid = Cell::EMPTY;
+        solid.bg = plate;
+        Backdrop {
+            layer,
+            scrim: Flag::new(true),
+            veil,
+            plate: solid,
+            viewport: Flag::new(vp),
+        }
+    }
+
+    /// Repaint for the current viewport with the plate under `panel`.
+    fn paint(&self, panel: Rect) {
+        let vp = self.viewport.get();
+        let full = Rect::from_size(vp);
+        let ground = if self.scrim.get() {
+            self.veil
+        } else {
+            Cell::EMPTY
+        };
+        let plate = self.plate;
+        let painted = self.layer.with_surface(|s| {
+            if s.size() != vp {
+                s.resize(vp, Cell::EMPTY);
+            }
+            s.fill_rect(full, ground);
+            s.fill_rect(panel.intersect(full), plate);
+        });
+        if painted.is_some() {
+            self.layer.damage();
         }
     }
 }

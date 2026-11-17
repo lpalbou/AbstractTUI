@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-17
+
+Modals you can see, and an avatar that no longer erases the text around
+it. The modal backdrop changes how every `Modal` looks, a documented
+behavior, so this ships as a minor release (0.9.0): read "Breaking /
+upgrade" first. The extension crates move to 0.8.0 for the new engine
+floor, with no API change.
+
+### Breaking / upgrade
+
+- **A `Modal` now has a solid panel and dims the page behind it.** The
+  panel ground is `surface_raised` (the popover ground) instead of the
+  translucent `overlay` scrim, which let the page show through the panel.
+  A full-screen backdrop under the panel dims everything outside it with
+  the `overlay` scrim; the page's text stays in place, veiled. An opaque
+  plate under the panel means the page never shows through, even where
+  the panel's content paints a translucent color. `ChoicePrompt` and the
+  keymap help ride the same backdrop. To keep the page at full brightness,
+  call `modal.set_scrim(false)` (the panel stays solid). Content that
+  painted its rows with the `overlay` token should paint them with
+  `surface_raised`, or leave them unpainted: `overlay` now composites over
+  the plate and reads darker than the panel.
+
+### Added
+
+- **`Modal::set_scrim(bool)`** turns the backdrop's dimming on (default) or
+  off. The backdrop goes with the panel on every close path: `close`, the
+  outside press, or removing `modal.layer()` directly.
+- **`StyledCanvas::tint(point, color)`** and **`Surface::tint`** composite a
+  translucent color over a cell and keep its character, the tool for soft
+  overlay art (a glow, a shadow) that must not erase what it covers. On an
+  overlay layer's empty cell the tint stays glyph-less, so the compositor
+  veils the layers below. A custom `StyledCanvas` that does not override it
+  falls back to a plain cell write.
+- **`Avatar::tint_below(coverage)`** and **`AVATAR_TINT_BELOW`** (0.5): see
+  the avatar change below.
+- **Two interactive examples.** `modal_backdrop` opens a modal, a stacked
+  modal and a `ChoicePrompt` over a busy page, with the scrim toggle.
+  `avatar_overlay` floats the avatar over a busy transcript with live
+  controls for the tint threshold and the glyph mode, and `0` for the old
+  behavior side by side.
+
+### Changed
+
+- **A transparent `Avatar` keeps the text around its artwork readable.**
+  With `transparent_background(true)`, faint cells (the glow, antialiased
+  edges: strongest coverage below `tint_below`, default 0.5) now tint the
+  text beneath instead of replacing it with a mosaic character. Only cells
+  with real ink replace the character there. `tint_below(0.0)` restores
+  the previous behavior.
+
 ## [0.8.1] - 2026-11-16
 
 A patch: a mouse click now skips the boot splash, and a new terminal verb,
@@ -3529,7 +3580,8 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
-[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/lpalbou/abstracttui/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/lpalbou/abstracttui/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/lpalbou/abstracttui/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/lpalbou/abstracttui/compare/v0.7.0...v0.7.1

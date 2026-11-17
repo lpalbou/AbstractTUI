@@ -91,6 +91,22 @@ pub trait StyledCanvas: Canvas {
         super::action::record(rect, action)
     }
 
+    /// Composite `color` (straight alpha) over the cell at `p` while
+    /// KEEPING its character: the background (and a glyph's ink) blend
+    /// toward `color`; the text underneath stays readable. The tool for
+    /// soft overlay art (a glow, a shadow) that must not erase what it
+    /// covers. On an overlay layer's empty cell the tint stays glyph-less,
+    /// so the compositor veils the layers below.
+    ///
+    /// Default (a canvas that cannot read its cells back): degrades to a
+    /// cell write — a space with `color` as background — which DOES
+    /// replace the character. The engine's own canvases (`Surface`,
+    /// `SurfaceCanvas`, `ClippedCanvas`, `BufferCanvas`) override it with
+    /// the real composite.
+    fn tint(&mut self, p: Point, color: crate::base::Rgba) {
+        self.put(p, ' ', crate::base::Rgba::TRANSPARENT, color);
+    }
+
     /// Fill a rect with a styled character. Default: per-row prints.
     fn fill_styled(&mut self, rect: Rect, ch: char, style: &crate::render::Style) {
         let mut buf = [0u8; 4];
@@ -242,6 +258,22 @@ impl Canvas for BufferCanvas {
 }
 
 impl StyledCanvas for BufferCanvas {
+    /// The real composite, so headless tests see what a surface would.
+    fn tint(&mut self, p: Point, color: Rgba) {
+        if color.is_transparent() || p.x < 0 || p.y < 0 || p.x >= self.size.w || p.y >= self.size.h
+        {
+            return;
+        }
+        let idx = (p.y * self.size.w + p.x) as usize;
+        let (ch, fg, bg) = self.cells[idx];
+        let fg = if ch != ' ' && !fg.is_transparent() {
+            color.over(fg)
+        } else {
+            fg
+        };
+        self.cells[idx] = (ch, fg, color.over(bg));
+    }
+
     fn print_styled(&mut self, p: Point, text: &str, style: &crate::render::Style) -> i32 {
         let advanced = self.print(
             p,
@@ -336,6 +368,10 @@ impl Canvas for SurfaceCanvas<'_> {
 impl StyledCanvas for SurfaceCanvas<'_> {
     fn register_link(&mut self, uri: &str) -> u16 {
         self.surface.register_link(uri)
+    }
+
+    fn tint(&mut self, p: Point, color: Rgba) {
+        self.surface.tint(p.x, p.y, color);
     }
 
     /// Full fidelity: the style patch goes straight to the surface —
@@ -442,6 +478,12 @@ impl StyledCanvas for ClippedCanvas<'_> {
     /// Links belong to the target surface, not to the clip: delegate.
     fn register_link(&mut self, uri: &str) -> u16 {
         self.inner.register_link(uri)
+    }
+
+    fn tint(&mut self, p: Point, color: Rgba) {
+        if self.clip.contains(p) {
+            self.inner.tint(p, color);
+        }
     }
 
     fn print_styled(&mut self, p: Point, text: &str, style: &crate::render::Style) -> i32 {

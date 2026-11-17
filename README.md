@@ -202,16 +202,16 @@ same dependency discipline, public core API only —
 [ADR-0004](docs/adr/0004-extension-packaging.md)):
 
 ```sh
-cargo add abstracttui-graph      # 0.7 — graph auto-layout + GraphView
-cargo add abstracttui-mermaid    # 0.7 — mermaid subset renderer
+cargo add abstracttui-graph      # 0.8 — graph auto-layout + GraphView
+cargo add abstracttui-mermaid    # 0.8 — mermaid subset renderer
 ```
 
-**What's new in 0.8.1:** a mouse click skips the boot splash, like a key
-(`Terminal::set_mouse_mode` is the new verb underneath). 0.8.0 brought `@`
-mention chips with a structured send in the chat composer, named authors on
-chat rows, the ready avatar designs, and new modal pointer defaults: a press outside a `Modal` closes it unless you call
-`set_close_on_outside(false)`. Upgrading from 0.7 needs a look at the
-[breaking changes](CHANGELOG.md#080---2026-11-10).
+**What's new in 0.9.0:** a `Modal` is a solid panel over a dimmed page, so it
+reads at a glance (`modal.set_scrim(false)` keeps the page bright), and a
+transparent `Avatar` tints the text around its glow instead of erasing it
+(`Avatar::tint_below`). Try `cargo run --example modal_backdrop` and
+`cargo run --example avatar_overlay --features avatar`. Upgrading from 0.8
+needs a look at the [breaking change](CHANGELOG.md#090---2026-11-17).
 
 ## Run the examples
 

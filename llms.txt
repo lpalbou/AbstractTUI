@@ -95,7 +95,7 @@ feature adds the procedural `Avatar` widget backed by the AbstractAvatar crate.
   pluggable `FileSource` seam), the `canvas` sub-cell vector layer (braille/quadrant dot grids,
   Bresenham/bezier/arc strokes, eighth-block fills, the cell-color z-order rule), the
   app runtime (overlays,
-  modal (an outside press closes it unless `set_close_on_outside(false)`), toast, edge-anchored `Drawer` panels, the anchored-popup substrate and the
+  modal (a solid panel over a dimmed backdrop; an outside press closes it unless `set_close_on_outside(false)`), toast, edge-anchored `Drawer` panels, the anchored-popup substrate and the
   Select/Combobox/MultiSelect pickers,
   completion, the `ThemeSwitcher` menu/toggle control, hooks, key press/release
   state and `PushToTalk`), theme, render
@@ -161,9 +161,9 @@ feature adds the procedural `Avatar` widget backed by the AbstractAvatar crate.
 ## Project
 
 - [Changelog](CHANGELOG.md): Release history (Keep a Changelog, SemVer); 0.1.0
-  (2026-07-21) is the first public release, **0.8.1** (2026-11-16) the current one.
-  The extension family is at `abstracttui-graph` 0.7.0 and
-  `abstracttui-mermaid` 0.7.0, each with its own changelog under `extensions/`.
+  (2026-07-21) is the first public release, **0.9.0** (2026-11-17) the current one.
+  The extension family is at `abstracttui-graph` 0.8.0 and
+  `abstracttui-mermaid` 0.8.0, each with its own changelog under `extensions/`.
 - [Contributing](CONTRIBUTING.md): Building, the test suite (~2,500 core tests; ~2,730
   with the extension family via `--workspace`, the CI gate) and the explicitly-run suites
   (live pty, two release-mode perf-budget suites with byte-emission ratchets, plus the

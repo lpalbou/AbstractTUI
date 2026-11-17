@@ -257,7 +257,7 @@ fn danger_option_wears_error_ink_except_under_the_selection_pair() {
     // Unhighlighted danger row: Error ink on the modal ground.
     let (fg, bg) = r.ink_at("Delete them").expect("danger row");
     assert_eq!(fg, t.error, "danger label rides the Error token (T3)");
-    assert_eq!(bg, t.overlay);
+    assert_eq!(bg, t.surface_raised);
     // Highlighted with the list focused: the audited selection pair
     // outranks the tint (the pair is the audited combination).
     r.key(Key::Down);
@@ -398,7 +398,7 @@ fn region_focus_affordance_visible_and_unfocused_highlight_distinct() {
     let (fg, bg) = r.ink_at("Alpha").expect("row");
     assert_eq!(
         (fg, bg),
-        (t.accent, t.overlay),
+        (t.accent, t.surface_raised),
         "unfocused highlight is accent ink (the RadioGroup precedent)"
     );
     let (plain_fg, _) = r.ink_at("Beta").expect("plain row");

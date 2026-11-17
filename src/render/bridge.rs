@@ -99,6 +99,10 @@ impl StyledCanvas for Surface {
         Surface::register_link(self, uri)
     }
 
+    fn tint(&mut self, p: Point, color: Rgba) {
+        Surface::tint(self, p.x, p.y, color);
+    }
+
     /// Full fidelity: the style patch goes straight to the surface —
     /// attrs, links, underline color all survive. Grapheme-correct
     /// (wide pairs, ZWJ clusters); returns real columns advanced.

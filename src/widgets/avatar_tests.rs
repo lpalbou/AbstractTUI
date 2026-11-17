@@ -975,3 +975,71 @@ fn an_experimental_design_set_explicitly_still_renders() {
     );
     root.dispose();
 }
+
+/// Transparent mode over text: faint cells (glow, soft edges) TINT the
+/// text beneath and keep it; only cells with real ink draw a character.
+/// `tint_below(0.0)` is the 0.8 behavior: every touched cell draws.
+#[test]
+fn faint_transparent_cells_tint_the_text_beneath_instead_of_erasing_it() {
+    use crate::{render::Style, ui::Element};
+    let size = Size::new(32, 17);
+    let page_bg = Rgba::rgb(20, 40, 90);
+    let tokens = crate::theme::default_theme().tokens;
+    // (cells drawn over, cells tinted with their 'X' kept)
+    let census = |style: AvatarStyle, tint: f32| -> (usize, usize) {
+        let (root, mut tree) = mount_widget(size, move |cx| {
+            Element::new()
+                .style(LayoutStyle::column())
+                .draw(move |canvas, rect| {
+                    canvas.fill_styled(rect, 'X', &Style::new().fg(Rgba::WHITE).bg(page_bg));
+                })
+                .child(
+                    Avatar::new(cx.signal(AvatarPose::Thinking))
+                        .style(style)
+                        .transparent_background(true)
+                        .tint_below(tint)
+                        .show_label(false)
+                        .layout(
+                            LayoutStyle::default()
+                                .width(Dimension::Percent(1.0))
+                                .height(Dimension::Percent(1.0)),
+                        )
+                        .element(cx, &tokens)
+                        .build(),
+                )
+                .build()
+        });
+        let frame = settle(&mut tree, size);
+        let (mut drawn, mut tinted) = (0, 0);
+        for y in 0..size.h {
+            for x in 0..size.w {
+                let (glyph, fg, bg) = frame.cell(Point::new(x, y)).unwrap();
+                if glyph != 'X' {
+                    drawn += 1;
+                } else if bg != page_bg || fg != Rgba::WHITE {
+                    tinted += 1;
+                }
+            }
+        }
+        root.dispose();
+        (drawn, tinted)
+    };
+    for style in shaded_styles() {
+        let (old_drawn, old_tinted) = census(style, 0.0);
+        let (new_drawn, new_tinted) = census(style, AVATAR_TINT_BELOW);
+        assert_eq!(old_tinted, 0, "0.0 draws every touched cell: {style:?}");
+        assert!(
+            new_tinted > 0,
+            "faint cells tint and keep the text: {style:?}"
+        );
+        assert!(
+            new_drawn < old_drawn,
+            "fewer cells lose their text: {style:?} {new_drawn} vs {old_drawn}"
+        );
+        assert_eq!(
+            new_drawn + new_tinted,
+            old_drawn,
+            "every touched cell is either drawn or tinted, never dropped: {style:?}"
+        );
+    }
+}

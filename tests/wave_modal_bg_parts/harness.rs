@@ -92,6 +92,51 @@ pub fn screen_diff_outside(a: &Screenshot, b: &Screenshot, skip: &[Rect]) -> Vec
     out
 }
 
+/// Oracle 1 across a modal OPEN: the modal's backdrop veils the page
+/// (the theme's `overlay` scrim composited over every cell outside the
+/// panel), so the page outside `skip` must be the SAME page — identical
+/// text, widths and attributes, nothing blanked or moved — with every
+/// explicit color exactly `overlay.over(before)`. A terminal-default
+/// ground (`None`) is composited by the compositor against the theme
+/// ground, so it must come out as `overlay.over(theme bg)`.
+pub fn screen_diff_outside_veiled(a: &Screenshot, b: &Screenshot, skip: &[Rect]) -> Vec<String> {
+    assert_eq!(a.size(), b.size(), "referee size mismatch (test bug)");
+    let t = abstracttui::theme::default_theme().tokens;
+    let veil = |c: abstracttui::base::Rgba| t.overlay.over(c);
+    let mut out = Vec::new();
+    let mut total = 0usize;
+    for y in 0..a.size().h {
+        for x in 0..a.size().w {
+            if skip.iter().any(|r| r.contains(Point::new(x, y))) {
+                continue;
+            }
+            let ca = a.cell(x, y).expect("cell");
+            let cb = b.cell(x, y).expect("cell");
+            let want_bg = Some(veil(ca.bg().unwrap_or(t.bg)));
+            let ink_ok = ca.text().trim().is_empty()
+                || match ca.fg() {
+                    Some(fg) => cb.fg() == Some(veil(fg)),
+                    None => true,
+                };
+            let same_page =
+                ca.text() == cb.text() && ca.width() == cb.width() && ca.attrs() == cb.attrs();
+            if !(same_page && ink_ok && cb.bg() == want_bg) {
+                total += 1;
+                if out.len() < 16 {
+                    out.push(format!(
+                        "({x},{y}): got {cb:?} want text {:?} veiled from {ca:?} (bg {want_bg:?})",
+                        ca.text()
+                    ));
+                }
+            }
+        }
+    }
+    if total > out.len() {
+        out.push(format!("... {total} mismatching cells total"));
+    }
+    out
+}
+
 /// Oracle 2: a forced full redraw must be a byte-level no-op on the
 /// SCREEN (the emission may be large; the resulting cells must match).
 pub fn assert_fresh_paint_equal(

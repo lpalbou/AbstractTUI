@@ -156,8 +156,31 @@ impl LayerHandle {
             store.meta.remove(i);
             store.damage_root_under(bounds);
         }
+        // Owned layers go with their owner (one level: owners are panels,
+        // owned layers are their decorations).
+        while let Some(i) = store.meta.iter().position(|m| m.owner == Some(self.id)) {
+            let bounds = store.layers[i].bounds();
+            store.layers.remove(i);
+            store.meta.remove(i);
+            store.damage_root_under(bounds);
+        }
         drop(store);
         request_frame();
+    }
+
+    /// Make this layer belong to `owner`: removing `owner` (by any path)
+    /// removes this layer too. Used for decorations created BELOW their
+    /// panel (a modal's backdrop), which must not outlive it.
+    pub(crate) fn belong_to(&self, owner: &LayerHandle) {
+        let Some(store) = self.store.upgrade() else {
+            return;
+        };
+        // Called at creation time, never mid-phase: a busy store here is a
+        // bug, and a silent skip would leak the decoration.
+        let mut store = store.borrow_mut();
+        if let Some(i) = store.index_of(self.id) {
+            store.meta[i].owner = Some(owner.id);
+        }
     }
 }
 

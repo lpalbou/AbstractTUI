@@ -231,6 +231,33 @@ impl Surface {
         }
     }
 
+    /// Composite `color` (straight alpha) over the cell at `(x, y)` WITHOUT
+    /// replacing its glyph: the background becomes `color` over the old
+    /// background, and a glyph's ink is veiled the same way (the
+    /// compositor's rule for a glyph-less translucent cell, applied in
+    /// place). On an empty cell of an overlay layer the result stays
+    /// glyph-less and translucent, so the compositor then veils whatever
+    /// the layers below show there. Out of bounds or a fully transparent
+    /// `color` is a no-op. The glyph never changes, so wide pairs stay
+    /// intact (both halves are tinted when both are painted).
+    pub fn tint(&mut self, x: i32, y: i32, color: crate::base::Rgba) {
+        if color.is_transparent() || !self.bounds().contains(Point::new(x, y)) {
+            return;
+        }
+        let i = self.idx(x, y);
+        let cell = &mut self.cells[i];
+        cell.bg = color.over(cell.bg);
+        if !cell.glyph.is_empty() {
+            if !cell.fg.is_transparent() {
+                cell.fg = color.over(cell.fg);
+            }
+            if !cell.ul.is_transparent() {
+                cell.ul = color.over(cell.ul);
+            }
+        }
+        self.damage_span(y, x, x + 1);
+    }
+
     /// `set` without damage recording, for bulk writers that damage a
     /// bounding rect once (the mosaic bridge). Returns the written column
     /// span `[x0, x1)` (empty when clipped) — pair repairs land within

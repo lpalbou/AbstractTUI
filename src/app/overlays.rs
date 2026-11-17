@@ -68,6 +68,10 @@ pub(crate) enum OverlayContent {
 pub(crate) struct OverlayMeta {
     pub id: u64,
     pub content: OverlayContent,
+    /// The layer this one belongs to: removing the owner removes this
+    /// layer too (a modal's backdrop goes with its panel, whichever
+    /// path closes it). `None` = independent.
+    pub owner: Option<u64>,
 }
 
 pub(crate) struct ImageEntry {
@@ -148,7 +152,11 @@ impl Overlays {
         // A fresh overlay must paint at least once.
         layer.surface_mut().damage_all();
         store.layers.push(layer);
-        store.meta.push(OverlayMeta { id, content });
+        store.meta.push(OverlayMeta {
+            id,
+            content,
+            owner: None,
+        });
         drop(store);
         request_frame();
         LayerHandle {
@@ -376,6 +384,7 @@ impl Overlays {
                     OverlayMeta {
                         id: ROOT_LAYER_ID,
                         content: OverlayContent::Root,
+                        owner: None,
                     },
                 );
             }

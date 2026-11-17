@@ -76,7 +76,7 @@ impl KeymapHelp {
         let ink = t.text;
         let muted = t.text_muted;
         let accent = t.accent;
-        let ground = t.overlay;
+        let ground = t.surface_raised;
 
         let slot: std::rc::Rc<std::cell::RefCell<Option<Modal>>> =
             std::rc::Rc::new(std::cell::RefCell::new(None));

@@ -34,6 +34,7 @@ the previous one:
 | 4 · interaction | `drawer_dock.rs` | the right-edge drawer rail (`DrawerDock`): docked panels, full collapse, badge dots |
 | 4 · interaction | `status_bar.rs` | app chrome from named slots (`StatusBar`): items yield by priority on resize; every item is a clickable, keyboard-reachable action span |
 | 4 · interaction | `decide.rs` | the modal decision gate (`ChoicePrompt`): confirmations, multi-pick, chains |
+| 4 · interaction | `modal_backdrop.rs` | a `Modal` over a busy page: the solid panel, the dimmed backdrop (toggle it), stacked modals, `ChoicePrompt` on the same backdrop |
 | 4 · interaction | `hovercard.rs` | `Tooltip` and rich hover cards on citation chips — reachable by hover AND by Tab, dismissed by Escape, with the `… N more` marker on a card the viewport cannot fit |
 | 5 · content + live data | `feed.rs` | background threads → bounded ingestion → `Feed` with follow-tail |
 | 5 · content + live data | `transcript.rs` | streaming markdown chat: tables render live, composer with completion |
@@ -47,6 +48,7 @@ the previous one:
 | 6 · the app shell | `dashboard/` | the flagship capstone: charts, log tail, sortable table, toasts, modal, pane nav |
 | 7 · graphics + 3D | `images.rs` | four mosaic families, dithering, pixel-protocol placement |
 | 7 · graphics + 3D | `avatar.rs` | procedural Halo/Hover, observed poses, voice level and cancellable motion (`--features avatar`) |
+| 7 · graphics + 3D | `avatar_overlay.rs` | the avatar floating over a busy transcript: faint cells tint the text beneath instead of erasing it — live threshold, glyph mode, `0` for the old behavior (`--features avatar`) |
 | 7 · graphics + 3D | `avatar_catalog.rs` (tool) | a headless PNG catalog of the avatar styles in one pose (`--features avatar`) |
 | 7 · graphics + 3D | `animation.rs` | animated GIF/APNG played in cells — and video refused by name |
 | 7 · graphics + 3D | `bigtext.rs` | text and icons several cells tall: the measured 4x3 legibility floor, the four vocabularies, and the 1:2 cell aspect that makes a "6x6" icon stretched rather than big |
@@ -240,6 +242,18 @@ Hover ink on the strip needs motion reporting, so this app opts in with
 - Run: `cargo run --example scrollbar`
 - Looks like: a 2×2 of bordered panes, each with a heavy `█` thumb on a
   `▏` rail at its right edge, over a footer of live offsets.
+
+## modal_backdrop
+
+A `Modal` you can actually see over a busy page: `cargo run --example
+modal_backdrop`. The panel is solid (`surface_raised`) and the page
+behind it is dimmed and veiled by the theme's `overlay` scrim, text kept
+in place.
+
+- Keys: `m` the workspace picker (`↑`/`↓`, `Enter`, `n` stacks a second
+  modal, `Esc`) · `c` a `ChoicePrompt` · `s` scrim on/off for the next
+  modal · `t` next theme · `q` quit. A click outside closes the top modal.
+- Needs: any tty.
 
 ## decide
 
@@ -491,6 +505,12 @@ audio level, visibility and motion; the widget only presents them.
 - Needs: any tty; the `avatar` feature.
 - Looks like: a shaded Halo or Hover figure breathing, listening or
   speaking in terminal cells.
+
+`avatar_overlay` floats the avatar over a busy transcript on its own
+overlay layer: `cargo run --features avatar --example avatar_overlay`.
+Arrows move it; `[`/`]` change the tint threshold (`0` = the 0.8 behavior,
+where every touched cell erases its text; `5` = the default); `g` cycles
+the glyph mode, `b` the opaque card, `p` the pose, `s` the design.
 
 `avatar_catalog` is the headless companion: `cargo run --features avatar
 --example avatar_catalog -- /tmp/avatars.png error` renders every style in

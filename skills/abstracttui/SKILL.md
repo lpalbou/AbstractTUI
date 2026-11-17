@@ -3,7 +3,7 @@ name: abstracttui
 description: Build terminal interfaces with the abstracttui Rust library. Use for reactive widgets, application shells, Markdown and chat panels, keyboard and mouse controls, or terminal rendering.
 license: MIT
 metadata:
-  package-version: "0.8.1"
+  package-version: "0.9.0"
 ---
 
 # Use AbstractTUI
@@ -14,7 +14,7 @@ Chat widgets do not make network calls or load models.
 
 ## Workflow
 
-1. Add `abstracttui = "0.8"` to your Cargo dependencies. Use `abstracttui::prelude::*`.
+1. Add `abstracttui = "0.9"` to your Cargo dependencies. Use `abstracttui::prelude::*`.
 2. Create `App::new(Size::new(width, height))`, then `app.mount(move |cx| { ... })?`.
 3. Allocate persistent state with `cx.signal(value)` outside reactive child rebuilds.
    Read signals inside `Element::dyn_child` to rebuild only their dependent region.
@@ -96,6 +96,9 @@ screen-copy fallback. See [the API](../../docs/api.md#feed--logical-content-sele
 - Set `.busy` from real backend state; a rendering indicator alone cannot protect
   application actions against duplicates.
 - Default input inset is zero. Explicitly set it on composers that need spacing.
+- A `Modal` is a solid `surface_raised` panel over a dimmed backdrop (the `overlay`
+  scrim); paint modal content on `surface_raised`, never on `overlay`.
+  `modal.set_scrim(false)` keeps the panel solid without dimming the page.
 - A press outside a `Modal` closes it. Call `modal.set_close_on_outside(false)` for a
   prompt that must be answered through its own controls, or
   `overlays.on_outside_press(modal.layer(), ...)` to route the press through an
@@ -140,10 +143,11 @@ leans, Waiting pulses in a lower posture with sequential dots, and Working bobs
 with deterministic thruster sparks. Halo Listening takes rings inward and Speaking
 emits them outward; fixed audio input still gives distinct active motion.
 
-For shape-only overlays, opt into Avatar::transparent_background(true), remove any
+For shape-only overlays, opt into Avatar::transparent_background(true) (faint glow and
+edge cells then tint the text beneath instead of erasing it; `tint_below` tunes it), remove any
 host rectangle fill, and apply Button::transparent_background(true) to a wrapping
-picture button. Empty cells preserve underlying glyphs/styles; occupied cells
-replace a whole terminal glyph, including antialiased edges. Keep the underlying
+picture button. Empty cells preserve underlying glyphs/styles; faint cells tint them;
+cells with real ink replace a whole terminal glyph. Keep the underlying
 view in the paint tree for restoration after motion/hide. Opaque previews remain
 the default; focus/press on the button retains a visible selection cue.
 
