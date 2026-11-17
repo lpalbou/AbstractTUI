@@ -4,9 +4,9 @@ version = 4
 
 [[package]]
 name = "abstractavatar"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaa5925d278d4b58aa9e9bde068eea3de548cb0fec75c5e20ef23a10b39c1868"
+checksum = "f618f4e0a843ef794c0418d9e5ec374f7d0d8e7165c18dea3b369f9a3bb0fc09"
 
 [[package]]
 name = "abstracttui"

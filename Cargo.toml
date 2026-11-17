@@ -23,7 +23,7 @@ exclude = ["reviews/", "docs/captures/", "docs/media/", ".github/", ".cursor/", 
 # low-level, MIT/Apache-licensed set below. Everything else is hand-rolled.
 # This manifest is owned by the integrator; agents request additions via reviews/.
 [dependencies]
-abstractavatar = { version = "0.1.0", optional = true }
+abstractavatar = { version = "0.2.0", optional = true }
 unicode-width = "0.2"
 unicode-segmentation = "1"
 miniz_oxide = "0.9"
