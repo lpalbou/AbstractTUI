@@ -957,11 +957,37 @@ focus and press retain the selection background as a visible interaction cue.
 
 ### TextInput / TextArea — inner content inset
 
-`.inset(left, right)` adds cells inside the side strokes. It affects text,
+`.inset(left, right)` adds cells of space before and after the text (inside
+the side strokes, on a field that draws them). It affects text,
 placeholder, selection, wrapping/scroll budgets and the TextArea caret/completion
 anchor. Negative values become zero; narrow fields reduce insets before leaving
 less than one text cell. The default is `(0, 0)` for compatibility. For a chat
 composer, use `.inset(1, 1)`.
+
+### TextArea — side strokes
+
+A `TextArea` paints no frame by default: its text, caret and placeholder
+start in the first column (after any `.inset`). That is the shape for a
+prompt line whose host draws its own leader just left of the field:
+
+```rust
+Element::new()
+    .style(LayoutStyle::row().width(Dimension::Percent(1.0)))
+    .child(leader) // a 2-cell element that prints "❯"
+    .child(
+        Element::new()
+            .style(LayoutStyle::column().grow(1.0).basis(Dimension::Cells(0)))
+            .child(TextArea::new().state(&state).rows(1, 4).view(cx))
+            .build(),
+    )
+    .build()
+```
+
+`.strokes(true)` frames the text with side strokes (`▐` left, `▌` right, in
+`border`, or `border_focus` while focused); the text then starts one cell
+after the left stroke and the wrap width loses the two stroke columns.
+`cargo run --example prompt_line` shows both shapes. `TextInput` always
+draws its strokes.
 
 ### TextInput — masked (secret) fields
 

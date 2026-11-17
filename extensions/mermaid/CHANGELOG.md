@@ -5,6 +5,14 @@ own their changelogs; core's CHANGELOG covers the engine). The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 SemVer.
 
+## [0.9.0] - 2026-11-17
+
+### Changed
+
+- Requires `abstracttui` **0.10** and `abstracttui-graph` **0.9** (an engine minor whose one
+  break is visual: a `TextArea` draws no side strokes by default). No API
+  change in this crate.
+
 ## [0.8.0] - 2026-11-17
 
 ### Changed

@@ -34,6 +34,7 @@ the previous one:
 | 4 · interaction | `drawer_dock.rs` | the right-edge drawer rail (`DrawerDock`): docked panels, full collapse, badge dots |
 | 4 · interaction | `status_bar.rs` | app chrome from named slots (`StatusBar`): items yield by priority on resize; every item is a clickable, keyboard-reachable action span |
 | 4 · interaction | `decide.rs` | the modal decision gate (`ChoicePrompt`): confirmations, multi-pick, chains |
+| 4 · interaction | `prompt_line.rs` | a `❯` prompt line: the default `TextArea` (no frame, caret right after the leader) above one with `strokes(true)` |
 | 4 · interaction | `modal_backdrop.rs` | a `Modal` over a busy page: the solid panel, the dimmed backdrop (toggle it), stacked modals, `ChoicePrompt` on the same backdrop |
 | 4 · interaction | `hovercard.rs` | `Tooltip` and rich hover cards on citation chips — reachable by hover AND by Tab, dismissed by Escape, with the `… N more` marker on a card the viewport cannot fit |
 | 5 · content + live data | `feed.rs` | background threads → bounded ingestion → `Feed` with follow-tail |
@@ -242,6 +243,18 @@ Hover ink on the strip needs motion reporting, so this app opts in with
 - Run: `cargo run --example scrollbar`
 - Looks like: a 2×2 of bordered panes, each with a heavy `█` thumb on a
   `▏` rail at its right edge, over a footer of live offsets.
+
+## prompt_line
+
+A one-line prompt with a host-drawn `❯` leader: `cargo run --example
+prompt_line`. The top prompt is a default `TextArea`: no frame, and the
+caret sits right after the leader. The bottom prompt opts into the
+`▐ … ▌` side strokes with `strokes(true)` for comparison. `Enter` shows what you
+sent on the status line.
+
+- Keys: type to edit · `Enter` sends · `Tab` / `Shift+Tab` switches
+  prompt · `Ctrl+C` quits.
+- Needs: any tty.
 
 ## modal_backdrop
 

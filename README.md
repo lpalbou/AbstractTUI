@@ -202,16 +202,17 @@ same dependency discipline, public core API only —
 [ADR-0004](docs/adr/0004-extension-packaging.md)):
 
 ```sh
-cargo add abstracttui-graph      # 0.8 — graph auto-layout + GraphView
-cargo add abstracttui-mermaid    # 0.8 — mermaid subset renderer
+cargo add abstracttui-graph      # 0.9 — graph auto-layout + GraphView
+cargo add abstracttui-mermaid    # 0.9 — mermaid subset renderer
 ```
 
-**What's new in 0.9.0:** a `Modal` is a solid panel over a dimmed page, so it
-reads at a glance (`modal.set_scrim(false)` keeps the page bright), and a
-transparent `Avatar` tints the text around its glow instead of erasing it
-(`Avatar::tint_below`). Try `cargo run --example modal_backdrop` and
-`cargo run --example avatar_overlay --features avatar`. Upgrading from 0.8
-needs a look at the [breaking change](CHANGELOG.md#090---2026-11-17).
+**What's new in 0.10.0:** a `TextArea` is prompt-shaped by default, with no
+side strokes, so its caret sits right after a host-drawn leader such as `❯ `
+(`.strokes(true)` brings the frame back; try `cargo run --example
+prompt_line`). 0.9.0 brought a solid `Modal` panel over a dimmed page and an
+`Avatar` that tints the text around its glow instead of erasing it.
+Upgrading from 0.9 needs a look at the
+[breaking change](CHANGELOG.md#0100---2026-11-17).
 
 ## Run the examples
 

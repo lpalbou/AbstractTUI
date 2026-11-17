@@ -75,6 +75,7 @@ fn composer_app(app: &mut App) -> (TextAreaState, Rc<RefCell<Vec<String>>>) {
         *h2.borrow_mut() = Some(state.clone());
         let submit_state = state.clone();
         let composer = TextArea::new()
+            .strokes(true)
             .state(&state)
             .rows(1, 3)
             .placeholder("message")
@@ -426,15 +427,16 @@ fn autofocused_composer_paints_placeholder_beside_caret_on_screen() {
         hint_row.contains("describe a task"),
         "autofocused composer must paint its hint: {hint_row:?}"
     );
-    // Caret block visible at the first text cell (x=1, past the
-    // stroke), cursor-token bg; the hint starts one cell past it.
-    let caret = term.screen().cell(1, row).expect("caret cell");
+    // Caret block visible at the first text cell (x=0: a default
+    // composer has no side strokes), cursor-token bg; the hint starts
+    // one cell past it.
+    let caret = term.screen().cell(0, row).expect("caret cell");
     assert_eq!(
         caret.paint.bg,
         Some(tokens.cursor),
         "caret bg is the cursor token"
     );
-    let hint = term.screen().cell(2, row).expect("hint cell");
+    let hint = term.screen().cell(1, row).expect("hint cell");
     assert_eq!(hint.ch(), 'd');
     assert_eq!(
         hint.paint.fg,
@@ -450,7 +452,7 @@ fn autofocused_composer_paints_placeholder_beside_caret_on_screen() {
         !typed_row.contains("describe a task"),
         "typing hides the focused placeholder: {typed_row:?}"
     );
-    assert_eq!(term.screen().cell(1, row).expect("cell").ch(), 'h');
+    assert_eq!(term.screen().cell(0, row).expect("cell").ch(), 'h');
     driver.finish(&mut term).expect("leave");
     assert_eq!(term.screen().unknown_seq_count(), 0, "all bytes modeled");
 }
@@ -731,6 +733,7 @@ fn layered_composer_app(app: &mut App, bounds: Rect) {
                 // controller opens on the layer's first solve.
                 state.set_text("/he");
                 let composer = TextArea::new()
+                    .strokes(true)
                     .state(&state)
                     .rows(1, 1)
                     .element(lcx, &t)

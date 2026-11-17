@@ -336,6 +336,7 @@ fn composer(
         *h2.borrow_mut() = Some(state.clone());
         let st = state.clone();
         TextArea::new()
+            .strokes(true)
             .state(&state)
             .placeholder("say something")
             .rows(1, 3)
@@ -554,6 +555,7 @@ fn autofocus_at_mount_anchors_to_the_solved_rect_not_the_origin() {
             .child(Element::new().style(LayoutStyle::line(5)).build())
             .child(
                 TextArea::new()
+                    .strokes(true)
                     .state(&state)
                     .rows(1, 3)
                     .element(cx, t)
@@ -642,6 +644,7 @@ fn placeholder_while_focused_paints_beside_the_caret() {
     let size = Size::new(20, 3);
     let (_root, mut tree) = mount_widget(size, move |cx| {
         TextArea::new()
+            .strokes(true)
             .placeholder("say it")
             .placeholder_while_focused(true)
             .element(cx, t)
@@ -777,6 +780,7 @@ fn content_inset_moves_typed_text_wrap_and_the_completion_anchor_together() {
             let state = TextAreaState::new(cx);
             *out.borrow_mut() = Some(state.clone());
             TextArea::new()
+                .strokes(true)
                 .state(&state)
                 .inset(inset, inset)
                 .rows(1, 4)

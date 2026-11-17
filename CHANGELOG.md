@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-17
+
+A prompt-shaped composer by default: a `TextArea` paints no side strokes,
+so its caret sits right after a host-drawn leader such as `❯ `. This
+changes how every `TextArea` looks, so it ships as a minor release: read
+"Breaking / upgrade" first. The extension crates move to 0.9.0 for the
+new engine floor, with no API change.
+
+### Breaking / upgrade
+
+- **A `TextArea` draws no side strokes by default.** The text, caret and
+  placeholder start in the first column (after any `inset`), and the wrap
+  width gains the two stroke columns, so a prompt's caret sits right after
+  a host-drawn leader such as `❯ `. `ChatPanel`'s composer follows. Call
+  `.strokes(true)` to keep the `▐ … ▌` frame. `TextInput` is unchanged.
+
+### Added
+
+- **`TextArea::strokes(bool)`** turns the side strokes on or off (default
+  off). The new `prompt_line` example shows both shapes.
+
 ## [0.9.0] - 2026-11-17
 
 Modals you can see, and an avatar that no longer erases the text around
@@ -3580,7 +3601,8 @@ First public release.
 - **Examples** — 12 runnable examples, from `hello` to a full dashboard,
   theme browser, and 3D viewer.
 
-[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/lpalbou/abstracttui/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/lpalbou/abstracttui/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/lpalbou/abstracttui/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/lpalbou/abstracttui/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/lpalbou/abstracttui/compare/v0.7.1...v0.8.0

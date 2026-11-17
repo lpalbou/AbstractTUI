@@ -208,16 +208,17 @@ same dependency discipline, public core API only —
 [ADR-0004](docs/adr/0004-extension-packaging.md)):
 
 ```sh
-cargo add abstracttui-graph      # 0.8 — graph auto-layout + GraphView
-cargo add abstracttui-mermaid    # 0.8 — mermaid subset renderer
+cargo add abstracttui-graph      # 0.9 — graph auto-layout + GraphView
+cargo add abstracttui-mermaid    # 0.9 — mermaid subset renderer
 ```
 
-**What's new in 0.9.0:** a `Modal` is a solid panel over a dimmed page, so it
-reads at a glance (`modal.set_scrim(false)` keeps the page bright), and a
-transparent `Avatar` tints the text around its glow instead of erasing it
-(`Avatar::tint_below`). Try `cargo run --example modal_backdrop` and
-`cargo run --example avatar_overlay --features avatar`. Upgrading from 0.8
-needs a look at the [breaking change](CHANGELOG.md#090---2026-11-17).
+**What's new in 0.10.0:** a `TextArea` is prompt-shaped by default, with no
+side strokes, so its caret sits right after a host-drawn leader such as `❯ `
+(`.strokes(true)` brings the frame back; try `cargo run --example
+prompt_line`). 0.9.0 brought a solid `Modal` panel over a dimmed page and an
+`Avatar` that tints the text around its glow instead of erasing it.
+Upgrading from 0.9 needs a look at the
+[breaking change](CHANGELOG.md#0100---2026-11-17).
 
 ## Run the examples
 
@@ -326,7 +327,7 @@ it, `FramePlayer` still presents RGBA frames from any producer — see
 Building against a working copy instead of a release — `[patch.crates-io]`
 pointing at a `path`, which is how a sibling app tracks the engine — has one
 rule that is not obvious: **pin the version requirement to the exact version
-the checkout carries** (`abstracttui = "0.9.0"`, not `"0.9"`). A patch whose
+the checkout carries** (`abstracttui = "0.10.0"`, not `"0.10"`). A patch whose
 version falls outside your requirement is not an error; cargo ignores it and
 resolves from crates.io instead, so you build against a published version
 while believing you build against your tree. The symptom and a check that
@@ -2028,11 +2029,37 @@ focus and press retain the selection background as a visible interaction cue.
 
 ### TextInput / TextArea — inner content inset
 
-`.inset(left, right)` adds cells inside the side strokes. It affects text,
+`.inset(left, right)` adds cells of space before and after the text (inside
+the side strokes, on a field that draws them). It affects text,
 placeholder, selection, wrapping/scroll budgets and the TextArea caret/completion
 anchor. Negative values become zero; narrow fields reduce insets before leaving
 less than one text cell. The default is `(0, 0)` for compatibility. For a chat
 composer, use `.inset(1, 1)`.
+
+### TextArea — side strokes
+
+A `TextArea` paints no frame by default: its text, caret and placeholder
+start in the first column (after any `.inset`). That is the shape for a
+prompt line whose host draws its own leader just left of the field:
+
+```rust
+Element::new()
+    .style(LayoutStyle::row().width(Dimension::Percent(1.0)))
+    .child(leader) // a 2-cell element that prints "❯"
+    .child(
+        Element::new()
+            .style(LayoutStyle::column().grow(1.0).basis(Dimension::Cells(0)))
+            .child(TextArea::new().state(&state).rows(1, 4).view(cx))
+            .build(),
+    )
+    .build()
+```
+
+`.strokes(true)` frames the text with side strokes (`▐` left, `▌` right, in
+`border`, or `border_focus` while focused); the text then starts one cell
+after the left stroke and the wrap width loses the two stroke columns.
+`cargo run --example prompt_line` shows both shapes. `TextInput` always
+draws its strokes.
 
 ### TextInput — masked (secret) fields
 
@@ -5771,9 +5798,9 @@ the mermaid parser is hand-rolled).
 
 ```toml
 [dependencies]
-abstracttui = "0.9"
-abstracttui-graph = "0.8"    # graph layout + GraphView
-abstracttui-mermaid = "0.8"  # mermaid subset (depends on -graph)
+abstracttui = "0.10"
+abstracttui-graph = "0.9"    # graph layout + GraphView
+abstracttui-mermaid = "0.9"  # mermaid subset (depends on -graph)
 ```
 
 ## The one data contract: `GraphDesc -> Layout`
@@ -6858,8 +6885,9 @@ focused — no widget claims the keyboard implicitly, because the engine
 cannot know which one should own it. With focus at the root, characters
 reach no editor, and root-level `KeyChord` shortcuts see every key.
 
-**Check**: press Tab. If the field takes focus (its side strokes turn to
-`border_focus`) and typing lands, this is the cause. Modal overlays are
+**Check**: press Tab. If the field takes focus (a `TextArea` shows its
+caret block; a `TextInput`'s side strokes turn to `border_focus`) and
+typing lands, this is the cause. Modal overlays are
 not affected — they establish initial focus when they open — so a
 composer inside a `Modal` that works while the root-level one does not
 confirms it too.

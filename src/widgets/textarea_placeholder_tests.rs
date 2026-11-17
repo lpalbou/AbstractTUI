@@ -25,6 +25,7 @@ fn mount_narrow_area(
             .style(LayoutStyle::column())
             .child(
                 TextArea::new()
+                    .strokes(true)
                     .placeholder("a very long hint")
                     .placeholder_while_focused(while_focused)
                     .layout(

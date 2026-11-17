@@ -231,6 +231,7 @@ pub struct TextArea {
     state: Option<TextAreaState>,
     placeholder: String,
     inset: (i32, i32),
+    strokes: bool,
     placeholder_while_focused: bool,
     min_rows: i32,
     max_rows: i32,
@@ -248,6 +249,7 @@ impl TextArea {
             state: None,
             placeholder: String::new(),
             inset: (0, 0),
+            strokes: false,
             placeholder_while_focused: false,
             min_rows: 1,
             max_rows: 6,
@@ -266,11 +268,23 @@ impl TextArea {
         self
     }
 
-    /// Inner breathing room between the side strokes and editable content.
+    /// Inner breathing room around the editable content (inside the side
+    /// strokes when [`strokes`](Self::strokes) is on).
     /// Negative values become zero; at narrow widths insets shrink before
     /// the text area falls below one cell. Default: no inset.
     pub fn inset(mut self, left: i32, right: i32) -> TextArea {
         self.inset = (left.max(0), right.max(0));
+        self
+    }
+
+    /// Draw the side strokes (`▐` left, `▌` right; `border`, or
+    /// `border_focus` while focused); the text then starts one cell after
+    /// the left stroke. Default off: the field paints no frame and its
+    /// text starts in the first column (after any [`inset`](Self::inset)),
+    /// the shape for a prompt line whose host draws its own leader, such
+    /// as `❯ `, just left of the field.
+    pub fn strokes(mut self, on: bool) -> TextArea {
+        self.strokes = on;
         self
     }
 
@@ -381,6 +395,7 @@ impl TextArea {
         let focused = state.inner.focused;
         let caret_cell = state.inner.caret_cell;
         let inset = self.inset;
+        let strokes = self.strokes;
         let placeholder = self.placeholder;
         let placeholder_while_focused = self.placeholder_while_focused;
         let (min_rows, max_rows) = (self.min_rows, self.max_rows);
@@ -390,7 +405,7 @@ impl TextArea {
         let on_submit: TextCallback = Rc::new(RefCell::new(self.on_submit));
         let on_paste: PasteHook = Rc::new(RefCell::new(self.on_paste));
 
-        // Wrap width last seen by an event handler (rect.w - 2 strokes).
+        // Wrap width last seen by an event handler (the text frame's width).
         // Read untracked by the growth style below: exact after any
         // event; before the first one (or right after a pure resize) the
         // logical-line count stands in until the next event re-measures.
@@ -402,8 +417,7 @@ impl TextArea {
             let on_submit = on_submit.clone();
             let width_hint = width_hint.clone();
             move |ctx: &mut EventCtx, ev: &UiEvent| {
-                let width =
-                    (crate::widgets::input::inset_frame(ctx.current_rect(), inset).w - 2).max(1);
+                let width = text_frame(ctx.current_rect(), inset, strokes).w.max(1);
                 width_hint.set(width);
                 let (consumed, owed) = match ev {
                     UiEvent::Key(k) => {
@@ -463,7 +477,7 @@ impl TextArea {
                             publish_caret_cell(
                                 &state,
                                 &mut c,
-                                crate::widgets::input::inset_frame(ctx.current_rect(), inset),
+                                text_frame(ctx.current_rect(), inset, strokes),
                                 width,
                             );
                             caret.set(c);
@@ -479,7 +493,7 @@ impl TextArea {
                     publish_caret_cell(
                         &state,
                         &mut c,
-                        crate::widgets::input::inset_frame(ctx.current_rect(), inset),
+                        text_frame(ctx.current_rect(), inset, strokes),
                         width,
                     );
                     caret.set(c);
@@ -539,8 +553,8 @@ impl TextArea {
                 if !focused.get() {
                     return;
                 }
-                let inner = crate::widgets::input::inset_frame(rect, inset);
-                let width = (inner.w - 2).max(1);
+                let inner = text_frame(rect, inset, strokes);
+                let width = inner.w.max(1);
                 width_hint.set(width);
                 let before = caret.get_untracked();
                 let mut c = before;
@@ -629,7 +643,7 @@ impl TextArea {
                             .height(Dimension::Percent(1.0)),
                     )
                     .draw(move |canvas, rect| {
-                        if rect.is_empty() || rect.w < 3 {
+                        if rect.is_empty() || rect.w < if strokes { 3 } else { 1 } {
                             return;
                         }
                         let bg = ground;
@@ -637,7 +651,7 @@ impl TextArea {
                         let stroke_style = Style::new()
                             .fg(if focused { stroke_focus } else { stroke })
                             .bg(bg);
-                        for y in rect.y..rect.bottom() {
+                        for y in (rect.y..rect.bottom()).filter(|_| strokes) {
                             canvas.print_styled(Point::new(rect.x, y), "▐", &stroke_style);
                             canvas.print_styled(
                                 Point::new(rect.right() - 1, y),
@@ -645,9 +659,9 @@ impl TextArea {
                                 &stroke_style,
                             );
                         }
-                        let inner = crate::widgets::input::inset_frame(rect, inset);
-                        let tx = inner.x + 1;
-                        let tw = inner.w - 2;
+                        let inner = text_frame(rect, inset, strokes);
+                        let tx = inner.x;
+                        let tw = inner.w;
                         // Placeholder branches clip to the INTERIOR
                         // (first-app/0284): draw closures clip to damage
                         // regions, not element rects, so an unbounded
@@ -824,8 +838,22 @@ fn finish_edit(state: &TextAreaState, c: &mut Caret, width: i32, min_rows: i32, 
     adjust_top(c, crow as i32, rows.len() as i32, visible);
 }
 
+/// The editable text columns of a TextArea solved at `rect`: the inset
+/// frame minus the stroke columns, or the whole inset frame when the
+/// strokes are off. Shared by editing, painting and the caret anchor.
+fn text_frame(rect: crate::base::Rect, inset: (i32, i32), strokes: bool) -> crate::base::Rect {
+    if strokes {
+        let inner = crate::widgets::input::inset_frame(rect, inset);
+        return crate::base::Rect::new(inner.x + 1, inner.y, inner.w - 2, inner.h);
+    }
+    let budget = (rect.w - 1).max(0);
+    let left = inset.0.max(0).min(budget);
+    let right = inset.1.max(0).min(budget - left);
+    crate::base::Rect::new(rect.x + left, rect.y, rect.w - left - right, rect.h)
+}
+
 /// Publish the caret's screen cell (the completion anchor) from the
-/// solved rect available inside handlers.
+/// text frame (`text_frame`) of the solved rect available inside handlers.
 fn publish_caret_cell(state: &TextAreaState, c: &mut Caret, rect: crate::base::Rect, width: i32) {
     let text = state.inner.value.get_untracked();
     let rows = RowMap::build_with(&text, width, &state.chip_table());
@@ -833,7 +861,7 @@ fn publish_caret_cell(state: &TextAreaState, c: &mut Caret, rect: crate::base::R
     let visible = (rows.len() as i32).clamp(1, rect.h.max(1));
     adjust_top(c, crow as i32, rows.len() as i32, visible);
     let cell = Point::new(
-        rect.x + 1 + ccol.min((rect.w - 3).max(0)),
+        rect.x + ccol.min((rect.w - 1).max(0)),
         rect.y + (crow as i32 - c.top).clamp(0, (rect.h - 1).max(0)),
     );
     state.inner.caret_cell.set(Some(cell));
@@ -928,3 +956,7 @@ mod paste_tests;
 #[cfg(test)]
 #[path = "textarea_chips_tests.rs"]
 mod chips_tests;
+
+#[cfg(test)]
+#[path = "textarea_strokes_tests.rs"]
+mod strokes_tests;

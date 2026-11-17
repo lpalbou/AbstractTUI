@@ -19,9 +19,9 @@ the mermaid parser is hand-rolled).
 
 ```toml
 [dependencies]
-abstracttui = "0.9"
-abstracttui-graph = "0.8"    # graph layout + GraphView
-abstracttui-mermaid = "0.8"  # mermaid subset (depends on -graph)
+abstracttui = "0.10"
+abstracttui-graph = "0.9"    # graph layout + GraphView
+abstracttui-mermaid = "0.9"  # mermaid subset (depends on -graph)
 ```
 
 ## The one data contract: `GraphDesc -> Layout`

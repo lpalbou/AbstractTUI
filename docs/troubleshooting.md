@@ -52,8 +52,9 @@ focused — no widget claims the keyboard implicitly, because the engine
 cannot know which one should own it. With focus at the root, characters
 reach no editor, and root-level `KeyChord` shortcuts see every key.
 
-**Check**: press Tab. If the field takes focus (its side strokes turn to
-`border_focus`) and typing lands, this is the cause. Modal overlays are
+**Check**: press Tab. If the field takes focus (a `TextArea` shows its
+caret block; a `TextInput`'s side strokes turn to `border_focus`) and
+typing lands, this is the cause. Modal overlays are
 not affected — they establish initial focus when they open — so a
 composer inside a `Modal` that works while the root-level one does not
 confirms it too.

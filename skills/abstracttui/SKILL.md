@@ -3,7 +3,7 @@ name: abstracttui
 description: Build terminal interfaces with the abstracttui Rust library. Use for reactive widgets, application shells, Markdown and chat panels, keyboard and mouse controls, or terminal rendering.
 license: MIT
 metadata:
-  package-version: "0.9.0"
+  package-version: "0.10.0"
 ---
 
 # Use AbstractTUI
@@ -14,7 +14,7 @@ Chat widgets do not make network calls or load models.
 
 ## Workflow
 
-1. Add `abstracttui = "0.9"` to your Cargo dependencies. Use `abstracttui::prelude::*`.
+1. Add `abstracttui = "0.10"` to your Cargo dependencies. Use `abstracttui::prelude::*`.
 2. Create `App::new(Size::new(width, height))`, then `app.mount(move |cx| { ... })?`.
 3. Allocate persistent state with `cx.signal(value)` outside reactive child rebuilds.
    Read signals inside `Element::dyn_child` to rebuild only their dependent region.
@@ -29,6 +29,9 @@ Chat widgets do not make network calls or load models.
 
 - `TextInput`: single-line editor; `TextArea`: multiline editor. `.inset(1, 1)`
   gives a cell of space inside the side strokes without moving the outer frame.
+  A `TextArea` draws no side strokes by default (the caret sits in the first
+  column, right after a host-drawn leader such as `❯ `); `.strokes(true)` adds the
+  `▐ … ▌` frame. `TextInput` always draws its strokes.
 - `List`: selectable items with keyboard and mouse-wheel navigation.
 - `MarkdownView`: document reader. Constrain its layout when it is an introduction
   above another growing region.
